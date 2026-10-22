@@ -1278,7 +1278,10 @@ UI.Linked := class (value: *, context: String?) => {
 
 // The terminal renderer: a scene drawn into a grid of cells, written as ANSI escape sequences
 UI.TUI := class {
-  Grid := class (width: Number, height: Number, cells: ANSI.Cell[][] = (0 ..< height).map(grid_row => (0 ..< width).map(grid_column => ANSI.Cell())), graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title) => {
+  Grid := class (width: Number, height: Number, cells: ANSI.Cell[][]? = None, graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title) => {
+    // (blank cells unless given: made here, where its width and height are given (a header's default does not see them yet,
+    // spec/TODO.md))
+    (.cells = (0 ..< .height).map(grid_row => (0 ..< this.width).map(grid_column => ANSI.Cell()))) if .cells === None
     space => Geometry.Space.grid(Geometry.Vector(this.width, this.height))
     inside (at: Geometry.Vector) => .space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => .cells[at.y][at.x] = cell if .inside(at)
@@ -1424,7 +1427,7 @@ UI.TUI := class {
   // A run on the terminal the instance is played through (`(@me/device as Terminal)`, one of its devices): what is drawn
   // written to it, what is typed on it read
   Terminal := class: UI.Interface (written: Compiler = UI.TUI.written, grid: UI.TUI.Grid? = None) => {
-    emit (bytes) => (@me/device as Terminal).write(bytes)
+    emit (bytes) => (@me/device as Terminal) = bytes
     dynamically typed = (@me/device as Terminal).typed
     size => (@me/device as Terminal).size -- (Geometry.Vector(.0, .1))
     emitted (value) => .emit(Compiler.reduced(value, this.written))

@@ -489,8 +489,10 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // under `=>`; blank lines between them too)
   // (a statement's line: on to the next line no deeper than it; how deep it is, the line it begins on, in code made (not
   // written in a file, `{{body}}` of a closure) only as far back as that code begins, `lo`)
-  function line(at: number, end: number, lo = 0) {
-    let from = at; while (b(from - 1) !== 10 && b(from - 1) !== 0 && from > lo) from--;
+  function line(at: number, end: number, lo = 0) { return line_of(at, end, lo, at); }
+  // (and as deep as the line `head` is on, before it: a rule's last hole begun on the lines under the rest, `=>` then a body)
+  function line_of(at: number, end: number, lo: number, head: number) {
+    let from = head; while (b(from - 1) !== 10 && b(from - 1) !== 0 && from > lo) from--;
     let indent = 0; while (b(from + indent) === 32) indent++;
     while (at < end) {
       const k = bracket(at, end);
@@ -977,7 +979,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         // (the last: to the end of the line; written against text, not beginning with a space, and none in it outside brackets
         // (`.{member}` of `.me() == p` is `me()`, what follows read on what it answers); a word, of a word's characters)
         if (hug && b(at) <= 32) return -1;
-        let p = line(at, end);
+        let hd = at, nl = 0; while (hd > 0 && (b(hd - 1) === 32 || b(hd - 1) === 10)) { if (b(hd - 1) === 10) nl = 1; hd--; }
+        let p = line_of(at, end, 0, nl && hd > 0 ? hd - 1 : at);
         if (hug) { let u = at; while (u < p && b(u) > 32) u = (bracket(u, p) & 3) === 1 ? past(u, p) : u + 1; if (u < p) p = u; }
         while (p > at && b(p - 1) <= 32) p--;
         if (p <= at) return -1;
@@ -1871,7 +1874,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   }
   // (what follows a value, read on it, in this reading's scratch: what that reads in turn, further on)
   // (the reading of an operator and what it takes, by declaration order: [reading of what is before p, p])
-  function precedence(t: number, s: number, e: number, rule: number, closure: number, vis: number, self: number, stop: number, on: number, sc: number, cut_only: number): number {
+  function precedence(t: number, s: number, e: number, rule: number, closure: number, vis: number, self: number, stop: number, on: number, sc: number, cut_only: number, want: number): number {
     const s0 = skip(s, e), cl = w(CLASSES);
     let o1 = s0; while (o1 < e && b(cl + b(o1)) === 2) o1++;
     if (o1 === s0 || o1 >= e || b(o1) > 32) return 0;
@@ -1892,7 +1895,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       p = bracket(p, e) & 1 ? past(p, e) : p + 1;
     }
     if (cut_only && !cut) return 0;
-    const at = cut || o1, left = reading(t, s, cut ? cut : o1, rule, closure, vis, self, 0, stop, 0, 1);
+    // (what is before the cut read as all of it was, led by text when it was: `+ b` of `a + b + c` is `+`'s, not `{this}{rest}`'s)
+    const at = cut || o1, left = reading(t, s, cut ? cut : o1, rule, closure, vis, self, cut ? want & LED : 0, stop, 0, 1);
     if (w(left) === K_UNREAD || w(left) === K_EMPTY) return 0;
     const pr = alloc(8); put(pr, left); put(pr + 4, at); return pr;
   }
@@ -1952,7 +1956,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (DEBUG && (w(FAIL_FAST) & 64) && b(skip(s, e)) === 46) debug(D_FAULT, 81, s, e);
     // (an operator read on a value, and another of the value's after it that binds as loose or looser, `+ 12 == 24` on 12: what
     // the first takes ends there, whatever reads it whole (`+ {other}`))
-    if (on && self && self !== w(GLOBAL) && w(self + N_IS) !== IS_FRAME && !left && !(w(FAIL_FAST) & 2048) && b(w(CLASSES) + b(s)) === 2) { const pr = precedence(t, s, e, rule, closure, vis, self, stop, self, sc, 1); if (stopped(t)) { put(t + T_SCRATCH, sc); put(r, K_UNREAD); return r; } if (pr) { put(t + T_SCRATCH, sc); put(r, K_ON); put(r + 12, w(pr)); put(r + 16, w(pr + 4)); put(r + 20, e); return r; } }
+    if (on && self && self !== w(GLOBAL) && w(self + N_IS) !== IS_FRAME && !left && !(w(FAIL_FAST) & 2048) && b(w(CLASSES) + b(s)) === 2) { const pr = precedence(t, s, e, rule, closure, vis, self, stop, self, sc, 1, want); if (stopped(t)) { put(t + T_SCRATCH, sc); put(r, K_UNREAD); return r; } if (pr) { put(t + T_SCRATCH, sc); put(r, K_ON); put(r + 12, w(pr)); put(r + 16, w(pr + 4)); put(r + 20, e); return r; } }
     const body_of = w(t + T_BODY); put(t + T_BODY, rule);
     // (in a left side, a name (a word, or an operator) and then its parameters in brackets alone, `f (x)`, `as (base: T)`,
     // `* (times: Number)`: that name being declared, not read by a rule that is it and an operand (`as {target}` is not applied to define `as`); but by one
@@ -1987,7 +1991,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (an operator read on a value, then what it takes, `== 2 * 2 + 2` on 6: up to the next operator of the same value's that
     // binds as loose or looser, the one declared before it or itself (of two, the one declared later binds tighter); none, all
     // of what follows (`==` takes `2 * 2 + 2`))
-    if (on && self && self !== w(GLOBAL) && w(self + N_IS) !== IS_FRAME && !left && !(w(FAIL_FAST) & 2048)) { const pr = precedence(t, s, e, rule, closure, vis, self, stop, self, sc, 0); if (pr) { put(r, K_ON); put(r + 12, w(pr)); put(r + 16, w(pr + 4)); put(r + 20, e); return r; } }
+    if (on && self && self !== w(GLOBAL) && w(self + N_IS) !== IS_FRAME && !left && !(w(FAIL_FAST) & 2048)) { const pr = precedence(t, s, e, rule, closure, vis, self, stop, self, sc, 0, want); if (pr) { put(r, K_ON); put(r + 12, w(pr)); put(r + 16, w(pr + 4)); put(r + 20, e); return r; } }
     // (a value and an operator after it, after a space, `6 == 2 * 2 + 2`: the operator and what follows read on the value, so
     // what the operator takes is by its precedence among the value's (above), not each operator on what is before it)
     if (!left && b(w(CLASSES) + b(skip(s, e))) !== 2) for (let p = s + 1; p < e;) {

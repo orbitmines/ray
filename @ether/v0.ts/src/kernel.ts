@@ -4009,9 +4009,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         put(rule + R_PARTS, n);
       }
     }
-    // (led by a symbol and written in a node, not everywhere (`[{{selection}}]`, `.. (last)` of Iterable's): a method of the
+    // (led by a symbol and written in a node, not everywhere nor at the top of a file (`@me/{path}`) (`[{{selection}}]`, `.. (last)` of Iterable's): a method of the
     // value it follows, not what reads the same text written alone in that node (`[1, 2, 3]` there))
-    if (!method && w(rule + R_PARTS) > 1 && w(led) === LITERAL && owner(vis) !== w(GLOBAL) && (b(w(CLASSES) + b(w(led + 4))) === 2 || b(w(led + 4)) === 91)) method = 1;
+    if (!method && w(rule + R_PARTS) > 1 && w(led) === LITERAL && owner(vis) !== w(GLOBAL) && !(w(owner(vis) + N_IS) === IS_NODE && w(owner(vis) + N_A) === ROOT) && (b(w(CLASSES) + b(w(led + 4))) === 2 || b(w(led + 4)) === 91)) method = 1;
     let hole = 0;
     for (let k = 0; k < w(rule + R_PARTS); k++) {
       const q = rule + R_PART + PART * k;
@@ -4353,6 +4353,20 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     for (let i = 0; i < w(LAZY_N) && i < w(LAZY_CAP); i++) {
       const l = w(LAZY) + 24 * i, q = w(l), r = w(l + 4);
       if (!q || w(q + 16) !== 1) continue;
+      // (the same text, a type tried already in this pass and read as none (one made again for each rule made of it): not tried
+      // again)
+      let tried = 0; for (let j = 0; j < i && !tried; j++) { const lj = w(LAZY) + 24 * j; if (w(lj) && w(w(lj) + 16) === 1 && w(lj + 8) === w(l + 8) && w(lj + 12) === w(l + 12)) tried = 1; }
+      if (tried) { if (last) { say(t, w(l + 8), L_UNREAD, w(l + 8), w(l + 12)); put(l, 0); } continue; }
+      // (an attempt that reads no type yet keeps nothing: what it made let go of, as an application's is (`freeing`), when
+      // nothing made before it was given what it made; it is tried again at every settle)
+      const lv = w(t + T_LVL), ln = w(t + T_LVL_N), start = w(t + T_CHUNK), cend = w(t + T_CHUNK_END), slot0 = w(t + T_SLOT), lazy0 = w(LAZY_N), log0 = w(LOG_N), at_ = lv + 24 * ln;
+      const scoped = w(t + T_FREEING) > 1 && lv && ln < DEPTH ? 1 : 0;
+      if (scoped) {
+        const below = ln ? at_ - 24 : 0;
+        set(at_, start); set(at_ + 4, 0x7FFFFFFF); set(at_ + 8, cend); set(at_ + 12, below && w(below + 8) === cend ? w(below + 12) : start); set(at_ + 16, 0); set(at_ + 20, w(t + T_WEAK_N));
+        const ev0 = w(t + EV); if (ev0 && w(ev0)) { if (!ln) { set(ev0 + 8, 0); set(ev0 + 40, 0); } if (ln < 6000) set(w(ev0 + 16) + 4 * ln, w(ev0 + 8)); }
+        set(t + T_LVL_N, ln + 1);
+      }
       const nd = node(IS_HOLE, 0, 0, owner(w(l + 16)), 0), outer = w(t + T_HOLE), oa = w(t + T_HOLE_A), ob = w(t + T_HOLE_B);
       // (each with a budget of its own: not what the thread that settles did before left (which thread it is is not the
       // language's: a constructor's `{arguments: Arguments}` stayed untyped on some runs))
@@ -4362,8 +4376,28 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       put(t + T_HOLE, outer); put(t + T_HOLE_A, oa); put(t + T_HOLE_B, ob);
       put(t + T_FAULT, 0); put(t + T_JUMP_N, 0);
       const type = member(t, nd, w(w(WORDS) + 8 * W_TYPE), w(w(WORDS) + 8 * W_TYPE + 4));
+      if (scoped) set(t + T_LVL_N, ln);
       if (type && type !== nd && w(type + N_IS) !== IS_PLACE && w(type + N_IS) !== IS_HOLE) { put(q + 16, type); put(l, 0); }
-      else if (last) { say(t, w(l + 8), L_UNREAD, w(l + 8), w(l + 12)); put(l, 0); }
+      else {
+        const now = w(t + T_CHUNK);
+        let holds = w(LAZY_N) !== lazy0 || w(LOG_N) !== log0 ? 1 : 0;
+        for (let k = 0; k < 1024 && !holds && scoped; k += 4) { if (k === T_LEXV || k === T_REFF || k === T_WRITTEN_IN || k === T_CHUNK || k === T_CHUNK_END || k === T_SLOT || k === T_SLOT_END || k === T_SCRATCH) continue; const tw = w(t + k); if (tw >= start && tw < now) holds = 1; }
+        if (scoped && !holds && w(at_ + 4) >= start && now > start && w(t + T_CHUNK_END) === cend) {
+          for (let k = slot0; k < w(t + T_SLOT) && k < w(LIST_CAP); k++) { const pv = w(w(LIST) + 4 * k); if (pv >= start && pv < now) set(w(LIST) + 4 * k, 0); }
+          const wk = w(t + T_WEAK); let kept_n = w(at_ + 20);
+          for (let i = w(at_ + 20); i < w(t + T_WEAK_N); i++) {
+            const en = w(wk + 4 * i);
+            if (en & 1) { const sl = en & -2; if (memo_holds(sl, start, now)) astore(sl, 0); else { set(wk + 4 * kept_n, en); kept_n++; } continue; }
+            const tv = w(en + T_VALUE); if (tv >= start && tv < now && aload(en + T_STATE) === 2) { set(en + T_VALUE, 0); astore(en + T_STATE, 0); } else { set(wk + 4 * kept_n, en); kept_n++; }
+          }
+          set(t + T_WEAK_N, kept_n);
+          fill(start, 0, now - start); set(t + T_CHUNK, start);
+          if (w(t + T_LEXV) >= start && w(t + T_LEXV) < now) set(t + T_LEXV, 0);
+          if (w(t + T_REFF) >= start && w(t + T_REFF) < now) set(t + T_REFF, 0);
+          if (w(t + T_WRITTEN_IN) >= start && w(t + T_WRITTEN_IN) < now) set(t + T_WRITTEN_IN, 0);
+        }
+        if (last) { say(t, w(l + 8), L_UNREAD, w(l + 8), w(l + 12)); put(l, 0); }
+      }
     }
   }
   // (the files' shadows, each file's in turn, by the order they were given: made the nodes' own)

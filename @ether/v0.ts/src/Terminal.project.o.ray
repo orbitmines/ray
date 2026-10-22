@@ -1,6 +1,6 @@
 // The terminal, as this interpreter reaches it (it runs no `@c`): what is written put on the host's standard output (the
 // kernel's `output`). (Its size: what a terminal is when nothing says otherwise, 80 by 24, until the host reports its own.)
 Terminal &+= {
-  = (value) ^punctuation => (external output (value as String)) -- this
+  = (value) ^punctuation => (external output (((value).textual === true) ? value : (value as String))) -- this
   size => (80, 24)
 }

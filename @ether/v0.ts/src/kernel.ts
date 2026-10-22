@@ -4039,8 +4039,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       const a = w(q + 4), z = a + w(q + 8), nd = node(IS_HOLE, 0, 0, owner(vis), 0);
       // (a hole of code, `{{x: T}}`: its name and type are those of what its braces hold, `x: T`)
       let ra = a, rz = z; { let p = a, y = z; while (p < y && b(p) <= 32) p++; while (y > p && b(y - 1) <= 32) y--; if (b(p) === 123 && b(y - 1) === 125 && past(p, y) >= y) { ra = p + 1; rz = y - 1; } }
-      // (read with the names of where it is written: `{x: a}` in a rule's body, its `a`)
-      const r = vis ? reading(t, ra, rz, names ? w(names + F_RULE) : 0, names ? w(names + F_CLOSURE) : 0, vis, nd, HOLES, 0, DEFINES | READER, 0) : 0;
+      // (read with the names of where it is written: `{x: a}` in a rule's body, its `a`; code led by an operator declares
+      // nothing, `{!= ":" && != "/"}` of a narrowing in a header made a head: not run (it would ask it of what is being made))
+      const r = vis && b(w(CLASSES) + b(ra)) !== 2 ? reading(t, ra, rz, names ? w(names + F_RULE) : 0, names ? w(names + F_CLOSURE) : 0, vis, nd, HOLES, 0, DEFINES | READER, 0) : 0;
       let value = 0;
       if (r && w(r) === K_RULE) {
         const outer = w(t + T_HOLE), decls = w(t + T_DECLS_N), oa = w(t + T_HOLE_A), ob = w(t + T_HOLE_B);

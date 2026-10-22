@@ -86,3 +86,11 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   read it as (Expression.ray's statements: a jump, a label, a declaration and its head), asked of the statement.
 - **`@me/device/os` in the bootstrap** (Node.ray IO3, Ether.entrypoint.ray's `threads` default): the OS is one of the
   devices `@me/device` superposes, selected by its type, `(@me/device as OS)`.
+
+## Painting
+
+- **A hole's style breaks reading** (`{name ^variable} := …`, `.{member ^property}`, `{word ^variable}` in Name): the kernel
+  crashes now and then (memory access out of bounds in refer ← follow ← valued, ~1 run in 3 at 26 threads) and some enum
+  tests are lost. The style is a member on the hole's node, which is `this` when the hole's code is read: probably why.
+  Until it holds, member names, declared and bare names, and method heads (`allows (called) =>`) are not painted.
+- **A body no test runs is never painted** (a method's, e.g. Access.ray's `covers`): it is read only when it runs.

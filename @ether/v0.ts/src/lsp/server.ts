@@ -10,7 +10,7 @@ type Paint = { begin: number, end: number, style: string };
 type Said = [at: number, message: string, style?: string][];
 // (what a reading thread sends: read, still being tested, tested; or it could not be read)
 type Report =
-  | { kind: 'language', key: string, memory: SharedArrayBuffer, handled: number, files: string[] }
+  | { kind: 'language', key: string, memory: SharedArrayBuffer, handled: number, files: string[], theme?: Theme }
   | { kind: 'read', s: number, e: number, paints: Paint[], said: Said, theme?: { name: string, colors: Record<string, string> } }
   | { kind: 'testing', paints: Paint[] }
   | { kind: 'tested', paints: Paint[], said: Said }
@@ -34,26 +34,10 @@ function thread(role: string, data: object): import('worker_threads').Worker {
 // What is painted, as language.ts's `paints` reads it (each statement's literal text in its rule's style, each hole's take in
 // the hole's, a frame given a style), its style only a name: a style member that is no text spans whatever memory its two ends
 // do, at worst hundreds of MB. (The kernel's layout, as language.ts has it.)
-const STYLED = 10, F = { RULE: 28, START: 40, END: 44, TAKES: 56 }, TAKE = 36, R = { HOLES: 12, PARTS: 28, HEAD: 32, PART: 96 }, PART = 24, N = { A: 12, B: 16 }, HOLE = 2;
-const STYLE = /^[\w.-]{1,64}$/;
-const styler = (ray: Ray) => (node: number): string => {
-  const v = node ? ray.member(node, 'style') : 0; if (!v) return '';
-  const a = ray.w(v + N.A), b = ray.w(v + N.B); if (b <= a || b - a > 64) return '';
-  const t = ray.text(a, b).trim(); return STYLE.test(t) ? t : '';
-};
-function painted(ray: Ray, s: number, e: number): Paint[] {
-  const out: Paint[] = [], style = styler(ray), u8 = new Uint8Array(ray.heap.buffer), w = (at: number) => ray.w(at);
-  const part = (rule: number, hole: number) => { for (let k = 0, q = rule + R.PART; k < w(rule + R.PARTS); k++, q += PART) if ((w(q) & 15) === HOLE && w(q + 12) === hole) return q; return 0; };
-  for (const frame of ray.frames) {
-    const fs = w(frame + F.START), fe = w(frame + F.END), rule = w(frame + F.RULE);
-    if (fs < s || fe > e || !rule) continue;
-    const whole = style(frame), head = style(w(rule + R.HEAD)), takes = Array.from({ length: w(rule + R.HOLES) }, (_, i) => frame + F.TAKES + TAKE * i);
-    if (whole) out.push({ begin: fs - s, end: fe - 1 - s, style: whole });
-    if (head) for (let at = fs; at < fe; at++) { const inside = takes.some(t => w(t) <= at && at < w(t + 4)); if (!inside && u8[at] > 32) out.push({ begin: at - s, end: at - s, style: head }); }
-    takes.forEach((t, i) => { const q = part(rule, i), hole = q ? style(w(q + 20)) : ''; if (hole && w(t) >= s && w(t + 4) <= e) out.push({ begin: w(t) - s, end: w(t + 4) - 1 - s, style: hole }); });
-  }
-  return out;
-}
+const STYLED = 10, F = { RULE: 28, START: 40, END: 44 }, R = { HEAD: 32 };
+const styler = (ray: Ray) => (node: number): string => ray.style_of(node);
+// (what the kernel's frames paint, as the language paints a frame)
+function painted(ray: Ray, s: number, e: number): Paint[] { return ray.paints(s, e); }
 // (the tests among what is painted: each frame whose rule's head is `untested`, a test written there; as each is run, its frame
 // is given what it found)
 function tests_in(ray: Ray, s: number, e: number): { frame: number, begin: number, end: number }[] {
@@ -89,7 +73,10 @@ function mixed(from: string | undefined, to: string | undefined, share: number):
 
 // The reading thread: the language, then the document (another document: what the language includes read, open documents as
 // the editor has them, the document among them where it is one, else after them on its own; the language's own tests not run).
-type Snapshot = { key: string, memory: SharedArrayBuffer, handled: number, files: string[] };
+type Theme = { name: string, colors: Record<string, string> };
+type Snapshot = { key: string, memory: SharedArrayBuffer, handled: number, files: string[], theme?: Theme };
+// (painting on for this thread: what tests make, and each whole-line comment, painted too)
+const paint_all = (ray: Ray) => (ray as { paint_tests?: () => void }).paint_tests?.();
 async function reader(job: { language: string, file: string, text: string, entry: string, texts: [string, string][], key: string, snapshot?: Snapshot }) {
   const parent = env.worker_threads.parentPort!, post = (report: Report) => parent.postMessage(report);
   const heap = memory(Ray.LSP_MEMORY), ray = new Ray(), encoder = new TextEncoder();
@@ -100,17 +87,26 @@ async function reader(job: { language: string, file: string, text: string, entry
   // the document)
   if (job.snapshot) {
     new Uint8Array(heap.buffer).set(new Uint8Array(job.snapshot.memory));
-    ray.init(heap); (ray as unknown as { handled: number }).handled = job.snapshot.handled; trace('language as it was read');
+    ray.init(heap); paint_all(ray); (ray as unknown as { handled: number }).handled = job.snapshot.handled; trace('language as it was read');
     ray.untested(); [s, e] = ray.alone(encoder.encode(job.text), job.file);
+  } else if (!job.file) {
+    // (the language alone, read before any document: kept, its theme with it)
+    ray.init(heap); paint_all(ray);
+    ray.file(encoder.encode(job.entry), job.language); ray.untested();
+    const spans = ray.included([], false, new Map(job.texts));
+    const end = Atomics.load(new Int32Array(heap.buffer), 0), memory = new SharedArrayBuffer(end);
+    new Uint8Array(memory).set(new Uint8Array(heap.buffer, 0, end));
+    post({ kind: 'language', key: job.key, memory, handled: (ray as unknown as { handled: number }).handled, files: [...spans.keys()], theme: ray.theme() }); trace(`language read and kept (${Math.round(end / 1048576)} MB)`);
+    return;
   } else {
-    ray.init(heap); trace('init');
+    ray.init(heap); paint_all(ray); trace('init');
     [s, e] = ray.file(encoder.encode(job.file === job.language ? job.text : job.entry), job.language);
     trace('entry read');
     if (job.file !== job.language) {
       ray.untested();
       const spans = ray.included([], false, new Map(job.texts));
       // (what the language includes is the language too: its tests not run, only the document's)
-      if (spans.has(job.file)) [s, e] = spans.get(job.file)!;
+      if (spans.has(job.file)) { [s, e] = spans.get(job.file)!; own_tests(heap, s, e); }
       else {
         // (the language read: its memory kept, for the next document to be read on)
         const end = Atomics.load(new Int32Array(heap.buffer), 0), memory = new SharedArrayBuffer(end);
@@ -123,6 +119,8 @@ async function reader(job: { language: string, file: string, text: string, entry
   trace(`document read (${e - s} bytes)`);
   const paints = painted(ray, s, e); trace(`painted (${paints.length} paints${process.env.RAY_LSP_TRACE ? `, the kernel paints ${ray.paints(s, e).length}` : ""})`);
   const said = [...ray.listen()]; trace(`said (${said.length})`);
+  // (and what nothing ran, read without running: under what was)
+  const unrun = ray.dry_paints(s, e); ray.listen(); paints.unshift(...unrun); trace(`read without running (${unrun.length} paints)`);
   post({ kind: 'read', s, e, paints, said, theme: ray.theme() }); trace('posted');
   // (its tests only once every document is painted: told so)
   await new Promise<void>(resolve => { parent.ref(); parent.once('message', (m: string) => { if (m === 'test') { parent.unref(); resolve(); } }); });
@@ -131,7 +129,7 @@ async function reader(job: { language: string, file: string, text: string, entry
   const done = Promise.all(testers.map(t => new Promise<void>(resolve => {
     t.on('message', (m: { said?: Said, paints?: Paint[] }) => {
       if (m.said) said.push(...m.said);
-      for (const p of m.paints ?? []) found.set(`${p.begin}:${p.end}`, p);
+      for (const p of m.paints ?? []) found.set(`${p.begin}:${p.end}:${p.style}`, p);
       if (m.paints) repaint();
     });
     t.on('error', (x: Error) => { said.push([0, `a test thread crashed: ${x.message}`]); resolve(); });
@@ -142,12 +140,29 @@ async function reader(job: { language: string, file: string, text: string, entry
   let last = '';
   const repaint = () => {
     for (const t of tests) if (!found.has(t.frame)) { const now = style(t.frame); if (now === 'passed' || now === 'failed') found.set(t.frame, { begin: t.begin, end: t.end, style: now }); }
-    const paints = [...painted(ray, s, e), ...found.values()], now = JSON.stringify(paints);
+    const paints = [...unrun, ...painted(ray, s, e), ...found.values()], now = JSON.stringify(paints);
     if (now !== last) { last = now; post({ kind: 'testing', paints }); }
   };
   const timer = setInterval(repaint, EVERY);
   await done; clearInterval(timer); repaint();
-  post({ kind: 'tested', paints: [...painted(ray, s, e), ...found.values()], said });
+  post({ kind: 'tested', paints: [...unrun, ...painted(ray, s, e), ...found.values()], said });
+}
+
+// (of what was put off, only what was put off in [s, e]: a file of the language puts off its tests among the language's own;
+// one that follows another (`+ 8`) kept with it)
+function own_tests(heap: WebAssembly.Memory, s: number, e: number) {
+  const i32 = new Int32Array(heap.buffer), w = (at: number) => i32[at >> 2], AFTER = 72, HEAD = 76, TAIL = 80, CAP = 84, ENTRY = 28;
+  const head = w(HEAD), tail = Math.min(w(TAIL), w(CAP));
+  let to = head, kept = false;
+  for (let k = head; k < tail; k++) {
+    const from = w(AFTER) + ENTRY * k, f = w(from), follows = w(from + 8);
+    if (!follows) kept = !!f && w(f + F.START) >= s && w(f + F.START) < e;
+    if (!kept) continue;
+    const at = w(AFTER) + ENTRY * to;
+    if (at !== from) i32.copyWithin(at >> 2, from >> 2, (from + ENTRY) >> 2);
+    to++;
+  }
+  i32[TAIL >> 2] = to;
 }
 
 // A test thread: what was put off, taken while there are any; what it said sent back.
@@ -155,8 +170,16 @@ function tester(job: { heap: WebAssembly.Memory, s: number, e: number }) {
   const ray = new Ray(), parent = env.worker_threads.parentPort!;
   // (a frame given what its test found, as the kernel tells of it (L.STYLED): a test inside a test too, whose frame is gone
   // once its test is done; sent at once)
-  const tell = ray.tell.bind(ray);
+  // (and each frame a test makes of a rule shown in a style (c = 1): its paints, gathered and sent every so often)
+  const tell = ray.tell.bind(ray), sent = new Set<string>();
+  let gathered: Paint[] = [];
+  const flush = () => { if (gathered.length) { parent.postMessage({ paints: gathered }); gathered = []; } };
+  const every = setInterval(flush, EVERY);
   ray.tell = (said_at: number, kind: number, a: number, c: number) => {
+    if (kind === STYLED && c === 1) {
+      for (const p of ray.frame_paints(a, job.s, job.e)) { const k = `${p.begin}:${p.end}:${p.style}`; if (!sent.has(k)) { sent.add(k); gathered.push(p); } }
+      return 0;
+    }
     if (kind === STYLED && a) {
       const style = styler(ray)(a), fs = ray.w(a + F.START), fe = ray.w(a + F.END);
       if ((style === 'passed' || style === 'failed') && fs >= job.s && fe <= job.e) parent.postMessage({ paints: [{ begin: fs - job.s, end: fe - 1 - job.s, style }] });
@@ -164,8 +187,9 @@ function tester(job: { heap: WebAssembly.Memory, s: number, e: number }) {
     return tell(said_at, kind, a, c);
   };
   const trace = (what: string) => { if (process.env.RAY_LSP_TRACE) env.fs.writeSync(2, `LSP tester ${what} at ${Math.round(performance.now())} ms, ${Math.round(process.memoryUsage().heapUsed / 1048576)} MB\n`); };
-  Ray.printing = false; ray.init(job.heap); trace('init');
+  Ray.printing = false; ray.init(job.heap); paint_all(ray); trace('init');
   ray.tests(); trace(`tested (${ray.listen().length} said)`);
+  clearInterval(every); flush();
   parent.postMessage({ said: [...ray.listen()] });
 }
 
@@ -186,16 +210,17 @@ function keep(language: string, snapshot: Snapshot) {
     const dir = cached(language); env.fs.mkdirSync(dir, { recursive: true });
     env.fs.writeFileSync(env.path.join(dir, 'memory'), new Uint8Array(snapshot.memory));
     const read = [language, ...KERNEL, ...snapshot.files];
-    env.fs.writeFileSync(env.path.join(dir, 'kept.json'), JSON.stringify({ handled: snapshot.handled, files: snapshot.files, read, hashes: hashes(read) }));
+    env.fs.writeFileSync(env.path.join(dir, 'kept.json'), JSON.stringify({ handled: snapshot.handled, files: snapshot.files, theme: snapshot.theme, read, hashes: hashes(read) }));
   } catch { /* (not kept: read again next time) */ }
 }
 function kept(language: string): Snapshot | undefined {
   try {
     const dir = cached(language), meta = JSON.parse(env.fs.readFileSync(env.path.join(dir, 'kept.json'), 'utf-8'));
-    if (hashes(meta.read).join() !== meta.hashes.join()) return undefined;
+    // (kept as it was read, with its theme: else read again)
+    if (hashes(meta.read).join() !== meta.hashes.join() || !meta.theme) return undefined;
     const bytes = env.fs.readFileSync(env.path.join(dir, 'memory')), memory = new SharedArrayBuffer(bytes.length);
     new Uint8Array(memory).set(bytes);
-    return { key: '', memory, handled: meta.handled, files: meta.files };
+    return { key: '', memory, handled: meta.handled, files: meta.files, theme: meta.theme };
   } catch { return undefined; }
 }
 
@@ -219,7 +244,8 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
   // is open and changed)
   let snapshot: Snapshot | undefined = kept(language);
   const language_key = () => [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? '';
-  const usable = (file: string) => snapshot && snapshot.key === language_key() && file !== language && !snapshot.files.includes(file) ? snapshot : undefined;
+  // (a file the language includes too: read again on it, as any other document)
+  const usable = (file: string) => snapshot && snapshot.key === language_key() && file !== language ? snapshot : undefined;
 
   const payload = (uris: string[]) => {
     const docs = uris.flatMap(uri => { const c = checked.get(uri); return c ? [{ uri, version: c.version, ranges: runs(c.text, c.paints) }] : []; });
@@ -237,8 +263,30 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
   const painted = (uri: string) => { if (refreshes) send({ id: `refresh${++asked}`, method: 'workspace/semanticTokens/refresh' }); notify('ether/theme', payload([uri])); };
 
   // Read a document again: the reading of it under way stopped, a new one begun.
+  // The language first, before any document (unless it is kept): read on its own thread, kept, its theme sent; a document
+  // opened meanwhile read on it once it is there.
+  let preparing: import('worker_threads').Worker | undefined;
+  const waiting = new Set<string>();
+  if (snapshot?.theme) shown = snapshot.theme;
+  const prepare = () => {
+    preparing?.terminate();
+    const key = language_key(), entry = [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? env.fs.readFileSync(language, 'utf-8');
+    const worker = thread('reader', { language, file: '', text: '', entry, texts: [...documents].map(([u, d]) => [file_of(u), d.text]), key });
+    preparing = worker;
+    const done = () => { if (preparing === worker) preparing = undefined; for (const uri of waiting) dirty.add(uri); waiting.clear(); if (dirty.size) schedule(); };
+    worker.on('message', (report: Report) => {
+      if (report.kind !== 'language' || preparing !== worker) return;
+      shown = report.theme ?? shown;
+      if (report.key === language_key()) { snapshot = report; if (report.key === '') keep(language, report); }
+      notify('ether/theme', payload([...checked.keys()]));
+      log(`language read and kept`); done();
+    });
+    worker.on('error', (x: Error) => { log(`reading the language failed: ${x.stack ?? x}`); snapshot = undefined; done(); });
+  };
   const check = (uri: string) => {
     const doc = documents.get(uri); if (!doc) return;
+    // (not before the language: it is read first)
+    if (file_of(uri) !== language && !(snapshot && snapshot.key === language_key())) { waiting.add(uri); if (!preparing) prepare(); return; }
     reading.get(uri)?.worker.terminate();
     const t0 = performance.now(), file = file_of(uri), version = doc.version, text = doc.text;
     const entry = [...documents].find(([u]) => file_of(u) === language)?.[1].text ?? env.fs.readFileSync(language, 'utf-8');
@@ -253,9 +301,11 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
     // A test as the theme shows it: `assert` itself as what it found (`untested` until it is run, then `passed` or `failed`),
     // what is written after it in its own colours, muted. (The frames painted are refilled while the tests run: what was read
     // keeps its paints; a test's result is the style its whole frame is given, kept once given.)
-    const TESTED = new Set(['untested', 'passed', 'failed']), read: Paint[] = [], heads: Paint[] = [], results = new Map<string, Paint>();
+    const TESTED = new Set(['untested', 'passed', 'failed']), read: Paint[] = [], once = new Set<string>(), heads: Paint[] = [], results = new Map<string, Paint>();
     const paint = (paints: Paint[], first = false) => {
-      if (first) { read.push(...paints.filter(p => !TESTED.has(p.style))); heads.push(...paints.filter(p => p.style === 'untested')); }
+      if (first) heads.push(...paints.filter(p => p.style === 'untested'));
+      // (what was read, and what the tests read as they run: kept, each once)
+      for (const p of paints) if (!TESTED.has(p.style)) { const k = `${p.begin}:${p.end}:${p.style}`; if (!once.has(k)) { once.add(k); read.push(p); } }
       for (const p of paints) if (p.style === 'passed' || p.style === 'failed') results.set(`${p.begin}:${p.end}`, p);
       const chars = (p: Paint) => ({ begin: char(p.begin), end: char(p.end), style: p.style });
       // (`assert`, a character at a time: the words they make, each to the end of its statement)
@@ -270,7 +320,9 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
         if (result) w.style = result.style;
       }
       const muted = (p: Paint) => words.some(w => w.end < p.begin && p.end <= w.rest);
-      const out = [...words.map(w => ({ begin: w.begin, end: w.end, style: w.style })), ...read.map(chars).map(p => muted(p) ? { ...p, style: 'muted:' + p.style } : p)];
+      // (the word itself only what its test found)
+      const on_word = (p: Paint) => words.some(w => p.begin <= w.end && w.begin <= p.end && p.end - p.begin <= w.end - w.begin);
+      const out = [...words.map(w => ({ begin: w.begin, end: w.end, style: w.style })), ...read.map(chars).filter(p => !on_word(p)).map(p => muted(p) ? { ...p, style: 'muted:' + p.style } : p)];
       checked.set(uri, { version, text, paints: out }); painted(uri);
     };
     // (and what is said of no place, out of memory: at the document's start, so no reading fails unseen)
@@ -305,14 +357,14 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
 
   // (an edit waits a little for the next, then the document is read again; the language changed: every document is)
   let scheduled: ReturnType<typeof setTimeout> | undefined;
+  const schedule = () => { if (scheduled !== undefined) clearTimeout(scheduled); scheduled = setTimeout(work, Number(process.env.RAY_LSP_DELAY ?? 100)); };
   const work = () => { scheduled = undefined; for (const uri of [...dirty]) { dirty.delete(uri); try { check(uri); } catch (x) { log(`reading ${uri} failed: ${(x as Error).stack ?? x}`); } } };
   const open = (uri: string, text: string, version: number) => {
     // (a file the language read, changed: the language read again)
     if (snapshot?.files.includes(file_of(uri)) && (documents.get(uri)?.text ?? (() => { try { return env.fs.readFileSync(file_of(uri), 'utf-8'); } catch { return undefined; } })()) !== text) snapshot = undefined;
     documents.set(uri, { text, version }); dirty.add(uri);
     if (file_of(uri) === language) for (const other of documents.keys()) dirty.add(other);
-    if (scheduled !== undefined) clearTimeout(scheduled);
-    scheduled = setTimeout(work, Number(process.env.RAY_LSP_DELAY ?? 100));
+    schedule();
   };
   const tokens = (uri: string, range?: [number, number]) => { const c = checked.get(uri); return { data: c ? encode(documents.get(uri)?.text ?? c.text, c.paints, TOKEN_TYPES, range) : [] }; };
   type Params = Record<string, any>;
@@ -332,6 +384,8 @@ export async function serve(language: string, io: { input: NodeJS.ReadableStream
   };
   const notifications: Record<string, (params: Params) => void> = {
     'exit': () => process.exit(0),
+    // (the theme as soon as there is one: the language's, kept or read first)
+    'initialized': () => { if (shown) notify('ether/theme', payload([])); else if (!preparing && !snapshot) prepare(); },
     'textDocument/didOpen': ({ textDocument: d }) => open(d.uri, d.text, d.version),
     'textDocument/didChange': ({ textDocument: d, contentChanges }) => open(d.uri, contentChanges[contentChanges.length - 1].text, d.version),
     'textDocument/didClose': ({ textDocument: d }) => { reading.get(d.uri)?.worker.terminate(); reading.delete(d.uri); documents.delete(d.uri); checked.delete(d.uri); },

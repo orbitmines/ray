@@ -49,6 +49,18 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
     // sign alone
     static groups (v) => (v < 64) ? [] : [v % 128 + 128].joined(Wasm.Signed.groups(v / 128))
     static top (v) => v < 64 ? v : Wasm.Signed.top(v / 128)
+    // (minus m: k groups, the fewest whose sign bit holds it, of 128 to the k less m) TODO(explicit): `-m` itself, once a
+    // number below zero reads as one here (its `negative`, its `integer`)
+    static width (m, k) => m <= 64 * Wasm.LEB.power(k - 1) ? k : Wasm.Signed.width(m, k + 1)
+    static low_groups (u, k) => k == 1 ? [] : [u % 128 + 128].joined(Wasm.Signed.low_groups(u / 128, k - 1))
+    static low_top (u, k) => k == 1 ? u : Wasm.Signed.low_top(u / 128, k - 1)
+    static below_zero (m) => {
+      below_k := Wasm.Signed.width(m, 1)
+      below_u := Wasm.LEB.power(below_k) - m
+      below_more := Wasm.Signed.low_groups(below_u, below_k)
+      below_last := Wasm.Signed.low_top(below_u, below_k)
+      Wasm.Signed(more: below_more, last: below_last)
+    }
     static encoded (v) => {
       enc_more := Wasm.Signed.groups(v)
       enc_last := Wasm.Signed.top(v)
@@ -440,10 +452,11 @@ Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, section
 //   assert (624485 as Wasm.U32 as Byte[]) == [0xE5, 0x8E, 0x26] && ([0xE5, 0x8E, 0x26] as Wasm.U32).value == 624485
 //   assert (-123456 as Wasm.S32 as Byte[]) == [0xC0, 0xBB, 0x78]
 //   assert ("add" as Wasm.Name as Byte[]) == [3, 0x61, 0x64, 0x64]
-// WA2 tests 100 for now: a signed value below zero is not written yet, the TODO in `Signed`)
+// WA2b writes minus 123456 by its magnitude, `below_zero`: a number below zero does not read as one here yet, the TODO there)
 // (its integers, read and written, outside the class: its own asserts ask of a module)
 assert Wasm.LEB.encoded(624485).bytes == [0xE5, 0x8E, 0x26] && Wasm.LEB(more: [0xE5, 0x8E], last: 0x26).value == 624485  // WA1 LEB128's example is not e5 8e 26
 assert Wasm.Signed.encoded(100).bytes == [0xE4, 0x00]  // WA2 a hundred is not two groups when signed (its sign bit would be set)
+assert Wasm.Signed.below_zero(123456).bytes == [0xC0, 0xBB, 0x78]  // WA2b minus 123456 is not its signed LEB128
 assert Wasm.Name(text: "add").bytes == [3, 97, 100, 100]  // WA3 a name is not its length and its UTF-8 bytes
 assert Wasm.module_bytes([]) == [0, 97, 115, 109, 1, 0, 0, 0]  // WA7 the empty module is not its header alone
 assert Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F]), Wasm.Vec(elements: [0x7F])]])).bytes == [1, 6, 1, 96, 1, 127, 1, 127]  // WA8 a type section of i32 to i32 is not these bytes

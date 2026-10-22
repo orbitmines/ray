@@ -110,7 +110,7 @@ async function reader(job: { language: string, file: string, text: string, entry
       ray.untested();
       const spans = ray.included([], false, new Map(job.texts));
       // (what the language includes is the language too: its tests not run, only the document's)
-      if (spans.has(job.file)) [s, e] = spans.get(job.file)!;
+      if (spans.has(job.file)) { [s, e] = spans.get(job.file)!; own_tests(heap, s, e); }
       else {
         // (the language read: its memory kept, for the next document to be read on)
         const end = Atomics.load(new Int32Array(heap.buffer), 0), memory = new SharedArrayBuffer(end);
@@ -148,6 +148,23 @@ async function reader(job: { language: string, file: string, text: string, entry
   const timer = setInterval(repaint, EVERY);
   await done; clearInterval(timer); repaint();
   post({ kind: 'tested', paints: [...painted(ray, s, e), ...found.values()], said });
+}
+
+// (of what was put off, only what was put off in [s, e]: a file of the language puts off its tests among the language's own;
+// one that follows another (`+ 8`) kept with it)
+function own_tests(heap: WebAssembly.Memory, s: number, e: number) {
+  const i32 = new Int32Array(heap.buffer), w = (at: number) => i32[at >> 2], AFTER = 72, HEAD = 76, TAIL = 80, CAP = 84, ENTRY = 28;
+  const head = w(HEAD), tail = Math.min(w(TAIL), w(CAP));
+  let to = head, kept = false;
+  for (let k = head; k < tail; k++) {
+    const from = w(AFTER) + ENTRY * k, f = w(from), follows = w(from + 8);
+    if (!follows) kept = !!f && w(f + F.START) >= s && w(f + F.START) < e;
+    if (!kept) continue;
+    const at = w(AFTER) + ENTRY * to;
+    if (at !== from) i32.copyWithin(at >> 2, from >> 2, (from + ENTRY) >> 2);
+    to++;
+  }
+  i32[TAIL >> 2] = to;
 }
 
 // A test thread: what was put off, taken while there are any; what it said sent back.

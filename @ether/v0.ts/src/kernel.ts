@@ -24,7 +24,25 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // first of its chunk was put (one past where allocation is, in another chunk: below them all), its chunk's end, where the
   // first application in that chunk began), what a write needs)
   // (a write of something newer into older memory, kept so that what it holds may be moved: where it was written)
-  function ev_log(a: number) { const b0 = w(THREAD + EV); if (!w(b0)) return; const n = w(b0 + 8); if (n < w(b0 + 12)) { set(w(b0 + 4) + 4 * n, a); set(b0 + 8, n + 1); } else set(b0 + 40, 1); }
+  // (full: of a place given more than once, only its last kept (each level that asks for the one before asks for the last
+  // too), and where each level's begin among those left; still nearly full, nothing more is moved this statement)
+  function ev_log(a: number) { const b0 = w(THREAD + EV); if (!w(b0) || w(b0 + 40)) return; if (w(b0 + 8) >= w(b0 + 12) && w(b0 + 48)) ev_compact(b0); const n = w(b0 + 8); if (n < w(b0 + 12)) { set(w(b0 + 4) + 4 * n, a); set(b0 + 8, n + 1); } else set(b0 + 40, 1); }
+  function ev_compact(b0: number) {
+    const lg = w(b0 + 4), n = w(b0 + 8), hs = w(b0 + 48), hm = w(b0 + 52), lv = w(b0 + 16), ln = w(THREAD + T_LVL_N), kn = ln < 6000 ? ln : 6000;
+    fill(hs, 0, 4 * (hm + 1));
+    for (let i = n - 1; i >= 0; i--) {
+      const a = w(lg + 4 * i); let h = mix(a) & hm, seen = 0;
+      for (let q = 0; q <= hm; q++) { const x = w(hs + 4 * h); if (!x) { set(hs + 4 * h, a); break; } if (x === a) { seen = 1; break; } h = (h + 1) & hm; }
+      if (seen) set(lg + 4 * i, 0);
+    }
+    let to = 0, k = 0;
+    for (let i = 0; i <= n; i++) {
+      while (k < kn && w(lv + 4 * k) <= i) { set(lv + 4 * k, to); k++; }
+      if (i < n) { const a = w(lg + 4 * i); if (a) { set(lg + 4 * to, a); to++; } }
+    }
+    set(b0 + 8, to);
+    if (to >= w(b0 + 12) - (w(b0 + 12) >> 3)) set(b0 + 40, 1);
+  }
   // (a thread's own words, its scratch and its stack of what is being checked: what they hold is let go of as it runs, so a
   // write there keeps nothing an application made (what still holds it when that is done is asked then)) TODO(explicit)
   function transient(a: number): number { if (a >= THREAD && a < THREAD + 1024) return 1; const se = w(THREAD + T_SCRATCH_END); if (a < se && a >= se - 2048 * SCRATCH) return 1; const ty = w(THREAD + T_TYP); if (ty && a >= ty && a < ty + 12 * TYPS) return 1; const sk = w(THREAD + T_STACK); return sk && a >= sk && a < sk + 8 * DEPTH ? 1 : 0; }
@@ -2762,7 +2780,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   }
   // (what an application made that is still held when it is done (what is newer, written in older memory; what a thread word
   // or its answer holds): moved together where its memory began, the rest let go of; its answer, where it is now)
-  function evacuate(t: number, start: number, now: number, at: number, lvl: number, v: number, slot0: number): number {
+  // (the rules listed for the build since `from`, of what was made from start to now: of one let go of (n < 0: all of it),
+  // none; of one moved, where it is; those left together)
+  function rules_listed(from: number, start: number, now: number, idx: number, n: number, dl: number) {
+    if (!(w(THREAD + EV) && w(w(THREAD + EV)))) return;
+    let to = from;
+    for (let k = from; k < w(RULES_N) && k < w(RULES_CAP); k++) {
+      let r = w(w(RULES) + 4 * k);
+      if (r >= start && r < now) { if (n < 0) r = 0; else { const ri = ev_find(r, start, now, idx, n); r = ri >= 0 && (w(w(idx + 4 * ri)) & EV_MARK) ? r + w(dl + 4 * ri) : 0; } }
+      if (r) { set(w(RULES) + 4 * to, r); to++; }
+    }
+    if (from < w(RULES_N)) set(RULES_N, to);
+  }
+  function evacuate(t: number, start: number, now: number, at: number, lvl: number, v: number, slot0: number, rules0: number): number {
     const b0 = w(t + EV), idx = w(b0 + 20), cap = w(b0 + 24), wk = w(b0 + 28), wcap = w(b0 + 32), dl = w(b0 + 36), lg = w(b0 + 4);
     const l0 = w(w(b0 + 16) + 4 * lvl); let ln = w(b0 + 8);
     // (the places older memory was given at, each once (one given twice, moved twice), none of its own: in order, the same
@@ -2814,6 +2844,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     set(t + T_WEAK_N, kept_n);
     // (the frames it listed: of one moved, where it is; of one let go of, none)
     for (let k = slot0; k < w(t + T_SLOT) && k < w(LIST_CAP); k++) { const pv = w(w(LIST) + 4 * k), pi = ev_find(pv, start, now, idx, n); if (pi >= 0) set(w(LIST) + 4 * k, (w(w(idx + 4 * pi)) & EV_MARK) ? pv + w(dl + 4 * pi) : 0); }
+    rules_listed(rules0, start, now, idx, n, dl);
     const v2 = ev_rel(v, start, now, idx, n, dl);
     // (moved, in order (each down, or where it was), its mark taken off; the rest let go of)
     for (let i = 0; i < n; i++) { const o = w(idx + 4 * i), h = w(o); if (!(h & EV_MARK)) continue; const d = w(dl + 4 * i), sz = 4 + (h & EV_SIZE); if (d) for (let q = 0; q < sz; q += 4) set(o + d + q, w(o + q)); set(o + d, h & ~EV_MARK); }
@@ -2823,7 +2854,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function freeing(t: number, rule: number, caps: number, names: number, f: number, self: number, s: number, e: number, written: number, on: number): number {
     const lv = w(t + T_LVL), n = w(t + T_LVL_N);
     if (!w(t + T_FREEING) || !lv || n >= DEPTH) return profiled(t, rule, caps, names, f, self, s, e, written, on);
-    const start = w(t + T_CHUNK), cend = w(t + T_CHUNK_END), slot0 = w(t + T_SLOT), slotend0 = w(t + T_SLOT_END), at = lv + 24 * n, below = n ? at - 24 : 0;
+    const start = w(t + T_CHUNK), cend = w(t + T_CHUNK_END), slot0 = w(t + T_SLOT), slotend0 = w(t + T_SLOT_END), at = lv + 24 * n, below = n ? at - 24 : 0, rules0 = w(RULES_N);
     set(at, start); set(at + 4, 0x7FFFFFFF); set(at + 8, cend); set(at + 12, below && w(below + 8) === cend ? w(below + 12) : start); set(at + 16, rule); set(at + 20, w(t + T_WEAK_N));
     // (where this one's writes of what is newer into older memory begin; none before the outermost)
     const ev0 = w(t + EV); if (ev0 && w(ev0)) { if (!n) { set(ev0 + 8, 0); set(ev0 + 40, 0); } if (n < 6000) set(w(ev0 + 16) + 4 * n, w(ev0 + 8)); }
@@ -2836,9 +2867,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // what it made, the value a jump carries out: kept), but for those let go of below) TODO(explicit)
     let thread_holds = 0;
     if (lowest >= start && now > start && !(v >= start && v < now)) for (let k = 0; k < 1024 && !thread_holds; k += 4) { if (k === T_LEXV || k === T_REFF || k === T_WRITTEN_IN || k === T_CHUNK || k === T_CHUNK_END || k === T_SLOT || k === T_SLOT_END || k === T_SCRATCH) continue; const tw = w(t + k); if (tw >= start && tw < now) thread_holds = 1; }
-    if ((w(t + T_FREEING) > 1 || pass_) && lowest >= start && !thread_holds && now > start && w(t + T_CHUNK_END) === cend && !(v >= start && v < now)) {
+    // (one that listed a rule for the build is not let go of at once: what holds that rule is asked (`evacuate`), as what
+    // holds anything else it made, the thread's scratch and stacks too)
+    if ((w(t + T_FREEING) > 1 || pass_) && lowest >= start && !thread_holds && now > start && w(t + T_CHUNK_END) === cend && !(v >= start && v < now) && w(RULES_N) === rules0) {
       // (the frames it listed, for what is painted: all its own, let go of; past a new run of slots, each one asked)
       for (let k = slot0; k < w(t + T_SLOT) && k < w(LIST_CAP); k++) { const pv = w(w(LIST) + 4 * k); if (pv >= start && pv < now) set(w(LIST) + 4 * k, 0); }
+      rules_listed(rules0, start, now, 0, -1, 0);
       // (the takes that kept a value it made: unread again)
       const wk = w(t + T_WEAK); let kept_n = w(at + 20);
       for (let i = w(at + 20); i < w(t + T_WEAK_N); i++) {
@@ -2854,7 +2888,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (w(t + T_WRITTEN_IN) >= start && w(t + T_WRITTEN_IN) < now) set(t + T_WRITTEN_IN, 0);
     } else {
       // (kept: what still holds what it made moved together where its memory began, the rest let go of) TODO(explicit)
-      if (ev0 && w(ev0) && !w(ev0 + 40) && lowest >= 0 && now - start > 1 << 18 && w(t + T_CHUNK_END) === cend && n < 6000) { if (ev_private(t)) v = evacuate(t, start, now, at, n, v, slot0); }
+      if (ev0 && w(ev0) && !w(ev0 + 40) && lowest >= 0 && now - start > 1 << 18 && w(t + T_CHUNK_END) === cend && n < 6000) { if (ev_private(t)) v = evacuate(t, start, now, at, n, v, slot0, rules0); }
       if (below && lowest < w(below + 4)) set(below + 4, lowest);
     }
     return v;
@@ -2952,7 +2986,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         // (x read; a rule it defined where it is read (`external style s (… => …).style = s`) is what is styled, x's value what is answered)
         const style_before = latest(self), style_x = style_q < z ? block(t, skip(style_q, z), z, names, f, self, 0, 1, 0, self, 0) : 0, style_after = latest(self);
         const styled_x = style_after && style_after !== style_before ? w(style_after + R_HEAD) : style_x;
-        if (styled_x && style_a < style_b && w(STYLES)) { const style_k = xadd(w(STYLES), 1); if (style_k < STYLES_CAP) { const style_at = w(STYLES) + 4 + 12 * style_k; aput(style_at, styled_x); put(style_at + 4, style_a); put(style_at + 8, style_b); } }
+        // (unpainted (no `T_PAINTS`): kept nowhere (the table is what painting asks; kept, every value styled stays))
+        if (w(t + T_PAINTS) && styled_x && style_a < style_b && w(STYLES)) { const style_k = xadd(w(STYLES), 1); if (style_k < STYLES_CAP) { const style_at = w(STYLES) + 4 + 12 * style_k; aput(style_at, styled_x); put(style_at + 4, style_a); put(style_at + 8, style_b); } }
         return style_x || w(NOTHING);
       }
       // (`external rule h`: the latest rule of the language whose head is written as the text h, its head (what it is shown as,
@@ -3946,7 +3981,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     put(r + R_OWNER, self); put(r + R_BS, bs); put(r + R_BE, be); put(r + R_CLOSURE, closure);
     link(self, r);
     // (one made while the files are read, not in a test: listed, its body read at build)
-    if (!w(THREAD + T_REG_AT)) { const k = xadd(RULES_N, 1); if (k < w(RULES_CAP)) put(w(RULES) + 4 * k, r); }
+    // (held weakly where what is made is moved or let go of (`rules_listed`): by what it is a rule of, if anything)
+    if (!w(THREAD + T_REG_AT)) { const k = xadd(RULES_N, 1); if (k < w(RULES_CAP)) { if (w(THREAD + EV) && w(w(THREAD + EV))) set(w(RULES) + 4 * k, r); else put(w(RULES) + 4 * k, r); } }
     return r;
   }
   // (the names a hole's content (a to z, in the head s to e) read from `from` on, each not another's type: when there are
@@ -4381,7 +4417,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (tried) { if (last) { say(t, w(l + 8), L_UNREAD, w(l + 8), w(l + 12)); put(l, 0); } continue; }
       // (an attempt that reads no type yet keeps nothing: what it made let go of, as an application's is (`freeing`), when
       // nothing made before it was given what it made; it is tried again at every settle)
-      const lv = w(t + T_LVL), ln = w(t + T_LVL_N), start = w(t + T_CHUNK), cend = w(t + T_CHUNK_END), slot0 = w(t + T_SLOT), lazy0 = w(LAZY_N), log0 = w(LOG_N), at_ = lv + 24 * ln;
+      const lv = w(t + T_LVL), ln = w(t + T_LVL_N), start = w(t + T_CHUNK), cend = w(t + T_CHUNK_END), slot0 = w(t + T_SLOT), lazy0 = w(LAZY_N), log0 = w(LOG_N), at_ = lv + 24 * ln, rules0 = w(RULES_N);
       const scoped = w(t + T_FREEING) > 1 && lv && ln < DEPTH ? 1 : 0;
       if (scoped) {
         const below = ln ? at_ - 24 : 0;
@@ -4404,8 +4440,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         const now = w(t + T_CHUNK);
         let holds = w(LAZY_N) !== lazy0 || w(LOG_N) !== log0 ? 1 : 0;
         for (let k = 0; k < 1024 && !holds && scoped; k += 4) { if (k === T_LEXV || k === T_REFF || k === T_WRITTEN_IN || k === T_CHUNK || k === T_CHUNK_END || k === T_SLOT || k === T_SLOT_END || k === T_SCRATCH) continue; const tw = w(t + k); if (tw >= start && tw < now) holds = 1; }
-        if (scoped && !holds && w(at_ + 4) >= start && now > start && w(t + T_CHUNK_END) === cend) {
+        if (scoped && !holds && w(at_ + 4) >= start && now > start && w(t + T_CHUNK_END) === cend && w(RULES_N) === rules0) {
           for (let k = slot0; k < w(t + T_SLOT) && k < w(LIST_CAP); k++) { const pv = w(w(LIST) + 4 * k); if (pv >= start && pv < now) set(w(LIST) + 4 * k, 0); }
+          rules_listed(rules0, start, now, 0, -1, 0);
           const wk = w(t + T_WEAK); let kept_n = w(at_ + 20);
           for (let weak_i = w(at_ + 20); weak_i < w(t + T_WEAK_N); weak_i++) {
             const en = w(wk + 4 * weak_i);
@@ -4533,7 +4570,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
 
   // Built: every rule made while the files were read, its body read now (read once, at build: what a test would read again).
   function prepared(t: number) {
-    for (let k = 0; k < w(RULES_N) && k < w(RULES_CAP); k++) { const r = w(w(RULES) + 4 * k); if (w(r + R_KIND) === RULE && !(w(r + R_FLAGS) & DEAD) && w(r + R_BS) < w(r + R_BE)) body(t, r); }
+    for (let k = 0; k < w(RULES_N) && k < w(RULES_CAP); k++) { const r = w(w(RULES) + 4 * k); if (r && w(r + R_KIND) === RULE && !(w(r + R_FLAGS) & DEAD) && w(r + R_BS) < w(r + R_BE)) body(t, r); }
   }
 
   return { prepared, begins, same, bracket, past, skip, line, apart, typed: typed_, match, read, parts, reading, ev, block, apply, head, rule_, member, valued, follow, run, tests, settle, node, frame, alloc, code, isolate };

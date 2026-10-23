@@ -997,6 +997,11 @@ assert {
 {on} &+ {code} ^operator => ((on).interior) &+= {
   {code}
 }
+// A value and a block added (§3.2, `A + B`, B over A): the same, a node made of the value, the block read in it
+// (`Vector := Elementwise{…} + { x => this[0] ?? 0 }`)
+{on} + {`{`}{code}{`}`} ^operator => ((on).interior) &+= {
+  {code}
+}
 interior => {
   external .
   // (what it holds are members: a bare name never reads them, `.name` does)

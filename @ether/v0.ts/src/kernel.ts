@@ -1469,6 +1469,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function valued_member(t: number, nd: number, s: number, n: number): number {
     return n > 0 && b(s) >= 65 && b(s) <= 90 ? member_seen(t, nd, s, n, nd, 0) : 0;
   }
+  // (a type named in the classes a node is written in, the nearest first (`outer_block`, and so on out); none, 0)
+  function outer_valued(t: number, nd: number, s: number, n: number): number {
+    let sm = 0;
+    for (let o = nd && w(nd + N_IS) === IS_NODE && nd !== w(GLOBAL) ? held(t, nd, W_OUTER_BLOCK, 0) : 0, k = 0; !sm && o && o !== w(NOTHING) && w(o + N_IS) === IS_NODE && k < 16; o = held(t, o, W_OUTER_BLOCK, 0), k++) sm = valued_member(t, o, s, n);
+    return sm && w(sm + N_IS) !== IS_PLACE ? sm : 0;
+  }
   function member_seen(t: number, nd: number, s: number, n: number, on: number, depth: number): number {
     const r = rule_seen(t, nd, s, n, depth), hd = r ? w(r + R_HEAD) : 0;
     return r ? apply(t, r, 0, frame(0, 0, on, 0, 0, 0, 0, on, on), 0, on, w(hd + N_A), w(hd + N_B), on, on) : 0;
@@ -2070,6 +2076,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (hl && !w(hl + N_A) && (k === K_RULE || k === K_NAME || k === K_REF) && w(r + 4) === skip(w(t + T_HOLE_A), w(t + T_HOLE_B)) && worded(w(r + 4), w(r + 8))) {
       let e = w(r + 8); while (e > w(r + 4) && b(e - 1) <= 32) e--;
       put(hl + N_A, w(r + 4)); put(hl + N_B, e); declare(t, hl, w(r + 4), e); return hl;
+    }
+    // (a type's name read as a place, what nothing defined yet where it was named (`S` in the body of `S := class …`, read
+    // before S is): what the classes it is written in name it now (`outer_block`, and so on out); none, the place)
+    if (k === K_RULE && !hl && !w(t + T_DECL) && !w(t + T_LE) && b(w(r + 4)) >= 65 && b(w(r + 4)) <= 90 && worded(w(r + 4), w(r + 8))) {
+      const pru = w(r + 12), ppl = pru && w(pru + R_KIND) === VALUE ? w(pru + R_BS) : 0;
+      if (ppl && w(ppl + N_IS) === IS_PLACE && !place_value(t, ppl)) { const pws = skip(w(r + 4), w(r + 8)), pwn = trim_end(w(r + 4), w(r + 8)) - pws, pov = outer_valued(t, w(w(ppl + N_BASE) + R_CLOSURE), pws, pwn) || (self !== w(w(ppl + N_BASE) + R_CLOSURE) ? outer_valued(t, self, pws, pwn) : 0); if (pov) return pov; }
     }
     // (what nothing in it reads: read where its rule was written, that frame's node (a method a class block written in a call
     // defines, `wrapped (tag) => class: this { says => tag }`: the call's `tag`))
@@ -2945,14 +2957,26 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const ss = skip(w(st), w(st + 4)), se = trim_end(w(st), w(st + 4));
     let ne = ss; while (ne < se && b(cl + b(ne)) === 1) ne++;
     let q = ne; while (q < se && b(q) === 32) q++;
-    if (ne === ss || q === ne || b(q) !== 58 || b(q + 1) !== 61 || b(q + 2) !== 32) return 0;
-    const vs = skip(q + 3, se);
+    if (ne === ss || b(q) !== 58) return 0;
+    // (`name := value`, or typed, `name: T = value` (the value read lazily, its type not asked of it), when the value is what
+    // a class makes, `static current: Space = Space.plane` (a type given, `Letter: Char = "a".."z"`, or a value of the language,
+    // `ray: .Lossless = (…)`, read as before))
+    let vq = 0, typed = 0;
+    if (b(q + 1) === 61 && b(q + 2) === 32) vq = q + 3;
+    else if (b(q + 1) === 32) { typed = 1; for (let x = q + 2, d = 0; x + 2 < se; x++) { const c = b(x); if (c === 40 || c === 91 || c === 123) d++; else if (c === 41 || c === 93 || c === 125) d--; else if (!d && c === 32 && b(x + 1) === 61 && b(x + 2) === 32) { vq = x + 3; break; } } }
+    if (!vq) return 0;
+    const vs = skip(vq, se);
     let we = vs; while (we < se && b(cl + b(we)) === 1) we++;
     const n = we - vs;
     // (nor a type, written as one, led by a capital, `static Unit := Binary₈`, `TF{} {…}` (named by what it is given to as a
     // class is), but what one makes is, `Space([…])`; nor another static, `.DepthFirst`)
     let ce = vs; while (ce < se && (b(cl + b(ce)) === 1 || b(ce) === 46)) ce++;
-    const made = ce < se && b(ce) === 40;
+    // (or a static of one, `Space.plane`: a capital, then its members, lowercase, and nothing after them)
+    let me_ = vs; while (me_ < se && b(cl + b(me_)) === 1) me_++;
+    let member_ = me_ > vs && me_ < se && b(me_) === 46 && b(me_ + 1) >= 97 && b(me_ + 1) <= 122;
+    if (member_) { let x = me_; while (x < se && b(x) === 46 && b(x + 1) >= 97 && b(x + 1) <= 122) { x++; while (x < se && b(cl + b(x)) === 1) x++; } member_ = x === se; }
+    const made = (ce < se && b(ce) === 40) || member_;
+    if (typed && !(made && b(vs) >= 65 && b(vs) <= 90)) return 0;
     if (vs >= se || b(vs) === 46 || (b(vs) >= 65 && b(vs) <= 90 && !made) || (n === 5 && b(vs) === 99 && b(vs + 1) === 108 && b(vs + 2) === 97 && b(vs + 3) === 115 && b(vs + 4) === 115) || (n === 6 && b(vs) === 108 && b(vs + 1) === 97 && b(vs + 2) === 122 && b(vs + 3) === 105 && b(vs + 4) === 108 && b(vs + 5) === 121)) return 0;
     const tk = alloc(TAKE);
     for (let i = 0; i < TAKE; i += 4) put(tk + i, w(st + i));

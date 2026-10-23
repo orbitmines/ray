@@ -146,16 +146,27 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `writing.value as String`. Without Language.ray it costs nothing.
 - **Language.ray's header writer reads `.of.header.head`, which no class has** (the entrypoint keeps a header as
   `header_quoted`): no structured value is written through its header; a Location (a Ray) falls to the list writer.
-- **A nested class naming itself bare reads a place** (`G := class { S := class (axes: Number[]) => { static q := S([1, 2])
-  } }`: `G.S.q.axes` is nothing, `G.S([1, 2])` from outside holds them; a static method `make => S(…)` alike; `static`
-  is the class): the name is read in the scope S was being declared in, where `S` was a name nothing defined yet, and
-  stays that place. Geometry's `Space.plane`/`screen` (`Space([Axis(), Axis()])`) so have no axes, `Space.current.dimension`
-  is nothing, nothing is a `Geometry.Vector` (`{.length == Space.current.dimension}`), and `Grid.put (at: Geometry.Vector, …)`
-  rejects every point: the first frame's cells are never put.
+- **A narrowing's constraint in a class does not see the class's other members by bare name** (`G := class { S := class {
+  static d => 2 }; Y := Number[]{.length == S.d} }`: `[1, 2] is G.Y` is false, `Z := Number[]{.length == 2}` there holds):
+  the constraint is read on the value it checks (`it.({constraint})`), in frames of GLOBAL, so where it was written (G's
+  block) is not reached. Geometry's `Vector := Elementwise{…}{.length == Space.current.dimension} + { … }` so holds for no
+  value (`[0, 0] is Geometry.Vector` false), and `Grid.put (at: Geometry.Vector, …)` rejects every point: the first frame's
+  cells are never put. (A name read as a place nothing defined where it was named, `S` in S's own block read before S
+  is, now reads what the classes it is written in name: `Space.plane`, `Space.current.dimension` hold.)
+- **A parameter named bare in a method does not read the field** (`S := class (axes: Number[]) => { dimension =>
+  axes.length }`: `S([1, 2]).dimension` is nothing; `.axes.length` reads it).
+- **A rule written outside the entrypoint does not read a block it was given in the node it makes** (`{on} +++ {`{`}{code}
+  {`}`} => ((on).interior) &+= { {code} }` in a file: `Node +++ { two => 2 }` is Node itself, and `two` is defined at the
+  top; the same rule in the entrypoint holds). So `A + { … }` is the entrypoint's, beside `&+`.
+- **Some bootstrap code made from text is read three times now, not once** (since statics written `name: T = Class.x`
+  and `Class.member` are read when first asked for): `0b0110 ~&& 0b1010 == 0b0010` and two like it, each unread, said
+  three times; nothing else differs.
 - **A class made in a method's body does not take its header** (`static C := lazily class (y: Number = 0) => { }`:
   `U.C() is U.C` is false, "a left side answers a value, not a place: `()`"). So `static X := v` is lazy (the kernel's
   `external static`) only when v is not a class, nor led by a capital unless it is a call (`Binary₈`, `TF{} {…}` are
-  types, named by what they are given to), nor `.`-led (`.DepthFirst`).
+  types, named by what they are given to), nor `.`-led (`.DepthFirst`). Typed, `static x: T = v`, only when v is what a
+  class makes, `Space.plane`, `Space(…)` (`Letter: Char = "a".."z"` is a type; Language's `ray: .Lossless = (…)` read
+  lazily is read by the first `as String`, ~320 MB, inside World's declaration).
 - **`.` in an argument is what the code is read in, not a section** (`(0..<24).map(8 + 10 * . -- Geometry.Color(., ., .))`
   in ANSI's `Palette`; `[0, 1].map(8 + .)` answers 1): read where ANSI is declared it was `10 * ANSI`, 6000 deep, and ANSI
   was left half-declared (`ANSI.Cell() is ANSI.Cell` false). Lazy statics keep it unread until asked.

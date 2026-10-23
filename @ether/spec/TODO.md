@@ -139,10 +139,28 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **Time.project.ray runs out of the 2 GB** when read after Unicode (the whole 85-file closure of the site does not fit).
 - **`x as String` answers a String of characters, not the kernel's text**: `external output (5 as String)` writes nothing,
   and `(5 as String) == "5"` is false in a ternary though `assert 5 as String == "5"` holds (assert's comparison is
-  structural). Terminal's map (`external output (value as String)`) so writes only literal texts: a frame built by joining
-  would not show.
+  structural). (A count's `as String` is its digits now, by the kernel's map, and a text joined with what is no text joins
+  it as written: `"\e[" + 5 + "H"` writes.)
 - **With Language.ray read, `5 as String` costs ~512 MB** at read time (and `Location() as String`, so Location's `==`):
   Language.ray gives every Node `as (=== String) => … Language.ray.write(this)`, and the Ray writer writes a Number as
   `writing.value as String`. Without Language.ray it costs nothing.
 - **Language.ray's header writer reads `.of.header.head`, which no class has** (the entrypoint keeps a header as
   `header_quoted`): no structured value is written through its header; a Location (a Ray) falls to the list writer.
+- **A nested class naming itself bare reads a place** (`G := class { S := class (axes: Number[]) => { static q := S([1, 2])
+  } }`: `G.S.q.axes` is nothing, `G.S([1, 2])` from outside holds them; a static method `make => S(…)` alike; `static`
+  is the class): the name is read in the scope S was being declared in, where `S` was a name nothing defined yet, and
+  stays that place. Geometry's `Space.plane`/`screen` (`Space([Axis(), Axis()])`) so have no axes, `Space.current.dimension`
+  is nothing, nothing is a `Geometry.Vector` (`{.length == Space.current.dimension}`), and `Grid.put (at: Geometry.Vector, …)`
+  rejects every point: the first frame's cells are never put.
+- **A class made in a method's body does not take its header** (`static C := lazily class (y: Number = 0) => { }`:
+  `U.C() is U.C` is false, "a left side answers a value, not a place: `()`"). So `static X := v` is lazy (the kernel's
+  `external static`) only when v is not a class, nor led by a capital unless it is a call (`Binary₈`, `TF{} {…}` are
+  types, named by what they are given to), nor `.`-led (`.DepthFirst`).
+- **`.` in an argument is what the code is read in, not a section** (`(0..<24).map(8 + 10 * . -- Geometry.Color(., ., .))`
+  in ANSI's `Palette`; `[0, 1].map(8 + .)` answers 1): read where ANSI is declared it was `10 * ANSI`, 6000 deep, and ANSI
+  was left half-declared (`ANSI.Cell() is ANSI.Cell` false). Lazy statics keep it unread until asked.
+- **The kernel's translation to WebAssembly mishandles a default parameter after another** (`function line(at, end, lo =
+  0, head = at)`, and `head = 0` as well): every caller that leaves them out reads garbage. `line_of` takes them explicitly.
+- **`RAY_MEMORY` above 2³¹ hangs the kernel** (`RAY_MEMORY=3221225472`: a run of the kernel's own translation, two functions,
+  never ends, main's kernel as well; 2³¹, the default, ends in two minutes): an address past 2³¹ is negative as a 32-bit
+  integer. So the self-hosting check runs at the default, and the translation of `apply_` is at the edge of it.

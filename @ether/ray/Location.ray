@@ -133,16 +133,17 @@ assert !("/no/such/place/anywhere" as Location is Directory)  // LOC58 a locatio
 // A write places what it writes: under the name it is written by, where what it is written in is (`x.count = v` at
 // `x.@ / "count"`), asked when it is (`.@`), so it follows where that is. Then it is written as the entrypoint writes:
 // the name a rule answering it, in what it is written in. (Not in what is nowhere yet: what is under it is nowhere too.
-// Nothing, true and false are one value everywhere, and are placed nowhere.)
+// Nothing, true and false are one value everywhere, and are placed nowhere. What is somewhere already stays where it is:
+// written elsewhere too, it is not moved, so nothing is placed under itself.)
 {holder}.{name: Char.Word[]} = {value} => {
   value
   holder ~~ ({name} => value)
-  ((value).({ location => ({holder}).@.under(`{name}`) })) if (holder).@ && !(((value) === None) || ((value) === true) || ((value) === false))
+  ((value).({ location => ({holder}).@.under(`{name}`) })) if (holder).@ && !((value).@) && !(((value) === None) || ((value) === true) || ((value) === false))
 }
 {holder}.{name: Char.Word[]} := {value} => {
   value
   holder ~~ ({name} => value)
-  ((value).({ location => ({holder}).@.under(`{name}`) })) if (holder).@ && !(((value) === None) || ((value) === true) || ((value) === false))
+  ((value).({ location => ({holder}).@.under(`{name}`) })) if (holder).@ && !((value).@) && !(((value) === None) || ((value) === true) || ((value) === false))
 }
 assert {
   placed_in := (inner: 0, other: 0) @ Location(path: "placed")

@@ -27,7 +27,7 @@ OS.Ether &+= {
   // a notification: kept for whoever plays the device; its display shows the latest
   shown (notification) => ((@me/device as Storage)["notifications"] = notification) -- notification
   // a file executed: read as the Ray program it is, run with the arguments
-  executed (location: Location, args) => (location.held as Program)(args)
+  executed (location: Location, args) => (location as String as Program)(args)
   // sockets: TCP, UDP and TLS in Ray over the network device's frames (Ethernet, IP; RFC 9293, RFC 768, RFC 8446)
   sent (address, bytes: Byte[], transport: "tcp" | "udp" | "tls") => TODO `{transport} in Ray over the network device's frames`
 }
@@ -39,11 +39,9 @@ OS.Ether &+= {
 // PCI Express Base 6.0, 7.2.2), each its registers at what its base address registers say. (What is kept for whoever plays
 // the device, how a key repeats, what was copied, is a member of OS.Ether like any value's: `OS.Ether.clipboard`.)
 Machine := class {
-  [location: Location] => (@c { unsigned char value = *(volatile unsigned char*){location.name as Number} })().value
-  { }[{location: Location}] = {value} ^punctuation => (@c { *(volatile unsigned char*){location.name as Number} = {value} })()
   // a little-endian number of `bytes` bytes at an address
-  static number (address: Number, bytes: Number = 4) => (0..<bytes).reduce(held = 0 => held + (@/memory / (address + .) as String).held * 256 ^ .)
-  static text (address: Number, bytes: Number) => (0..<bytes).map((@/memory / (address + .) as String).held as Char).join("")
+  static number (address: Number, bytes: Number = 4) => (0..<bytes).reduce(held = 0 => held + ((@/memory / (address + .) as String) as Number) * 256 ^ .)
+  static text (address: Number, bytes: Number) => (0..<bytes).map((@/memory / (address + .) as String) as Char).join("")
 
   // ACPI: the root pointer in the BIOS area on a 16-byte boundary (UEFI hands it over instead), its extended table of
   // tables, the one of a signature
@@ -61,8 +59,11 @@ Machine := class {
   static driver (class: Number) => Machine.functions{Machine.number(. + (class > 0xFF ? 0x0A : 0x0B), class > 0xFF ? 2 : 1) == class}
     .map(function => Machine.drivers.find(.takes(function)) -- (driver => driver ? driver(registers: Machine.registers(function)) : None)).compact.first
 }
-Holders = Holders + {
-  {location: Location{OS.Ether && .segments.first == "memory"}} => Machine()
+// (`@/memory/N`: the byte at the address N)
+Location{OS.Ether && .segments.first == "memory"} &+= {
+  as (=== Number) => (@c { unsigned char value = *(volatile unsigned char*){this.name as Number} })().value
+  as (=== Char) => (this as Number) as Char
+  = (value) ^punctuation => (@c { *(volatile unsigned char*){this.name as Number} = {value} })()
 }
 
 assert OS.Ether["platform"] == "ether"  // ETH4 the language as the operating system does not name its platform ether
@@ -89,6 +90,6 @@ assert {
     @me/instance = "a"
     @me/instance = "b"
     assert (@me/device as Storage)["instance/sent"] == "b" && (@me/device as Storage)["instance/sent"].previous == "a"  // ETH9 what is sent to an instance on ether is not kept in order
-    assert [Random.bit, Time.now, ("a" as Location).held()].every(.erred)  // ETH8 what the language as the operating system has not written yet does not err
+    assert [Random.bit, Time.now, ("a" as Location)()].every(.erred)  // ETH8 what the language as the operating system has not written yet does not err
   }
 }

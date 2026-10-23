@@ -11,7 +11,7 @@ Vibration := class (pattern: Quantity.Temporal[] = []) => {
   // navigator.vibrate in a browser; a Mac does not vibrate; on ether a USB controller's
   // HID output report (xHCI), not written yet
   felt => if OS.Linux {
-      ((@/dev/input/by-id).held{. as String ~= "-event-joystick" ⊣}.first as String) -- (controller => this.pattern.enumerate.for(step => (@c {
+      ((@/dev/input/by-id).children{.@ as Path ~= "-event-joystick" ⊣}.first.@ as Path) -- (controller => this.pattern.enumerate.for(step => (@c {
         int felt = open({controller}, O_RDWR)
         struct ff_effect effect = \{0\}
         effect.type = FF_RUMBLE

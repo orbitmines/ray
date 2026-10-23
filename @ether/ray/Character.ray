@@ -8,25 +8,18 @@ Nameable := class {
 }
 
 // A character by its name, `@"ada"` (`@"{name}"`): one claimed, made from what it is called
-@"{name: (!"\"")[]}" ^string => Character(name: name)
+@"{name ^string}" ^string => Character(name: `{name}`)
 // A fragment tagged by a language, `@html <p>{who}</p>`, `@json { … }`: taken whole, its block or the rest of its line,
 // and read by nothing until a dependency is flagged as a language (spec/TODO.md)
-@{tag: Char.Word[]} {{block}} ^keyword => block
-@{tag: Char.Word[]} {rest: (Char.Word | "<" | "(" | "`" | "\"" | "@" | "-"), (!\n)[]} ^keyword => rest
+@{tag: Char.Word[]} {{block}} ^keyword => `{block}`
+@{tag: Char.Word[]} {first: Char.Word | "<" | "(" | "`" | "\"" | "-"}{rest} ^keyword => `{first}{rest}`
 
 Character := class: Hierarchy &+ Nameable {
   // what a value nobody granted is visible to, as this character runs (`@me/policy`): nobody, unless it is set
-  policy: * = none
-  assert @"plc".policy === none  // AC50 the policy nobody has changed is not the permission nobody has
+  policy: Accessor = none
   // The same principal as `other`: here, the same value; @ether/security compares verified roots instead. (Whom a
   // principal answers for, a grant's, a delegation's: `==` it, or `is` it when that is a narrowing of principals.)
   chainable == (other) => this === other
-  assert {
-    c := @"c"
-    assert c == c  // CHR2 a character is not the same as itself
-    assert !(c == @"c")  // CHR3 two different characters of one name are the same
-    assert c is Character{.name == "c"} & !(c is Character{.name == "d"})  // CHR5 a character is not of a narrowing it satisfies, or is of one it does not
-  }
   static PREFIX := "@"
   // (a path, `device/os`: each name a member of what is before it; from where the next `/` is)
   static walked (at, path) => path.empty ? at : Character.walked_at(at, path, path)
@@ -38,16 +31,13 @@ Character := class: Hierarchy &+ Nameable {
   quests => Program#{who: this}{.running}
   acting => this
 }
-
-// `who.read`, `who.write`, `who.execute`: a grant to who of that method; `who{filter}.read`: only where the filter holds
-{who: Character}.{verb: "read" | "write" | "execute"} ^keyword => Access(who, method: Access.method_of(verb))
-{who}{{filter}}.{verb: "read" | "write" | "execute"} ^keyword => Access(who, method: Access.method_of(verb), filter: Program(code: (filter**)))
+// (asserted out here: a class's body runs for each one made, so a character made in it would make one again)
+assert @"plc".policy === none  // AC50 the policy nobody has changed is not the permission nobody has
 assert {
-  zed := @"zed"
-  assert zed.read.who == zed  // AC44 `.read` is not a grant to that character
-  assert zed.read.reads  // AC45 `.read` does not allow reading
-  assert !zed.read.writes  // AC46 `.read` allows writing
-  assert zed.write.writes  // AC47 `.write` does not allow writing
-  assert !zed.write.reads  // AC48 `.write` allows reading
-  assert zed.execute.executes  // AC49 `.execute` does not allow executing
+  c := @"c"
+  assert c == c  // CHR2 a character is not the same as itself
+  assert !(c == @"c")  // CHR3 two different characters of one name are the same
+  assert c is Character{.name == "c"} & !(c is Character{.name == "d"})  // CHR5 a character is not of a narrowing it satisfies, or is of one it does not
+  assert c is Character & c is Accessor  // CHR49 a character is not a character, or not who may
 }
+

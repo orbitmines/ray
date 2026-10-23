@@ -209,7 +209,7 @@ Item := class: Nameable {
   obtained_by: Program?
 
   trail => [location, location.previous**].flatten
-  shown => name ?? (static.name, (" @ ", location as String) if location).join("")
+  shown => name ?? (static.name, (" @ ", location as Path) if location).join("")
   move (to: Location): static => {
     transaction { location = to }
     this
@@ -393,7 +393,7 @@ Character &+= {
   // Delegation: signed, scoped and expiring; the effective permission is the intersection.
   assert {
     dlg_from := @local.login(@"lender")
-    dlg := dlg_from.delegate(@me, Access(method: `()`), until: Time.now + 1 hour)
+    dlg := dlg_from.delegate(@me, Location{.name == "()"}, until: Time.now + 1 hour)
     assert dlg.valid()  // DLG1 a signed delegation is not valid
     assert dlg.covers(`()`, "x")  // DLG2 a delegation does not cover what it names
     assert !(dlg.covers(`=`, "x"))  // DLG3 a delegation to run covers writing
@@ -408,7 +408,7 @@ Character &+= {
     hold_from := @local.login(@"hold-from")
     hold_to := @local.login(@"hold-to")
     hold_other := @local.login(@"hold-other")
-    hold := hold_from.delegate(hold_to, Access(method: `()`), until: Time.now + 1 hour)
+    hold := hold_from.delegate(hold_to, Location{.name == "()"}, until: Time.now + 1 hour)
     assert @local.delegated(hold, by: hold_to) == hold_from.acting  // HOLD1 the one a delegation was given to does not act on it
     assert @local.delegated(hold) is Diagnostic  // HOLD2 a delegation given to someone else is acted on by whoever presents it
     assert @local.delegated(hold, by: hold_other) is Diagnostic  // HOLD3 a delegation is acted on by someone it was not given to
@@ -473,7 +473,7 @@ Character &+= {
   assert {
     sct := @local.login(@"secret-keeper")
     @local.certified(sct, World(name: "sct-world"))
-    assert ["key", "inbox", "roots", "world_keys"].every(name => sct.fields{.name == name}.every(.unreadable))  // SECRET1 a private key is held in a field someone may read
+    assert ["key", "inbox", "roots", "world_keys"].every((sct.@ / .).access === none)  // SECRET1 a private key is held in a field someone may read
     assert !((sct as Store.Row).fields.some(.name is ("key" | "inbox" | "roots" | "world_keys")))  // SECRET3 a store writes a private key
     sct_root := sct.roots.first
     @local.logout(sct)
@@ -491,7 +491,7 @@ Character &+= {
     revk.commit(revk_owner, 1)
     revk.shared(revk_reader, revk_owner)
     revk.unshared(revk_reader.acting, revk_owner)
-    assert !(revk.access#.some(.who === revk_reader))  // REVK1 a reader revoked by a verified copy keeps the grant
+    assert !(revk.allows(revk_reader))  // REVK1 a reader revoked by a verified copy keeps the grant
     assert revk.content_key(revk.current_key, [revk_reader]).erred  // REVK2 a reader revoked by a verified copy holds the new key
     assert !(revk_reader is Verified || @"revk-reader" is Verified)  // REVK4 a claimed character answers for a principal
     assert revk_reader.acting is Verified & revk_reader.acting == revk_reader  // REVK5 a verified character does not answer for itself
@@ -610,10 +610,6 @@ assert Character(name: "alice" | @github.com/@alice | "alice@a.b").(
 )
 assert {
   reader := @"reader"
-  once_target := "used once"
-  reader{uses < 1}.execute once_target
-  assert once_target.allows(reader, `()`)  // AC6 a grant never used before is refused
-  assert !(once_target.allows(reader, `()`))  // AC7 a grant for one use allowed a second
   day_target := "read by day"
   reader{0:00 <= now}.read day_target
   assert day_target.allows(reader, `size`)  // AC8 a grant whose filter holds is refused
@@ -678,7 +674,7 @@ Instance := class: Location {
   // program run as the character once 30 days have passed; stopping it within them cancels it (W2.4).
   logout (character: Character, delete_all = false) => {
     registry = registry#{!(. === character || character is Verified && character == .)}
-    character.fields{.unreadable}.for(field => {
+    character.fields{(character.@ / .name).access === none}.for(field => {
       Instance.keys_in(field.value).for(.zeroised)
       character[field.name] = None
     })
@@ -764,7 +760,7 @@ assert Status#.count == 9  // CS1 there are other than nine statuses
 
 Organization := class: Character {
   logo: *?
-  assert @./lib/logo.png as String == "./lib/logo.png"  // LC3 @./path is not a relative location
+  assert @./lib/logo.png as Path == "./lib/logo.png"  // LC3 @./path is not a relative location
   assert (@./lib / "logo.png") == @./lib/logo.png  // LC5 / does not go into a location
   website: *?
 
@@ -790,19 +786,19 @@ assert !(Network.DomainName(text: "").valid)  // WO8 a name of nothing is a vali
 assert Proof.theorem(Proof.Proposition(code: { true }), Proof(proposition: None, argument: Proof.Proposition(code: { true })))  // WO11 the theorem does not hold
 
 // Locations written as values (L§6.1, A3)
-assert (@https://orbitmines.com/archive) as String == "https://orbitmines.com/archive"  // LC1 @https://… is not a location of what is written
+assert (@https://orbitmines.com/archive) as Path == "https://orbitmines.com/archive"  // LC1 @https://… is not a location of what is written
 
 assert @"a name with spaces".name == "a name with spaces"  // LC2 @"…" does not keep its spaces
 
-assert (@https://www.unicode.org/Public/ 17 /ucd) as String == "https://www.unicode.org/Public/17/ucd"  // LC6 a value between the parts of a location is not written into it
+assert (@https://www.unicode.org/Public/ 17 /ucd) as Path == "https://www.unicode.org/Public/17/ucd"  // LC6 a value between the parts of a location is not written into it
 
 assert (@https://www.unicode.org/ucd/UnicodeData.txt) as String ~= "UnicodeData.txt" ⊣  // LC7 a dot in a path is not part of the path
 
-assert (@https://www.unicode.org/ucd)/UnicodeData.txt as String == "https://www.unicode.org/ucd/UnicodeData.txt"  // LC8 a path written after a location does not continue it
+assert (@https://www.unicode.org/ucd)/UnicodeData.txt as Path == "https://www.unicode.org/ucd/UnicodeData.txt"  // LC8 a path written after a location does not continue it
 
-assert (@https://en.wikipedia.org/wiki/Dune_(novel)) as String == "https://en.wikipedia.org/wiki/Dune_(novel)"  // LC9 a location loses the parentheses in its path
+assert (@https://en.wikipedia.org/wiki/Dune_(novel)) as Path == "https://en.wikipedia.org/wiki/Dune_(novel)"  // LC9 a location loses the parentheses in its path
 
-assert (@./icons/ "tick" .svg) as String == "./icons/tick.svg"  // LC10 a location does not go on with an extension after a value
+assert (@./icons/ "tick" .svg) as Path == "./icons/tick.svg"  // LC10 a location does not go on with an extension after a value
 
 assert "+31 (0)6 1234-5678" is Phone && ("+31 (0)6 1234-5678" as Phone).digits == "+31612345678" && ("(020) 123 4567" as Phone).digits == "0201234567"  // CTH7 a grouped phone number is not read to its digits
 

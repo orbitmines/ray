@@ -1474,35 +1474,38 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   beginning with `/.@`).
 - Text joined into a path that isn't proven free of `..` or `/` is a warning (configurable).
 
-### 14.2 A location is what is held there
+### 14.2 A location is what is there
 
-- Mentioning `@x` resolves to what is held there, but it stays a location until something uses it otherwise. Used as a
-  location (`/`, `name`, `segments`, `children`, `==`) it is one; used as anything else it is read:
+- Everything has a location, `.@`: a value written under a name is at the location of what it is written in, then that
+  name (`x.count.@` is `x.@ / "count"`); `value @ place` puts it somewhere too. A location is a hierarchy (`Location :=
+  Ray`): each name under a location is one location, its child (`.parent`), so what is placed there, a grant, stays.
+  What it is written in stores nothing but where it is. A write (`x.count = v`, `x.count := v`) gives the value a rule
+  `location => x.@ / "count"`, asked when `.@` is, so it follows where x is; it is written in `.ray`, in Location.ray.
+  (2026-10-23, user: from the drafts' `dynamically sub.location &= location / property`; what never asks for `.@`, a
+  compiler level may leave unplaced.)
+- A location is what is there; there is no holder and no `held`/`content`/`resolved` (2026-10-23, user). A project
+  reserving a space adds to the locations in it (`Location{!.scheme || …} &+= { … }` in @ether/filesystem, the URLs in
+  @ether/network, `@/memory/N` in @ether/os), with no value in between:
 
   ```ray
   @/etc/hosts as String       // the file's text
-  logo := @./logo.png         // an Image, because PNG reads it
+  logo := @./logo.png         // read as anything: `logo as PNG`
   @x = value                  // writes it
   @x = None                   // removes it
   @new = @x                   // copies it
   @x(…)                       // executes it, with any code as arguments
-  if @x { … }                 // whether anything is held there
+  if @x { … }                 // whether anything is there
+  (@x).children               // what is under it
+  @x as Path                  // its own text
   ```
 
-  There are no `read`, `write`, `listing`, `exists`, `remove`, `content` or `launch` members. A directory's `children` are
-  what is under it.
-- `.@` is the location method of any value (`x.@` is `x.location`); `(@./x).@` is the location itself. There is one
-  class, `Location` (no `Held`, 2026-10-21): what is there is read `.held`, written `@x = value`, executed `@x(…)`; a
-  location made in memory holds its `content` and `children` itself. A path as written after `@` is a `Path`.
-- What holds a location is what its space is reserved to. A project holds a space by adding to `Holders`
-  (`@ether/filesystem` reserves `@/ => FileSystem.Host()`, and `@./`, `@../` and drives; `@ether/network` the locations
-  with a scheme and `@localhost`). A holder answers `holder[location]`, `holder[location] = value` and
-  `holder(location, args)`. A location nothing loaded holds holds nothing (`.held` is None); writing it is `ERROR@Location`. Code that only
-  names locations doesn't depend on what holds them; what runs (an app, a device's entrypoint) loads the holders.
-- A node's location is the superposition of every place it is (`Node.location`). `value @ place` adds one and answers the
-  value; `(value @ place) = v` writes v there. Where a value was written (what diagnostics point at) is one of its places.
-  No class keeps a location field of its own. A mirror is the value at another instance: `instance.mirror(x, depth)`
-  places x (and its children, to that depth) there.
+  A location in no reserved space has nothing there (writing it is `ERROR@Location`). Code that only names locations
+  doesn't depend on what answers them; what runs (an app, a device's entrypoint) loads those projects.
+- Who may use a value is at its location (Access.ray, §17.2): the location's `access` names who (a character, a location,
+  any narrowing of them). Reading is the location, writing its `=` under it (`x.@ / "="`), executing its `()`; what a
+  location does not say, the one above it does, at the same method, and above everything `@me/policy`.
+- A mirror is the value at another instance: `instance.mirror(x, depth)` places x (and its children, to that depth)
+  there.
 - `IO /path` is the instance directory, sandboxed: `..` can't leave the top (symlinks can), and the host's file system is
   reached only through `confidential IO.os /path` when permitted. A path naming a field is looked up as `{field}.ray`, then
   a directory `{field}`, then a file.
@@ -1823,17 +1826,16 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   @company may network @https://api.company.com
   ```
 
-- A node's `access` superposition is the only store of who may do what. A grant `{who}.read x` places an access on what
-  `x` names: on the value or field, or on the expression itself when it derives something. A grant names an expression,
-  and paths are expressions: `@ether.read x.count` and `@ether.read x @/count` are the same. Prefer code; use paths only
-  where paths make sense.
-- A grant is a node, so its own location says where it holds: placed at an instance it holds only there, placed nowhere
-  it holds everywhere. A mirror can so have permissions of its own.
+- Who may do what is only who, at a location (§14.2); there is no `Access` (2026-10-23, user: the method is a location,
+  `x.@` reading, `x.@ / "="` writing, `x.@ / "()"` executing, and a filter is a narrowing of who). `{who}.read x` gives who
+  where what `x` names is: `@ether.read x.count` at `x.@ / "count"`, so a field, a derivative, is granted apart from what
+  holds it; `who{filter}.read x` gives the narrowing of who. A value is visible to who its location lets, else who the
+  location above lets. A delegation's scope is a narrowing of locations. Prefer code; use paths only where paths make
+  sense.
+- A mirror is placed at its instance, so it can have permissions of its own.
 - A grant may carry a narrowing: `{once}` (consumed by its first use), `{while app.running}`, or a condition on the other
   party's code, re-read `dynamically`. A permission's `who` is any narrowing (`Character{presence near x}`), and reaching
   items by presence is a grant narrowed by distance.
-- Checking a permission runs no one's code: a grant's expression and filter must change nothing outside themselves and
-  terminate, or the grant is refused when made.
 - `execute` runs a function where it is, on its owner's instance, for the caller; `read` lets the reader copy the function
   and run it on its own instance. Running injected code in someone else's program needs an execute grant on it; without
   one it applies only to your own copy.
@@ -1843,8 +1845,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 
 - An item inherits its parent's visibility; at the top it falls back to the default privacy policy, which is private
   (`local` until someone sets their policy).
-- The levels are `who` values. The core has only `none` (no one: `none.read` is a secret, `const x` is `none.write` on x
-  and children that set nothing of their own) and `confidential` (the default privacy policy). Ether names `@local` (this
+- The levels are `who` values. The core has only `none` (no one: `none.read` is a secret; there is no `const`, 2026-10-23) and `confidential` (the default privacy policy). Ether names `@local` (this
   character, this machine), `@localhost` (characters on the same machine), `@private` (this character anywhere, the
   central server included), `@private.managed` (only your own servers) and `@public`. `confidential` is never wider than
   `@private.managed`, whatever the policy.

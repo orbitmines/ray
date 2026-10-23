@@ -76,6 +76,19 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   language, which gives the syntax. Until then they are unread. The tests that use them stay as written, and TL1
   (`` @ray`1 + 2` == 3 ``) waits for this.
 
+- **A name written in a frame is not placed** (`x := …` at the top of a file or in a block): a write places what it writes
+  only in what has a location (Location.ray's `{holder}.{name} = {value}`), and a frame has none. It should be where the
+  code is written (the file, `@/…/Program.ray`). The rule's body cannot name the frame (`.`) from the block it defines on
+  the value; a hole spliced in braces (`{holder}`) can be.
+- **A value placed after what was written in it** (`x.f = v`, then `x @ place`): v stays nowhere, since a write in what
+  has no location places nothing (Location.ray; placing each write costs a rule and a block, and most holders are
+  nowhere). A write could place lazily always, once that costs less.
+- **Reading `x.a.b.@.parent.parent === y` does not finish** (probed 2026-10-23); the same in steps does, in 0.2 s. A
+  guess: the member-write head `{holder}.{name} = {value}` tried against `===`.
+
+- **A grant for one use (`{once}`, W2)** has nothing to count its uses since Access was removed (2026-10-23): who may is
+  only who, at a location. AC6/AC7 were taken out of World.ray until uses are counted where they happen.
+
 ## Tests to take in
 
 - **Control.ray's tests of the language's own forms** (operator sections OP1–OP5, `if` with cases IC3, `?`/`?=` QM1–QM2,

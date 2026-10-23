@@ -62,12 +62,13 @@ Terminal := class {
       })() -- (got => (got.columns, got.rows))
     }
     else { OS.Ether.terminal_size }
-
-  // As what holds the instance it plays: reading it is what was typed, writing it shows what was written; it is not
-  // executed.
-  [location: Location] => .typed
-  { }[{location: Location}] = {value} ^punctuation => (this as Terminal) = value
-  ({location: Location}, {args}) => ERROR@Terminal `an instance is not executed: it is sent to`
+}
+// The instance whoever plays it reaches through it, `@local`: read, what was typed; written, it shows what was written;
+// it is not executed
+Location{=== @local} &+= {
+  as (=== String) => (@me/device as Terminal).typed
+  = (value) ^punctuation => (@me/device as Terminal) = value
+  ({args}) => ERROR@Terminal `an instance is not executed: it is sent to`
 }
 assert {
   with (@me/device as OS) = OS.Ether {

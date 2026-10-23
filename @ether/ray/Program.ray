@@ -390,21 +390,36 @@ assert !(Program(code: { external read "x" }) is Initializer)  // AC66 a program
 Refused := Program{. is Program.refused#}
 Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 
+// Configuration, `name.cfg.ray`: Ray whose code provably halts and has no side effects
+Cfg := class: Program{Pure & Terminating} {
+  static extensions := ".cfg"
+}
+assert !(Program(code: { while true { } }) is Cfg)  // VC57 a line's settings may run forever
+assert Program(code: { x := 1 }) is Cfg  // LNG37 a configuration that only declares is not configuration
+
+// What a file is written in: the class whose extensions name it (`.json`), Ray's being Program's; read by its header,
+// `text as JSON`, written by it, `json as String`
+Program &+= {
+  static extensions := ".ray"
+  static extended (extension: String) => Node#{.extensions && extension is .extensions#}.first
+}
+assert Program.extended(".ray") === Program  // LNG31 Ray does not name its own extension
+assert Program.extended(".cfg") === Cfg  // LNG38 the configuration language does not use the extension ".cfg"
+assert Program.extended(".nothing-has-this") === None  // LNG32 a class names an extension that is not its own
+
+assert {
+  Numbered := class ("#", number: Decimal, ("'", revision: Decimal)?) => { }
+  assert (Numbered(number: 3, revision: 2) as String) == "#3'2"  // LNG22 a value is not written by walking the pattern in its class's header
+  assert (Numbered(number: 3) as String) == "#3"  // LNG23 an optional part is written when it is not held
+  assert ("#3'2" as Numbered).revision == 2  // LNG9 a value written by its header does not read back
+}
+
 [(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
   right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
 }
 
-// What a program is to a grant (Access.ray): checkable when it changes nothing outside itself and terminates (reading the
-// time stays allowed, `@bob.read history{from Time.now}`, L§9.2: this is `!Effecting`, not `Pure`), so checking a
-// permission runs no one's code; and who runs it, its chain of callers
+// Who runs a program: its chain of callers
 Program &+= {
-  checkable => !(this is Effecting) && this is Terminating
-  assert Program(code: { 1 + 1 }).checkable  // AC30 a program with no effects that terminates cannot be checked
-  assert !Program(code: { external read "x" }).checkable  // AC31 a program with an effect can be checked
-  names (value) => this === value || this == value || .checkable && this() === value
-  assert Program(code: { 1 + 1 }).names(2)  // AC54 a checkable program does not name what it answers
-  assert !Program(code: { 1 + 1 }).names(3)  // AC55 a program names what it does not answer
-  assert !(Program(code: { external read "leak" }).names("leak"))  // PURG4 checking a grant runs an expression with effects
 
   caller: Program?
   // Who runs a program is its chain of callers, the origin first; a prompt names them all.
@@ -423,39 +438,17 @@ Program &+= {
     + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
 }
 
-// A grant is an Access on what it names: on what the expression answers when that is held somewhere (a value, a field),
-// on the expression itself when it derives something (`@ether.read x.count`, L§8.2.2); grants on a derivative sit on the
-// expression that names it, found by what it answers
-Access &+= {
-  { }{target} ^punctuation => Program(code: target**) -- (named => Access.checkable(named) && Access.checkable(this.filter)
-    ? named() -- (value => value is Node && value.parent ? value : named) -- (held => held ~~ .access |= (this ~~ .target = held))
-    : ERROR@Access `a grant names an expression that changes nothing and terminates`)
-}
-Node &+= {
-  granted => [.visibility#, Program#{.access && .names(this)}.access#].flatten
-}
-// A grant names an expression: a derivative may be granted where the value it derives from is not
+// A grant is where what it names is: a field, a derivative, is granted apart from what holds it
 assert {
-  gx_reader := (name: "reader")
-  gx := (count: 3, secret: "s")
-  Access(gx_reader, method: Access.Reading) gx.count
-  gx_grant := Program#{.access#.some(.who === gx_reader)}.first?.access
-  assert gx_grant.target is Program  // GX1 a grant took the value of what it names instead of the expression
-  assert gx_grant.target.names(Program(code: { gx.count }))  // GX2 a grant does not name the expression it was given
-  assert !(gx_grant.target.names(Program(code: { gx.secret })))  // GX3 a grant on one derivative names another
-  assert Program(code: { gx.count }).allows(gx_reader, `count`)  // GX4 a granted derivative is refused
-  assert !(Program(code: { gx.secret }).allows(gx_reader, `secret`))  // GX5 a grant on a count lets another field leave
+  gx_reader := @"reader"
+  gx := (count: 0, secret: "") @ Location(path: "gx")
+  gx.count = (n: 3)
+  gx.secret = (s: "s")
+  gx_reader.read gx.count
+  assert gx.count.allows(gx_reader)  // GX4 a granted field is refused
+  assert !(gx.secret.allows(gx_reader))  // GX5 a grant on one field lets another leave
+  assert (gx.@ / "count").access == gx_reader  // GX1 a grant is not where what it names is
   gx_whole := (count: 1)
-  Access(gx_reader, method: Access.Reading) gx_whole
-  assert gx_whole.allows(gx_reader, `size`)  // GX6 a grant naming a value does not cover that value
-  assert gx_whole.access#.some(.who === gx_reader)  // GACC1 a grant naming a value is not on that value
-}
-// Checking a permission runs no one's code: a grant whose expression or filter has effects is refused when granted, and
-// never run
-assert {
-  purg_reader := (name: "purg-reader")
-  purg_lamp := (lamp: 1)
-  assert (Access(purg_reader, method: Access.Reading) (external read "leak")) is Diagnostic  // PURG1 a grant naming an expression with effects is granted
-  assert (Access(purg_reader, method: Access.Reading, filter: Program(code: { external read "leak" })) purg_lamp) is Diagnostic  // PURG2 a grant whose filter has effects is granted
-  assert !(purg_lamp.access)  // PURG3 a refused grant is kept
+  gx_reader.read gx_whole
+  assert gx_whole.allows(gx_reader)  // GX6 a grant naming a value does not cover that value
 }

@@ -481,7 +481,7 @@ Geometry := class {
   assert Geometry.Box(content: "a"){.font.size == 18px}.font.size == 18px  // UI128 font_size does not size the text
   assert Geometry.Box(){.transition == Geometry.Transition(0.4 s, Geometry.ease)}.transition.duration == 0.4 s  // UI134 animated does not give the shape a transition
   assert Geometry.Box(){.position == Geometry.Fixed()}.position is Geometry.Fixed  // UI135 position == fixed is not narrowed
-  assert Geometry.Box(content: (choose Language.ray).attempt("x := 1")).face.content.some(Geometry.Box(content: (choose Language.ray).attempt("x := 1")).styles.nonempty) && Geometry.Box(content: (choose Language.ray).attempt("x := 1")).face.content == "x := 1"  // UI142 a text area in a language is not painted
+  assert Geometry.Box(content: (choose Program).attempt("x := 1")).face.content.some(Geometry.Box(content: (choose Program).attempt("x := 1")).styles.nonempty) && Geometry.Box(content: (choose Program).attempt("x := 1")).face.content == "x := 1"  // UI142 a text area in a language is not painted
   Ball := Shape{.boundary == ellipse(.size)}
   Curve := class: Shape (segments: Segment[], rank: Integer = 1, boundary: Shape = segments is Loop ? Shape(rank: 0) : Shape(rank: 0, cells: [Cell(points.first, [], -1), Cell(points.last, [], 1)])) => {
     points => .segments.map(segment => if segment {

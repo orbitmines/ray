@@ -40,7 +40,7 @@ Room := class: Location value: * {
 }
 
 Onboarding := class {
-  language: Language?
+  language: Program?
   purpose: everything | tools_only = everything
   network: * = public
   look: realistic | voxel = realistic

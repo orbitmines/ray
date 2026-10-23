@@ -1,65 +1,52 @@
-// A grant: who may use a method (`=` writing, `()` executing, any other reading) on its target, only where its filter
-// holds and only where it is placed. Who is a principal, compared with `==` (or `is` a narrowing of principals): identity
-// here, verified roots with @ether/security.
-Access := class (who: *?, method: `=` | `()` | * = *, filter: *?, target: *?) => {
-  static Reading := *{. != `=` && . != `()`}
-  assert `read` is Access.Reading  // AC27 reading is not a reading method
-  assert !(`=` is Access.Reading)  // AC28 writing is a reading method
-  assert !(`()` is Access.Reading)  // AC29 executing is a reading method
-  static method_of (verb) => verb == "read" ? Access.Reading : verb == "write" ? `=` : `()`
-  assert Access.method_of("write") == `=` & Access.method_of("execute") == `()`  // AC67 a method is not named by its verb
+// Who may: a character or a location (an instance, who is at one), or any narrowing of them. What is done is a location
+// too: reading a value is where it is (`x.@`), writing it its `=` under that (`x.@ /
+// "="`), executing it its `()`. What a location does not say, the one above it does, at the same method; above
+// everything, the policy of whoever runs (`@me/policy`).
+Accessor := Character | Location
 
-  // A grant's expression and filter are read to check it, never run for what they do: what says of itself whether it may
-  // be (`checkable`, a program: when it changes nothing and terminates) is granted only when it may; anything else is data.
-  static checkable (expression) => expression.checkable ?? true
-  assert Access.checkable(5)  // AC32 a value that is not a program cannot be checked
-
-  allows (called) => called is .method#
-  assert Access(method: `=`).allows(`=`)  // AC33 a grant of writing does not allow writing
-  assert !Access(method: `=`).allows(`()`)  // AC34 a grant of writing allows executing
-  reads => .allows(`read`)
-  writes => .allows(`=`)
-  executes => .allows(`()`)
-  assert Access(method: Access.Reading).reads  // AC35 a grant of reading does not allow reading
-  assert !Access(method: Access.Reading).writes  // AC36 a grant of reading allows writing
-  assert Access(method: `=`).writes  // AC37 a grant of writing does not allow writing
-  assert !Access(method: `=`).reads  // AC38 a grant of writing allows reading
-  assert Access(method: `()`).executes  // AC39 a grant of executing does not allow executing
-  assert !Access(method: `()`).writes  // AC40 a grant of executing allows writing
-  // A grant placed somewhere (its own location) holds only there; one placed nowhere holds everywhere (W2.27).
-  covers (who, called, at = None) => (who == this.who || who is this.who) && .allows(called) && (!.location || !at || at is .location#)
-    && (!.filter || Access.checkable(.filter) && .filter.entered(this, None))
-  assert {
-    alice := (name: "alice")
-    grant := Access(alice, method: `=`)
-    assert grant.covers(alice, `=`)  // AC41 a grant does not cover the one it was given to
-    assert !grant.covers(alice, `()`)  // AC42 a grant covers a method it does not allow
-    assert !grant.covers((name: "bob"), `=`)  // AC43 a grant covers someone it was not given to
-  }
+Location &+= {
+  access: Accessor? = None
+  at (method) => ((method == `=`) || (method == "write")) ? this / "=" : ((method == `()`) || (method == "execute")) ? this / "()" : this
+  give (who: Accessor) => this ~~ (.access = ((.access === None) ? who : (.access | who)))
+  take (who: Accessor) => this ~~ (.access = .access{!== who})
+  lets (who: Accessor, method = "read") => .at(method).access -- (granted => (granted !== None) ? granted#.some((. == who) || (who is .))
+    : .parent ? .parent.lets(who, method) : who is @me/policy)
 }
-
-// The permission nobody has
-none := Node{false}
-assert !((name: "anyone") is none)  // CST2 the permission nobody has reaches someone
-
-// (`none.read`: a grant to nobody, so no one may read it: a secret)
-none.{verb: "read" | "write" | "execute"} ^keyword => Access(none, method: Access.method_of(verb))
-assert none.read.reads & none.read.who === none  // CST4 `none.read` is not reading granted to nobody
-
-// `const x`: nobody may write it (`none.write`), and what it holds inherits that
-const {target} ^keyword => target ~~ .access |= Access(none, method: `=`, target: target)
-assert (const (count: 1)).access#.some(.who === none && .writes)  // CST1 const is not the permission nobody has
-
-// What a value is visible to: its own grants, else what holds it's, else the policy of whoever runs (`@me/policy`)
 Node &+= {
-  visibility => .access ?? (.parent ? .parent.visibility : None) ?? Access(@me/policy, method: Access.Reading, target: this)
-  assert (count: 1).visibility.who === @me/policy  // AC51 a value granted nothing is not visible to the policy
-  granted => .visibility#
-  allows (who, called, at = None) => .granted.some(.covers(who, called, at))
-  // A secret is a node no one may read (`none.read`, W5.6): stores skip it and logging out drops it.
-  unreadable => .access#.some(.who === none && .reads)
-  assert !(const (count: 1)).unreadable  // AC52 a constant is unreadable
-  assert !(count: 1).unreadable  // AC53 a value nobody restricted is unreadable
+  allows (who: Accessor, method = "read") => .@ ? .@.lets(who, method) : who is @me/policy
   // (what the bootstrap leaves here: `internal x`, visible only to what made it)
-  right-to-left internal => this ~~ .access = Access(&.caller, method: Access.Reading, target: this)
+  right-to-left internal => (.@ ?? (this ~~ (.location = Location(path: ""))).@).give(&.caller)
 }
+
+// The permission nobody has: `none.read` a secret (W5.6), which stores skip and logging out drops
+none := Accessor{false}
+assert !(@"anyone" is none)  // CST2 the permission nobody has reaches someone
+
+// `who.read x`, `who.write x`, `who.execute x`: who may, where what x names is (`@ether.read x.count` at `x.@ / "count"`,
+// apart from what holds it; placed somewhere of its own when it is nowhere yet); `who{filter}.read x`, who while the
+// filter holds of them; a field declared so, where the field is
+{who}.{verb: "read" | "write" | "execute"} {target} ^keyword => ((target).@ ?? ((target) ~~ (.location = Location(path: ""))).@).at(verb).give(who)
+{who}{{filter}}.{verb: "read" | "write" | "execute"} {target} ^keyword => (Accessor{((. == who) || (. is who)) && ({filter})}).{verb} {target}
+{who}.{verb: "read" | "write" | "execute"} {name ^variable}: {type} ^keyword => {
+  ({name}: {type})
+  (.@ / `{name}`).at(verb).give(who)
+}
+
+// What one may execute: what someone may execute where it is
+Executable := *{.@ && .@.at(`()`).access !== None}
+assert !((count: 1) is Executable)  // LOC59 a value without execute access is an executable
+
+assert {
+  zed := @"zed"
+  Held := class { count: Number = 1 }
+  granted := Held()
+  zed.read granted
+  assert granted.allows(zed) & !granted.allows(zed, `=`) & !granted.allows(@"other")  // AC45 `.read` does not let read, or lets write, or lets someone else
+  writable := Held()
+  zed.write writable
+  assert writable.allows(zed, `=`) & !writable.allows(zed)  // AC47 `.write` does not let write, or lets read
+  above := Location(path: "above")
+  above.give(zed)
+  assert (above / "below").lets(zed) & !(above / "below").lets(zed, `=`)  // AC70 who may read a location may not read what is under it, or may write it
+}
+assert (count: 1).allows(@me/policy)  // AC51 a value no one was given is not visible to the policy

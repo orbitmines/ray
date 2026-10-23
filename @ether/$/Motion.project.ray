@@ -24,8 +24,8 @@ Motion := class {
     else { OS.Ether.acceleration }
 
   // the first Linux sensor with the channel: `/sys/bus/iio/devices/iio:device*/in_{channel}_{x,y,z}_raw` times `in_{channel}_scale`
-  static iio (channel: String) => (@/sys/bus/iio/devices).held{(. / ("in_" + channel + "_x_raw")).held}.first -- (sensor => sensor
-    ? ["x", "y", "z"].map(axis => ((sensor / ("in_" + channel + "_" + axis + "_raw")).held as String as Decimal) * ((sensor / ("in_" + channel + "_scale")).held as String as Decimal)) as Geometry.Vector
+  static iio (channel: String) => (@/sys/bus/iio/devices).children{(. / ("in_" + channel + "_x_raw")) as boolean}.first -- (sensor => sensor
+    ? ["x", "y", "z"].map(axis => ((sensor / ("in_" + channel + "_" + axis + "_raw")) as String as Decimal) * ((sensor / ("in_" + channel + "_scale")) as String as Decimal)) as Geometry.Vector
     : None)
   // the first Windows sensor of the type: its latest report's three values
   static sensed (type: Program, x: Program, y: Program, z: Program) => (@c {

@@ -2,15 +2,14 @@
 
 // ECMAScript Language Specification (https://tc39.es/ecma262/)
 // A fragment reads as the Ray program it is, kept as code: calls, members, operators and lambdas are Ray's own, and a hole in braces is its value. Writing JS is one level over Ray's program shapes, a rule to each production
-JS := class: Language {
+JS := class {
   static extensions := ".js"
   static Identifier := (Char.Letter | "_" | "$", (Char.Word | "$")[])
 
-  level := {
-    {code} => Program(code: code)
-  }
-
-  written := JSON.written + {
+  // A program written as JS: a rule to each production
+  static (program: Program) as (=== JS) => Compiler.reduced(program, {
+    // Values held in holes, as JSON writes them (https://tc39.es/ecma262/#sec-json-object)
+    {value: None | boolean | Number | String} => JSON(root: value as JSON.Value) as String
     // Statements, each ended by ";" (https://tc39.es/ecma262/#sec-statements)
     {program: Program} => program.steps.map(., ";")
     // Comments (https://tc39.es/ecma262/#sec-comments)
@@ -24,7 +23,7 @@ JS := class: Language {
     if ({condition}) {then} => "if(", condition, "){", then, "}"
     // Function definitions (https://tc39.es/ecma262/#sec-function-definitions), arrow functions with a block or an expression (https://tc39.es/ecma262/#sec-arrow-function-definitions)
     function {name: JS.Identifier}({parameters}) {body} => "function ", name, "(", parameters, "){", body, "}"
-    assert (JS.read((@js function (a) { return a }) as JS) as JS) == ((@js function (a) { return a }) as JS)  // UI292 a written anonymous function does not read back
+    assert ((((@js function (a) { return a }) as JS) as Program) as JS) == ((@js function (a) { return a }) as JS)  // UI292 a written anonymous function does not read back
     function ({parameters}) {body} => "function(", parameters, "){", body, "}"
     ({parameters}) => {body: Program} => "(", parameters, ")=>{", body, "}"
     ({parameters}) => {body} => "(", parameters, ")=>(", body, ")"
@@ -48,11 +47,11 @@ JS := class: Language {
     {name: JS.Identifier}: {value} => name, ":", value
     // Regular expression literals (https://tc39.es/ecma262/#sec-literals-regular-expression-literals), strings in single quotes (https://tc39.es/ecma262/#sec-literals-string-literals), null and undefined
     /{pattern}/{flags: Char.Letter[]} => "/", pattern, "/", flags
-    '{text}' => Language.Writing(text)
+    '{text}' => JSON(root: text as JSON.Value) as String
     null => "null"
     undefined => "undefined"
     {name: JS.Identifier} => name
-  }
+  }).flatten.join("")
 }
 assert {
   who := "Ray"

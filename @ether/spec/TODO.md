@@ -83,8 +83,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A value placed after what was written in it** (`x.f = v`, then `x @ place`): v stays nowhere, since a write in what
   has no location places nothing (Location.ray; placing each write costs a rule and a block, and most holders are
   nowhere). A write could place lazily always, once that costs less.
-- **Reading `x.a.b.@.parent.parent === y` does not finish** (probed 2026-10-23); the same in steps does, in 0.2 s. A
-  guess: the member-write head `{holder}.{name} = {value}` tried against `===`.
 
 - **A grant for one use (`{once}`, W2)** has nothing to count its uses since Access was removed (2026-10-23): who may is
   only who, at a location. AC6/AC7 were taken out of World.ray until uses are counted where they happen.

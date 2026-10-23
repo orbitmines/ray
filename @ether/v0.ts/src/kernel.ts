@@ -419,14 +419,15 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // it is. The brackets are the header's, and the pairs rules taught (a head that is one hole between two characters).
   function bracket(at: number, end: number) {
     // (one byte each, the header's are in the table too: 5 and 6)
-    // (one escaped, `\"`, `\{` (after an odd number of backslashes), as within quotes: opens and closes nothing)
-    if (w(OPEN_LENGTH) === 1 && w(CLOSE_LENGTH) === 1) { const k = b(w(PAIRS) + b(at)); return !k || (b(at - 1) === 92 && escaped(at)) ? 0 : k + 8; }
+    // (one escaped, `\"`, `\{` (after an odd number of backslashes), as within quotes: opens and closes nothing; and the
+    // escape's own that follows `\e`, a control sequence, `\e[2;3H`, `\e]0;`, written bare in a fragment)
+    if (w(OPEN_LENGTH) === 1 && w(CLOSE_LENGTH) === 1) { const k = b(w(PAIRS) + b(at)); return !k || (b(at - 1) === 92 && escaped(at)) || (b(at - 1) === 101 && b(at - 2) === 92 && escaped(at - 1)) ? 0 : k + 8; }
     let l = w(OPEN_LENGTH);
     if (at + l <= end && same(at, w(OPEN), l)) return l * 8 + 5;
     l = w(CLOSE_LENGTH);
     if (at + l <= end && same(at, w(CLOSE), l)) return l * 8 + 6;
     const k = b(w(PAIRS) + b(at));
-    return !k || (b(at - 1) === 92 && escaped(at)) ? 0 : k + 8;
+    return !k || (b(at - 1) === 92 && escaped(at)) || (b(at - 1) === 101 && b(at - 2) === 92 && escaped(at - 1)) ? 0 : k + 8;
   }
   function escaped(at: number): number { let n = 0; while (b(at - 1 - n) === 92) n++; return n & 1; }
   // Past what opens at `at`: to after what closes it (what opens inside it, past that too), or a quote's text.

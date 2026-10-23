@@ -1045,6 +1045,8 @@ assert {
 // A constructor of a class's own (`static (a: String) => …`, separate constructors override the one its block is): what it is
 // called with read by it, what it answers what the call does (`made_by`)
 static ({parameters}) {`=>`} {body} ^keyword => static made_by ({parameters}) => {body}
+// (but a conversion written so, `static (cell: Cell) as (=== Style) => …`: the conversion, no constructor)
+static ({converted_parameter}) as (=== {converted_type}) {`=>`} {converted_body} ^keyword => external static ({converted_parameter}) as (=== {converted_type}) => {converted_body}
 interior => {
   external .
   // (what it holds are members: a bare name never reads them, `.name` does)
@@ -1984,7 +1986,8 @@ converted_to (type) => {
 {on} including {level} ^keyword => on &+= {
   {level}
 }
-{level} reducing {value} ^keyword => level reading {value}
+// (what the level's rules make of the value, read in it: not the level, which `reading` (`&+=`) answers)
+{level} reducing {value} ^keyword => (level).({value})
 
 // What a value holds under a key: its entries (`keyed`), none until one is given.
 keyed := None

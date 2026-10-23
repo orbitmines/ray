@@ -5,7 +5,7 @@
 @hkdf
 
 // The Noise Protocol Framework, revision 34 (https://noiseprotocol.org/noise.html)
-Noise := class: Language pattern = XX, dh: Language = X25519, cipher = ChaCha20Poly1305, hash: Language = SHA256 {
+Noise := class pattern = XX, dh = X25519, cipher = ChaCha20Poly1305, hash = SHA256 {
   static extensions := ".noise"
 
   // Tokens of message patterns (§7.1), each written and read by its narrowing below; XX: -> e, <- e, ee, s, es, -> s, se (§7.5)
@@ -16,10 +16,10 @@ Noise := class: Language pattern = XX, dh: Language = X25519, cipher = ChaCha20P
 
   // e: a fresh ephemeral key, its public half in the clear and mixed into h; read, the other's (§5.3)
   static Ephemeral := Noise.Token{== Noise.Token.e} {
-    written (hs: Noise.Handshake) => (hs.e = hs.protocol.dh.generated()).public ~~ hs.mixed_hash(hs.e.public)
+    written (hs: Noise.Handshake) => (hs.e = Key.generated(hs.protocol.dh)).public ~~ hs.mixed_hash(hs.e.public)
     read (hs: Noise.Handshake, rest: Byte[]) => rest[hs.width..] ~~ (hs.re = rest[..<hs.width]) ~~ hs.mixed_hash(hs.re)
     assert {
-      nz_bob := Noise.handshake(false, X25519.generated())
+      nz_bob := Noise.handshake(false, Key.generated(X25519))
       // -> e; <- e, ee, s, es; -> s, se: both sides end with one handshake hash, each holding the other's static key (§7.5)
       nz_bob.read(nz_alice.written())
       nz_hello := nz_alice.read(nz_bob.written("hello".bytes))
@@ -62,23 +62,23 @@ Noise := class: Language pattern = XX, dh: Language = X25519, cipher = ChaCha20P
   kdf => HKDF(this.hash)
 
   // A CipherState: a key and a nonce; with no key yet, text passes as it is (§5.1). ChaChaPoly's nonce is 32 zero bits, then n as 64 bits little-endian (§12.3)
-  static Cipher := class cipher: Language = ChaCha20Poly1305, k: Byte₃₂?, n: Number = 0 {
+  static Cipher := class cipher = ChaCha20Poly1305, k: Byte₃₂?, n: Number = 0 {
     nonce => [[0] * 4, .n.little(8)].flatten
     encrypted (ad: Byte[], plaintext: Byte[]) => .k ? .cipher.sealed(this.k, this.nonce, ad, plaintext) ~~ (this.n += 1) : plaintext
     decrypted (ad: Byte[], ciphertext: Byte[]) => .k ? .cipher.opened(this.k, this.nonce, ad, ciphertext) ~~ (this.n += 1) : ciphertext
   }
 
   // A handshake, initiated or answered with a static key; its DH function is the one the key names (§5.3)
-  static handshake (initiator: boolean, s: Key, prologue: Byte[] = [], pattern = Noise.XX, cipher = ChaCha20Poly1305, hash: Language = SHA256) =>
+  static handshake (initiator: boolean, s: Key, prologue: Byte[] = [], pattern = Noise.XX, cipher = ChaCha20Poly1305, hash = SHA256) =>
     Noise.Handshake(protocol: Noise(pattern, dh: s.algorithm, cipher, hash), initiator, s) ~~ .mixed_hash(prologue)
-  assert Noise.handshake(true, X25519.generated()).(
+  assert Noise.handshake(true, Key.generated(X25519)).(
     nz_bob.read(.written()) == []  // NZ6 an empty payload does not read back empty
     & .done && nz_bob.done  // NZ7 three messages do not finish XX
   )
 
   // The HandshakeState with its SymmetricState: the name as h (padded, or hashed when longer than HASHLEN), ck = h, then the tokens of each message in turn (§5.2, §5.3)
   static Handshake := class protocol: Noise, initiator: boolean, s: Key, e: Key?, rs: Byte[]?, re: Byte[]?, step: Number = 0 {
-    h: Byte[] = .protocol.name.bytes -- (.count <= this.protocol.size ? [., [0] * (this.protocol.size - .count)].flatten : this.protocol.hash.write(.).bytes)
+    h: Byte[] = .protocol.name.bytes -- (.count <= this.protocol.size ? [., [0] * (this.protocol.size - .count)].flatten : (. as this.protocol.hash).digest)
     ck: Byte[] = .h
     cipher: Noise.Cipher = Noise.Cipher(cipher: this.protocol.cipher)
     bound: Byte[]?
@@ -88,7 +88,7 @@ Noise := class: Language pattern = XX, dh: Language = X25519, cipher = ChaCha20P
     done => .step == .messages.count
     writes => !.done && (.step % 2 == 0) == .initiator
 
-    mixed_hash (data: Byte[]): static => this ~~ (.h = this.protocol.hash.write([this.h, data].flatten).bytes)
+    mixed_hash (data: Byte[]): static => this ~~ (.h = (([this.h, data].flatten) as this.protocol.hash).digest)
     mixed_key (ikm: Byte[]): static => .protocol.kdf.derived(this.ck, ikm).chunk(this.protocol.size) -- (out => this ~~ (.ck = out[0]) ~~ (.cipher = Noise.Cipher(cipher: this.protocol.cipher, k: out[1][..<32])))
     encrypted_and_hashed (plaintext: Byte[]) => .cipher.encrypted(this.h, plaintext) -- (c => c ~~ this.mixed_hash(c))
     decrypted_and_hashed (ciphertext: Byte[]) => .cipher.decrypted(this.h, ciphertext) ~~ this.mixed_hash(ciphertext)
@@ -102,7 +102,7 @@ Noise := class: Language pattern = XX, dh: Language = X25519, cipher = ChaCha20P
     session => .done ? .protocol.kdf.derived(this.ck, []).chunk(this.protocol.size).map(Noise.Cipher(cipher: this.protocol.cipher, k: .[..<32])) -- (pair =>
       Session(sending: this.initiator ? pair[0] : pair[1], receiving: this.initiator ? pair[1] : pair[0], binding: this.h, peer: Key(algorithm: this.protocol.dh, public: this.rs)))
       : ERROR@Handshake `finish the handshake`
-    assert Noise.handshake(true, X25519.generated()).session.erred  // NZ15 an unfinished handshake has a session
+    assert Noise.handshake(true, Key.generated(X25519)).session.erred  // NZ15 an unfinished handshake has a session
   }
 
   // The transport phase: each side's CipherState, the handshake hash, and the remote static key (§5.1, §11.2)
@@ -114,5 +114,5 @@ Noise := class: Language pattern = XX, dh: Language = X25519, cipher = ChaCha20P
 // The name has 32 bytes, HASHLEN, so h starts as the name itself (§5.2, §8)
 assert Noise().(
   .name == "Noise_XX_25519_ChaChaPoly_SHA256"  // NZ3 the protocol is not named Noise_XX_25519_ChaChaPoly_SHA256
-  & Noise.handshake(true, X25519.generated()).h == .name.bytes  // NZ4 a name of HASHLEN bytes is not h as it is
+  & Noise.handshake(true, Key.generated(X25519)).h == .name.bytes  // NZ4 a name of HASHLEN bytes is not h as it is
 )

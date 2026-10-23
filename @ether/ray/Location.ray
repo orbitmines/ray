@@ -4,15 +4,13 @@ assert "a(b)c" is Path  // LOC60 a word with parentheses balanced inside is not 
 assert !("a b" is Path)  // LOC61 a space inside a path does not end it
 assert !("a)" is Path)  // LOC62 a lone closing parenthesis is in a path
 
-// What holds a location: the rules a project adds when it reserves a space (@ether/filesystem the file space, @ether/network
-// the URLs), each answering a holder; none, nothing holds it
-Holders := { }
-
 // A location (RFC 3986 section 3): a scheme, then the authority only when "//" follows, a path, a query (read as its
 // parameters, `?a=1&b=x%20y` is `{ a: "1", b: "x y" }`: `.query.a`) and a fragment.
-// What is there is what holds it answers: read, `.held`; written, `@x = value` (`@x = None` removes it, `@new = @x` copies
-// what is held); executed, `@x(…)`; as a boolean, whether anything is there. A location made in memory holds its `content`
-// and its `children` itself (a tree of files).
+// It is where a value is (`x.@`): a hierarchy, each name under a location one location (`x.@ / "count"`, where what `x`
+// holds under "count" is). In a space a project reserves (@ether/filesystem the files, @ether/network the URLs, each
+// adding to the locations in it), it is what is there: read as anything (`@/etc/hosts as String`), written (`@x = value`,
+// `@x = None` removing it, `@new = @x` copying it), executed (`@x(…)`), as a boolean whether anything is there, and its
+// `children` what is under it. Its own text is `as Path`.
 Location := class: Hierarchy (
   (scheme: Char.Word[], ":", ("//", host: Char{!= ":" && != "/" && != "?" && != "#"}[], (":", port: Decimal)?)?)?,
   path: Char{!= "?" && != "#"}[],
@@ -39,16 +37,14 @@ Location := class: Hierarchy (
     & .host == None  // LOC13 a relative path has a host
     & .path == "a/b"  // LOC14 a relative path is not its own path
   )
-  content: *?
+  // (a location is where it is, wherever it was written)
   location => this
-  holder => Compiler.reduced(this, Holders) -- (. === this || . is Location ? None : .)
-  held => .holder ? .holder[this] : .content
-  = (value) ^punctuation => .holder ? (.holder[this] = (value is Location ? value.held : value)) : ERROR@Location `nothing loaded holds the location to write it`
-  ({args}) => .holder ? .holder(this, args) : None
-  as (=== boolean) => .held !== None
-  assert ("/no/such/place/anywhere" as Location).held == None  // LOC51 a location nothing holds holds something
-  assert ("/no/such/place/anywhere" as Location)(1, 2) == None  // LOC53 executing what nothing holds gives something
-  assert Location(path: "t", content: "hi").held == "hi"  // LOC48 a location made in memory does not hold its content
+  .@ ^punctuation => this
+  // in no space a project reserves, there is nothing there
+  = (value) ^punctuation => ERROR@Location `nothing that answers this location is loaded to write it`
+  ({args}) => None
+  as (=== boolean) => false
+  assert !("/no/such/place/anywhere" as Location)  // LOC51 a location where nothing is answers something
 
   // (its query, as its parameters: read when asked, not each time one is made (a header is read as a rule's head, its braces
   // holes: a hole reading the query would run on what is being made))
@@ -70,9 +66,9 @@ Location := class: Hierarchy (
   assert Location.decoded("a+b") == "a b"  // LOC16 "+" in a query is not a space
   assert Location.decoded("%C3%A9") == "é"  // LOC17 a multi-byte percent sequence is not decoded as UTF-8 ("%C3%A9" is U+00E9)
   // the same location, its query's parameters changed (None removes one)
-  with (changes) => ((this.origin as String) + .path + "?" + [.query.fields{!changes.fields.name.contains(.name)}, changes.fields{.value != None}]
+  with (changes) => ((this.origin as Path) + .path + "?" + [.query.fields{!changes.fields.name.contains(.name)}, changes.fields{.value != None}]
     .flatten.map(.name + "=" + (.value as String)).join("&") + (.fragment ? "#" + .fragment : "")) as Location
-  assert ("https://orbitmines.com/p?a=1" as Location).with(a: 2) as String == "https://orbitmines.com/p?a=2"  // LOC25 a location changed in its query is not the same location with that query
+  assert ("https://orbitmines.com/p?a=1" as Location).with(a: 2) as Path == "https://orbitmines.com/p?a=2"  // LOC25 a location changed in its query is not the same location with that query
   assert ("?a=1&b=2" as Location).with(a: None).query.(.a == None & .b == "2")  // LOC20 a parameter changed to None is not removed
   assert ("?a=1&b=2" as Location).with(b: 3, c: 4).query.(.a == "1" & .b == "3" & .c == "4")  // LOC19 changing parameters drops, keeps or misses one
 
@@ -81,21 +77,32 @@ Location := class: Hierarchy (
   normalised => .segments{!= "."}.reduce(kept = [] => . == ".." ? kept[..<-1] : (kept, .)).join("/")
   assert ("a/./b/../c" as Location).normalised == "a/c"  // LOC75 a path is not normalised without "." and what ".." leaves
   origin => Location(.scheme, .host, .port, path: "")
-  assert ("https://orbitmines.com:8080/a/b" as Location).origin as String == "https://orbitmines.com:8080"  // LOC76 the origin of a location is not its scheme, host and port
+  assert ("https://orbitmines.com:8080/a/b" as Location).origin as Path == "https://orbitmines.com:8080"  // LOC76 the origin of a location is not its scheme, host and port
   name => .segments.last ?? ""
   assert ("https://orbitmines.com/a/b.txt" as Location).name == "b.txt"  // LOC40 a location's name is not its last segment
   assert ("https://orbitmines.com" as Location).name == ""  // LOC41 a location without segments is not named ""
+  extension => (.path ~= (*, ".", last: Char.Word[]) ⊣).last
+  // what it is written in, by its extension: `name.cfg.ray` in `.cfg` (Ray narrowed), `name.json` in JSON, else Ray
+  language => Program.extended("." + ((.name ~= (*, ".", inner: Char.Word[], ".ray") ⊣)?.inner ?? .extension ?? "ray")) ?? Program
+  assert ("main.ray" as Location).language === Program  // LNG5 a plain Ray file is not read as Ray
+  assert ("notes.nothing-has-this" as Location).language === Program  // LNG6 a file named by an extension no class has is not read as Ray
+  assert ("settings.cfg.ray" as Location).language === Cfg  // LNG7 a Ray file written in a sublanguage (`name.cfg.ray`) is not read in that sublanguage
 
-  // text after it (`+ "/b"`), or a segment under it (`/ "b"`)
-  + (suffix: String | Location) => ((this as String) + (suffix as String)) as Location
-  assert (("https://orbitmines.com/a" as Location) + "/b") as String == "https://orbitmines.com/a/b"  // LOC26 adding a string to a location does not append it to the location's text
-  assert (("https://orbitmines.com" as Location) + ("/a" as Location)) as String == "https://orbitmines.com/a"  // LOC27 adding a location does not append that location's text
-  / (segment: String) => this + "/" + segment ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
-  assert (("https://orbitmines.com" as Location) / "a") as String == "https://orbitmines.com/a"  // LOC28 joining a segment does not add "/" and the segment
-  assert (("https://orbitmines.com" as Location) / "..") as String == "https://orbitmines.com/.."  // LOC29 joining a segment with ".." does not still join it
-  == (other) => (this as String) == (other as String)
+  // text after it (`+ "/b"`)
+  + (suffix: String | Location) => ((this as Path) + (suffix is Location ? suffix as Path : suffix)) as Location
+  assert (("https://orbitmines.com/a" as Location) + "/b") as Path == "https://orbitmines.com/a/b"  // LOC26 adding a string to a location does not append it to the location's text
+  assert (("https://orbitmines.com" as Location) + ("/a" as Location)) as Path == "https://orbitmines.com/a"  // LOC27 adding a location does not append that location's text
+  // a name under it (`/ "b"`): one location for each name, a child in its hierarchy, so what is placed there stays
+  known := { }
+  under (segment: String) => .known[segment] ?? (.known[segment] = Location(.scheme, .host, .port, path: .path + "/" + segment, parent: this))
+  / (segment: String) => .under(segment) ~~ (WARN@Location `text joined into a path may leave it` if segment ~= (*, ".." | "/", *))
+  assert (("https://orbitmines.com" as Location) / "a") as Path == "https://orbitmines.com/a"  // LOC28 joining a segment does not add "/" and the segment
+  assert (("https://orbitmines.com" as Location) / "..") as Path == "https://orbitmines.com/.."  // LOC29 joining a segment with ".." does not still join it
+  assert (("https://orbitmines.com" as Location) -- (at => (at / "a") === (at / "a") && (at / "a").parent === at))  // LOC77 a name under a location is another location each time, or not a child of it
+  == (other) => (this as Path) == (other is Location ? other as Path : other)
   // (written out, its parts in order, as its header writes them: not as any value with fields is)
-  as (=== String) => ((.scheme === None) ? "" : .scheme + ":") + ((.host === None) ? "" : "//" + .host + ((.port === None) ? "" : ":" + (.port as String))) + .path + ((.query_text === None) ? "" : "?" + .query_text) + ((.fragment === None) ? "" : "#" + .fragment)
+  as (=== String) => this as Path
+  as (=== Path) => ((.scheme === None) ? "" : .scheme + ":") + ((.host === None) ? "" : "//" + .host + ((.port === None) ? "" : ":" + (.port as String))) + .path + ((.query_text === None) ? "" : "?" + .query_text) + ((.fragment === None) ? "" : "#" + .fragment)
   assert ("https://orbitmines.com/a" as Location) == "https://orbitmines.com/a"  // LOC33 a location is not equal to the text it is written as
   assert ("https://orbitmines.com/a" as Location) == ("https://orbitmines.com/a" as Location)  // LOC34 a location is not equal to an identical location
   assert !(("https://orbitmines.com/a" as Location) == "https://orbitmines.com/b")  // LOC35 two different locations are equal
@@ -117,50 +124,56 @@ Location := class: Hierarchy (
   from: (line: Decimal, column: Decimal)?
   to: (line: Decimal, column: Decimal)? = .from
   file => this ~~ (.from = None) ~~ (.to = None)
-
-  // a tree of files in memory: placed at relative paths, found again, each leaf a file
-  files => .children.nonempty ? .children.map(.files).flatten : [this]
-  assert ("/no/such/place" as Location).files.count == 1  // LOC42 a location holding nothing is not its own only file
-  at (relative: String) => relative.split("/"){.nonempty}.reduce(held = this => held.children.find(.name == .))
-  placed (relative: String, bytes) => relative.split("/"){.nonempty} -- (segments =>
-    (this.children.find(.name == segments.first) ?? this.add(Location(path: (this.path, segments.first){.nonempty}.join("/"), content: segments.count == 1 ? bytes : None)))
-      -- (next => segments.count == 1 ? next : next.placed(segments.rest.join("/"), bytes)))
-    -- this
-  assert {
-    tree := ("/t" as Location).placed("a/b.txt", "hi")
-    assert tree.at("a/b.txt").name == "b.txt" & tree.at("a/b.txt").held == "hi"  // LOC44 a location placed at a relative path cannot be found there, or does not hold what was placed
-    assert tree.at("a/missing.txt") == None  // LOC45 a path that is not there finds something
-    assert tree.files.count == 1 & tree.files.first.name == "b.txt"  // LOC46 placing bytes at a relative path does not leave a file named by its last segment
-    assert tree.at("a").name == "a"  // LOC47 the placed file is not under the directory of the first segment
-  }
 }
-// A location one may execute: one granted the execute method
-Executable := Location{.access#.some(.executes)}
-assert !("/no/such/place/anywhere" as Location is Executable)  // LOC59 a location without execute access is an executable
-// A directory: a location holding locations
-Directory := Location{.held is Location[]}
-assert !("/no/such/place/anywhere" as Location is Directory)  // LOC58 a location nothing holds is a directory
+// A directory: a location with what is under it
+Directory := Location{.children.nonempty}
+assert !("/no/such/place/anywhere" as Location is Directory)  // LOC58 a location where nothing is is a directory
+
+
+// A write places what it writes: under the name it is written by, where what it is written in is (`x.count = v` at
+// `x.@ / "count"`), asked when it is (`.@`), so it follows where that is. Then it is written as the entrypoint writes:
+// the name a rule answering it, in what it is written in. (Not in what is nowhere yet: what is under it is nowhere too.
+// Nothing, true and false are one value everywhere, and are placed nowhere.)
+{holder}.{name: Char.Word[]} = {value} => {
+  value
+  holder ~~ ({name} => value)
+  ((value).({ location => ({holder}).@.under(`{name}`) })) if (holder).@ && !(((value) === None) || ((value) === true) || ((value) === false))
+}
+{holder}.{name: Char.Word[]} := {value} => {
+  value
+  holder ~~ ({name} => value)
+  ((value).({ location => ({holder}).@.under(`{name}`) })) if (holder).@ && !(((value) === None) || ((value) === true) || ((value) === false))
+}
+assert {
+  placed_in := (inner: 0, other: 0) @ Location(path: "placed")
+  placed_in.inner = (m: 2)
+  placed_in.inner.deep := (d: 3)
+  assert placed_in.inner.m == 2  // LOC73 a write placing what it writes did not write it
+  assert placed_in.inner.@ === placed_in.@.under("inner")  // LOC70 what is written in a value is not where that value is, under its name
+  placed_above := placed_in.inner.deep.@.parent
+  assert placed_above === placed_in.inner.@ & placed_above.parent === placed_in.@  // LOC71 what is written in what is written is not under both
+}
 
 // Written in code (`@"…"` is a character's name, Character.ray): `@scheme://…`, `@/…`, `@./…`, `@../…`, `@C:/…` (a Windows drive,
 // https://url.spec.whatwg.org/#windows-drive-letter), `@name/…`
 @{scheme: Char.Word[]}://{rest: Path} ^string => (scheme + "://" + rest) as Location
-assert @https://orbitmines.com/a as String == "https://orbitmines.com/a"  // LOC63 `@scheme://rest` is not the location written out
+assert @https://orbitmines.com/a as Path == "https://orbitmines.com/a"  // LOC63 `@scheme://rest` is not the location written out
 @{start: ("." | "..")?}/{path: Path} ^string => (start + "/" + path) as Location
-assert @/etc/hosts as String == "/etc/hosts"  // LOC65 `@/path` is not the absolute location
-assert @./a/b as String == "./a/b"  // LOC66 `@./path` is not the location relative to here
-assert @../a as String == "../a"  // LOC67 `@../path` is not the location relative to the parent
+assert @/etc/hosts as Path == "/etc/hosts"  // LOC65 `@/path` is not the absolute location
+assert @./a/b as Path == "./a/b"  // LOC66 `@./path` is not the location relative to here
+assert @../a as Path == "../a"  // LOC67 `@../path` is not the location relative to the parent
 @{drive: Char.Letter}:/{path: Path} ^string => (drive + ":/" + path) as Location
-assert @C:/Windows/System32 as String == "C:/Windows/System32"  // LOC68 `@C:/path` is not a Windows drive location
+assert @C:/Windows/System32 as Path == "C:/Windows/System32"  // LOC68 `@C:/path` is not a Windows drive location
 @{name: Char.Word[]}/{path: Path} ^string => (name + "/" + path) as Location
-assert @a/b as String == "a/b"  // LOC69 `@name/path` is not the location under that name
+assert @a/b as Path == "a/b"  // LOC69 `@name/path` is not the location under that name
 
 // Reading a location answers what is there and leaves it as it was: the file the library is declared in is read twice.
 // (Writing a location is not claimed here: a test that writes a file leaves one behind.)
 assert {
-  read_once := (@ether/.project.ray).held as String
-  read_twice := (@ether/.project.ray).held as String
+  read_once := @ether/.project.ray as String
+  read_twice := @ether/.project.ray as String
   assert read_once.nonempty  // IO5 a read answers nothing
   assert read_once == read_twice  // IO6 reading a file changed it
   // A location computed as a string reaches the machine as the bits it is written with.
-  assert ("@ether/.project.ray".bits as Location).held as String == read_once  // IO7 a location given as a string's bits is read as another place
+  assert ("@ether/.project.ray".bits as Location) as String == read_once  // IO7 a location given as a string's bits is read as another place
 }

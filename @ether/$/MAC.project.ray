@@ -32,7 +32,7 @@ Device &+= {
   // (memory-mapped, through Machine);
   // a browser says none (a random locally administered one)
   mac: MAC = (if OS.Linux {
-      (@/sys/class/net).held{!(. as String ~= "/lo" ⊣)}.map(((. / "address").held as String).lines.first){!= "00:00:00:00:00:00"}.first as MAC
+      (@/sys/class/net).children{!(.@ as Path ~= "/lo" ⊣)}.map(((. / "address") as String).lines.first){!= "00:00:00:00:00:00"}.first as MAC
     }
     elsif OS.Windows {
       (@c {

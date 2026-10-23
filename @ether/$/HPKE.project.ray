@@ -5,7 +5,7 @@
 @hkdf
 
 // Hybrid Public Key Encryption, base mode (https://www.rfc-editor.org/rfc/rfc9180)
-HPKE := class: Language kem: Language = X25519, kdf: Language = SHA256, aead: Language = ChaCha20Poly1305 {
+HPKE := class kem = X25519, kdf = SHA256, aead = ChaCha20Poly1305 {
   static extensions := ".hpke"
 
   // DHKEM(X25519, HKDF-SHA256), HKDF-SHA256 and ChaCha20Poly1305 by their identifiers, two bytes each (RFC 9180 §7.1, §7.2, §7.3)
@@ -26,10 +26,10 @@ HPKE := class: Language kem: Language = X25519, kdf: Language = SHA256, aead: La
   expanded (suite: Byte[], prk: Byte[], label: String, info: Byte[], length: Number) => HKDF(this.kdf).expanded(prk, [length as Binary₁₆ as Byte[], "HPKE-v1".bytes, suite, label.bytes, info].flatten, length)
 
   // DeriveKeyPair for X25519: the secret expanded from the input keying material (RFC 9180 §7.1.3)
-  derived (ikm: Byte[]) => .kem.generated(this.expanded(this.kem_suite, this.extracted(this.kem_suite, [], "dkp_prk", ikm), "sk", [], 32))
+  derived (ikm: Byte[]) => Key.generated(.kem, this.expanded(this.kem_suite, this.extracted(this.kem_suite, [], "dkp_prk", ikm), "sk", [], 32))
   // ExtractAndExpand over the DH output, with enc and the recipient's public key as context; Encap with an ephemeral key, Decap with the recipient's (RFC 9180 §4.1)
   shared (dh: Byte[], enc: Byte[], recipient: Byte[]) => .expanded(this.kem_suite, this.extracted(this.kem_suite, [], "eae_prk", dh), "shared_secret", [enc, recipient].flatten, this.size)
-  encapsulated (recipient: Key, e: Key = .kem.generated()) => (shared: .shared(e.agreed(recipient.public), e.public, recipient.public), enc: e.public)
+  encapsulated (recipient: Key, e: Key = Key.generated(.kem)) => (shared: .shared(e.agreed(recipient.public), e.public, recipient.public), enc: e.public)
   decapsulated (enc: Byte[], recipient: Key) => .shared(recipient.agreed(enc), enc, recipient.public)
 
   // KeySchedule in base mode: no PSK, the info hashed into the context, then the key, the base nonce and the exporter secret (RFC 9180 §5.1)
@@ -67,7 +67,7 @@ HPKE := class: Language kem: Language = X25519, kdf: Language = SHA256, aead: La
       hpke_r_context := hpke.receiver(hpke_encap.enc, hpke_r, "Ode on a Grecian Urn".bytes)
       assert hpke_r_context.opened("Count-0".bytes, "1c5250d8034ec2b784ba2cfd69dbdb8af406cfe3ff938e131f0def8c8b60b4db21993c62ce81883d2dd1b51a28" as Hexadecimal₉₀ as Byte₄₅) == "Beauty is truth, truth beauty".bytes  // HPKE14 the recipient does not open ciphertext 0
       // Single-shot: what is sealed to a key opens with it, and not with another key or other info (RFC 9180 §6.1)
-      hpke_other := X25519.generated()
+      hpke_other := Key.generated(X25519)
       hpke_one := hpke.sealed(hpke_r.published, "info".bytes, [], "a content key".bytes)
       assert hpke.opened(hpke_r, "info".bytes, [], hpke_one) == "a content key".bytes  // HPKE15 a single-shot seal does not open for its recipient
       assert hpke.opened(hpke_other, "info".bytes, [], hpke_one) is Diagnostic  // HPKE16 a single-shot seal opens for another key
@@ -79,7 +79,7 @@ HPKE := class: Language kem: Language = X25519, kdf: Language = SHA256, aead: La
   }
 
   // SetupBaseS and SetupBaseR (RFC 9180 §5.1.1)
-  sender (recipient: Key, info: Byte[] = [], e: Key = .kem.generated()) => .encapsulated(recipient, e) -- (held => (enc: held.enc, context: this.scheduled(held.shared, info)))
+  sender (recipient: Key, info: Byte[] = [], e: Key = Key.generated(.kem)) => .encapsulated(recipient, e) -- (held => (enc: held.enc, context: this.scheduled(held.shared, info)))
   receiver (enc: Byte[], recipient: Key, info: Byte[] = []) => .scheduled(this.decapsulated(enc, recipient), info)
 
   // Single-shot Seal and Open: enc, then the ciphertext (RFC 9180 §6.1)
@@ -94,16 +94,16 @@ HPKE := class: Language kem: Language = X25519, kdf: Language = SHA256, aead: La
   recognised (recipient: Key, info: Byte[], expected: Byte[], sealed: Byte[]) => .tag(this.decapsulated((sealed as HPKE.Sealed).enc, recipient), info) == expected
 }
 
-// A key with a public part (a KEM's, `X25519.generated()`) is written to through HPKE: what is encrypted for it, only its
+// A key with a public part (a KEM's, `Key.generated(X25519)`) is written to through HPKE: what is encrypted for it, only its
 // secret reads back (@ether/encryption)
 X25519 &+= {
   static sealed_for (key: Key, bytes: Byte[]) => HPKE(kem: X25519).sealed(key, [], [], bytes)
   static opened_with (key: Key, written: Byte[]) => HPKE(kem: X25519).opened(key, [], [], written)
 }
 assert {
-  inbox := X25519.generated()
+  inbox := Key.generated(X25519)
   number: Number = Encrypted(5, inbox)
-  assert number is Number & inbox.read(number) == 5  // HPKE20 a value encrypted to a key's public part is not read back by its secret
-  assert X25519.generated().read(number).erred  // HPKE21 another key reads back what was encrypted to this one
-  assert !(inbox == ChaCha20Poly1305.generated())  // HPKE22 keys of different algorithms are equal
+  assert number is Number & inbox.opened(number) == 5  // HPKE20 a value encrypted to a key's public part is not read back by its secret
+  assert Key.generated(X25519).opened(number).erred  // HPKE21 another key reads back what was encrypted to this one
+  assert !(inbox == Key.generated(ChaCha20Poly1305))  // HPKE22 keys of different algorithms are equal
 }

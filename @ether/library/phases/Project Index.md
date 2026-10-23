@@ -13,6 +13,9 @@
 
 Also include device drivers.
 
+Databases
+	- Fastlanes, Adaptive Lossless floating Point (ALP), Fast Symbolic Symbol Table (FSST), DIctionary (dict_string), Bitpacked, RunEnd, PCodec, ZSTD, FFOR, RLE, DElta, ; these things should be part of the language index. Databases as optimizations on 2D/grid data.
+
 ---
 
 <div align="center">  

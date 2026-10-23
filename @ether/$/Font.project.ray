@@ -21,5 +21,5 @@ Fonts := class {
     }
   }
   // the file named like the family, in any of the folders
-  static named (family: String): Location? => Fonts.installed.map(.held.children).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
+  static named (family: String): Location? => Fonts.installed.map(.children).flatten{(.segments.last ?? "").fold_case ~= family.fold_case}.first
 }

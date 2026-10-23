@@ -1,20 +1,18 @@
 @ether/random
 
-// Keys. An algorithm is a language, and so is a key of one: what it writes only its secret reads back. A value written in
-// it stays where it is, of its type (`field: String = Encrypted("…")` is a String there, sealed), and only the key reads it
-// back (`key.read(field)`). How it is sealed is the algorithm's (`sealed_for`, `opened_with`): this project knows none.
-Key := class: Language (algorithm: Language, none.read secret: Byte[]?, public: Byte[] = (secret && algorithm.public ? algorithm.public(secret) : [])) => {
+// Keys. What a value written in a key holds only its secret reads back: it stays where it is, of its type (`field: String =
+// Encrypted("…")` is a String there, sealed), and only the key opens it (`key.opened(field)`). How it is sealed is the
+// algorithm's (`sealed_for`, `opened_with`): this project knows none.
+Key := class (algorithm, none.read secret: Byte[]?, public: Byte[] = (secret && algorithm.public ? algorithm.public(secret) : [])) => {
   published => Key(.algorithm, None, .public)
-  write (value) => .algorithm.sealed_for(this, value as Byte[]) ~~ (.of = value.of)
-  read (sealed) => .secret ? .algorithm.opened_with(this, sealed) as sealed.of : ERROR@Key `find the key`
+  (value) as (=== this) => .algorithm.sealed_for(this, value as Byte[]) ~~ (.of = value.of)
+  opened (sealed) => .secret ? .algorithm.opened_with(this, sealed) as sealed.of : ERROR@Key `find the key`
   signed (value) => Signed(value, by: .published, signature: .algorithm.sign(.secret, value as Byte[]))
   agreed (other: Byte[]) => .algorithm.agreed(.secret, other)
   zeroised: static => this ~~ .secret = None
   chainable == (other: Key) => .algorithm === other.algorithm && .public == other.public
-}
-Language &+= {
-  // a key of it: the secret given, else drawn
-  static generated (secret: Byte[] = secure Byte₃₂.random) => Key(this, secret)
+  // a key of an algorithm: the secret given, else drawn
+  static generated (algorithm, secret: Byte[] = secure Byte₃₂.random) => Key(algorithm, secret)
 }
 // A value encrypted where it is written: for the reader of the character writing it, unless another key is given.
 Encrypted (value, key: Key = @me.inbox) => value as key

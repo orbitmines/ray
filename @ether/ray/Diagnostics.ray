@@ -42,7 +42,7 @@ Report := class (name: String = "ray", claims: .Claim[] = []) => {
 
   // (a claim as a test marks it in what it says: `INFO@mark ` + its id and message)
   static Mark := ("INFO@mark `", id: (Char.Letter | Char.Digit)[]{.length > 0}, " ", message: (!"`")[], "`")
-  static (file: Location) as (=== Report) => file.held as String -- (text => Program(code: text)().reports -- (reports => Report(name: file.@ as String,
+  static (file: Location) as (=== Report) => file as String -- (text => Program(code: text)().reports -- (reports => Report(name: file.@ as Path,
     claims: text.split(\n).enumerate.map(line => (line.value ~= (*, Report.Mark, *)) -- (found => Report.Claim(found.id, found.message,
       passed: !reports.some(.level == INFO && .comment ~= ⊢(found.id + " ")),
       at: file{.from == (line.index + 1, 1)}) if found)).compact)))

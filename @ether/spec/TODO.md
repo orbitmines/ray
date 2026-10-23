@@ -171,19 +171,24 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `(x: A) | B | C`**: only `x: A | B` with A and B names is the whole union (the entrypoint's rule); a structure's
   alternatives of named fields, `(LHS: … | RHS: … | String)`, must stay what they are. And a statement typed so,
   `a: Number | String = 3`, is not 3 (`b: (Number | String) = 3` neither).
-- **`this` in a function is the function, not the `this` where it was written** (`m => (0 ..< 1).map(rr => this.width)`,
-  `n => [1] -- (v => this.width)`: nothing; the function's call rules are `{this}(…)`, its body inlined in them,
-  `{{body}}`). Grid's `changes` reads `this.cells` so. Asking where the function was written (the frame its body was
-  inlined from, counted out, a reading being shared) breaks methods' bodies, inlined too (`root`'s `this`): not kept.
-  (`this` in a class's own block, written at the top, is what is made now: `this.width`.)
-- **A list first among arguments is joined with the rest** (`k.pa(at, 5)`, `at` a `Geometry.Vector`, gives `pa` one list
-  `[0, 0, 5]`: "a value is not of the type it is given to"; `[[1, 2], [3, 4]]` is `[1, 2, 3, 4]`): `,` joins whatever list
-  is before it, gathered (`[…]`) or not. Joining only one still spreading (made by `,`) makes the suite 8× slower and loses
-  tests in Node/Ray/String (a list `,` a list is a join they rely on): not kept. `Grid.put (at: Geometry.Vector, cell)` so
-  never puts a cell, and the first frame is empty.
+- **`this` in a function written in a class's own block is not what is made** (`rows := (0 ..< 1).map(r => this.width)`
+  in a class's block: nothing; `.width` neither). In a method it is the method's `this` now (the frame the function was read
+  from, out through the functions it is written in); a class's block, inlined in its constructor, names what is made only
+  as `.` and `this` directly. Grid names its width before its rows for that.
+- **Arguments are composed by `,`, then separated by the types they are given to** (the user, 2026-10-23): `.put(at, cell)`,
+  `at` a Vector, reaches `put` as `0, 0, cell`; given more than it has places, a place typed so takes as many as make one of
+  its type, made it (`&+=`, its members on it). Only when more are given than places, and only for the first places in
+  order: a place taking a list among defaults, or two lists, is not done. `[at], cell` keeps it whole as written.
 - **Geometry gives an Axis a Number where it declares a Length** (`Space.grid`: `extent: axis_entry.value`, the grid's
   size in cells, against `extent: Length?`): said as an error, and the extent is then the type (all Lengths), so `holds`
-  compares against every Length and runs out of memory when asked twice.
+  compares against every Length and runs out of memory when asked twice. (A Length is a distance with a unit: the grid's
+  extent wants a Quantity, the user, 2026-10-23.)
+- **The CLI's first frame does not fit in 2 GB**: the bootstrap and the 34 files it includes (ray/, $/ devices, os, Device,
+  World, Geometry, ANSI, UI) leave little: "almost all the memory there is is in use" at points that differ from run to run
+  (one thread or many). `RAY_MEMORY` above 2³¹ hangs (above).
+- **A method written against what follows it takes one word of it** (`0..p.width` is `(0..p).width`; `0 .. p.width` and
+  `0..(p.width)` read): the member is read on what the method answered. `..<` so is read whole by a rule in Ray.ray (`0..<p.width`,
+  `(0..<.height)` in UI's Grid); `..` is not (a rule `{low}..{high}` would take `..<` too): UI's `(from.x..to.x)` (underlines).
 - **`x -- y` binds looser than `:=`** (as declared, after `=` and `,`): `q := [4, 5] -- (v => …)` is `(q := [4, 5]) -- …`.
   A function in brackets after it is given what is before it (`x -- (made => (@also made Vector) -- made)`); a function
   read another way is not.

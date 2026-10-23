@@ -2008,9 +2008,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (x) { put(r, K_NAME); put(r + 12, (x - 1) >> 16); put(r + 16, (x - 1) & 0xFFFF); put(r + 20, w(THREAD + T_REFF)); return r; }
     // (`this` written in a rule's body, no hole of it named so: that application's first argument, what it was read on,
     // wherever the code is read (a value given as an argument, read in the callee, is the caller's `this`); but not in code
-    // the rule inlined, written where nothing is `this` (a class's block in its constructor, `{{block}}`): what that is read
-    // in, `.` (written in a method, `{. ^ degree <= this}` in `root`: as before))
-    const inlined_ = rule && w(rule + R_IN2_F) && s >= w(rule + R_IN2_S) && e <= w(rule + R_IN2_E) && w(w(rule + R_IN2_F) + F_THIS) === w(GLOBAL);
+    // a class's constructor inlined, its block (`{{block}}`, the constructor the class's own): what that is read in, `.` (a
+    // method's body, its rule its block's, and code given to a rule, `{. ^ degree <= this}` in `root`: as before))
+    const inlined_ = rule && w(rule + R_IN2_F) && s >= w(rule + R_IN2_S) && e <= w(rule + R_IN2_E) && classed(w(rule + R_OWNER));
     if (rule && !on && !inlined_ && word(s, e, W_THIS)) { put(r, K_HELD); put(r + 12, -4); return r; }
     // (its scratch, the next free: what it reads, and what reading it reads in turn, further on)
     const sc = w(t + T_SCRATCH);
@@ -2189,7 +2189,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // (`this`: what it was read on; else what it is read in, and in a method, a node made there is what that is read on)
       // (but a class called, `x.C(…)`: the class (what it makes is of it), not x)
       if (h === -2) { const th = w(self + F_THIS), rc = w(self + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
-      if (h === -4) { const fr = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? names : 0; if (!fr) return self; const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
+      // (in a function's body, inlined in its call (`{{body}}`): what `this` is where the function was written, the frame the
+      // function was read from, out through the functions it is written in (`.all.every(a => this.all.every(…))`); not out of
+      // a method, read where its class's constructor read the class's block)
+      if (h === -4) { let fr = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? names : 0; if (!fr) return self;
+        for (let hp = 0, ts = w(r + 4), te = w(r + 8); hp < 8; hp++) { const fru = w(fr + F_RULE), lit = fru ? w(fru + R_IN2_F) : 0; if (!lit || w(lit + N_IS) !== IS_FRAME || ts < w(fru + R_IN2_S) || te > w(fru + R_IN2_E) || classed(w(fru + R_OWNER)) || (w(lit + F_RULE) && classed(w(w(lit + F_RULE) + R_OWNER)))) break; const wr_ = w(lit + F_CALLER); if (!wr_ || w(wr_ + N_IS) !== IS_FRAME || !w(wr_ + F_RULE)) break; fr = wr_; } const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
       const tk = follow(self + F_TAKES + TAKE * h, 0);
       // (a text: in what the kernel's map says texts are (its rules read on it), else in what everything is)
       return node(IS_TEXT, w(tk), w(tk + 4), w(TEXTS) || w(GLOBAL), 0);

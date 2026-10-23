@@ -1286,7 +1286,8 @@ UI.TUI := class {
     faded (at: Geometry.Vector, amount: Probability) => .cell(at) -- (cell => this.put(at, cell ~~ .foreground = cell.foreground.mix(cell.background, 1 - amount)))
     shaded (at: Geometry.Vector) => .cell(at) -- (cell => this.put(at, cell ~~ .background = (cell.background ?? Geometry.Color(0, 0, 0)).mix(Geometry.Color(0, 0, 0), 0.5)))
     graphic (at: Geometry.Vector, bytes) => .graphics.push (at: at, bytes: bytes)
-    changes (before: UI.TUI.Grid?) => (0..<.height).map(y => (0..<this.width){!before || this.cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], this.cells[y][x]])).flatten(1)
+    // (the grid named first: `this` two functions in is not the grid yet, spec/TODO.md)
+    changes (before: UI.TUI.Grid?) => this -- (grid => (0..<grid.height).map(y => (0..<grid.width){!before || grid.cells[y][.] != before.cells[y][.]}.map(x => [[Geometry.Vector(x, y)], grid.cells[y][x]])).flatten(1))
     assert {
       watched_value := 1
       fired_count := 0
@@ -1304,7 +1305,7 @@ UI.TUI := class {
     }
     framed (previous: UI.TUI.Grid? = None) => [
       ANSI.Title(.title) if .title && .title != previous.title,
-      this.changes(previous).map((at, cell) => [ANSI.Move(row: at.y + 1, column: at.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
+      this.changes(previous).map((position, cell) => [ANSI.Move(row: position.y + 1, column: position.x + 1), cell as ANSI.Style, ANSI.Hyperlink(target: (cell.link === None ? "" : (cell.link as String))), cell.glyph]),
       this.graphics{!(previous.graphics.contains(.) ?? false)}.map([ANSI.Move(row: .at.y + 1, column: .at.x + 1), .bytes]),
       ANSI.Style()
     ]
@@ -1392,8 +1393,15 @@ UI.TUI := class {
   static ramp := " .:-=+*#%@"
 
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
-  Start := class (modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]) => { }
-  Stop := class (start: UI.TUI.Start = UI.TUI.Start()) => { }
+  Start := class (modes: ANSI.Mode[] = [ANSI.Mode(1049, "h"), ANSI.Mode(25, "l"), ANSI.Mode(1000, "h"), ANSI.Mode(1002, "h"), ANSI.Mode(1006, "h"), ANSI.Mode(2004, "h"), ANSI.Mode(1004, "h")]) => {
+    as String => UI.TUI.text(this.modes) + UI.TUI.text([ANSI.Erase(2), ANSI.Move()])
+  }
+  Stop := class (start: UI.TUI.Start = UI.TUI.Start()) => {
+    as String => UI.TUI.text(this.start.modes.map(.flipped).reverse)
+  }
+  // (what is written to the terminal, as a text: each sequence as it writes itself (`as String`), a list of them one after
+  // another (a list, not what holds fields, `Move(row, column)`), a text itself, nothing none)
+  static text (written_value) => (written_value === None) ? "" : (((written_value).textual === true) ? written_value : ((((written_value).listing === true) && ((written_value).of === [].of)) ? written_value.map(written_part => UI.TUI.text(written_part)).join("") : (written_value as String)))
   written := {
     {text: String} => text
     {glyph: Char} => glyph as String
@@ -1424,7 +1432,7 @@ UI.TUI := class {
     emit (bytes) => (@me/device as Terminal) = bytes
     dynamically typed = (@me/device as Terminal).typed
     size => (@me/device as Terminal).size -- (Geometry.Vector(.0, .1))
-    emitted (value) => .emit(Compiler.reduced(value, this.written))
+    emitted (value) => .emit(UI.TUI.text(value))
     // (the scene is as large as the terminal: its columns and rows)
     start =>
       UI.scene.size = Geometry.Vector(Quantity(quantities: [(quantity: this.size.x, unit: Unit.column)]), Quantity(quantities: [(quantity: this.size.y, unit: Unit.row)]))

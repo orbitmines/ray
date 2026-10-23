@@ -220,3 +220,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **`RAY_MEMORY` above 2³¹ hangs the kernel** (`RAY_MEMORY=3221225472`: a run of the kernel's own translation, two functions,
   never ends, main's kernel as well; 2³¹, the default, ends in two minutes): an address past 2³¹ is negative as a 32-bit
   integer. So the self-hosting check runs at the default, and the translation of `apply_` is at the edge of it.
+- **A statement's memory running out is a crash, not a report** (`RAY_STATEMENT_MB=200`, a 20 by 1 TUI grid written: "Worker
+  queue failed: memory access out of bounds", no diagnostic naming the statement; at 400 the frame is written). After the
+  frame, the run ends in "out of memory (2147483648 bytes, all of it in use)": something after the last statement holds 2 GB.

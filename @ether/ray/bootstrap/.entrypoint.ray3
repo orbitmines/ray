@@ -695,7 +695,12 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
     // (more given than places: a list among them composed into the rest by `,` (`.put(at, cell)`, `at` a Vector): a place typed
     // so takes as many as make one of its type, made one (§ arguments: separated by the types they are given to; written
     // `[at], cell`, kept whole as written))
-    each_extra := each_part.count - places.count
+    each_surplus := each_part.head
+    each_counted := places.head
+    while each_surplus && each_counted {
+      each_surplus = each_surplus.next
+      each_counted = each_counted.next
+    }
     while each_place {
       // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing; given in its place, `(4, "-", 9)`,
       // that text is passed over)
@@ -705,20 +710,20 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
         each_by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(each_place.value) !== None))
         while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument === true) { each_taken_at = each_taken_at.next }
         each_value := (each_by_name !== None) ? each_by_name.value : (each_taken_at ? each_taken_at.value : declared)
-        if (each_by_name === None) && (each_extra > 0) && each_taken_at && ((each_place.value).type !== None) && !((each_value) is ((each_place.value).type)) {
+        if (each_by_name === None) && each_surplus && each_taken_at && ((each_place.value).type !== None) && !((each_value) is ((each_place.value).type)) {
           each_group := Array.new.append(each_value)
           each_walk := each_taken_at.next
-          each_steps := 0
+          each_budget := each_surplus
           each_end := None
-          while each_walk && (each_steps < each_extra) && (each_end === None) {
+          while each_walk && each_budget && (each_end === None) {
             each_group.append(each_walk.value)
-            each_steps = each_steps + 1
             (each_end = each_walk) if (each_group is ((each_place.value).type))
             each_walk = each_walk.next
+            each_budget = each_budget.next
           }
           if each_end !== None {
             each_value = (each_group) &+= ((each_place.value).type)
-            each_extra = each_extra - each_steps
+            each_surplus = each_budget
             each_taken_at = each_end
           }
         }

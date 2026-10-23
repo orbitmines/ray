@@ -71,6 +71,24 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   for now each project is tested with only what it depends on. (Each file read took a 16 MB chunk more, every pending hole
   type tried again in each settle: now once per text, what a failed try made let go of. A small file is ~0 MB again.)
 
+- **Tagged literals read by nothing** (`@html <p>{who}</p>`, `@json {…}`, `@css …`, `@c …`, `@js …`, `` @ray`1 + 2` ``):
+  Language.ray (deleted) read them through `Language.named(ext).level`. They come back when a dependency is flagged as a
+  language, which gives the syntax. Until then they are unread. The tests that use them stay as written, and TL1
+  (`` @ray`1 + 2` == 3 ``) waits for this.
+
+- **A name written in a frame is not placed** (`x := …` at the top of a file or in a block): a write places what it writes
+  only in what has a location (Location.ray's `{holder}.{name} = {value}`), and a frame has none. It should be where the
+  code is written (the file, `@/…/Program.ray`). The rule's body cannot name the frame (`.`) from the block it defines on
+  the value; a hole spliced in braces (`{holder}`) can be.
+- **A value placed after what was written in it** (`x.f = v`, then `x @ place`): v stays nowhere, since a write in what
+  has no location places nothing (Location.ray; placing each write costs a rule and a block, and most holders are
+  nowhere). A write could place lazily always, once that costs less.
+- **Reading `x.a.b.@.parent.parent === y` does not finish** (probed 2026-10-23); the same in steps does, in 0.2 s. A
+  guess: the member-write head `{holder}.{name} = {value}` tried against `===`.
+
+- **A grant for one use (`{once}`, W2)** has nothing to count its uses since Access was removed (2026-10-23): who may is
+  only who, at a location. AC6/AC7 were taken out of World.ray until uses are counted where they happen.
+
 ## Tests to take in
 
 - **Control.ray's tests of the language's own forms** (operator sections OP1–OP5, `if` with cases IC3, `?`/`?=` QM1–QM2,
@@ -139,10 +157,39 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **Time.project.ray runs out of the 2 GB** when read after Unicode (the whole 85-file closure of the site does not fit).
 - **`x as String` answers a String of characters, not the kernel's text**: `external output (5 as String)` writes nothing,
   and `(5 as String) == "5"` is false in a ternary though `assert 5 as String == "5"` holds (assert's comparison is
-  structural). Terminal's map (`external output (value as String)`) so writes only literal texts: a frame built by joining
-  would not show.
+  structural). (A count's `as String` is its digits now, by the kernel's map, and a text joined with what is no text joins
+  it as written: `"\e[" + 5 + "H"` writes.)
 - **With Language.ray read, `5 as String` costs ~512 MB** at read time (and `Location() as String`, so Location's `==`):
   Language.ray gives every Node `as (=== String) => … Language.ray.write(this)`, and the Ray writer writes a Number as
   `writing.value as String`. Without Language.ray it costs nothing.
 - **Language.ray's header writer reads `.of.header.head`, which no class has** (the entrypoint keeps a header as
   `header_quoted`): no structured value is written through its header; a Location (a Ray) falls to the list writer.
+- **A narrowing's constraint in a class does not see the class's other members by bare name** (`G := class { S := class {
+  static d => 2 }; Y := Number[]{.length == S.d} }`: `[1, 2] is G.Y` is false, `Z := Number[]{.length == 2}` there holds):
+  the constraint is read on the value it checks (`it.({constraint})`), in frames of GLOBAL, so where it was written (G's
+  block) is not reached. Geometry's `Vector := Elementwise{…}{.length == Space.current.dimension} + { … }` so holds for no
+  value (`[0, 0] is Geometry.Vector` false), and `Grid.put (at: Geometry.Vector, …)` rejects every point: the first frame's
+  cells are never put. (A name read as a place nothing defined where it was named, `S` in S's own block read before S
+  is, now reads what the classes it is written in name: `Space.plane`, `Space.current.dimension` hold.)
+- **A parameter named bare in a method does not read the field** (`S := class (axes: Number[]) => { dimension =>
+  axes.length }`: `S([1, 2]).dimension` is nothing; `.axes.length` reads it).
+- **A rule written outside the entrypoint does not read a block it was given in the node it makes** (`{on} +++ {`{`}{code}
+  {`}`} => ((on).interior) &+= { {code} }` in a file: `Node +++ { two => 2 }` is Node itself, and `two` is defined at the
+  top; the same rule in the entrypoint holds). So `A + { … }` is the entrypoint's, beside `&+`.
+- **Some bootstrap code made from text is read three times now, not once** (since statics written `name: T = Class.x`
+  and `Class.member` are read when first asked for): `0b0110 ~&& 0b1010 == 0b0010` and two like it, each unread, said
+  three times; nothing else differs.
+- **A class made in a method's body does not take its header** (`static C := lazily class (y: Number = 0) => { }`:
+  `U.C() is U.C` is false, "a left side answers a value, not a place: `()`"). So `static X := v` is lazy (the kernel's
+  `external static`) only when v is not a class, nor led by a capital unless it is a call (`Binary₈`, `TF{} {…}` are
+  types, named by what they are given to), nor `.`-led (`.DepthFirst`). Typed, `static x: T = v`, only when v is what a
+  class makes, `Space.plane`, `Space(…)` (`Letter: Char = "a".."z"` is a type; Language's `ray: .Lossless = (…)` read
+  lazily is read by the first `as String`, ~320 MB, inside World's declaration).
+- **`.` in an argument is what the code is read in, not a section** (`(0..<24).map(8 + 10 * . -- Geometry.Color(., ., .))`
+  in ANSI's `Palette`; `[0, 1].map(8 + .)` answers 1): read where ANSI is declared it was `10 * ANSI`, 6000 deep, and ANSI
+  was left half-declared (`ANSI.Cell() is ANSI.Cell` false). Lazy statics keep it unread until asked.
+- **The kernel's translation to WebAssembly mishandles a default parameter after another** (`function line(at, end, lo =
+  0, head = at)`, and `head = 0` as well): every caller that leaves them out reads garbage. `line_of` takes them explicitly.
+- **`RAY_MEMORY` above 2³¹ hangs the kernel** (`RAY_MEMORY=3221225472`: a run of the kernel's own translation, two functions,
+  never ends, main's kernel as well; 2³¹, the default, ends in two minutes): an address past 2³¹ is negative as a 32-bit
+  integer. So the self-hosting check runs at the default, and the translation of `apply_` is at the edge of it.

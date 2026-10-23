@@ -5,21 +5,8 @@
 
 // The device's files: the host's (sandboxed: what the host answers for a directory is its entries); a browser and the
 // language as the operating system keep them in the device's storage (`storage: Storage = @me/device`, a page's its Web Storage),
-// where a directory is what is kept under it. It holds the file space: a location of no scheme, `file:`, or a Windows
-// drive (`@C:/`, https://url.spec.whatwg.org/#windows-drive-letter).
-FileSystem := class: Language {
-  [location: Location] => if OS.Browser || OS.Ether {
-      (@me/device as Storage) -- (storage => storage[location.normalised] ?? (storage.fields.name{~= ⊢(location.normalised + "/")}
-        .map(.after(location.normalised + "/").before("/")).unique.map(location / .) -- (.nonempty ? . : None)))
-    } else { FileSystem.read(location.sandboxed) -- (. is String[] ? .map(location / .) : .) }
-  { }[{location: Location}] = {value} ^punctuation => if OS.Browser || OS.Ether { (@me/device as Storage)[location.normalised] = value }
-    elsif value === None { FileSystem.removed(location.sandboxed) }
-    else { FileSystem.written(location.sandboxed, value as Byte[]) }
-  // executed: what the host opens it with, given the code between the brackets
-  ({location: Location}, {args}) => if OS.Ether { (location.held as Program)(args) }
-    elsif OS.Browser { ERROR@OS `a browser does not execute a file` }
-    else { FileSystem.opened(location.@ as String, args) }
-
+// where a directory is what is kept under it.
+FileSystem := class {
   // What the host's files are, through its interface: POSIX's on Linux and macOS (open, read, opendir, unlink,
   // posix_spawnp; https://pubs.opengroup.org/onlinepubs/9799919799/), Win32's on Windows (CreateFileW, ReadFile,
   // FindFirstFileW, DeleteFileW, ShellExecuteW; https://learn.microsoft.com/windows/win32/fileio/file-management-functions).
@@ -101,27 +88,41 @@ Location &+= {
   sandboxed => "instance/" + .normalised
 }
 
-Holders = Holders + {
-  // (this instance, as whoever plays it reaches it: the terminal it is played through, one of its devices)
-  {location: Location{=== @local}} => (@me/device as Terminal)
-  {location: Location{!.scheme || .scheme == "file" || .scheme.length == 1}} => FileSystem()
+// A location of no scheme, `file:`, or a Windows drive (`@C:/`, https://url.spec.whatwg.org/#windows-drive-letter) is a
+// file's: read as its bytes or its text, a directory what is under it
+Location{!.scheme || .scheme == "file" || .scheme.length == 1} &+= {
+  // what is there: a file its bytes, a directory the names in it, nothing None
+  read => if OS.Browser || OS.Ether {
+      (@me/device as Storage) -- (storage => storage[this.normalised] ?? (storage.fields.name{~= ⊢(this.normalised + "/")}
+        .map(.after(this.normalised + "/").before("/")).unique -- (.nonempty ? . : None)))
+    } else { FileSystem.read(.sandboxed) }
+  children => .read -- (. is String[] ? .map(this / .) : [])
+  as (=== Byte[]) => .read -- (. is String[] ? None : .)
+  as (=== String) => (this as Byte[]) as String
+  as (=== boolean) => .read !== None
+  = (value) ^punctuation => if OS.Browser || OS.Ether { (@me/device as Storage)[.normalised] = (value is Location ? value as Byte[] : value) }
+    elsif value === None { FileSystem.removed(.sandboxed) }
+    else { FileSystem.written(.sandboxed, value as Byte[]) }
+  // executed: what the host opens it with, given the code between the brackets
+  ({args}) => if OS.Ether { ((this as String) as Program)(args) }
+    elsif OS.Browser { ERROR@OS `a browser does not execute a file` }
+    else { FileSystem.opened(this as Path, args) }
 }
-assert ("/a/b" as Location).holder is FileSystem  // LOC49 a location with no scheme is not held by the file system
+assert ("/a/b" as Location).sandboxed == "instance/a/b"  // LOC49 a location with no scheme is not a file's
 // A Windows drive is a file location, not a URL with the scheme "C".
-assert (@C:/Windows/System32) as String == "C:/Windows/System32"  // FS1 a Windows drive path is not read as written
-assert (@C:/Windows/System32).holder is FileSystem  // FS2 a Windows drive is not held like any other file path
+assert @C:/Windows/System32 as Path == "C:/Windows/System32"  // FS1 a Windows drive path is not read as written
 
-// What is at a location: `.held` read, `@x = value` written, `@x = None` removed, `@new = @x` copied, a directory's children
-// what is under it
+// What is at a location: read as anything, `@x = value` written, `@x = None` removed, `@new = @x` copied, a directory's
+// children what is under it
 assert {
   with (@me/device as OS) = OS.Ether {
     @./ethertest/a = "x"
-    assert (@./ethertest/a).held == "x"  // ETH1 what is written on ether is not read back
-    assert (@./ethertest).children == [@./ethertest/a]  // ETH2 a location on ether does not list what was written under it
+    assert (@./ethertest/a as String) == "x"  // ETH1 what is written on ether is not read back
+    assert (@./ethertest).children.map(. as Path) == ["./ethertest/a"]  // ETH2 a location on ether does not list what was written under it
     @./ethertest/b = @./ethertest/a
-    assert (@./ethertest/b).held == "x"  // FS3 a location assigned another is not a copy of what is held there
+    assert (@./ethertest/b as String) == "x"  // FS3 a location assigned another is not a copy of what is there
     @./ethertest/a = None
     assert !(@./ethertest/a)  // ETH3 a location removed on ether is still there
-    assert (@./ethertest/a) as String == "./ethertest/a"  // FS4 a location's own location is not where it was written
+    assert @./ethertest/a as Path == "./ethertest/a"  // FS4 a location's own location is not where it was written
   }
 }

@@ -2,11 +2,8 @@
 
 // OpenType specification (https://learn.microsoft.com/en-us/typography/opentype/spec/)
 // The table directory (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
-OpenType := class: Language (sfnt_version: U32, count: U16, U16, U16, U16, records: (tag: Char₄, checksum: U32, offset: U32, size: U32)[]{.length == count}, *) {
+OpenType := class (sfnt_version: U32, count: U16, U16, U16, U16, records: (tag: Char₄, checksum: U32, offset: U32, size: U32)[]{.length == count}, *) {
   static extensions := ".otf" | ".ttf" | ".opentype"
-  static level := {
-    {font: OpenType} => font
-  }
   static Glyph := class outlines: Geometry.Curve[], advance: Number, units: Number, ascender: Number
   // Data types (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#data-types)
   static U8 = Binary₈
@@ -118,5 +115,5 @@ OpenType := class: Language (sfnt_version: U32, count: U16, U16, U16, U16, recor
   [character: Char] => .cmap[character as Number] -- (glyph => OpenType.Glyph(this.outlines(glyph), this.hmtx[glyph], this.head.units, this.hhea.ascender.signed))
 }
 // A table directory with no tables: sfntVersion 0x00010000 for TrueType outlines, numTables 0 (https://learn.microsoft.com/en-us/typography/opentype/spec/otff#table-directory)
-assert OpenType.read([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).sfnt_version == 0x00010000 && OpenType.read([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]).records.empty  // OTF1 an empty table directory is not read
-assert OpenType === OpenType && Language.named(".ttf") === OpenType  // OTF4 OpenType is not OpenType
+assert ([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] as OpenType).sfnt_version == 0x00010000 && ([0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] as OpenType).records.empty  // OTF1 an empty table directory is not read
+assert OpenType === OpenType && Program.extended(".ttf") === OpenType  // OTF4 OpenType is not OpenType

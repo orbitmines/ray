@@ -6,7 +6,7 @@
 
 // The WebSocket protocol (https://www.rfc-editor.org/rfc/rfc6455)
 // A client masks every frame it sends, a server none (https://www.rfc-editor.org/rfc/rfc6455#section-5.1)
-WebSocket := class: Language client: boolean = true {
+WebSocket := class client: boolean = true {
   static extensions := ".ws" | ".websocket"
 
   // Opcodes (https://www.rfc-editor.org/rfc/rfc6455#section-5.2, https://www.rfc-editor.org/rfc/rfc6455#section-11.8)
@@ -51,8 +51,8 @@ WebSocket := class: Language client: boolean = true {
     text => .data is String
     bytes => .text ? .data as Unicode.UTF-8 as Byte[] : .data
   }
-  assert Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket.written).masked  // WS7 a client's frame is not masked
-  assert !(Compiler.reduced(Language.Writing(WebSocket.Message("hi")), WebSocket(client: false).written).masked)  // WS8 a server's frame is masked
+  assert (WebSocket.Message("hi") as WebSocket()).masked  // WS7 a client's frame is not masked
+  assert !(WebSocket.Message("hi") as WebSocket(client: false)).masked  // WS8 a server's frame is masked
   // Control frames: ping, pong, and close with its status code and reason (https://www.rfc-editor.org/rfc/rfc6455#section-5.5)
   static Control := class opcode: WebSocket.Opcode{.control} = WebSocket.Opcode.ping, data: Byte[] = []
   // Closing (https://www.rfc-editor.org/rfc/rfc6455#section-5.5.1), status codes (https://www.rfc-editor.org/rfc/rfc6455#section-7.4.1)
@@ -80,13 +80,9 @@ WebSocket := class: Language client: boolean = true {
     & .controls.count == 1  // WS6 a control frame between fragments is lost
   )
 
-  level := {
-    {stream: WebSocket.Stream} => stream.messages
-  }
-  written := {
-    {writing: Language.Writing{.value is WebSocket.Message}} => WebSocket.Frame(opcode: writing.value.text ? WebSocket.Opcode.text : WebSocket.Opcode.binary, masked: this.client, payload: writing.value.bytes)
-    {writing: Language.Writing{.value is WebSocket.Control}} => WebSocket.Frame(opcode: writing.value.opcode, masked: this.client, payload: writing.value.data)
-  }
+  // A message or a control written as a frame, masked by a client
+  (message: WebSocket.Message) as (=== this) => WebSocket.Frame(opcode: message.text ? WebSocket.Opcode.text : WebSocket.Opcode.binary, masked: this.client, payload: message.bytes)
+  (control: WebSocket.Control) as (=== this) => WebSocket.Frame(opcode: control.opcode, masked: this.client, payload: control.data)
 
   // Opening handshake (https://www.rfc-editor.org/rfc/rfc6455#section-4.1)
   static GUID := "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
@@ -99,7 +95,7 @@ WebSocket := class: Language client: boolean = true {
     & WebSocket.opened(., WebSocket.accepting(.))  // WS10 an accepted opening is not open
   )
   // Sec-WebSocket-Accept is the base64 SHA-1 of the key and the GUID (https://www.rfc-editor.org/rfc/rfc6455#section-4.2.2)
-  static accept (key: String) => ((key + WebSocket.GUID) as SHA1 as Byte[]) as Base64 as String
+  static accept (key: String) => (((key + WebSocket.GUID) as Byte[]) as SHA1).digest as Base64 as String
   assert WebSocket.accept("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="  // WS3 the accept key is not the one in RFC 6455 section 1.3
   static accepting (request: HTTP.Request) => HTTP.Response(status: HTTP.Status(101), fields: HTTP.Fields(entries: [
     (name: "Upgrade", value: "websocket"), (name: "Connection", value: "Upgrade"),

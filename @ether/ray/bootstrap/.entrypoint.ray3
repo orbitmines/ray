@@ -997,6 +997,11 @@ assert {
 {on} &+ {code} ^operator => ((on).interior) &+= {
   {code}
 }
+// A value and a block added (§3.2, `A + B`, B over A): the same, a node made of the value, the block read in it
+// (`Vector := Elementwise{…} + { x => this[0] ?? 0 }`)
+{on} + {`{`}{code}{`}`} ^operator => ((on).interior) &+= {
+  {code}
+}
 interior => {
   external .
   // (what it holds are members: a bare name never reads them, `.name` does)
@@ -1364,9 +1369,14 @@ way_value (way) => ((way).reading_count !== None) ? ((((way).reading_value) firs
 // prefers), then fewer; a written text, itself; any other, each span it is, the shortest first. `ways_first`: the first only)
 // (as a rule: a type that is a list, given among other arguments, would be spread into them; its body a call, where `return`
 // leaves it)
+// (a node of its own each time, the type it boxes in it: `Node &+ { }` written in a rule is read once)
+boxed_node (boxed_type) => {
+  boxed_box := Node &+ { }
+  external member (boxed_box) (`boxed`) (boxed_type)
+  boxed_box
+}
 {ways_type} ways_in {ways_text} into {ways_into} first {ways_first} ^keyword => {
-  ways_box := Node &+ { }
-  external member (ways_box) (`boxed`) (ways_type)
+  ways_box := boxed_node(ways_type)
   ways_dynamic := (ways_type).dynamic_frame
   if ways_dynamic !== None {
     external dynamic_in ways_dynamic
@@ -1616,7 +1626,8 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
 class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   // (`static`, the class: the one whose block this is written in (`outer`, its block's), else this one: `integer: static` of
   // a class written in Decimal's block is a Decimal)
-  outer := this.class_block
+  // (read bare: where the class is written (inside this closure, `this` is not))
+  outer := class_block
   // (built on a conjunction, `class: Iterable & Ordered`: on its parts, not on the conjunction (whose `conjoined` an
   // instance would hold: it is no conjunction itself))
   held := ((((parent).conjoins === true) ? (parent).conjoined.first : (parent)) &+ {

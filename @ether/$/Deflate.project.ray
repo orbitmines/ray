@@ -1,5 +1,5 @@
 // DEFLATE Compressed Data Format Specification version 1.3 (https://www.rfc-editor.org/rfc/rfc1951)
-Deflate := class: Language {
+Deflate := class {
   static extensions := ".deflate"
 
   // Huffman codes given by their lengths alone: shorter codes first, equal lengths in symbol order, each the next binary number (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
@@ -97,10 +97,10 @@ Deflate := class: Language {
   static Stream := class (blocks: Deflate.Block[]{.last.final && !.[..<-1].some(.final)}, Binary{.length < 8 && (.at + .length) % 8 == 0}) {
     // A copy may reach back into earlier blocks, and may overlap what it writes (https://www.rfc-editor.org/rfc/rfc1951#section-2, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.3)
     bytes => .blocks.values.flatten.reduce(out = [] => Deflate.Stream.copied(out, .))
-    assert Deflate.read([0x01, 0x05, 0x00, 0xfa, 0xff, "hello".bytes].flatten) as String == "hello"  // DF3 a stored block does not read its bytes
+    assert ([0x01, 0x05, 0x00, 0xfa, 0xff, "hello".bytes].flatten as Deflate.Stream).bytes as String == "hello"  // DF3 a stored block does not read its bytes
     assert (("ray " * 64).bytes).(
-      Deflate.read(Deflate.write(.)) == .  // DF7 written bytes do not read back
-      & (Deflate.write(.) as Byte[]).count < .count  // DF8 repeated bytes are not written shorter
+      (Deflate.deflated(.) as Byte[] as Deflate.Stream).bytes == .  // DF7 written bytes do not read back
+      & (Deflate.deflated(.) as Byte[]).count < .count  // DF8 repeated bytes are not written shorter
     )
     static copied (out: Byte[], value: Deflate.Literal | Deflate.Copy) => value is Deflate.Literal ? [out, value.byte]
       : (0..<value.length).reduce(held = out => [held, held[held.count - value.distance]])
@@ -134,18 +134,14 @@ Deflate := class: Language {
       Block(final: block.final, kind: 2, dynamic: dynamic(block.values))
   }
 
-  level := {
-    {stream: Deflate.Stream} => stream.bytes
-  }
-  written := Deflate.Optimizations + {
-    {writing: Language.Writing} => Deflate.Stream(blocks: Deflate.blocked(writing.value as Byte[]))
-  }
+  // Bytes deflated: stored blocks, each then written shorter where the optimizations find a way
+  static deflated (bytes: Byte[]) => Compiler.reduced(Deflate.Stream(blocks: Deflate.blocked(bytes)), Deflate.Optimizations)
 }
-assert Deflate.read([0x03, 0x00]).empty  // DF4 an empty fixed block is not empty
-assert Deflate.read([0x4b, 0x04, 0x00]) as String == "a"  // DF5 a literal with the fixed codes is not read
-assert Deflate.read([0x4b, 0x84, 0x03, 0x00]) as String == "aaaaaaaaaa"  // DF6 a back-reference overlapping what it writes is not copied
+assert ([0x03, 0x00] as Deflate.Stream).bytes.empty  // DF4 an empty fixed block is not empty
+assert ([0x4b, 0x04, 0x00] as Deflate.Stream).bytes as String == "a"  // DF5 a literal with the fixed codes is not read
+assert ([0x4b, 0x84, 0x03, 0x00] as Deflate.Stream).bytes as String == "aaaaaaaaaa"  // DF6 a back-reference overlapping what it writes is not copied
 
-assert Zlib.read([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62]) as String == "a"  // DF9 a zlib stream does not inflate and check its Adler-32
+assert ([0x78, 0x9c, 0x4b, 0x04, 0x00, 0x00, 0x62, 0x00, 0x62] as Zlib).inflated as String == "a"  // DF9 a zlib stream does not inflate and check its Adler-32
 
 // Matching bytes, what LZ77 is made of (and a delta, `Git`, and an edit, `History.edit`): how long two lists start the same,
 // and a list as runs of another (`(from, count)` where at least 4 bytes are found in it) and the bytes that are not

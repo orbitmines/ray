@@ -5,7 +5,7 @@
 @unicode
 
 // Domain names, implementation and specification (https://www.rfc-editor.org/rfc/rfc1035)
-DNS := class: Language {
+DNS := class {
   static extensions := ".dns"
 
   // TYPE values (https://www.rfc-editor.org/rfc/rfc1035#section-3.2.2), AAAA (https://www.rfc-editor.org/rfc/rfc3596#section-2.1), SRV (https://www.rfc-editor.org/rfc/rfc2782)
@@ -72,7 +72,7 @@ DNS := class: Language {
       www IN CNAME example.com.
     }
     assert zone.count == 3 && zone[0] is DNS.Comment && zone[1].data as String == "93.184.215.14" && zone[1].ttl == 300 && DNS.text(zone[2].name) == "www.example.com"  // DN16 a zone block does not read its comment, its hole, $ORIGIN and $TTL
-    assert (zone as DNS) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *)  // DN17 records are not written back as zone-file lines with their comment
+    assert (zone as DNS.Zone as String) ~= (*, "; the apex\nexample.com. 300 IN A 93.184.215.14\n", *)  // DN17 records are not written back as zone-file lines with their comment
   }
   static AAAA := DNS.Record{.type == DNS.Type.AAAA} {
     static Data := Binary₁₂₈ as IPv6
@@ -208,21 +208,13 @@ DNS := class: Language {
     records => .lines.line{!= None} -- (all => all.enumerate.map(line => line.value is DNS.Entry ? line.value.record(all[..<line.index]) : line.value){!(. is (DNS.Origin | DNS.Lifetime))})
   }
 
-  level := {
-    {message: DNS.Message} => message
-    {entry: DNS.Entry} => entry.record([])
-    {zone: DNS.Zone} => zone.records
-  }
-  written := {
-    {writing: Language.Writing{.value is DNS.Message}} => writing.value
-    // Records written in the master file format, one to a line (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
-    {writing: Language.Writing{.value is (DNS.Record | DNS.Comment)[]}} => writing.value.map(line => (line is DNS.Comment ? line
-      : (DNS.text(line.name), ". ", line.ttl as String, " ", line.within.name, " ", line.type.name, " ", line.presented)), \n)
-  }
+  // Records written in the master file format, one to a line, read back as a zone (https://www.rfc-editor.org/rfc/rfc1035#section-5.1)
+  static (lines: (DNS.Record | DNS.Comment)[]) as (=== DNS.Zone) => (lines.map(line => (line is DNS.Comment ? line as String
+    : (DNS.text(line.name), ". ", line.ttl as String, " ", line.within.name, " ", line.type.name, " ", line.presented)), \n).flatten.join("") as DNS.Zone
 }
 
 // Class and type mnemonics in any case (https://www.rfc-editor.org/rfc/rfc1035#section-2.3.3), written in upper case
-assert (@dns example.com. 300 in a 93.184.215.14).type == DNS.Type.A && (@dns example.com. 300 in a 93.184.215.14).within == DNS.Classes.IN && ([(@dns example.com. 300 in a 93.184.215.14)] as DNS) ~= (*, "example.com. 300 IN A 93.184.215.14", *)  // DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case
+assert (@dns example.com. 300 in a 93.184.215.14).type == DNS.Type.A && (@dns example.com. 300 in a 93.184.215.14).within == DNS.Classes.IN && ([(@dns example.com. 300 in a 93.184.215.14)] as DNS.Zone as String) ~= (*, "example.com. 300 IN A 93.184.215.14", *)  // DN18 lower-case class and type mnemonics do not read as IN A, or are not written back in upper case
 
 // DN19 lower- and mixed-case $ORIGIN, $TTL and mnemonics are not read, or the origin's case is not kept
 assert (@dns {

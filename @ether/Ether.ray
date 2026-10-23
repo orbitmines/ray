@@ -40,10 +40,10 @@ Node &+= {
   public => visibility#.some(.reads && @public is .who)
   // Pre-rotation: the next keys are known by their digests only, and count for a rotation once revealed.
   assert {
-    idy_next := Ed25519.generated()
-    idy_pre := Identity(keys: [Ed25519.generated().published], next: [SHA256.write(idy_next.public).bytes])
+    idy_next := Key.generated(Ed25519)
+    idy_pre := Identity(keys: [Key.generated(Ed25519).published], next: [(idy_next.public as SHA256).digest])
     assert idy_pre.counts(idy_next.published, idy_pre.rotate.signers, World.ether.clock.now)  // IDY11 a revealed next key does not count for a rotation
-    assert !(idy_pre.counts(Ed25519.generated().published, idy_pre.rotate.signers, World.ether.clock.now))  // IDY12 a key nobody committed to counts for a rotation
+    assert !(idy_pre.counts(Key.generated(Ed25519).published, idy_pre.rotate.signers, World.ether.clock.now))  // IDY12 a key nobody committed to counts for a rotation
   }
   assert {
     lgo := @local.login(@"leaving-inbox")
@@ -51,7 +51,7 @@ Node &+= {
     lgo_inbox := lgo.inbox
     lgo_world_key := lgo.world_keys.first.key
     @local.logout(lgo)
-    assert !(lgo_inbox.agreed(X25519.generated().public) is Byte[])  // LGO1 an agreement key outlives logging out
+    assert !(lgo_inbox.agreed(Key.generated(X25519).public) is Byte[])  // LGO1 an agreement key outlives logging out
     assert !(lgo_world_key.signed([1]).valid == true)  // LGO2 a per-world key outlives logging out
   }
   // Sealed sender: a who narrower than the history moves who and the signature into the ciphertext; the line shows a per-history pseudonymous key.
@@ -75,7 +75,7 @@ Node &+= {
     assert frk.sealed_sender && frk.current_key == sel.current_key && sel[sel.head.previous].sealed_sender  // FRK1 a copy of a sealed history loses its sender or its key
     frk.commit(sel_writer, 3)
     assert frk.head.who is Key && frk.value == 3  // FRK2 a commit on a fork of a sealed history names its sender
-    assert !(Language.ray.write(sel.since(None).map(.wraps)) ~= Language.ray.write(sel_writer.inbox.published.public))  // ANW5 a sealed history's wraps name its writer
+    assert !(((sel.since(None).map(.wraps)) as String) ~= (sel_writer.inbox.published.public as String))  // ANW5 a sealed history's wraps name its writer
   }
   // What a new reader can decrypt is what their read grant covers: the whole history by default, or any narrowing of it; a rotation follows the grants that reach the head.
   assert {
@@ -113,7 +113,7 @@ Node &+= {
     // Wraps are anonymous: no recipient key in plaintext, a tag only the recipient recomputes, the writer's own wrap like any other.
     anw := grk.head.wraps
     anw_info := (grk.current_key as String).bytes
-    assert !(Language.ray.write(anw) ~= Language.ray.write(grk_all.inbox.published.public) || anw.some(.reader))  // ANW1 a wrap names its recipient
+    assert !((anw as String) ~= (grk_all.inbox.published.public as String) || anw.some(.reader))  // ANW1 a wrap names its recipient
     assert anw{w => w.by.recognised(grk_all.inbox, anw_info, w.tag, w.sealed)}.count == 1  // ANW2 a reader does not find exactly one wrap by its tag
     assert !(anw.some(w => w.by.recognised(grk_past.inbox, anw_info, w.tag, w.sealed)))  // ANW3 someone not a reader recognises a wrap
     assert anw.every(.tag.count == anw.first.tag.count && .sealed.count == anw.first.sealed.count)  // ANW4 the writer's wrap differs in shape from a reader's
@@ -126,7 +126,7 @@ Node &+= {
     crypt.commit(ada, Program(code: { .secret = "kept twice" }))
     crypt_first := crypt.since(None).first
     crypt_line := crypt.head.written(above: crypt.head.previous)
-    crypt_text := Language.ray.write(crypt).at(crypt.id as String + ".ray").content as String
+    crypt_text := History.placed(crypt.files).at(crypt.id as String + ".ray").content as String
     assert !(crypt.public)  // CRYPT1 a history is public by default
     assert crypt_first.wraps.some(.key == crypt_first.id) && crypt_first.key == crypt_first.id  // CRYPT2 the first commit does not bring a content key of its own
     assert crypt.head.key == crypt_first.id  // CRYPT3 a line does not name the content key it uses
@@ -179,7 +179,7 @@ Node &+= {
     assert vl ~= ⊢(vh.head.id as String + "\\ ")  // VC7 a line does not begin with its label
     assert vl ~= "\\ with (@me = @ada; now = "  // VC8 a line does not set who made the commit and when
     assert vl ~= "(0..<100).for"  // VC9 a line does not hold the program as written
-    vt := Language.ray.write(vh)
+    vt := History.placed(vh.files)
     vf := vt.at(vh.id as String + ".ray").content as String
     assert vf.lines{.nonempty}.count == 3  // VC10 three commits are other than three lines
     assert !vt.at("index.ray")  // VC11 a history is written with an index beside its program
@@ -252,7 +252,7 @@ Node &+= {
     hr_joined := hr | hr_apart
     assert hr_joined.roots.count == 2  // HB11 a merge of two unrelated histories does not keep both roots
     assert hr_joined.value.a == 1 && hr_joined.value.b == 2  // HB12 a merge of two unrelated histories lost one of them
-    hr_text := Language.ray.write(hr_joined).at(hr_joined.id as String + ".ray").content as String
+    hr_text := History.placed(hr_joined.files).at(hr_joined.id as String + ".ray").content as String
     assert hr_text ~= ". = None; "  // HB13 a second root is written as continuing the line above it
     assert ((hr_text as Program) as History).roots.count == 2  // HB14 a history read back has other than its two roots
     assert (hr + hr_apart).value.b == 2  // HB15 a rebase onto an unrelated history lost its commits
@@ -306,7 +306,7 @@ Node &+= {
 @{instance: Instance} ^string => instance.canonical
 {prefix: "@" | "#"}{id: UUID} ^string => children**{.PREFIX == prefix & id is .name}.first
 
-assert HTTP.v1_1.read("HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\ncontent-type: text/plain\r\n\r\nnope").(
+assert ("HTTP/1.1 404 Not Found\r\nContent-Length: 4\r\ncontent-type: text/plain\r\n\r\nnope" as HTTP.v1_1.Wire).value.(
   .status.code == 404  // HT4 a status line does not give its code
   & .status is HTTP.Status.ClientError && !(.status is HTTP.Status.ServerError)  // HT5 404 is not a client error
   & .fields["Content-Type"] == "text/plain"  // HT6 a field name is read case-sensitively

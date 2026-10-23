@@ -227,7 +227,7 @@ Instance &+= {
 assert ("https://orbitmines.com/a" as Location).holder is Remote  // IO12 an http location is not reached over the network
 
 // What holds a location with a scheme, one under `@remote`, or another instance: reached over the network
-Remote := class: Language {
+Remote := class {
   at (location: Location) => location.scheme ? location.origin : @remote
   inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
   over_http (location: Location) => location.scheme ~= ⊢"http"

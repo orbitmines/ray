@@ -71,6 +71,11 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   for now each project is tested with only what it depends on. (Each file read took a 16 MB chunk more, every pending hole
   type tried again in each settle: now once per text, what a failed try made let go of. A small file is ~0 MB again.)
 
+- **Tagged literals read by nothing** (`@html <p>{who}</p>`, `@json {…}`, `@css …`, `@c …`, `@js …`, `` @ray`1 + 2` ``):
+  Language.ray (deleted) read them through `Language.named(ext).level`. They come back when a dependency is flagged as a
+  language, which gives the syntax. Until then they are unread. The tests that use them stay as written, and TL1
+  (`` @ray`1 + 2` == 3 ``) waits for this.
+
 ## Tests to take in
 
 - **Control.ray's tests of the language's own forms** (operator sections OP1–OP5, `if` with cases IC3, `?`/`?=` QM1–QM2,

@@ -2,7 +2,7 @@
 
 // Intel's 8254x Gigabit Ethernet controllers (what most machines and every emulator offer, `e1000`): a language over their registers
 // (https://www.intel.com/content/dam/doc/manual/pci-pci-x-family-gbe-controllers-software-dev-manual.pdf, 13)
-Intel8254x := class: Language (registers: Number) => {
+Intel8254x := class (registers: Number) => {
   static takes (function: Number) => Machine.number(function, 2) == 0x8086 && Machine.number(function + 0x0B, 1) == 0x02
   // the receive address 0 (RAL0, RAH0 at 0x5400), as the controller read it from its EEPROM
   mac => (0..<6).map((@/memory / (this.registers + 0x5400 + .) as String).held)

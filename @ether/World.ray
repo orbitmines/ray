@@ -301,8 +301,8 @@ Character &+= {
     assert !((with (@me = ver_a) { Character(name: "forged", proof: ver_a.acting.proof) == ver_a.acting }))  // VER8 code running as a character made a verified one
     assert !((with (@me = ver_a) { ver_a.key.secret }) is Byte[])  // IDY18 a private key is read by the character's own code
     // An introduction is checked against its key log, and the character is made from that log: an identity told beside it is never taken.
-    intro_forged := hsk_si.sent(Language.ray.write((name: "hsk-a", identity: ver_b.identity, log: hsk_a.identity.history,
-      by: hsk_a.key.published, signature: hsk_a.key.signed(hsk_si.binding))) as Byte[])
+    intro_forged := hsk_si.sent((((name: "hsk-a", identity: ver_b.identity, log: hsk_a.identity.history,
+      by: hsk_a.key.published, signature: hsk_a.key.signed(hsk_si.binding))) as String) as Byte[])
     intro_seen := hsk_peer.introduced(hsk_sr, intro_forged)
     assert !(intro_seen.root == ver_b.root || intro_seen.policy().keys == ver_b.policy().keys)  // INTRO1 an introduction keeps the identity it was told
     assert intro_seen.root == hsk_a.root && intro_seen.policy().certifies(hsk_a.key.published, World.ether.clock.now)  // INTRO2 an introduced character's identity is not the key log that was checked
@@ -424,8 +424,8 @@ Character &+= {
     rcv := rcv_c.recovery()
     assert !(rcv_log.find(rcv.goal.id))  // RCV1 a recovery is in the key log before its guardians signed it
     rcv_g := @local.login(@"guardian")
-    rcv_i := Noise.handshake(true, X25519.generated())
-    rcv_r := Noise.handshake(false, X25519.generated())
+    rcv_i := Noise.handshake(true, Key.generated(X25519))
+    rcv_r := Noise.handshake(false, Key.generated(X25519))
     rcv_r.read(rcv_i.written())
     rcv_i.read(rcv_r.written())
     rcv_r.read(rcv_i.written())
@@ -511,10 +511,10 @@ Character &+= {
       none.read spares: (label: String, key: Key)[] = []
     }
     zer_at := Instance(path: "zer-at")
-    zer := @local.login(Keyholder(name: "zer", key: Ed25519.generated(), spare: Ed25519.generated(), spares: [(label: "one", key: Ed25519.generated())], presence: zer_at))
+    zer := @local.login(Keyholder(name: "zer", key: Key.generated(Ed25519), spare: Key.generated(Ed25519), spares: [(label: "one", key: Key.generated(Ed25519))], presence: zer_at))
     zer_spare := zer.spare
     zer_listed := zer.spares.first.key
-    zer_other := @local.login(Keyholder(name: "zer-other", key: Ed25519.generated()))
+    zer_other := @local.login(Keyholder(name: "zer-other", key: Key.generated(Ed25519)))
     @local.logout(zer)
     assert !(zer.key || zer.spare || zer_spare.signed([1]).valid == true)  // ZER1 a key on a character outlives logging out
     assert !(zer.spares || zer_listed.signed([1]).valid == true)  // ZER3 a key held in a list of tuples outlives logging out
@@ -719,16 +719,16 @@ assert {
 // What is encrypted for an instance's key is read back where that key is, and nowhere else (a key is the language it is
 // written in: `Encrypted` in @ether/security)
 assert {
-  one := Instance(key: X25519.generated())
-  two := Instance(key: X25519.generated())
+  one := Instance(key: Key.generated(X25519))
+  two := Instance(key: Key.generated(X25519))
   locked := Encrypted(5, one.key)
-  assert one.key.read(locked) == 5  // EN1 what is locked does not open with its key
-  assert two.key.read(locked).erred  // EN2 it opens with the wrong key
-  assert Character(name: "k", key: one.key).key.read(locked) == 5  // EN33 a value does not open for a character holding its key
-  packed := Encrypted(5 as Gzip, one.key)
-  assert one.key.read(packed) == 5 as Gzip  // EN15 what is packed inside what is locked does not come back
-  assert two.key.read(packed).erred  // EN16 what is locked around a packed value opens with the wrong key
-  assert Base64.read(4 as Base64) == 4  // EN24 a packed value does not come back
+  assert one.key.opened(locked) == 5  // EN1 what is locked does not open with its key
+  assert two.key.opened(locked).erred  // EN2 it opens with the wrong key
+  assert Character(name: "k", key: one.key).key.opened(locked) == 5  // EN33 a value does not open for a character holding its key
+  packed := Encrypted(Gzip(deflated: Deflate.deflated(5 as Byte[])), one.key)
+  assert (one.key.opened(packed) as Gzip).inflated == 5 as Byte[]  // EN15 what is packed inside what is locked does not come back
+  assert two.key.opened(packed).erred  // EN16 what is locked around a packed value opens with the wrong key
+  assert (((4 as Byte[] as Base64) as String) as Base64).bytes == 4 as Byte[]  // EN24 a packed value does not come back
 }
 
 // the current instance (not `@localhost`: anything on the host machine): `Instance.local`, what `@local` answers

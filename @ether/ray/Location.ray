@@ -85,6 +85,12 @@ Location := class: Hierarchy (
   name => .segments.last ?? ""
   assert ("https://orbitmines.com/a/b.txt" as Location).name == "b.txt"  // LOC40 a location's name is not its last segment
   assert ("https://orbitmines.com" as Location).name == ""  // LOC41 a location without segments is not named ""
+  extension => (.path ~= (*, ".", last: Char.Word[]) ⊣).last
+  // what it is written in, by its extension: `name.cfg.ray` in `.cfg` (Ray narrowed), `name.json` in JSON, else Ray
+  language => Program.extended("." + ((.name ~= (*, ".", inner: Char.Word[], ".ray") ⊣)?.inner ?? .extension ?? "ray")) ?? Program
+  assert ("main.ray" as Location).language === Program  // LNG5 a plain Ray file is not read as Ray
+  assert ("notes.nothing-has-this" as Location).language === Program  // LNG6 a file named by an extension no class has is not read as Ray
+  assert ("settings.cfg.ray" as Location).language === Cfg  // LNG7 a Ray file written in a sublanguage (`name.cfg.ray`) is not read in that sublanguage
 
   // text after it (`+ "/b"`), or a segment under it (`/ "b"`)
   + (suffix: String | Location) => ((this as String) + (suffix as String)) as Location

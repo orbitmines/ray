@@ -2,7 +2,7 @@
 
 // CSS Snapshot (https://www.w3.org/TR/css-2023/)
 // The headers read CSS and write it; written inline, a Ray value in braces is a hole in a selector or a value, and a declaration whose value is None is left out
-CSS := class: Language {
+CSS := class {
   static extensions := ".css"
 
   static Blank := (" " | \t | \n | \r)[]
@@ -28,7 +28,7 @@ CSS := class: Language {
       #{who} { gap: 1px; }
     }
     assert sheet_block.count == 2 && sheet_block.last.selector == "#Ray"  // UI218 a css block of rules is not its rules
-    assert (CSS.read(css_rule as CSS) as CSS) == (css_rule as CSS)  // UI290 a written css rule does not read back as the same rule
+    assert (((css_rule as String) as CSS.Rule) as String) == (css_rule as String)  // UI290 a written css rule does not read back as the same rule
   }
   // Keyframes; the at-rule name and the selectors from and to in any case (https://www.w3.org/TR/css-animations-1/#keyframes, https://www.w3.org/TR/css-syntax-3/#at-rule, https://www.w3.org/TR/css-values-4/#keywords)
   static Keyframes := class ("@", "keyframes".ignore_case, CSS.Blank, name: (!"{" && !" ")[], CSS.Blank, "{",
@@ -39,20 +39,13 @@ CSS := class: Language {
   }
   static Sheet := class (rules: (CSS.Blank, CSS.Rule | CSS.Keyframes | CSS.Comment)[] = [], CSS.Blank)
 
-  level := {
-    {group: CSS.Group} => group.held
-    {rule: CSS.Rule | CSS.Keyframes | CSS.Comment} => rule
-    {sheet: CSS.Sheet} => sheet.rules
-    {declarations: CSS.Declarations} => declarations
-  }
-  written := {
-    {rule: CSS.Rule{.within}} => rule.within, "{", CSS.Rule(rule.selector, rule.declarations), "}"
-    {keyframes: CSS.Keyframes} => "@keyframes ", keyframes.name, "{", keyframes.frames.map(.at * 100, "%{", .declarations, "}"), "}"
-  }
+  // A rule within a group written inside it, keyframes at their percentages
+  static (rule: CSS.Rule{.within}) as (=== String) => rule.within + "{" + (CSS.Rule(rule.selector, rule.declarations) as String) + "}"
+  static (keyframes: CSS.Keyframes) as (=== String) => "@keyframes " + keyframes.name + "{" + keyframes.frames.map((.at * 100) as String + "%{" + (.declarations as String) + "}").join("") + "}"
 }
-assert ((@css p { /* note */ display: grid; }) as CSS) == "p{/* note */display:grid;}"  // UI237 a css comment is not written into the css
+assert ((@css p { /* note */ display: grid; }) as String) == "p{/* note */display:grid;}"  // UI237 a css comment is not written into the css
 // Property names and at-rule names are ASCII case-insensitive, custom properties are not (https://www.w3.org/TR/css-syntax-3/#declaration, https://www.w3.org/TR/css-variables-1/#defining-variables)
-assert ((@css p { Display: grid; --Gap: 1px; }) as CSS) == "p{display:grid;--Gap:1px;}"  // UI303 a mixed-case property is not written in lower case, or a custom property's case is not kept
+assert ((@css p { Display: grid; --Gap: 1px; }) as String) == "p{display:grid;--Gap:1px;}"  // UI303 a mixed-case property is not written in lower case, or a custom property's case is not kept
 
 assert (@css p { color: {None}; display: grid; }).declarations.count == 1  // UI202 a declaration whose value is None is not left out
 

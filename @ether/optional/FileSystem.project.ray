@@ -7,7 +7,7 @@
 // language as the operating system keep them in the device's storage (`storage: Storage = @me/device`, a page's its Web Storage),
 // where a directory is what is kept under it. It holds the file space: a location of no scheme, `file:`, or a Windows
 // drive (`@C:/`, https://url.spec.whatwg.org/#windows-drive-letter).
-FileSystem := class: Language {
+FileSystem := class {
   [location: Location] => if OS.Browser || OS.Ether {
       (@me/device as Storage) -- (storage => storage[location.normalised] ?? (storage.fields.name{~= ⊢(location.normalised + "/")}
         .map(.after(location.normalised + "/").before("/")).unique.map(location / .) -- (.nonempty ? . : None)))

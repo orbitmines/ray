@@ -390,6 +390,30 @@ assert !(Program(code: { external read "x" }) is Initializer)  // AC66 a program
 Refused := Program{. is Program.refused#}
 Abstracted := Program{. is Effecting && !(. is Program.speculated#)}
 
+// Configuration, `name.cfg.ray`: Ray whose code provably halts and has no side effects
+Cfg := class: Program{Pure & Terminating} {
+  static extensions := ".cfg"
+}
+assert !(Program(code: { while true { } }) is Cfg)  // VC57 a line's settings may run forever
+assert Program(code: { x := 1 }) is Cfg  // LNG37 a configuration that only declares is not configuration
+
+// What a file is written in: the class whose extensions name it (`.json`), Ray's being Program's; read by its header,
+// `text as JSON`, written by it, `json as String`
+Program &+= {
+  static extensions := ".ray"
+  static extended (extension: String) => Node#{.extensions && extension is .extensions#}.first
+}
+assert Program.extended(".ray") === Program  // LNG31 Ray does not name its own extension
+assert Program.extended(".cfg") === Cfg  // LNG38 the configuration language does not use the extension ".cfg"
+assert Program.extended(".nothing-has-this") === None  // LNG32 a class names an extension that is not its own
+
+assert {
+  Numbered := class ("#", number: Decimal, ("'", revision: Decimal)?) => { }
+  assert (Numbered(number: 3, revision: 2) as String) == "#3'2"  // LNG22 a value is not written by walking the pattern in its class's header
+  assert (Numbered(number: 3) as String) == "#3"  // LNG23 an optional part is written when it is not held
+  assert ("#3'2" as Numbered).revision == 2  // LNG9 a value written by its header does not read back
+}
+
 [(`pure`, Pure), (`deterministic`, Deterministic), (`nondeterministic`, Nondeterministic)].for (word, claim) => {
   right-to-left `word` {method} ^keyword => method -- (ERROR `this method is not what it is marked as` unless method** is claim)
 }

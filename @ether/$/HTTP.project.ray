@@ -42,7 +42,7 @@ HTTP := class {
   static Message := class {
     fields: HTTP.Fields = HTTP.Fields()
     body: Byte[] = []
-    assert HTTP.v1_1.read("HTTP/1.1 204 No Content\r\n\r\n").body.empty  // HT13 a 204 response is read with a body
+    assert ("HTTP/1.1 204 No Content\r\n\r\n" as HTTP.v1_1.Wire).value.body.empty  // HT13 a 204 response is read with a body
 
     text => .body as String
     framed => .framing(this.fields)
@@ -55,15 +55,15 @@ HTTP := class {
   static Request := class: HTTP.Message {
     method: HTTP.Method = HTTP.Method.get
     assert HTTP.Request(method: HTTP.Method.post, target: @http://example.com/, body: "hi" as Byte[]).(
-      . as HTTP.v1_1 == "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 2\r\n\r\nhi"  // HT3 a body is not framed by its length
+      . as HTTP.v1_1.Wire as String == "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 2\r\n\r\nhi"  // HT3 a body is not framed by its length
       & Compiler.reduced(HTTP.Exchange(.), HTTP.Optimizations).format === HTTP.v1_1  // HT14 a plain http exchange left HTTP/1.1
     )
     assert (@http GET /a HTTP/1.1).method == HTTP.Method.get  // HT16 a request line written inline is not a GET request
     target: Location
     assert HTTP.Request(target: @https://example.com/a?b=1).(
       .method == HTTP.Method.get  // HT1 a request without a method is not a GET
-      & . as HTTP.v1_1 == "GET /a?b=1 HTTP/1.1\r\nHost: example.com\r\n\r\n"  // HT2 a request is not written as its request line and Host
-      & (HTTP.v1_1.read(. as HTTP.v1_1)).(
+      & . as HTTP.v1_1.Wire as String == "GET /a?b=1 HTTP/1.1\r\nHost: example.com\r\n\r\n"  // HT2 a request is not written as its request line and Host
+      & ((. as HTTP.v1_1.Wire as String) as HTTP.v1_1.Wire).value.(
         .target.host == "example.com" && .target.origin_form == "/a?b=1"  // HT9 a written request does not read back to its target
       )
     )
@@ -97,7 +97,7 @@ HTTP := class {
   static Line := (name: HTTP.Token, ":", HTTP.OWS, value: HTTP.Value, HTTP.OWS, HTTP.End)
 
   // HTTP/1.1 (https://www.rfc-editor.org/rfc/rfc9112)
-  static v1_1 := class: Language {
+  static v1_1 := class {
     static extensions := ".http"
 
     // HTTP-message (https://www.rfc-editor.org/rfc/rfc9112#section-2.1)
@@ -121,7 +121,7 @@ HTTP := class {
       // chunked is the final transfer coding when present (https://www.rfc-editor.org/rfc/rfc9112#section-6.1)
       chunked => .fields["Transfer-Encoding"].split(",").last.trimmed.fold_case == "chunked"
       assert {
-        chunked := HTTP.v1_1.read("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n1;x=y\r\n!\r\n0\r\n\r\n")
+        chunked := ("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\nhi\r\n1;x=y\r\n!\r\n0\r\n\r\n" as HTTP.v1_1.Wire).value
         assert chunked.text == "hi!"  // HT8 chunks are not joined into the body
       }
       content_length => .fields["Content-Length"] -- (. ? . as Decimal : None)
@@ -152,16 +152,10 @@ HTTP := class {
       static (bytes: Byte[]) as (=== Chunked) => Chunked(chunks: bytes.chunk(2 ^ 14).map((size: .count as Hexadecimal, data: .)), trailers: [])
     }
 
-    level := {
-      {wire: Wire} => wire.value
-    }
-    written := {
-      {writing: Language.Writing{.value is (HTTP.Request | HTTP.Response)}} => writing.value as Wire
-    }
   }
 
   // HTTP/2 (https://www.rfc-editor.org/rfc/rfc9113)
-  static v2 := class: Language {
+  static v2 := class {
     static extensions := ".h2"
     // Connection preface (https://www.rfc-editor.org/rfc/rfc9113#section-3.4)
     static preface := "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
@@ -210,6 +204,7 @@ HTTP := class {
       // A field block is a HEADERS frame and the CONTINUATION frames after it (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
       blocks => (.frames{.type is (Frame.Type.headers | Frame.Type.continuation)} ~= (blocks: (first: Frame{.type == Frame.Type.headers}, rest: Frame{.type == Frame.Type.continuation}[])[])).blocks.map([.first, .rest].flatten)
       // One decoding context per connection, field blocks in the order they arrive (https://www.rfc-editor.org/rfc/rfc9113#section-4.3)
+      value => .streams.map(this.message(.))
       decoded => HPACK.Connection(this.blocks.map(.fragment.flatten as HPACK.Block)).fields
       // Pseudo-header fields (https://www.rfc-editor.org/rfc/rfc9113#section-8.3)
       message (stream: Number) => HTTP.Fields(entries: this.blocks.enumerate{.value.first.stream == stream}.map(this.decoded[.index]).flatten(1)) -- (fields =>
@@ -218,24 +213,17 @@ HTTP := class {
           : HTTP.Request(method: fields[":method"] as HTTP.Method, target: (fields[":scheme"] + "://" + fields[":authority"] + fields[":path"]) as Location, fields: plain, body: body))))
       // Connection-specific fields are not sent (https://www.rfc-editor.org/rfc/rfc9113#section-8.2.2)
       static (request: HTTP.Request) as (=== Wire) => Wire(frames: [
-        Frame(type: Frame.Type.headers, flags: 4 + (request.body.empty ? 1 : 0), stream: 1, payload: HPACK.write([
+        Frame(type: Frame.Type.headers, flags: 4 + (request.body.empty ? 1 : 0), stream: 1, payload: (([
           (name: ":method", value: request.method.written), (name: ":scheme", value: request.target.scheme),
           (name: ":authority", value: request.target.host), (name: ":path", value: request.target.origin_form),
-          request.fields.entries{!(.name.fold_case is ("host" | "connection" | "transfer-encoding"))}.map((name: .name.lower_case, value: .value))].flatten(1))),
+          request.fields.entries{!(.name.fold_case is ("host" | "connection" | "transfer-encoding"))}.map((name: .name.lower_case, value: .value))].flatten(1)) as HPACK.Block) as Byte[]),
         Frame(type: Frame.Type.data, flags: 1, stream: 1, payload: request.body) if request.body.nonempty
       ])
     }
-
-    level := {
-      {wire: Wire} => wire.streams.map(wire.message(.))
-    }
-    written := {
-      {writing: Language.Writing{.value is Request}} => preface, writing.value as Wire
-    }
   }
 
-  static Exchange := class request: Request, format: Language = v1_1 {
-    response => .request.target.socket.send(this.format.write(this.request)) -- this.format.read(.)
+  static Exchange := class request: Request, format = v1_1 {
+    response => .request.target.socket.send(this.request as this.format.Wire) -- (. as this.format.Wire).value
   }
   // Protocol negotiation (https://www.rfc-editor.org/rfc/rfc7301) picks the newest format both ends speak
   static Optimizations := {

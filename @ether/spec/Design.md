@@ -1604,12 +1604,19 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - A language is a mapping from text in that format to Ray values and back: a Program level whose rules read `.x`.
   A language states its own assumptions ("a newline is a new statement") as rules in its level. Each file extension is
   its own language (`.uc`, `.uci`). When a mapping counts as a language is a research question for the Library Project.
-- A language is named by its class (`JSON`, `Git`, `Language.ray` for Ray itself), reached through the dependency on its
+- A language is named by its class (`JSON`, `Git`; Ray itself is `Program`), reached through the dependency on its
   project (`@json` is `$/JSON.project.ray`). There is no `$.name` (removed 2026-10-21, user).
-- A language is declared one way: its class is `class: Language`, with its header when the format has one
-  (`JSON := class: Language (Blank, root: Value, Blank)`). Reading is `Name.read`, writing
-  `Name.write` or `x as Name`. A language that writes several files answers a tree of Locations with content.
-  `Language.Lossless` is the narrowing of languages that read back what they write; `.ray` is one.
+- A language is a plain class; there is no `Language` class (removed 2026-10-23, user: every Program is a language, and
+  what a compiler setup is will later be defined by transformations). Its header is its grammar
+  (`JSON := class (Blank, root: Value, Blank)`), which reads it and writes it: reading is `text as JSON`, writing is the
+  instance `as String` (or `as Byte[]`). A value becomes one by a conversion (`static (bytes: Byte[]) as (=== SHA1)`,
+  `JSON(root: value as JSON.Value)`); a keyed one by a conversion to the instance (`value as key`, `bytes as HMAC(…)`).
+  There are no `read`/`write`/`level`/`written` blocks on a language. The class whose `static extensions` name a file's
+  extension is `Program.extended(".json")`, and a location's language is `location.language`. `Lossless`
+  (@ether/version-control) is the narrowing of formats that read back what they write; Ray's is one.
+- Configuration, `.cfg.ray`, is `Cfg := class: Program{Pure & Terminating}`.
+- Tagged fragments (`@html …`, `@json {…}`) are read by nothing until a dependency is flagged as a language
+  (spec/TODO.md); for now Character.ray captures them whole.
 - A format reads straight into Ray values with one grammar, its headers, which also write it. There is no record
   vocabulary between a format and Ray: a `@js` fragment is a Ray program, and writing JS is one Compiler level over
   Ray's program shapes. Kinds of a value (an HTTP status class, a DNS record type) are narrowings.
@@ -1693,7 +1700,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 ### 16.3 Backends and storage levels
 
 - A backend is a Language. Its level reads into a `History`, and writing goes out of one: `Git`, and on the
-  `version-control` branch `Mercurial`, `Fossil`, `Pijul`, `Subversion`; and Ray itself (`Language.ray`, the `.%` form).
+  `version-control` branch `Mercurial`, `Fossil`, `Pijul`, `Subversion`; and Ray itself (`Program`, the `.%` form).
   Git is one compile target: cloning is `Git.read(@https://…)`, pushing is `history as Git`, and converting is
   reading as one language and writing as another.
 - Each backend is lossless (Ray, Pijul) or a snapshot backend (Git, Mercurial, Fossil, Subversion). Writing to a snapshot
@@ -1701,7 +1708,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   `.%` line beside it (git notes under `refs/notes/ray`), so reading our own repository back is exact. A foreign
   repository is read by writing each commit's change against its first parent as Ray (`History.change`); a rename comes
   from the backend's own record, else from line similarity of at least 50%, and a tie raises `ERROR@Rename`.
-- Routing uses the store syntax (§16.6): `History{location is @me}$ = Language.ray | Git` stores in both.
+- Routing uses the store syntax (§16.6): `History{location is @me}$ = Program | Git` stores in both.
 - The backend, the storage granularity and the caches are Compiler levels (`Compiler.stored`): a choice of format, never a
   fixed layout. No layout is canonical; per object or per project, splitting (past 1 MiB, one file per object) and caches
   (every 64th commit and at the head) are optimizations. `delta` writes a commit as `. edited(from, to, "text")` when

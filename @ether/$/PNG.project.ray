@@ -4,7 +4,7 @@
 @crc32
 
 // Portable Network Graphics (PNG) Specification, Third Edition (https://www.w3.org/TR/png-3/)
-PNG := class: Language (
+PNG := class (
   // PNG signature (5.2)
   137, 80, 78, 71, 13, 10, 26, 10,
   header: Chunk{type == "IHDR"},
@@ -12,7 +12,6 @@ PNG := class: Language (
   Chunk{type == "IEND"} = Chunk(type: "IEND", data: [])
 ) {
   static extensions := ".png"
-  static of := Language.Image
 
   // Chunk layout (5.3), its CRC over the type and data (5.5)
   static Chunk := class (size: Binary₃₂ = data.count, type: Char₄, data: Byte[]{.length == size}, crc: Binary₃₂ = [type.bytes, data].flatten as CRC32 as Binary₃₂) {
@@ -52,7 +51,7 @@ PNG := class: Language (
   palette => .chunks{.type == "PLTE"}.first.data.chunk(3).map(Geometry.Color(.0, .1, .2)) ?? []
   transparency => .chunks{.type == "tRNS"}.first.data ?? []
   // IDAT (11.2.4): one zlib stream over all of them
-  inflated => Zlib.read(this.chunks{.type == "IDAT"}.data.flatten)
+  inflated => (this.chunks{.type == "IDAT"}.data.flatten as Zlib).inflated
   passes => (.ihdr.interlace == 0 ? [(0, 0, 1, 1)] : PNG.Adam7).map((x, y, dx, dy) => (x: x, y: y, dx: dx, dy: dy,
     width: ((this.ihdr.width - x + dx - 1) / dx).floor max 0, height: ((this.ihdr.height - y + dy - 1) / dy).floor max 0))
   span (width: Number) => (width * .ihdr.depth * .channels + 7) / 8 -- .floor
@@ -68,22 +67,15 @@ PNG := class: Language (
   // Writing: 8-bit truecolour with alpha, filter type 0, not interlaced
   static (raster: Geometry.Raster) as (=== PNG) => PNG(
     header: PNG.Chunk(type: "IHDR", data: PNG.Header(width: raster.width, height: raster.height, depth: 8, color: 6, compression: 0, filter: 0, interlace: 0) as Byte[]),
-    chunks: [PNG.Chunk(type: "IDAT", data: Zlib.write(raster.map(row => [0, row.map([.red, .green, .blue, (.alpha * 255).floor])].flatten)) as Byte[])])
-
-  static level := {
-    {png: PNG} => png.raster
-  }
-  static written := {
-    {writing: Language.Writing{.value is Geometry.Raster}} => writing.value as PNG
-  }
+    chunks: [PNG.Chunk(type: "IDAT", data: Zlib(deflated: Deflate.deflated(raster.map(row => [0, row.map([.red, .green, .blue, (.alpha * 255).floor])].flatten))) as Byte[])])
 }
 // One red pixel, 8-bit truecolour with alpha, filter type 0, as Pillow 12.3 writes it, a reference encoder's output and no value of the specification (5.2, 11.2.1, 11.2.4, 11.2.5)
 assert {
   red_png := [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4, 0x89,
     0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0x00, 0x05, 0x00, 0x01, 0xff, 0x89, 0x99, 0x3d, 0x1d, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]
-  red := PNG.read(red_png)
+  red := (red_png as PNG).raster
   assert red.width == 1 && red.height == 1 && red[0][0] == Geometry.Color(255, 0, 0, 1)  // PNG1 one red pixel is not read as a red raster
-  assert PNG.read(PNG.write(red) as Byte[])[0][0] == Geometry.Color(255, 0, 0, 1)  // PNG2 a written raster does not read back
-  assert (PNG.write(red) as Byte[])[-12..] == [0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]  // PNG3 a written image does not end with IEND and its CRC
-  assert PNG.read([red_png[..<29], [0x00, 0x15, 0xc4, 0x89], red_png[33..]].flatten) is Diagnostic  // PNG4 a chunk whose CRC does not match reads
+  assert (((red as PNG) as Byte[]) as PNG).raster[0][0] == Geometry.Color(255, 0, 0, 1)  // PNG2 a written raster does not read back
+  assert ((red as PNG) as Byte[])[-12..] == [0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82]  // PNG3 a written image does not end with IEND and its CRC
+  assert (([red_png[..<29], [0x00, 0x15, 0xc4, 0x89], red_png[33..]].flatten) as PNG).raster is Diagnostic  // PNG4 a chunk whose CRC does not match reads
 }

@@ -9,6 +9,10 @@ Nameable := class {
 
 // A character by its name, `@"ada"` (`@"{name}"`): one claimed, made from what it is called
 @"{name: (!"\"")[]}" ^string => Character(name: name)
+// A fragment tagged by a language, `@html <p>{who}</p>`, `@json { … }`: taken whole, its block or the rest of its line,
+// and read by nothing until a dependency is flagged as a language (spec/TODO.md)
+@{tag: Char.Word[]} {{block}} ^keyword => block
+@{tag: Char.Word[]} {rest: (Char.Word | "<" | "(" | "`" | "\"" | "@" | "-"), (!\n)[]} ^keyword => rest
 
 Character := class: Hierarchy &+ Nameable {
   // what a value nobody granted is visible to, as this character runs (`@me/policy`): nobody, unless it is set

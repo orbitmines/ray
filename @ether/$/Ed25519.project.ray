@@ -3,7 +3,7 @@
 @sha512
 
 // Edwards-Curve Digital Signature Algorithm, Ed25519 (https://www.rfc-editor.org/rfc/rfc8032)
-Ed25519 := class: Language {
+Ed25519 := class {
   static extensions := ".ed25519"
 
   // The field GF(2^255 - 19) is X25519's (RFC 7748 §4.1); the curve constant d = -121665/121666 and the order L of the base point (RFC 8032 §5.1)
@@ -40,8 +40,8 @@ Ed25519 := class: Language {
   assert (Ed25519.B as Byte[]) as Ed25519.Point == Ed25519.B  // EDS6 the base point does not read back as itself
 
   // The secret's SHA-512, its first half pruned as X25519's scalar (RFC 8032 §5.1.5, RFC 7748 §5)
-  static expanded (secret: Byte₃₂) => SHA512.write(secret).bytes -- (h => (scalar: X25519.clamped(h[..<32]), prefix: h[32..]))
-  static reduced (bytes: Byte[]) => (SHA512.write(bytes).bytes).little % Ed25519.L
+  static expanded (secret: Byte₃₂) => (secret as SHA512).digest -- (h => (scalar: X25519.clamped(h[..<32]), prefix: h[32..]))
+  static reduced (bytes: Byte[]) => ((bytes as SHA512).digest).little % Ed25519.L
 
   // The public key: the base point times the pruned scalar (RFC 8032 §5.1.5)
   static public (secret: Byte₃₂) => (Ed25519.B * Ed25519.expanded(secret).scalar) as Byte[]
@@ -56,13 +56,13 @@ Ed25519 := class: Language {
     assert !(Ed25519.verify(ed_public, [0x72], ed_signature))  // EDS4 a signature verifies for another message
     assert !(Ed25519.verify(ed_public, [], [ed_signature[..<63], ed_signature[63] ~x|| 0x01].flatten))  // EDS5 a changed signature verifies
     // A key names its algorithm, and what it signs holds only for that value
-    ed_pair := Ed25519.generated(ed_secret)
+    ed_pair := Key.generated(Ed25519, ed_secret)
     assert ed_pair.algorithm === Ed25519 && ed_pair.public == ed_public  // EDS8 a key pair forgot its algorithm or its public half
     assert ed_pair.signed("abc".bytes).(.valid & .value == "abc".bytes)  // EDS9 what a key signed does not hold for it
     assert !(ed_pair.signed("abc".bytes) ~~ .value = "abd".bytes).valid  // EDS10 a signed value that was changed still holds
-    assert ed_pair.secret == ed_secret & !(Ed25519.generated() == Ed25519.generated())  // EDS20 a key does not keep its secret, or two keys drawn are the same
+    assert ed_pair.secret == ed_secret & !(Key.generated(Ed25519) == Key.generated(Ed25519))  // EDS20 a key does not keep its secret, or two keys drawn are the same
     assert ed_pair.signed("abc".bytes).(.by == ed_pair.published & .signature.count == 64)  // EDS21 a signature is not by the key's published part, or is not 64 bytes (RFC 8032 section 5.1.6)
-    assert !Signed("abc".bytes, by: Ed25519.generated().published, signature: ed_pair.signed("abc".bytes).signature).valid  // EDS22 a signature holds under another key
+    assert !Signed("abc".bytes, by: Key.generated(Ed25519).published, signature: ed_pair.signed("abc".bytes).signature).valid  // EDS22 a signature holds under another key
     assert Ed25519.public(ed_secret_2) as Hexadecimal₆₄ == "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"  // EDS11 the public key of RFC 8032's test 2 is not 3d4017c3…
     assert Ed25519.sign(ed_secret_2, ed_message_2) as Hexadecimal₁₂₈ == "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00"  // EDS12 the message of RFC 8032's test 2 does not sign as 92a009a9…
     assert Ed25519.verify("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c" as Hexadecimal₆₄ as Byte₃₂, ed_message_2, "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" as Hexadecimal₁₂₈ as Byte₆₄) && !Ed25519.verify("3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c" as Hexadecimal₆₄ as Byte₃₂, [ed_message_2, [0]].flatten, "92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00" as Hexadecimal₁₂₈ as Byte₆₄)  // EDS13 the signature of RFC 8032's test 2 does not verify, or verifies a longer message

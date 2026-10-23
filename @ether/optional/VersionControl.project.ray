@@ -99,9 +99,9 @@ Project &+= {
   assert !Project(written_against: %v0.1.4-E2027.0A.4).carries([%v0.1.3-E2027.0A.3, %v0.1.4-E2027.0A.4])  // PRJ7 a project written against a version the host runs is carried
   assert !Project().carries([%v0.1.4-E2027.0A.4])  // PRJ8 a project written against nothing is carried
 }
-Language &+= {
+Program &+= {
   // (what a file in it holds at a label of its history, as a tree)
-  tree_at (location: Location, label) => .read(location).at(label).tree
+  static tree_at (location: Location, label) => (location as History).at(label).tree
   version: Version?
   backwards_compatible => .previous**.every(.targeting(this))
   forwards_compatible => .next**.every(.targeting(this))
@@ -170,7 +170,7 @@ History := class: Iterable (repository: *?, base: History.Commit?, head: History
     mentions (label) => .id == label || .versions.contains(label)
     // A line's settings, written `name = text` in its `with (…)`: those its hash covers, then the rest. A project that adds
     // fields to commits adds their settings (`more_attributes`, `more_settings`) and how it reads them back (`given`).
-    attributes => [[(name: "@me", text: Language.ray.write(this.who)), (name: "now", text: .stamp as String) if .stamp,
+    attributes => [[(name: "@me", text: (this.who as String)), (name: "now", text: .stamp as String) if .stamp,
       (name: "version", text: .versions.join(" | ")) if .versions.nonempty], .more_attributes].flatten(1)
     more_attributes => []
     more_settings => []
@@ -188,10 +188,10 @@ History := class: Iterable (repository: *?, base: History.Commit?, head: History
       assert History.change(vt1, vs2).erred  // VC31 a rename two files could have made is not raised
     }
     given (set, written: String) => this
-    hash: Byte[] => SHA256.write([this.parents.map(.hash), (this.id, this.attributed, this.text).join("") as Byte[]].flatten).bytes
+    hash: Byte[] => (([this.parents.map(.hash), (this.id, this.attributed, this.text).join("") as Byte[]].flatten) as SHA256).digest
     written (above: Commit? = None) => (.id, "\\ with (", .settings, ") ", (". = ", .parents.empty ? "None" : .parents.id.join(" & "), "; ") unless .parents == [above] || .parents.empty && !above, .text, \n).join("")
     static read (label: Label, code: Program) => (code as String) ~= (⊢"with (", settings: *, ") ", (". = ", root: "None" | from: Label[].join(" & "), "; ")?, change: *) ⊣ -- (line => line
-      ? Language.cfg.read("(" + line.settings + ")") -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from,
+      ? (("(" + line.settings + ")") as Cfg)() -- (set => Commit(id: label, who: set["@me"], stamp: set.now as Stamp, change: line.change as Program, from: line.root ? [] : line.from,
         versions: set.version# ?? []).given(set, line.change as String))
       : Commit(id: label, change: code))
 
@@ -238,7 +238,7 @@ History := class: Iterable (repository: *?, base: History.Commit?, head: History
   pinned (label, as_of: Stamp? = None) => .ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last.id ?? label
   checkout (label, as_of: Stamp? = None) => this[.pinned(label, as_of)].value
   fix (who, label: History.Label, change) => .commit(who, change, versions: [label])
-  tree => History.placed(.public ? this.value.fields{.value != None}.map((path: .name, content: Language.ray.write(.value) as Byte[])) : this.files)
+  tree => History.placed(.public ? this.value.fields{.value != None}.map((path: .name, content: (.value as String) as Byte[])) : this.files)
   static placed (files) => files.reduce(held = Location(path: "") => held.placed(.path, .content))
 
   fork => .copy ~~ (.base = this.head)
@@ -293,9 +293,9 @@ History &+= {
   as (=== Program) => .written_as()
   written_as (change_of = .change) => .since(None) -- (commits => commits.map(c => c.rewritten(change_of(c)).stored.written(above: commits[c.index - 1] if c.index > 0)).join("") as Program)
 
-  static edit (before, after) => (Language.ray.write(before) as Byte[]) -- (old => (Language.ray.write(after) as Byte[]) -- (new =>
+  static edit (before, after) => ((before as String) as Byte[]) -- (old => ((after as String) as Byte[]) -- (new =>
     old.common(new) -- (prefix => (old[prefix..].reverse).common(new[prefix..].reverse) -- (suffix =>
-      (". edited(", prefix, ", ", old.count - suffix, ", ", Language.ray.write(new[prefix..<new.count - suffix] as String), ")") as String as Program))))
+      (". edited(", prefix, ", ", old.count - suffix, ", ", ((new[prefix..<new.count - suffix] as String) as String), ")") as String as Program))))
   assert History.edit("abcdef", "abXdef") as String == ". edited(3, 4, \"X\")"  // VC41 a small change is not written as an edit
 
   file => (path: .id as String + ".ray", content: .written_as() as String as Byte[])
@@ -304,22 +304,17 @@ History &+= {
   cache_files => []
   files => [[.stored_file], .object_files, .cache_files].flatten(1)
 
-  of (name) => .since(None){this[.].value?[name] != this[.previous].value?[name]}.reduce(held = History() => held.extended(.rewritten(Language.ray.write(this[.].value?[name]) as Program)))
+  of (name) => .since(None){this[.].value?[name] != this[.previous].value?[name]}.reduce(held = History() => held.extended(.rewritten(((this[.].value?[name]) as String) as Program)))
   object_path (name) => .id as String + "/" + name + ".ray"
   objects => .value.fields.name.map(name => (path: this.object_path(name), content: this.of(name).written_as() as String as Byte[]))
-  pins (commit: History.Commit) => .value.fields.name{this.of(.).find(commit.id)}.map(name => ".[" + Language.ray.write(name) + "] = @./" + this.object_path(name) + "%[" + commit.id + "]").join("; ") as Program
+  pins (commit: History.Commit) => .value.fields.name{this.of(.).find(commit.id)}.map(name => ".[" + (name as String) + "] = @./" + this.object_path(name) + "%[" + commit.id + "]").join("; ") as Program
   cached => .since(None){.index % 64 == 63 || . === this.head}
   // A cache line: the value at a commit, written as that commit's change.
-  cached_at (commit: History.Commit) => commit.rewritten(Language.ray.write(this[commit].value) as Program)
+  cached_at (commit: History.Commit) => commit.rewritten(((this[commit].value) as String) as Program)
 
-  static level := {
-    {at: Location{segments.last == ".%"}} => at.held.children -- (files => History.global(files{.name ~= ".ray" ⊣}.map(. as Program as History))
-      ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(. as Program as History))
-  }
-
-  static written := {
-    {writing: Language.Writing{.value is History}} => History.placed(writing.value.files)
-  }
+  // A `.%` location read: the histories of its files, with their caches
+  static (at: Location{.segments.last == ".%"}) as (=== History) => at.held.children -- (files => History.global(files{.name ~= ".ray" ⊣}.map(. as Program as History))
+    ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(. as Program as History))
 
   static similar: Probability = 50%
 
@@ -330,31 +325,31 @@ History &+= {
     close{this.similarity(.content, file.content) == close.map(this.similarity(.content, file.content)).max} -- (best =>
       best.count > 1 ? best ~~ ERROR@Rename `rename` : best.first))
 
-  static read_file (file: Location) => Language.for_file(file.name).read(file.content as String)
+  static read_file (file: Location) => (file.content as String) as file.language
   static valued (tree: Location) => tree.files.reduce(held = {} => held, {(.path): this.read_file(.)})
 
-  static assigned (path: String, to: String) => ".[" + Language.ray.write(path) + "] = " + to
+  static assigned (path: String, to: String) => ".[" + (path as String) + "] = " + to
   static change (before: Location, after: Location) => before.files{!after.at(.path)} -- (gone =>
     after.files{!before.at(.path)}.map(file => (file, from: this.renamed_from(file, gone))) -- (added => added.find(.from.erred).from ?? [
-      added{.from}.map(this.assigned(.file.path, ".[" + Language.ray.write(.from.path) + "]")),
+      added{.from}.map(this.assigned(.file.path, ".[" + (.from.path as String) + "]")),
       gone.map(this.assigned(.path, "None")),
-      after.files{before.at(.path).content != .content && !added.some(a => a.file === . && a.from.content == .content)}.map(this.assigned(.path, Language.ray.write(this.read_file(.))))
+      after.files{before.at(.path).content != .content && !added.some(a => a.file === . && a.from.content == .content)}.map(this.assigned(.path, ((this.read_file(.)) as String)))
     ].flatten.join("; ") as Program))
 
   stored => Store.routed(this).map(.kept_in.language).compact
-  lossless => .stored.find(. is Language.Lossless)
+  lossless => .stored.find(. is Lossless)
 
   append (location: Location) => .head -- (commit => {
     location / (this.id as String + ".ray") += commit.written(above: this.written_last)
     this.written_last = commit
     location
   })
-  appended (location: Location, language: Language = Language.ray) => language === Language.ray
+  appended (location: Location, language = Program) => language === Program
     ? .append(location)
-    : language.written_to(.copy ~~ (.base = this.head.previous), location)
+    : ((.copy ~~ (.base = this.head.previous)) as language).placed_at(location)
 }
 
-History{.location is @me}$ = Language.ray | Git
+History{.location is @me}$ = Program | Git
 
 Program &+= {
   as (=== History) => .written.reduce(held = [] => .is_label ? [held, [(label: .code[..<-1], code: Program())]].flatten(1) : held ~~ (.last.code = .last.code + .))
@@ -370,7 +365,7 @@ assert ((Program(code: {
 })) as History).count == 2
 
 Node &+= {
-  edited (from: Number, to: Number, text: String) => Language.ray.write(this) -- (written => Language.ray.read((written[..<from], text, written[to..]).join("")))
+  edited (from: Number, to: Number, text: String) => (this as String) -- (written => (((written[..<from], text, written[to..]).join("")) as Program))
   assert "abcdef".edited(3, 4, "X") == "abXdef"  // VC42 an edit does not produce the changed value
 }
 
@@ -406,9 +401,9 @@ Access &+= {
 
 Compiler &+= {
   formats := {
-    ({kept: Language.Lossless} | {other: Language}).read({source}) => kept.read(source)
-    {history: History{.location && .stored.some(!(. is Language.Lossless))}}.checkout({label}) => history.pinned(label) -- (pinned =>
-      history.stored.find(!(. is Language.Lossless)).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history[pinned].value))
+    {source} as ({kept: Lossless} | {other}) => source as kept
+    {history: History{.location && .stored.some(!(. is Lossless))}}.checkout({label}) => history.pinned(label) -- (pinned =>
+      history.stored.find(!(. is Lossless)).tree_at(history.location, pinned) -- (tree => tree ? History.valued(tree) : history[pinned].value))
   }
 
   per_object := {
@@ -440,17 +435,9 @@ Compiler &+= {
   assert Compiler.levels.contains(Compiler.stored)  // VC39 storage is not a compiler level
 }
 
-Language &+= {
-  stored: Compiler? = Compiler.stored
-}
-assert !Language.cfg.admits(Program(code: { while true { } }))  // VC57 a line's settings may run forever
-// What the Ray language keeps.
-assert Language.ray is Language.Lossless  // VC17 the .% history is not lossless
-
-Language.ray &+= {
-  level &+= History.level
-  written &+= History.written
-}
+// A format that reads back what it writes: Ray's is one, git's (snapshots only) is not
+Lossless := *{forall value is *#: ((value as .) as String as .) == value}
+assert Program is Lossless  // VC17 the .% history is not lossless
 
 Consistency := class (replicas: *[] = []) => {
   read (value) => .replicas.every(.synced) ? value : ERROR@Consistency `wait for the replicas`
@@ -482,7 +469,7 @@ Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
   static materialised: *?
   static default := Store()
 
-  static stored (place) => place is Store ? place : place is Language ? Store(format: Store.Format(language: place)) : Store(at: place)
+  static stored (place) => place is Store ? place : place.extensions ? Store(format: Store.Format(language: place)) : Store(at: place)
   static route (type, places: Program) => .routes.push Store.Route(type, places) -- places
   static rerouted (type, places: Program) => (.routes = .routes{.type !== type}) -- this.route(type, places)
   static routed (instance) => .routes{.takes(instance)}.stores.flatten.unique -- (.empty ? [this.default] : .)
@@ -501,8 +488,8 @@ Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
   static Row := class (type: String, id: String, fields: (name: String, value: String)[]) => {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
     static (instance) as (=== Store.Row) => Store.Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
-      fields: instance.fields{!.unreadable}.map((name: .name, value: Language.ray.write(.value is Character ? .value.name{is UUID}#.first : .value))))
-    instance => Language.ray.read((this.type, "(name: ", Language.ray.write(this.id as UUID), this.fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String)
+      fields: instance.fields{!.unreadable}.map((name: .name, value: ((.value is Character ? .value.name{is UUID}#.first : .value) as String))))
+    instance => (((this.type, "(name: ", ((this.id as UUID) as String), this.fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String) as Program)
     // The store: routed by type, read back as a narrowing.
     assert {
       Kept := class key: *, size: Number
@@ -522,19 +509,22 @@ Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
     }
   }
 
-  static Format := class (language: Language, file = true, versioned = false) => {
-    read (store: Store, type) => (.versioned ? .language.read(store.at).value : .file ? .language.read(store.at.held) : .language.read(store.at)[type.name].map(row => Store.Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
+  static Format := class (language, file = true, versioned = false) => {
+    // the instances a file holds, and the text holding them, in its language: Ray as what it runs to, a table as its rows
+    instances (text: String) => .language === KeyValue ? (text as KeyValue).rows.map(.instance) : ((text as Program)() -- (read => read is Columns ? read.rows.map(.instance) : read))
+    written (instances) => .language === Program ? instances as String : (instances.map(. as Store.Row) as .language) as String
+    read (store: Store, type) => (.versioned ? (store.at as History).value : .file ? .instances(store.at.held as String) : (store.at as .language)[type.name].map(row => Store.Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
     kept (store: Store, instance) => .versioned ? store.history.appended(store.at, this.language)
-      : .file ? (store.at.held = .language.write(store.children))
-      : .language.read(store.at).executed(this.language.write([instance as Store.Row]))
+      : .file ? (store.at.held = .written(store.children))
+      : (store.at as .language).executed([instance as Store.Row] as this.language)
     assert Store(at: Location(path: "kept.kv")).kept_in == Store.keyed  // DB9 a .kv location is not kept as keys
   }
 
   static memory: Store.Format? = None
-  static native := Store.Format(language: Language.ray, versioned: true)
-  static rows := Store.Format(language: Language.ray)
-  static columnar := Store.Format(language: Columns.language)
-  static keyed := Store.Format(language: KeyValue.language)
+  static native := Store.Format(language: Program, versioned: true)
+  static rows := Store.Format(language: Program)
+  static columnar := Store.Format(language: Columns)
+  static keyed := Store.Format(language: KeyValue)
 
   static Column := class (name: String, values: *[]) => {
     distinct => .values.unique.count
@@ -629,19 +619,12 @@ Columns := class (tables: (type: String, ids: String[], columns: (name: String, 
     (type, ids: held.map(.id), columns: held.first.fields.map(.name).map(name => (name, encoded: Store.Column(name, values: held.map(.fields{.name == name}.first.value)).encoded))))))
   rows => .tables.map(table => table.ids.enumerate.map(entry => Store.Row(type: table.type, id: entry.value, fields: table.columns.map((name: .name, value: .encoded.values[entry.index]))))).flatten
 
-  static language := Language(".columns",
-    level: Language.ray.level + { {columns: Columns} => columns.rows.map(.instance) },
-    written: {
-      {writing: Language.Writing{.value is Iterable && !(.value is Columns)}} => Language.Writing(writing.value.map(. as Store.Row) as Columns)
-      {writing: Language.Writing{.value is Columns}} => "Columns(", Language.Writing(writing.value.tables), ")"
-      {writing: Language.Writing{.value is Store.Encoded}} => "Store.", writing.value.static.name, "(", writing.value.fields.map((", " if .index > 0), .name, ": ", Language.Writing(.value)), ")"
-    } + Language.ray_written)
+  static extensions := ".columns"
 }
 
 KeyValue := class (entries: (key: (type: (!"/" && !\t)[], "/", id: (!"/" && !\t)[], "/", field: (!\t)[]), \t, value: (!\n)[])[].join(\n), \n?) => {
   rows => .entries.map((type: .key.type, id: .key.id)).unique.map(held => Store.Row(type: held.type, id: held.id, fields: this.entries{.key.type == held.type && .key.id == held.id}.map((name: .key.field, value: .value.replace("\\n", \n)))))
 
-  static language := Language(".kv",
-    level: { {text: String} => (text as KeyValue).rows.map(.instance) },
-    written: { {writing: Language.Writing} => writing.value.map(. as Store.Row).map(row => row.fields.map(row.type, "/", row.id, "/", .name, \t, .value.replace(\n, "\\n"), \n)) })
+  static extensions := ".kv"
+  static (rows: Store.Row[]) as (=== KeyValue) => KeyValue(entries: rows.map(row => row.fields.map((key: (type: row.type, id: row.id, field: .name), value: .value.replace(\n, "\\n")))).flatten)
 }

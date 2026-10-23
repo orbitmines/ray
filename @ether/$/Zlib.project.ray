@@ -1,7 +1,7 @@
 @deflate
 
 // ZLIB Compressed Data Format Specification version 3.3 (https://www.rfc-editor.org/rfc/rfc1950)
-Zlib := class: Language (
+Zlib := class (
   // CMF: CINFO, the base-2 logarithm of the window size minus eight, then CM, 8 for deflate (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
   window: Binary₄{<= 7} = 7,
   method: Binary₄{== 8} = 8,
@@ -23,15 +23,9 @@ Zlib := class: Language (
   static adler32 (bytes: Byte[]) => bytes.reduce(held = (a: 1, b: 0) => ((held.a + .) % 65521) -- (a => (a: a, b: (held.b + a) % 65521))) -- (.b * 65536 + .a)
   assert Zlib.adler32("hello".bytes) == 0x062c0215  // ZL2 the Adler-32 of hello is not 062c0215
 
-  static level := {
-    {zlib: Zlib} => zlib.inflated
-  }
-  static written := {
-    {writing: Language.Writing} => Zlib(deflated: Deflate.write(writing.value as Byte[]))
-  }
 }
 // "hello" as zlib 1.3.2 writes it at its default level (node:zlib deflateSync, Python zlib.compress), a reference encoder's output and no value of RFC 1950: CMF 0x78, FLG 0x9c, then its Adler-32 062c0215 (https://www.rfc-editor.org/rfc/rfc1950#section-2.2)
-assert Zlib.read(([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15])) as String == "hello"  // ZL1 a zlib stream does not inflate to its data
-assert Zlib.read([([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15])[..<9], [0x06, 0x2c, 0x02, 0x16]].flatten) is Diagnostic  // ZL5 a stream whose Adler-32 does not match its data reads
-assert Zlib.read(Zlib.write(("ray " * 32).bytes) as Byte[]) == ("ray " * 32).bytes  // ZL3 written bytes do not read back
-assert (Zlib.write("hello".bytes) as Byte[])[..<2] -- ((.0 * 256 + .1) % 31 == 0)  // ZL4 a written header is not a multiple of 31
+assert ((([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15])) as Zlib).inflated as String == "hello"  // ZL1 a zlib stream does not inflate to its data
+assert (([([0x78, 0x9c, 0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x07, 0x00, 0x06, 0x2c, 0x02, 0x15])[..<9], [0x06, 0x2c, 0x02, 0x16]].flatten) as Zlib).inflated is Diagnostic  // ZL5 a stream whose Adler-32 does not match its data reads
+assert ((Zlib(deflated: Deflate.deflated(("ray " * 32).bytes)) as Byte[]) as Zlib).inflated == ("ray " * 32).bytes  // ZL3 written bytes do not read back
+assert (Zlib(deflated: Deflate.deflated("hello".bytes)) as Byte[])[..<2] -- ((.0 * 256 + .1) % 31 == 0)  // ZL4 a written header is not a multiple of 31

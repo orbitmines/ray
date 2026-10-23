@@ -1,7 +1,7 @@
 @deflate
 
 // HPACK: Field compression for HTTP/2 (https://www.rfc-editor.org/rfc/rfc7541)
-HPACK := class: Language {
+HPACK := class {
   static extensions := ".hpack"
 
   // Static table (https://www.rfc-editor.org/rfc/rfc7541#appendix-A)
@@ -24,9 +24,9 @@ HPACK := class: Language {
   ) {
     value => small ?? 2 ^ prefix - 1 + [groups.group, last].flatten.enumerate.map(.value * 128 ^ .index).sum
     assert (0b111111001101000001010 as HPACK.Integer<5>).value == 1337  // HP3 continuation octets do not read back as 1337
-    assert HPACK.write([(name: ":method", value: "GET")]) as Byte[] == [0x82]  // HP12 a field in the static table is not written as its index
-    assert HPACK.read([0x04, 0x0c, "/sample/path".bytes].flatten)[":path"] == "/sample/path"  // HP13 a literal without indexing does not read as in C.2.2
-    assert HPACK.read([0x10, 0x08, "password".bytes, 0x06, "secret".bytes].flatten)["password"] == "secret"  // HP14 a literal never indexed does not read as in C.2.3
+    assert ([(name: ":method", value: "GET")] as HPACK.Block) as Byte[] == [0x82]  // HP12 a field in the static table is not written as its index
+    assert ([0x04, 0x0c, "/sample/path".bytes].flatten as HPACK.Block).value[":path"] == "/sample/path"  // HP13 a literal without indexing does not read as in C.2.2
+    assert ([0x10, 0x08, "password".bytes, 0x06, "secret".bytes].flatten as HPACK.Block).value["password"] == "secret"  // HP14 a literal never indexed does not read as in C.2.3
     assert third_fields.contains((name: ":authority", value: "www.example.com")) && third_fields.contains((name: "custom-key", value: "custom-value"))  // HP15 the third request of C.3.3 does not read its authority and custom-key
     assert "no-cache" as HPACK.Coded as Byte[] == [0xa8, 0xeb, 0x10, 0x64, 0x9c, 0xbf]  // HP16 no-cache is not Huffman coded as in C.4.2
     assert "custom-key" as HPACK.Coded as Byte[] == [0x25, 0xa8, 0x49, 0xe9, 0x5b, 0xa9, 0x7d, 0x7f]  // HP17 custom-key is not Huffman coded as in C.4.3
@@ -98,6 +98,14 @@ HPACK := class: Language {
 
   // A field block: its representations in order, each seeing the table left by those before it (https://www.rfc-editor.org/rfc/rfc7541#section-3.2)
   static Block := class (representations: HPACK.Representation[]) {
+    // its fields by name, decoded with a table of its own
+    value => {
+      held := { }
+      this.decoded().fields.for(held[.name] = .value)
+      held
+    }
+    // fields written as a block, each then written shorter where the optimizations find a way
+    static (fields: (name: String, value: String)[]) as (=== HPACK.Block) => Compiler.reduced(HPACK.Block(representations: fields.map(. as HPACK.Representation)), HPACK.Optimizations)
     decoded (table: HPACK.Table = HPACK.Table()) => .representations.reduce(held = (table: table, fields: []) => .field(held.table) -- (field =>
       .size ? (table: held.table.resized(.size.value), fields: held.fields)
       : (table: .inserting ? held.table.inserted(field) : held.table, fields: [held.fields, field])))
@@ -107,7 +115,7 @@ HPACK := class: Language {
     fields => .blocks.reduce(held = (table: HPACK.Table(), fields: []) => .decoded(held.table) -- (decoded => (table: decoded.table, fields: [held.fields, [decoded.fields]].flatten(1)))).fields
     assert {
       first := [0x82, 0x86, 0x84, 0x41, 0x0f, "www.example.com".bytes].flatten
-      assert HPACK.read(first)[":authority"] == "www.example.com"  // HP8 the first request of C.3.1 does not read its authority
+      assert (first as HPACK.Block).value[":authority"] == "www.example.com"  // HP8 the first request of C.3.1 does not read its authority
       second := [0x82, 0x86, 0x84, 0xbe, 0x58, 0x08, "no-cache".bytes].flatten
       connection := HPACK.Connection([first as HPACK.Block, second as HPACK.Block]).fields.last
       assert connection.contains((name: ":authority", value: "www.example.com")) && connection.contains((name: "cache-control", value: "no-cache"))  // HP11 the second request of C.3.2 does not find its authority in the dynamic table
@@ -122,23 +130,12 @@ HPACK := class: Language {
       Representation(kind: r.kind, at: (HPACK.Static.name.index_of(r.name.value) + 1) as HPACK.Integer<4>, value: r.value)
     {text: HPACK.Text{!huffman && (.value as HPACK.Coded as Byte[]).count < octets.count}} => HPACK.Text(huffman: true, octets: text.value as HPACK.Coded as Byte[])
   }
-
-  level := {
-    {block: HPACK.Block} => {
-      held := { }
-      block.decoded().fields.for(held[.name] = .value)
-      held
-    }
-  }
-  written := HPACK.Optimizations + {
-    {writing: Language.Writing} => HPACK.Block(representations: writing.value.map(. as HPACK.Representation))
-  }
 }
-assert HPACK.read([0x82])[":method"] == "GET"  // HP7 index 2 is not :method GET as in C.2.4
+assert ([0x82] as HPACK.Block).value[":method"] == "GET"  // HP7 index 2 is not :method GET as in C.2.4
 
 assert ([0x40, 0x0a, "custom-key".bytes, 0x0d, "custom-header".bytes].flatten).(
-  HPACK.read(.)["custom-key"] == "custom-header"  // HP5 a literal with indexing does not read as in C.2.1
+  (. as HPACK.Block).value["custom-key"] == "custom-header"  // HP5 a literal with indexing does not read as in C.2.1
   & (. as HPACK.Block).decoded().table.size == 55  // HP6 the dynamic table after C.2.1 is not 55 octets
 )
 
-assert HPACK.read(([0x82, 0x86, 0x84, 0x41, 0x8c, 0xf1, 0xe3, 0xc2, 0xe5, 0xf2, 0x3a, 0x6b, 0xa0, 0xab, 0x90, 0xf4, 0xff]))[":authority"] == "www.example.com"  // HP9 a Huffman-coded authority does not read as in C.4.1
+assert ((([0x82, 0x86, 0x84, 0x41, 0x8c, 0xf1, 0xe3, 0xc2, 0xe5, 0xf2, 0x3a, 0x6b, 0xa0, 0xab, 0x90, 0xf4, 0xff])) as HPACK.Block).value[":authority"] == "www.example.com"  // HP9 a Huffman-coded authority does not read as in C.4.1

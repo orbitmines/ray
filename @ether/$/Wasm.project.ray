@@ -2,7 +2,7 @@
 // (https://webassembly.github.io/threads/core/binary/). The header reads and writes a module. `none` and `default` are its
 // levels: rules from a Program to instructions, each right side the ops and their values as a module writes them, read
 // again by the level until only ops are left.
-Wasm := class: Language (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section[]) {
+Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section[]) {
   static extensions := lazily ".wasm"
   // (in the order `Order` gives their ids, a custom one anywhere (5.5); function i typed by the function section's i, coded by the code section's)
   static Order := lazily [1, 2, 3, 4, 5, 13, 6, 7, 8, 9, 12, 10, 11]

@@ -1,6 +1,6 @@
 // ECMA-404, The JSON Data Interchange Syntax (https://ecma-international.org/publications-and-standards/standards/ecma-404/)
 // The header reads JSON text, and `@json` with it: a Ray value in braces at a value's position is a hole, that value
-JSON := class: Language (Blank, root: Value, Blank) => {
+JSON := class (Blank, root: Value, Blank) => {
   static extensions := ".json"
 
   static Blank := (" " | \t | \n | \r)[]
@@ -31,39 +31,39 @@ JSON := class: Language (Blank, root: Value, Blank) => {
   }
   value => JSON.valued(this.root)
 
-  static escaped (text: String) => #text.map({ "\"": "\\\"", "\\": "\\\\", "<": "\\u003c", \n: "\\n", \r: "\\r", \t: "\\t" }[.] ?? .) as String
-  static written := {
-    {writing: Language.Writing{this.value === None}} => "null"
-    {writing: Language.Writing{this.value is .boolean}} => writing.value ? "true" : "false"
-    {writing: Language.Writing{this.value is Number}} => writing.value as 10 as String
-    {writing: Language.Writing{this.value is String | Location}} => "\"", JSON.escaped(writing.value as String), "\""
-    {writing: Language.Writing{this.value is Iterable}} => "[", writing.value.map((", " if .index > 0), Language.Writing(.)), "]"
-    {writing: Language.Writing} => "{", writing.value.fields.map((", " if .index > 0), Language.Writing(.name), ": ", Language.Writing(.value)), "}"
-  }
-  static level := {
-    {json: JSON} => json.value
-  }
+  // A value written in JSON: each kind the class whose header writes it; in text, a quote, a backslash and the controls
+  // escaped, and "<" as \u003c so the text cannot close a script it is in
+  static escape (character: Char) => character is ("\"" | "\\") ? JSON.Escaped(character: character)
+    : character is (\n | \r | \t) ? JSON.Escaped(control: { \n: "n", \r: "r", \t: "t" }[character])
+    : character == "<" ? JSON.Escaped(unit: 0x3c) : character
+  static text (value: String) => JSON.Text(characters: #value.map(JSON.escape(.)))
+  static (value) as (=== JSON.Value) => value === None ? JSON.Literal("null")
+    : value is boolean ? JSON.Literal(value ? "true" : "false")
+    : value is Number ? JSON.Numeral(written: value as 10 as String)
+    : value is String | Location ? JSON.text(value as String)
+    : value is Iterable ? JSON.Array(elements: value.map((element: . as JSON.Value)))
+    : JSON.Object(members: value.fields.map((name: JSON.text(.name), value: .value as JSON.Value)))
 }
-assert JSON.read("{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\": \"b\\n\"}}").(
+assert ("{\"name\": \"x\", \"list\": [1, true, null], \"inner\": {\"a\": \"b\\n\"}}" as JSON).value.(
   .name == "x"  // JN1 a JSON member is not read
   & .list.count == 3  // JN2 a JSON array is not three
   & .list[1] == true  // JN3 JSON true is not true
   & .inner.a == "b" + \n  // JN4 a JSON escape is not read
-  & JSON.read(JSON.write(.)).inner.a == .inner.a  // JN6 written JSON does not read back
-  & (@. {"list": [1, {"Ray"}]}).list == JSON.read("{\"list\": [1, \"Ray\"]}").list  // One grammar: what the header reads, written inline, is the same document (ECMA-404 §5–§8); JN10 an inline json fragment and the same text read are other documents
+  & ((JSON(root: . as JSON.Value) as String) as JSON).value.inner.a == .inner.a  // JN6 written JSON does not read back
+  & (@. {"list": [1, {"Ray"}]}).list == ("{\"list\": [1, \"Ray\"]}" as JSON).value.list  // One grammar: what the header reads, written inline, is the same document (ECMA-404 §5–§8); JN10 an inline json fragment and the same text read are other documents
   & (@. {"name": {"Ray"}, "tags": ["a", {"Ray"}], "none": null}).(
     .name == "Ray" && .tags.last == "Ray" && .none === None  // JN8 a single-line json fragment is not its document with the holes' values
   )
   & (@. {
   {"name": {"Ray"}, "list": [1, true, null], "inner": {"a": {"Ray"}}}
 }).(
-    .name == "Ray" && .list.count == 3 && .inner.a == "Ray" && JSON.read(JSON.write(.)).inner.a == "Ray"  // JN9 a json block is not its document with the holes' values
+    .name == "Ray" && .list.count == 3 && .inner.a == "Ray" && ((JSON(root: . as JSON.Value) as String) as JSON).value.inner.a == "Ray"  // JN9 a json block is not its document with the holes' values
   )
 )
-assert JSON.write("</script>") == "\"\\u003c/script>\""  // UI98 JSON text can close the script it is in
+assert (JSON(root: "</script>" as JSON.Value) as String) == "\"\\u003c/script>\""  // UI98 JSON text can close the script it is in
 
-assert JSON.write([1, "a"]) == "[1, \"a\"]"  // JN5 a list is not written as JSON
+assert (JSON(root: [1, "a"] as JSON.Value) as String) == "[1,\"a\"]"  // JN5 a list is not written as JSON
 // The examples of RFC 8259 §13, each written on one line (https://www.rfc-editor.org/rfc/rfc8259#section-13)
-assert JSON.read("{\"Image\": {\"Width\": 800, \"Height\": 600, \"Title\": \"View from 15th Floor\", \"Thumbnail\": {\"Url\": \"http://www.example.com/image/481989943\", \"Height\": 125, \"Width\": 100}, \"Animated\": false, \"IDs\": [116, 943, 234, 38793]}}").(.Image.Width == 800 && .Image.Thumbnail.Url == "http://www.example.com/image/481989943" && .Image.Animated == false && .Image.IDs[3] == 38793)  // JN11 the object of RFC 8259 §13 does not read its members
-assert JSON.read("[{\"precision\": \"zip\", \"Latitude\": 37.7668, \"Longitude\": -122.3959, \"Address\": \"\", \"City\": \"SAN FRANCISCO\", \"State\": \"CA\", \"Zip\": \"94107\", \"Country\": \"US\"}, {\"precision\": \"zip\", \"Latitude\": 37.371991, \"Longitude\": -122.026020, \"Address\": \"\", \"City\": \"SUNNYVALE\", \"State\": \"CA\", \"Zip\": \"94085\", \"Country\": \"US\"}]").(.count == 2 && .[0].Longitude == -122.3959 && .[1].City == "SUNNYVALE" && .[1].Address == "")  // JN12 the array of two objects of RFC 8259 §13 does not read its members
-assert JSON.read("\"Hello world!\"") == "Hello world!" && JSON.read("42") == 42 && JSON.read("true") == true  // JN13 the three small texts of RFC 8259 §13 do not read as their values
+assert (("{\"Image\": {\"Width\": 800, \"Height\": 600, \"Title\": \"View from 15th Floor\", \"Thumbnail\": {\"Url\": \"http://www.example.com/image/481989943\", \"Height\": 125, \"Width\": 100}, \"Animated\": false, \"IDs\": [116, 943, 234, 38793]}}") as JSON).value.(.Image.Width == 800 && .Image.Thumbnail.Url == "http://www.example.com/image/481989943" && .Image.Animated == false && .Image.IDs[3] == 38793)  // JN11 the object of RFC 8259 §13 does not read its members
+assert (("[{\"precision\": \"zip\", \"Latitude\": 37.7668, \"Longitude\": -122.3959, \"Address\": \"\", \"City\": \"SAN FRANCISCO\", \"State\": \"CA\", \"Zip\": \"94107\", \"Country\": \"US\"}, {\"precision\": \"zip\", \"Latitude\": 37.371991, \"Longitude\": -122.026020, \"Address\": \"\", \"City\": \"SUNNYVALE\", \"State\": \"CA\", \"Zip\": \"94085\", \"Country\": \"US\"}]") as JSON).value.(.count == 2 && .[0].Longitude == -122.3959 && .[1].City == "SUNNYVALE" && .[1].Address == "")  // JN12 the array of two objects of RFC 8259 §13 does not read its members
+assert (("\"Hello world!\"") as JSON).value == "Hello world!" && ("42" as JSON).value == 42 && ("true" as JSON).value == true  // JN13 the three small texts of RFC 8259 §13 do not read as their values

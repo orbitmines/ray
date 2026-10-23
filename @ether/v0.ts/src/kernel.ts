@@ -212,7 +212,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     put(f + N_LAST, rules);
     // (forgotten: what was kept for all from it, its frames, the types it put off)
     const wn = w(t + T_WROTE_N);
-    if (wn > WROTE) { for (let i = 0; i <= OMEMO_MASK && w(t + T_OMEMO); i++) aput(w(t + T_OMEMO) + MEMO_ENTRY * i, 0); for (let i = 0; i <= w(TMEMO_MASK) && w(TMEMO); i++) aput(w(TMEMO) + TMEMO_ENTRY * i, 0); for (let i = 0; i < BEGINS_N; i++) aput(w(BEGINS) + 44 * i, 0); }
+    if (wn > WROTE) { for (let i = 0; i <= OMEMO_MASK && w(t + T_OMEMO); i++) aput(w(t + T_OMEMO) + MEMO_ENTRY * i, 0); for (let tab = w(TMEMO); tab; tab = w(tab - 8)) { for (let i = 0; i <= w(tab - 12); i++) aput(tab + TMEMO_ENTRY * i, 0); set(tab - 4, 0); } for (let i = 0; i < BEGINS_N; i++) aput(w(BEGINS) + 44 * i, 0); }
     else for (let i = 0; i < wn; i++) aput(w(w(t + T_WROTE) + 4 * i), 0);
     if (DEBUG && wn > WROTE) debug(D_FAULT, 94, w(f + F_START), w(f + F_END));
     // (what lies outside every chunk it took is not its own: asked first)
@@ -573,10 +573,16 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const memo = w(TMEMO), last = latest(type), glob = latest(w(GLOBAL)), quiet = w(THREAD + T_QUIET) >= TYPINGS ? 1 : 0;
     // (in a test: its own, this thread's, as the readings it keeps are)
     const sh = w(THREAD + T_SH_N) ? w(THREAD + T_SH) : w(THREAD + T_REG_AT) ? THREAD | 1 : 0, gen = sh ? w(THREAD + T_SHGEN) : 0, shn = w(THREAD + T_SH_N);
-    if (memo) for (let h = mix(at * 31 + end * 17 + type * 13 + gen) & w(TMEMO_MASK), n = 0; n < 16; n++, h = (h + 1) & w(TMEMO_MASK)) {
-      const m = memo + TMEMO_ENTRY * h, k = aload(m);
-      if (!k) { slot = m; break; }
-      if (k === at && w(m + 4) === end && w(m + 8) === type && w(m + 12) === last && w(m + 20) === glob && w(m + 24) === quiet && w(m + 28) === sh && w(m + 32) === gen && w(m + 36) === shn) { const kept = aload(m + 16); if (kept) { if (DEBUG) count(15); return kept - 1; } break; }
+    // (in each table, the newest first: a new one only in that)
+    let tab = memo, first = 1;
+    while (tab) {
+      const mk = w(tab - 12);
+      for (let h = mix(at * 31 + end * 17 + type * 13 + gen) & mk, n = 0; n < 16; n++, h = (h + 1) & mk) {
+        const m = tab + TMEMO_ENTRY * h, k = aload(m);
+        if (!k) { if (first) slot = m; break; }
+        if (k === at && w(m + 4) === end && w(m + 8) === type && w(m + 12) === last && w(m + 20) === glob && w(m + 24) === quiet && w(m + 28) === sh && w(m + 32) === gen && w(m + 36) === shn) { const kept = aload(m + 16); if (kept) { if (DEBUG) count(15); return kept - 1; } break; }
+      }
+      tab = w(tab - 8); first = 0;
     }
     put(ty + 12 * tn, at); put(ty + 12 * tn + 4, end); put(ty + 12 * tn + 8, type); set(THREAD + T_TYP_N, tn + 1);
     const cut = w(THREAD + T_CUT), ran = w(THREAD + T_RAN); set(THREAD + T_CUT, 0); set(THREAD + T_RAN, 0);
@@ -590,7 +596,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const was_cut = w(THREAD + T_CUT), was_run = w(THREAD + T_RAN); set(THREAD + T_CUT, cut | was_cut); set(THREAD + T_RAN, ran | was_run);
     set(THREAD + T_TYP_N, tn);
     if (DEBUG) { if (was_run) count(11); else if (was_cut) count(12); else count(13); if (ok) count(14); }
-    if (slot && !w(THREAD + T_REG_AT) && !was_cut && (!was_run || kept_type(type)) && acas(slot, 0, at) === 0) { wrote(slot); put(slot + 4, end); put(slot + 8, type); put(slot + 12, last); put(slot + 20, glob); put(slot + 24, quiet); put(slot + 28, sh); put(slot + 32, gen); put(slot + 36, shn); aput(slot + 16, ok + 1); }
+    if (slot && !w(THREAD + T_REG_AT) && !was_cut && (!was_run || kept_type(type)) && acas(slot, 0, at) === 0) { memo_added(TMEMO, TMEMO_ENTRY, (1 << 23) - 1); wrote(slot); put(slot + 4, end); put(slot + 8, type); put(slot + 12, last); put(slot + 20, glob); put(slot + 24, quiet); put(slot + 28, sh); put(slot + 32, gen); put(slot + 36, shn); aput(slot + 16, ok + 1); }
     return ok;
   }
   // (the type `{element}[]` made, marked: the characters its element is one of, each a text of one byte, `"0" | "1"`; one it
@@ -1843,16 +1849,22 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const reg = w(THREAD + T_REG_AT) ? 1 : 0, keeps = (!framed || bare) && w(MEMO) && !w(THREAD + T_SKIP), at_ = reg ? kept_as(vis) : vis, named_by = bare ? (reg ? kept_as(w(self + F_RULE)) : w(self + F_RULE)) | 1 : 0;
     // (read without some rules, the other reading of one: kept as one of those, by which rules it is without)
     const sees = keeps ? seen(vis, stop, t) : 0, names_k = reg ? names_as(rule, closure) : rule, closure_k = (reg ? 0 : closure) ^ skips_key();
+    // (the readings kept for all made larger only by what tests keep there: what is read outside them is let go of when the
+    // files are merged, and what a test reads again is what pays for them)
     // (in a test: what it kept, in this thread's own table, first (what other threads keep never changes what it finds), then
     // what was kept for all before the tests)
     if (keeps) {
       const own = w(THREAD + T_REG_AT) ? w(THREAD + T_OMEMO) : 0, h0 = mix(s * 31 + at_ * 17 + names_k * 13 + e + gen * 7 + sees + named_by * 3);
       for (let pass = own ? 0 : 1; pass < 2; pass++) {
-        const tab = pass ? w(MEMO) : own, mask = pass ? w(MEMO_MASK) : OMEMO_MASK;
-        for (let h = h0 & mask, n = 0; n < 32; n++, h = (h + 1) & mask) {
-          const m = tab + MEMO_ENTRY * h, at = aload(m);
-          if (!at) { if (pass ? !own : 1) slot = m; if (pass) gslot = m; break; }
-          if (at === s && w(m + 4) === e && w(m + 8) === at_ && w(m + 12) === names_k && w(m + 16) === closure_k && w(m + 20) === flags && w(m + 24) === stop && w(m + 32) === sh && w(m + 36) === gen && w(m + 40) === shn && w(m + 44) === sees && w(m + 48) === named_by) { const kept = aload(m + 28); if (kept && (w(t + T_BUDGET) < w(m + 52) || w(t + T_QBUDGET) < w(m + 56))) break; if (kept) { set(t + T_BUDGET, w(t + T_BUDGET) - w(m + 52)); set(t + T_QBUDGET, w(t + T_QBUDGET) - w(m + 56)); if (DEBUG && (w(FAIL_FAST) & 4)) { const fresh = remembered(t, s, e, rule, closure, vis, self, want, stop, refuse, on); if (!alike_reading(fresh, kept)) { debug(D_FAULT, 88, s, e); debug(D_FAULT, 82, w(kept) * 1000 + w(fresh), w(kept + 12) === w(fresh + 12) ? 1 : 0); for (let i = 0; i < 2; i++) { const x = i ? fresh : kept; if (w(x) === K_RULE) { const hd = w(w(x + 12) + R_HEAD), ow = w(w(x + 12) + R_OWNER); if (hd) debug(D_FAULT, i ? 84 : 85, w(hd + N_A), w(hd + N_B)); debug(D_FAULT, 83, ow * 10 + w(w(x + 12) + R_KIND), in_region(w(x + 12)) ? 1 : 0); } } } if (w(kept) !== w(fresh)) debug(D_FAULT, 86, s, e); } return reg ? relit(kept, vis) : kept; } break; }
+        let tab = pass ? w(MEMO) : own, first = 1;
+        while (tab) {
+          const mask = pass ? w(tab - 12) : OMEMO_MASK;
+          for (let h = h0 & mask, n = 0; n < 32; n++, h = (h + 1) & mask) {
+            const m = tab + MEMO_ENTRY * h, at = aload(m);
+            if (!at) { if (first) { if (pass ? !own : 1) slot = m; if (pass) gslot = m; } break; }
+            if (at === s && w(m + 4) === e && w(m + 8) === at_ && w(m + 12) === names_k && w(m + 16) === closure_k && w(m + 20) === flags && w(m + 24) === stop && w(m + 32) === sh && w(m + 36) === gen && w(m + 40) === shn && w(m + 44) === sees && w(m + 48) === named_by) { const kept = aload(m + 28); if (kept && (w(t + T_BUDGET) < w(m + 52) || w(t + T_QBUDGET) < w(m + 56))) break; if (kept) { set(t + T_BUDGET, w(t + T_BUDGET) - w(m + 52)); set(t + T_QBUDGET, w(t + T_QBUDGET) - w(m + 56)); if (DEBUG && (w(FAIL_FAST) & 4)) { const fresh = remembered(t, s, e, rule, closure, vis, self, want, stop, refuse, on); if (!alike_reading(fresh, kept)) { debug(D_FAULT, 88, s, e); debug(D_FAULT, 82, w(kept) * 1000 + w(fresh), w(kept + 12) === w(fresh + 12) ? 1 : 0); for (let i = 0; i < 2; i++) { const x = i ? fresh : kept; if (w(x) === K_RULE) { const hd = w(w(x + 12) + R_HEAD), ow = w(w(x + 12) + R_OWNER); if (hd) debug(D_FAULT, i ? 84 : 85, w(hd + N_A), w(hd + N_B)); debug(D_FAULT, 83, ow * 10 + w(w(x + 12) + R_KIND), in_region(w(x + 12)) ? 1 : 0); } } } if (w(kept) !== w(fresh)) debug(D_FAULT, 86, s, e); } return reg ? relit(kept, vis) : kept; } break; }
+          }
+          tab = pass ? w(tab - 8) : 0; first = 0;
         }
       }
     }
@@ -1871,13 +1883,24 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (in a test, one holding nothing of the test's own: kept for all, a copy where nothing lets go of it (another test reads
     // the same text the same way); one holding the test's own, not kept)
     if (DEBUG && keeps && w(r) !== K_UNREAD && !was_cut && (!reg || lasting(r))) { debug(D_KEY, s, e, at_); debug(D_KEY + 1, names_k, sees, named_by); debug(D_KEY + 2, flags, stop, closure_k); }
-    if (reg) { slot = 0; if (gslot && !(w(FAIL_FAST) & 16) && !was_cut && w(r) !== K_UNREAD && lasting(r) && !(w(THREAD + T_LVL_N) && s >= w(w(THREAD + T_LVL)))) { const p = lasted(r); if (p && acas(gslot, 0, s) === 0) { put(gslot + 4, e); put(gslot + 8, at_); put(gslot + 12, names_k); put(gslot + 16, closure_k); put(gslot + 20, flags); put(gslot + 24, stop); put(gslot + 32, sh); put(gslot + 36, gen); put(gslot + 40, shn); put(gslot + 44, sees); put(gslot + 48, named_by); put(gslot + 52, spent); put(gslot + 56, qspent); aput(gslot + 28, p); } } }
+    if (reg) { slot = 0; if (gslot && !(w(FAIL_FAST) & 16) && !was_cut && w(r) !== K_UNREAD && lasting(r) && !(w(THREAD + T_LVL_N) && s >= w(w(THREAD + T_LVL)))) { const p = lasted(r); if (p && acas(gslot, 0, s) === 0) { memo_added(MEMO, MEMO_ENTRY, (1 << 20) - 1); put(gslot + 4, e); put(gslot + 8, at_); put(gslot + 12, names_k); put(gslot + 16, closure_k); put(gslot + 20, flags); put(gslot + 24, stop); put(gslot + 32, sh); put(gslot + 36, gen); put(gslot + 40, shn); put(gslot + 44, sees); put(gslot + 48, named_by); put(gslot + 52, spent); put(gslot + 56, qspent); aput(gslot + 28, p); } } }
     // (kept weakly, when that is on: written without keeping what it holds; forgotten when that is let go of) TODO(explicit)
-    if (slot && !was_cut && w(r) !== K_UNREAD && w(THREAD + T_WEAK_ON) && w(THREAD + T_LVL_N) && w(THREAD + T_WEAK) && w(THREAD + T_WEAK_N) < 1 << 20 && acas(slot, 0, s) === 0) { wrote(slot); set(slot + 4, e); set(slot + 8, at_); set(slot + 12, names_k); set(slot + 16, closure_k); set(slot + 20, flags); set(slot + 24, stop); set(slot + 32, sh); set(slot + 36, gen); set(slot + 40, shn); set(slot + 44, sees); set(slot + 48, named_by); set(slot + 52, spent); set(slot + 56, qspent); astore(slot + 28, r); const wk_ = w(THREAD + T_WEAK_N); set(w(THREAD + T_WEAK) + 4 * wk_, slot | 1); set(THREAD + T_WEAK_N, wk_ + 1); slot = 0; }
-    if (slot && !was_cut && w(r) !== K_UNREAD && acas(slot, 0, s) === 0) { wrote(slot); put(slot + 4, e); put(slot + 8, at_); put(slot + 12, names_k); put(slot + 16, closure_k); put(slot + 20, flags); put(slot + 24, stop); put(slot + 32, sh); put(slot + 36, gen); put(slot + 40, shn); put(slot + 44, sees); put(slot + 48, named_by); put(slot + 52, spent); put(slot + 56, qspent); aput(slot + 28, r); }
+    if (slot && !was_cut && w(r) !== K_UNREAD && w(THREAD + T_WEAK_ON) && w(THREAD + T_LVL_N) && w(THREAD + T_WEAK) && w(THREAD + T_WEAK_N) < 1 << 20 && acas(slot, 0, s) === 0) { if (slot === gslot) memo_added(MEMO, MEMO_ENTRY, 0); wrote(slot); set(slot + 4, e); set(slot + 8, at_); set(slot + 12, names_k); set(slot + 16, closure_k); set(slot + 20, flags); set(slot + 24, stop); set(slot + 32, sh); set(slot + 36, gen); set(slot + 40, shn); set(slot + 44, sees); set(slot + 48, named_by); set(slot + 52, spent); set(slot + 56, qspent); astore(slot + 28, r); const wk_ = w(THREAD + T_WEAK_N); set(w(THREAD + T_WEAK) + 4 * wk_, slot | 1); set(THREAD + T_WEAK_N, wk_ + 1); slot = 0; }
+    if (slot && !was_cut && w(r) !== K_UNREAD && acas(slot, 0, s) === 0) { if (slot === gslot) memo_added(MEMO, MEMO_ENTRY, 0); wrote(slot); put(slot + 4, e); put(slot + 8, at_); put(slot + 12, names_k); put(slot + 16, closure_k); put(slot + 20, flags); put(slot + 24, stop); put(slot + 32, sh); put(slot + 36, gen); put(slot + 40, shn); put(slot + 44, sees); put(slot + 48, named_by); put(slot + 52, spent); put(slot + 56, qspent); aput(slot + 28, r); }
     return r;
   }
   // (a number's bits, mixed: so that numbers near one another are not near in a table)
+  // (what is kept for all, a table made larger as it fills: half full, a new one twice as large before it, up to `most` (a
+  // mask); the older ones still read, never moved (a reading holds where in them it keeps what it is reading); each table's
+  // size, the one before it and how full it is, the words before it)
+  function memo_added(at: number, entry: number, most: number) {
+    const tab = aload(at); if (!tab) return; const mask = w(tab - 12);
+    if (xadd(tab - 4, 1) + 1 !== (mask + 1) >> 1 || mask >= most) return;
+    const n = 2 * (mask + 1), size = (12 + entry * n + 15) & -16, a = xadd(HEAP, size);
+    if (a < 0 || a > w(LIMIT) - size) return;
+    fill(a, 0, size); set(a, n - 1); set(a + 4, tab);
+    cas(at, tab, a + 12);
+  }
   function mix(x: number): number { x = (x ^ (x >> 16)) * 0x45d9f3b | 0; x = (x ^ (x >> 16)) * 0x45d9f3b | 0; return x ^ (x >> 16); }
   // (what a reading from `vis` sees, as one number: the last rule of each node it goes on to, as read() goes)
   function seen(vis: number, stop: number, t: number): number {
@@ -3521,15 +3544,16 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     return fn && w(rule + R_BODY) === bd ? compiled(fn, t, f, from) : exec(t, f, bd, from);
   }
   function exec(t: number, f: number, bd: number, from: number): number {
-    let answer = 0;
+    // (a loop's turns, a level of their own: what they made and nothing holds let go of as it goes round, not when it ends)
+    let answer = 0, it = 0, it_slot = 0, it_rules = 0;
     const n = w(bd);
     for (let pc = from; pc < n;) {
       const st = bd + 4 + STEP * pc, kind = w(st), self = w(f + F_THIS);
       if (kind === S_LABEL || kind === S_LABELLED) { pc++; continue; }
       if (kind === S_GOTO) {
         const to = labelled(bd, w(st + 12), w(st + 16));
-        if (to >= 0) { if (to <= pc) again(f); pc = to; continue; }
-        if (word(w(st + 12), w(st + 12) + w(st + 16), W_AFTERWARDS)) { defer(f, pc + 1); return 0; }
+        if (to >= 0) { if (to <= pc) { again(f); if (it && w(t + T_CHUNK) - w(w(t + T_LVL) + 24 * (it - 1)) > 1 << 18) { answer = turned(t, it, answer, it_slot, it_rules); it = 0; } if (!it) { it = turning(t, w(f + F_RULE)); it_slot = w(t + T_SLOT); it_rules = w(RULES_N); } } pc = to; continue; }
+        if (word(w(st + 12), w(st + 12) + w(st + 16), W_AFTERWARDS)) { defer(f, pc + 1); answer = 0; break; }
         go(t, w(st + 12), w(st + 16), f, answer);
       } else if (kind === S_TO) {
         const target = of(t, w(st + 12), f, self);
@@ -3543,17 +3567,37 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (latest(self) !== w(self + N_BASE) && making(self) && could(self, w(st + 4), w(st + 8))) { const again = reading(t, w(st + 4), w(st + 8), w(f + F_RULE), w(f + F_CLOSURE), latest(self), self, 0, 0, 0, 0); if (owned(again, self)) r = again; }
         answer = ev(t, r, f, f, self, pc === n - 1 ? 1 : 0, self, self);
       }
-      if (w(t + T_FAULT) || w(OOM)) return 0;
+      if (w(t + T_FAULT) || w(OOM)) { answer = 0; break; }
       const jn = w(t + T_JUMP_N);
       if (jn) {
         const js = w(t + T_JUMP_S), to = labelled(bd, js, jn);
-        if (to >= 0) { if (to <= pc) again(f); pc = to; if (w(t + T_JUMP_V)) answer = w(t + T_JUMP_V); put(t + T_JUMP_N, 0); continue; }
-        if (word(js, js + jn, W_AFTERWARDS)) { put(t + T_JUMP_N, 0); defer(f, pc + 1); return 0; }
-        return 0;
+        if (to >= 0) { const back = to <= pc; if (back) again(f); pc = to; if (w(t + T_JUMP_V)) answer = w(t + T_JUMP_V); put(t + T_JUMP_N, 0); if (back) { if (it && w(t + T_CHUNK) - w(w(t + T_LVL) + 24 * (it - 1)) > 1 << 18) { answer = turned(t, it, answer, it_slot, it_rules); it = 0; } if (!it) { it = turning(t, w(f + F_RULE)); it_slot = w(t + T_SLOT); it_rules = w(RULES_N); } } continue; }
+        if (word(js, js + jn, W_AFTERWARDS)) { put(t + T_JUMP_N, 0); defer(f, pc + 1); answer = 0; break; }
+        answer = 0; break;
       }
       pc++;
     }
+    if (it) answer = turned(t, it, answer, it_slot, it_rules);
     return answer;
+  }
+  // (a level begun for a loop's turns, as one is for an application; none past the deepest: 0)
+  function turning(t: number, rule: number): number {
+    const lv = w(t + T_LVL), n = w(t + T_LVL_N);
+    if (!w(t + T_FREEING) || !lv || n >= DEPTH) return 0;
+    const start = w(t + T_CHUNK), cend = w(t + T_CHUNK_END), at = lv + 24 * n, below = n ? at - 24 : 0;
+    set(at, start); set(at + 4, 0x7FFFFFFF); set(at + 8, cend); set(at + 12, below && w(below + 8) === cend ? w(below + 12) : start); set(at + 16, rule); set(at + 20, w(t + T_WEAK_N));
+    const ev0 = w(t + EV); if (ev0 && w(ev0)) { if (!n) { set(ev0 + 8, 0); set(ev0 + 40, 0); } if (n < 6000) set(w(ev0 + 16) + 4 * n, w(ev0 + 8)); }
+    set(t + T_LVL_N, n + 1);
+    return n + 1;
+  }
+  // (and ended: what still holds what the turns made (the loop's frame too, older) moved together, the rest let go of)
+  function turned(t: number, it: number, v: number, slot0: number, rules0: number): number {
+    const n = it - 1, at = w(t + T_LVL) + 24 * n, below = n ? at - 24 : 0, start = w(at), cend = w(at + 8);
+    set(t + T_LVL_N, n);
+    const now = w(t + T_CHUNK), lowest = w(at + 4), ev0 = w(t + EV);
+    if (ev0 && w(ev0) && !w(ev0 + 40) && lowest >= 0 && now - start > 1 << 18 && w(t + T_CHUNK_END) === cend && n < 6000) { if (ev_private(t)) v = evacuate(t, start, now, at, n, v, slot0, rules0); }
+    if (below && lowest < w(below + 4)) set(below + 4, lowest);
+    return v;
   }
   // (a jump back in a body, a loop: what its holes took is read again, as it is now (`while c { … }` asks c each time))
   function again(f: number) {
@@ -4567,7 +4611,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       put(p + 16, 0);
     }
     // (what was read once was read without them)
-    if (changed && w(MEMO)) for (let i = 0; i <= w(MEMO_MASK); i++) put(w(MEMO) + MEMO_ENTRY * i, 0);
+    if (changed) for (let tab = w(MEMO); tab; tab = w(tab - 8)) { for (let i = 0; i <= w(tab - 12); i++) put(tab + MEMO_ENTRY * i, 0); set(tab - 4, 0); }
   }
   // (how many rules a statement may apply: as many per line of it as one line may, a long block more than a line)
   function budgeted(s: number, e: number) { let n = 1; for (let i = s; i < e && n < 20; i++) if (b(i) === 10) n++; return w(BUDGET) * n; }

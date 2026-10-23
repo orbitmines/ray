@@ -5,17 +5,14 @@
 // as a block, each value as Ray reads its type (an integer a Number, a `char *` or a `wchar_t *` a String, an array its
 // elements): `(@c { int n; f(&n); })().n`. A name it does not declare is what it runs on defines: an operating system
 // its headers, its libraries and how they are called (`os.headers`, `os.libraries`, `os.abi`, each in its own project).
-C := class: Language {
+C := class {
   static extensions := ".c" | ".h"
   static Identifier := (Char.Letter | "_", (Char.Word | "_")[])
   // A type: a name, qualified, pointed to, or a pointer to a function of it, as declarators read (6.7.2, 6.7.7)
   static Type := (("const" | "unsigned" | "struct"), " ")[], C.Identifier, (" "[], "*")[], (" "[], "(*)(", (!")")[], ")")?
 
-  level := {
-    {code} => Program(code: code)
-  }
-
-  written := {
+  // A program written as C: a rule to each production
+  static (program: Program) as (=== C) => Compiler.reduced(program, {
     // Statements, each ended by ";" (6.8), a compound statement in braces (6.8.3)
     {program: Program} => program.steps.map(., ";")
     // Comments (6.4.10)
@@ -48,12 +45,11 @@ C := class: Language {
     {array}[{index}] => array, "[", index, "]"
     // An initializer (6.7.11), a string literal, a wide one (6.4.5), the null pointer constant (6.4.4.6)
     \{{entries: *[]}{`}`} => "{", entries.map(("," if .index > 0), .), "}"
-    L{text: String} => "L", Language.Writing(text)
-    {text: String} => Language.Writing(text)
+    L{text: String} => "L\"", text.escaped_line, "\""
+    {text: String} => "\"", text.escaped_line, "\""
     nullptr => "nullptr"
     {name: C.Identifier} => name
-  }
-
+  }).flatten.join("")
 }
 assert {
   who := "Ray"

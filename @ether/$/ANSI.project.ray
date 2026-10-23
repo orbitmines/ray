@@ -2,7 +2,7 @@
 @base64
 
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
-ANSI := class: Language {
+ANSI := class (pieces: (ANSI.Sequence | Char)[]) {
   static extensions := ".ansi"
   Cell := class (glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: ANSI.Attribute# = [], link: Location? = None) => { }
   assert ANSI.Cell("x", foreground: Geometry.Color(255, 0, 0), styles: ANSI.Attribute.italic).(
@@ -102,17 +102,13 @@ ANSI := class: Language {
   Sequence := ANSI.Move | ANSI.Erase | ANSI.Mode | ANSI.Style | ANSI.Title | ANSI.Hyperlink | ANSI.Copy
   Input := ANSI.Key | ANSI.Mouse | ANSI.Paste | ANSI.FocusChange
 
-  level := {
-    {text: String} => (text ~= (pieces: (ANSI.Sequence | Char)[])).pieces
-  }
-
   // Terminals without direct colour: the nearest entry of the xterm colour cube
   XTerm256 := {
     {colored: ANSI.Colored{.index == None}} => ANSI.Colored(colored.layer, index: 16 + 36 * (colored.red * 5 / 255).floor + 6 * (colored.green * 5 / 255).floor + (colored.blue * 5 / 255).floor)
   }
   TrueColor := { }
 }
-assert Language.named(".ansi") == ANSI && ANSI === ANSI  // UI66 the terminal's language is not registered
+assert Program.extended(".ansi") == ANSI && ANSI === ANSI  // UI66 the terminal's language is not registered
 
 assert {
   who := "Ray"

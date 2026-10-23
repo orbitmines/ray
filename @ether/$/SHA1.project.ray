@@ -1,5 +1,5 @@
 // Secure Hash Standard, SHA-1 (https://csrc.nist.gov/pubs/fips/180-4/upd1/final)
-SHA1 := class: Language {
+SHA1 := class (digest: Byte₂₀) {
   static extensions := ".sha1"
   // 512-bit blocks, a 160-bit digest, in bytes (FIPS 180-4 §1)
   static block := 64
@@ -27,14 +27,12 @@ SHA1 := class: Language {
     (SHA1.rotl(v[0], 5) + SHA1.f(.index, v[1], v[2], v[3]) + v[4] + SHA1.K[(.index / 20).floor] + .value) % 2 ^ 32, v[0], SHA1.rotl(v[1], 30), v[2], v[3]
   ]).zip(h).map((a, b) => (a + b) % 2 ^ 32)
 
-  written := {
-    {writing: Language.Writing} => (SHA1.Padded(message: writing.value as Byte[]) as Byte[]).chunk(64).map(.chunk(4).map(. as Binary₃₂))
-      .reduce(h = initial => SHA1.compressed(h, .)).map(. as Binary₃₂ as Byte₄).flatten
-  }
+  static (message: Byte[]) as (=== SHA1) => SHA1(digest: (SHA1.Padded(message: message) as Byte[]).chunk(64).map(.chunk(4).map(. as Binary₃₂))
+    .reduce(h = SHA1.initial => SHA1.compressed(h, .)).map(. as Binary₃₂ as Byte₄).flatten)
 }
 // One-block message "abc" (FIPS 180-4 example SHA1.pdf, and FIPS 180-2 Appendix A.1)
-assert SHA1.write("abc".bytes) as Byte₂₀ as Hexadecimal₄₀ == "a9993e364706816aba3e25717850c26c9cd0d89d"  // SHI1 abc does not digest as in FIPS 180's one-block example
+assert ("abc".bytes as SHA1) as Byte₂₀ as Hexadecimal₄₀ == "a9993e364706816aba3e25717850c26c9cd0d89d"  // SHI1 abc does not digest as in FIPS 180's one-block example
 // Two-block message, the 448 bits "abcdbcde…nopq" (FIPS 180-4 example SHA1.pdf, and FIPS 180-2 Appendix A.2)
-assert SHA1.write("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes) as Byte₂₀ as Hexadecimal₄₀ == "84983e441c3bd26ebaae4aa1f95129e5e54670f1"  // SHI2 the 448-bit message does not digest as in FIPS 180's two-block example
+assert ("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq".bytes as SHA1) as Byte₂₀ as Hexadecimal₄₀ == "84983e441c3bd26ebaae4aa1f95129e5e54670f1"  // SHI2 the 448-bit message does not digest as in FIPS 180's two-block example
 // The empty message (NIST CAVP SHAVS, SHA1ShortMsg.rsp, Len = 0)
-assert SHA1.write([]) as Byte₂₀ as Hexadecimal₄₀ == "da39a3ee5e6b4b0d3255bfef95601890afd80709"  // SHI3 the empty message does not digest as da39a3ee…
+assert ([] as SHA1) as Byte₂₀ as Hexadecimal₄₀ == "da39a3ee5e6b4b0d3255bfef95601890afd80709"  // SHI3 the empty message does not digest as da39a3ee…

@@ -1,7 +1,7 @@
 @ether/time
 
 // Time Zone Information Format (https://datatracker.ietf.org/doc/html/rfc8536)
-TZif := class: Language (
+TZif := class (
   v1: Block<Binary₃₂>,
   (v2: Block<Binary₆₄>, \n, footer: Rule?, \n) if v1.version != ₂0
 ) {
@@ -41,25 +41,18 @@ TZif := class: Language (
 
   data => .v2 ?? .v1
   at (time: Time) => (time as s).floor -- (seconds => this.data.type_at(seconds) -- (type => (offset: type.offset seconds, daylight: type.daylight == 1, abbreviation: this.data.named(type), rule: this.footer if this.data.after_last(seconds))))
-
-  static level := {
-    {zone: TZif} => zone
-  }
-  static written := {
-    {writing: Language.Writing{.value is TZif}} => writing.value as Byte[]
-  }
 }
-assert TZif.read(tzif_utc) -- (.v1.leap_count == 27 && .v1.type_count == 1 && .v1.transition_count == 0 && .v2 === None)  // TZIF5 the file of RFC 8536 B.1 does not read as one version 1 block of one type and 27 leap seconds
-assert TZif.read(tzif_utc).v1.leaps -- (.first.occurrence == 78796800 && .first.correction == 1 && .last.occurrence == 1483228826 && .last.correction == 27)  // TZIF6 the first and last leap seconds of RFC 8536 B.1 are not 78796800 and 1483228826
+assert (tzif_utc as TZif) -- (.v1.leap_count == 27 && .v1.type_count == 1 && .v1.transition_count == 0 && .v2 === None)  // TZIF5 the file of RFC 8536 B.1 does not read as one version 1 block of one type and 27 leap seconds
+assert (tzif_utc as TZif).v1.leaps -- (.first.occurrence == 78796800 && .first.correction == 1 && .last.occurrence == 1483228826 && .last.correction == 27)  // TZIF6 the first and last leap seconds of RFC 8536 B.1 are not 78796800 and 1483228826
 assert (tzif_utc as TZif) is TZif && (tzif_utc as TZif) as Byte[] == tzif_utc  // TZIF7 the file of RFC 8536 B.1 read as TZif and written back is not the same bytes
-assert TZif.read(tzif_honolulu) -- (.v1.transition_count == 7 && .v1.type_count == 6 && .v2.transition_count == 7 && .v2.type_count == 6)  // TZIF8 the file of RFC 8536 B.2 does not read as two blocks of 7 transitions and 6 types
-assert TZif.read(tzif_honolulu).footer.offset.seconds_west == 36000  // TZIF9 the footer of RFC 8536 B.2, HST10, is not 10 hours west
-assert TZif.read(tzif_honolulu).data -- (zone => zone.type_at(-1156939200) -- (.offset == -34200 && .daylight == 1 && zone.named(.) == "HDT"))  // TZIF10 1933-05-04T12:00:00Z is not HDT, 9:30 west, in RFC 8536 B.2
+assert (tzif_honolulu as TZif) -- (.v1.transition_count == 7 && .v1.type_count == 6 && .v2.transition_count == 7 && .v2.type_count == 6)  // TZIF8 the file of RFC 8536 B.2 does not read as two blocks of 7 transitions and 6 types
+assert (tzif_honolulu as TZif).footer.offset.seconds_west == 36000  // TZIF9 the footer of RFC 8536 B.2, HST10, is not 10 hours west
+assert (tzif_honolulu as TZif).data -- (zone => zone.type_at(-1156939200) -- (.offset == -34200 && .daylight == 1 && zone.named(.) == "HDT"))  // TZIF10 1933-05-04T12:00:00Z is not HDT, 9:30 west, in RFC 8536 B.2
 assert (tzif_honolulu as TZif) is TZif && (tzif_honolulu as TZif) as Byte[] == tzif_honolulu  // TZIF11 the file of RFC 8536 B.2 read as TZif and written back is not the same bytes
 
 // A version 1 file of one local time type, UTC: no transitions, offset 0, abbreviation "UTC" (RFC 8536 3.1, 3.2)
 assert (["TZif".bytes, [0x00], [0x00] * 15, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 4], [0, 0, 0, 0, 0, 0], "UTC".bytes, [0x00]].flatten).(
-  (TZif.read(.)).(
+  ((. as TZif)).(
     .v1.type_count == 1 && .v2 === None  // TZIF1 a version 1 file is not read as one data block
     & .at(Time.now) -- (.offset == 0 seconds && !.daylight && .abbreviation == "UTC")  // TZIF2 a zone of one type is not UTC at every time
   )

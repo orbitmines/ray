@@ -1,13 +1,11 @@
 // CRC-32 of ISO 3309, ITU-T V.42 and IEEE 802.3: the polynomial reflected as 0xEDB88320, the register starting and ending inverted (https://www.rfc-editor.org/rfc/rfc1952#section-8, https://www.w3.org/TR/png-3/#D-CRCAppendix)
-CRC32 := class: Language {
+CRC32 := class (sum: Binary₃₂) {
   static extensions := ".crc32"
   static size := 4
 
   static step (c, byte: Byte) => (0..7).reduce(r = c ~x|| byte => r.odd ? (r / 2).floor ~x|| 0xEDB88320 : (r / 2).floor)
   // The checksum as 32 bits, most significant byte first (https://www.w3.org/TR/png-3/#5CRC-algorithm)
-  written := {
-    {writing: Language.Writing} => ((writing.value as Byte[]).reduce(c = 0xFFFFFFFF => CRC32.step(c, .)) ~x|| 0xFFFFFFFF) as Binary₃₂ as Byte[]
-  }
+  static (bytes: Byte[]) as (=== CRC32) => CRC32(sum: bytes.reduce(c = 0xFFFFFFFF => CRC32.step(c, .)) ~x|| 0xFFFFFFFF)
 }
 // The catalogue's check: "123456789" is 0xCBF43926
 assert "123456789".bytes as CRC32 as Binary₃₂ == 0xCBF43926  // CRC1 the check string does not sum to cbf43926

@@ -11,7 +11,7 @@
 
 // Git's formats (https://git-scm.com/docs/gitformat-pack, https://git-scm.com/docs/gitformat-index, https://git-scm.com/docs/gitprotocol-http)
 // The object format is part of the type: Git reads and writes SHA-1 repositories, Git<SHA256> SHA-256 ones (https://git-scm.com/docs/hash-function-transition)
-Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
+Git<hash: SHA1 | SHA256 = SHA1> := class {
   static extensions := ".git"
   static noted_at := "refs/notes/ray"
 
@@ -28,15 +28,22 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   // The name of no object, as a push names a reference not yet there (https://git-scm.com/docs/gitprotocol-pack#_reference_update_request_and_packfile_transfer)
   zero: Id => "0" * .hash.size * 2
   // An object is named by the hash of its type, size and content, in the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)
-  hashed (bytes: Byte[]): Id => .hash.write(bytes) as Git.Raw as Id
+  hashed (bytes: Byte[]): Id => (bytes as this.hash).digest as Git.Raw as Id
 
   // A tree entry's mode, in octal: a file, an executable, a symbolic link, a tree, or a submodule's commit (https://git-scm.com/docs/gitformat-index#_index_entry)
   static Mode := enum file (code: "100644") | executable (code: "100755") | link (code: "120000") | directory (code: "40000") | module (code: "160000") {
     static (code: String) as (=== Git.Mode) => Git.Mode#{.code == code}.first
-    static (at: Location) as (=== Git.Mode) => at is Directory ? Git.Mode.directory : at is Executable ? Git.Mode.executable : Git.Mode.file
+    static (content: Byte[]) as (=== Git.Mode) => content is Executable ? Git.Mode.executable : Git.Mode.file
   }
-  // A tree of files at their paths (https://git-scm.com/docs/gitformat-index#_index_entry)
-  static rooted (files: (path: String, content: Byte[])[]) => files.reduce(root = Location() => root.placed(.path, .content))
+  // Files at their paths as a tree: what is directly in it, a file or a directory of what is under that name
+  // (https://git-scm.com/docs/gitformat-index#_index_entry)
+  static entries (files: (path: String, content: Byte[])[]) => files.map(.path.split("/"){.nonempty}.first).unique.map(name =>
+    files{.path.split("/"){.nonempty}.first == name} -- (under => under.count == 1 && under.first.path.split("/"){.nonempty}.count == 1
+      ? (name: name, file: under.first.content)
+      : (name: name, files: under.map((path: .path.after(name + "/"), content: .content)))))
+  // every object of a tree of files: the tree, its trees and its blobs
+  static objects_in (files: (path: String, content: Byte[])[]): Git.Object[] => [files as Git.Object, Git.entries(files).map(entry => entry.files
+    ? Git.objects_in(entry.files) : [Git.Object("blob", entry.file)]).flatten]
 
   Object := class kind: "blob" | "tree" | "commit" | "tag", content: Byte[] {
     framed: Byte[] => (.kind + " " + .content.count as String + "\x00") as Byte[], .content
@@ -48,11 +55,11 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
     assert Git<SHA256>.Object("tree", []).id == "6ef19b41225c5369f1c104d45d8d85efa9b057b53b14b4b9b939dd74decc5321"  // VC52 git's empty tree in a sha256 repository is not named as git names it
     assert Git<SHA256>.Object("blob", "hello\n" as Byte[]).id.count == 64 && Git.Object("blob", "hello\n" as Byte[]).id.count == 40  // VC54 an object's id is not 64 hexadecimal digits in sha256 and 40 in sha1
     path => "objects/" + .id[..1] + "/" + .id[2..]
-    assert (([Location(path: "hello", content: "hello\n" as Byte[])] as Git<SHA256>.Tree).entries.first.id as Byte[]).count == 32  // VC55 a tree entry's id is not 32 bytes in sha256
+    assert ((([(path: "hello", content: "hello\n" as Byte[])] as Git<SHA256>.Object).content as Git<SHA256>.Tree).entries.first.id as Byte[]).count == 32  // VC55 a tree entry's id is not 32 bytes in sha256
     // Modes and pack object types are read and written by the header (https://git-scm.com/docs/gitformat-index#_index_entry, https://git-scm.com/docs/gitformat-pack#_object_types)
-    assert "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000" && Location(path: "a") as Git.Mode == Git.Mode.directory  // GIT1 a tree entry's mode is not read by its octal code
-    loose: Byte[] => .framed as Zlib as Byte[]
-    static (at: Location) as (=== Git.Object) => at.children.nonempty ? Git.Object("tree", at.children as Git.Tree as Byte[]) : Git.Object("blob", at.content)
+    assert "100755" as Git.Mode == Git.Mode.executable && Git.Mode.directory.code == "40000"  // GIT1 a tree entry's mode is not read by its octal code
+    loose: Byte[] => Zlib(deflated: Deflate.deflated(.framed)) as Byte[]
+    static (files: (path: String, content: Byte[])[]) as (=== Git.Object) => Git.Object("tree", files as Git.Tree as Byte[])
   }
   Loose := class (kind: Char.Letter[], " ", size: Decimal, "\x00", content: Byte[]{.count == size}) {
     object => Git.Object(this.kind, this.content)
@@ -61,7 +68,8 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   // Each entry names its object in bytes of the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)
   Tree := class (entries: (mode: ("0".."7")[] as Git.Mode, " ", name: (!"\x00")[], "\x00", id: Git.Raw)[]) {
     // Tree entries sort as if a directory's name ended in /
-    static (children: Location[]) as (=== Git.Tree) => Git.Tree(entries: children.sort_by(. is Directory ? .name + "/" : .name).map(child => (mode: child as Git.Mode, name: child.name, id: (child as Git.Object).id as Git.Raw)))
+    static (files: (path: String, content: Byte[])[]) as (=== Git.Tree) => Git.Tree(entries: Git.entries(files).sort_by(.files ? .name + "/" : .name).map(entry =>
+      (mode: entry.files ? Git.Mode.directory : entry.file as Git.Mode, name: entry.name, id: (entry.files ? entry.files as Git.Object : Git.Object("blob", entry.file)).id as Git.Raw)))
   }
 
   Signature := class (name: (!"<")[], " <", email: (!">")[], "> ", seconds: Decimal, " ", zone: (("+" | "-"), Decimal.Digit₄)) {
@@ -119,8 +127,8 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 
     static entry (object: Git.Object, previous: Git.Object?, base: Entry?) => (previous && previous.kind == object.kind ? Git.Delta.between(previous.content, object.content) : None) -- (delta =>
       delta && delta.size < object.content.count
-        ? Entry(type: Git.Pack.Kind.offset_delta, size: delta.size, base_entry: base, data: delta as Byte[] as Zlib)
-        : Entry(type: Git.Pack.Kind#{.name == object.kind}.first, size: object.content.count, data: object.content as Zlib))
+        ? Entry(type: Git.Pack.Kind.offset_delta, size: delta.size, base_entry: base, data: Zlib(deflated: Deflate.deflated(delta as Byte[])))
+        : Entry(type: Git.Pack.Kind#{.name == object.kind}.first, size: object.content.count, data: Zlib(deflated: Deflate.deflated(object.content))))
     static (objects: Git.Object[]) as (=== Git.Pack) => objects.sort_by(o => (o.kind, o.content.count)) -- (sorted => Git.Pack(version: 2, count: sorted.count,
       entries: sorted.reduce(made = [] => made, [Git.Pack.entry(., previous: sorted[.index - 1] if .index > 0, base: made.last)])))
 
@@ -182,14 +190,14 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
       vh := History(repository: Repository())
       vh.commit(ada, Program(code: { .greet = "hello" }))
       vh.commit(ada, Program(code: { .welcome = .greet; .greet = None }))
-      vg := Git.write(vh)
-      assert vg.at("HEAD").content as String == "ref: refs/heads/main\n"  // VC24 git's HEAD does not name the branch
-      assert vg.at(Git.noted_at)  // VC25 git keeps no notes of the programs
-      vgh := Git.read(Git.written_to(vh, @./history-test))
+      vg := Git.Written(history: vh).files
+      assert vg.find(.path == "HEAD").content as String == "ref: refs/heads/main\n"  // VC24 git's HEAD does not name the branch
+      assert vg.some(.path == Git.noted_at)  // VC25 git keeps no notes of the programs
+      vgh := (Git.Written(history: vh).placed_at(@./history-test) as Git.Store).history
       assert vgh.head.id == vh.head.id  // VC26 a history written as git and read back has other labels
       assert vgh.value.welcome == "hello" && vgh.value.greet == None  // VC27 a history written as git and read back has another value
-      assert (Git<SHA256>.write(vh).at("config").content as Git.Config).format === SHA256  // VC57 a history written as sha256 git does not name its object format in its config
-      vgs := Git.read(Git<SHA256>.written_to(vh, @./history-test-sha256))
+      assert (Git<SHA256>.Written(history: vh).files.find(.path == "config").content as Git.Config).format === SHA256  // VC57 a history written as sha256 git does not name its object format in its config
+      vgs := (Git<SHA256>.Written(history: vh).placed_at(@./history-test-sha256) as Git.Store).history
       assert vgs.head.id == vh.head.id  // VC58 a history written as sha256 git and read back has other labels
     }
     // Version 0 knows no extensions; version 1 reads them (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/git-config#Documentation/git-config.txt-corerepositoryFormatVersion)
@@ -207,27 +215,28 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   }
 
   Store := class root: Location?, fetched: Git.Pack[] = [], given: (String, Git.Id)[] = [] {
-    loose (id: Git.Id) => .root ? (.root / ("objects/" + id[..1] + "/" + id[2..])).held as Byte[] -- (bytes => bytes.nonempty ? (Zlib.read(bytes) as Git.Loose).object : None) : None
-    packs => .fetched.map(pack => (index: pack as Git.Index, pack)), (.root ? (.root / "objects/pack").held.children{.name ~= ".idx" ⊣}.map(index => (index: index as Byte[] as Git.Index, pack: ((index.@ as String)[..<-4] + ".pack") as Held as Byte[] as Git.Pack)) : [])
+    loose (id: Git.Id) => .root ? (.root / ("objects/" + id[..1] + "/" + id[2..])) as Byte[] -- (bytes => bytes.nonempty ? ((bytes as Zlib).inflated as Git.Loose).object : None) : None
+    packs => .fetched.map(pack => (index: pack as Git.Index, pack)), (.root ? (.root / "objects/pack").children{.name ~= ".idx" ⊣}.map(index => (index: index as Byte[] as Git.Index, pack: (((index as Path)[..<-4] + ".pack") as Location) as Byte[] as Git.Pack)) : [])
     packed (id: Git.Id) => .packs.find(.index.offset_of(id) != None) -- (found => found.pack.object_at(found.index.offset_of(id), this))
     object (id: Git.Id) => .loose(id) ?? .packed(id)
 
-    references => .given, (.root ? (((.root / "packed-refs").held as Git.PackedReferences).references.map((.name, .id)), (.root / "refs").held.children**{!(. is Directory)}.map(at => ((at.@ as String)[(this.root.@ as String).count + 1..], (at as Git.Reference).id))) : [])
+    references => .given, (.root ? (((.root / "packed-refs") as Byte[] as Git.PackedReferences).references.map((.name, .id)), (.root / "refs").children**{!(. is Directory)}.map(at => ((at as Path)[(this.root as Path).count + 1..], (at as Byte[] as Git.Reference).id))) : [])
     reference (name: String) => .references{.0 == name}.last.1
-    current => .root ? ((.root / "HEAD").held as Git.Reference).symbolic : .references.find(.0 ~= ⊢"refs/heads/" && .1 == this.reference("HEAD")).0
-    head => .reference("HEAD") ?? ((.root / "HEAD").held as Git.Reference) -- (head => head.symbolic ? this.reference(head.symbolic) : head.id)
+    current => .root ? ((.root / "HEAD") as Byte[] as Git.Reference).symbolic : .references.find(.0 ~= ⊢"refs/heads/" && .1 == this.reference("HEAD")).0
+    head => .reference("HEAD") ?? ((.root / "HEAD") as Byte[] as Git.Reference) -- (head => head.symbolic ? this.reference(head.symbolic) : head.id)
     branches => .references{.0 ~= ⊢"refs/heads/"}.map((name: .0[11..], id: .1))
 
-    config => .root ? (.root / "config").held as Config : hash as Config
+    config => .root ? (.root / "config") as Byte[] as Config : hash as Config
     commit (id: Git.Id) => .object(id).content as Git.Commit
-    tree (id: Git.Id, name: String = ""): Location => (.object(id).content as Git.Tree).entries.reduce(held = Location(path: name) => held ~~ .add(.mode == Git.Mode.directory
-      ? this.tree(.id as Git.Id, .name)
-      : Location(path: .name, content: this.object(.id as Git.Id).content) ~~ (.access = Access(method: `()`) if .mode == Git.Mode.executable)))
-    recorded => .reference(Git.noted_at) -- (tip => tip ? this.tree(this.commit(tip).tree).files.map((target: .path.replace("/", ""), line: .content as String)) : [])
+    // the files of a tree at their paths (one executable granted executing)
+    tree (id: Git.Id, under: String = "") => (.object(id).content as Git.Tree).entries.map(entry => entry.mode == Git.Mode.directory
+      ? this.tree(entry.id as Git.Id, under + entry.name + "/")
+      : [(path: under + entry.name, content: this.object(entry.id as Git.Id).content ~~ (Accessor.execute . if entry.mode == Git.Mode.executable))]).flatten(1)
+    recorded => .reference(Git.noted_at) -- (tip => tip ? this.tree(this.commit(tip).tree).map((target: .path.replace("/", ""), line: .content as String)) : [])
     reachable (ids: Git.Id[]) => ids.map(id => (this.reachable(this.commit(id).parents), id)).flatten.unique
     read_commit (id: Git.Id, made, repository: Repository) => .commit(id) -- (made_by => (this.recorded.find(.target == id).line -- (noted => noted ? (noted as Program as History).head : None) ?? History.Commit(
       stamp: repository.clock.receive(Stamp.at(made_by.author.when, node: made_by.author.name)), who: @"{made_by.author.name}" ?? made_by.author.name,
-      change: History.change(made_by.parents.first ? this.tree(this.commit(made_by.parents.first).tree) : Location(), this.tree(made_by.tree)),
+      change: History.change(made_by.parents.first ? this.tree(this.commit(made_by.parents.first).tree) : [], this.tree(made_by.tree)),
       when: made_by.author.when, message: made_by.message)) ~~ (.previous = made_by.parents.map(made[.])#))
 
     history => (Repository() @ .root) -- (repository => this.reachable(this.references{.0 != Git.noted_at && .0 != "HEAD"}.map(.1)).reduce(made = {} => made, {(.): this.read_commit(., made, repository)}) -- (made => repository
@@ -236,7 +245,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   }
 
   Remote := class: Location {
-    advertised (service: String) => (this / "info/refs").with(service: service).held as Git.Advertised
+    advertised (service: String) => (this / "info/refs").with(service: service) as Byte[] as Git.Advertised
     fetched => .advertised("git-upload-pack") -- (offered => (this as String as Git<offered.format>.Remote).fetching(offered))
     fetching (offered: Git.Advertised) => ((this / "git-upload-pack") = (
       offered.references.enumerate.map(("want " + .value.id + (.index == 0 ? asked : "") + \n) as Git.Line), Git.Line.flush, "done\n" as Git.Line
@@ -248,15 +257,16 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 
   Written := class history: History {
     branch => .history.name ?? "main"
-    objects_in (tree: Location): Git.Object[] => [tree, tree**].flatten.map(. as Git.Object)
+    // its files placed under a location
+    placed_at (location: Location) => .files.for(file => (location / file.path) = file.content) -- location
     line => .history.since(None)
     commits => .line.reduce(made = {} => made, {(.id): Git.Object("commit", Git.Commit(
       tree: (this.history[.].tree as Git.Object).id, parents: .parents.map(made[.id].id),
       author: (who: .who, when: .when) as Git.Signature, committer: (who: .who, when: .when) as Git.Signature, headers: [], message: .message ?? .change as String) as Byte[])})
     head => .commits[.history.head.id]
     notes => .line.map(commit => (path: this.commits[commit.id].id, content: commit.written() as Byte[])) -- (noted =>
-      Git.rooted(noted) -- (tree => (who: this.history.head.who, when: Time.now) as Git.Signature -- (signed => [this.objects_in(tree), Git.Object("commit", Git.Commit(tree: (tree as Git.Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
-    objects => (.line.map(this.objects_in(this.history[.].tree)).flatten, .commits.values, .notes).flatten.unique(.id)
+      noted -- (tree => (who: this.history.head.who, when: Time.now) as Git.Signature -- (signed => [Git.objects_in(tree), Git.Object("commit", Git.Commit(tree: (tree as Git.Object).id, parents: [], author: signed, committer: signed, headers: [], message: "Notes added by Ray") as Byte[])].flatten)))
+    objects => (.line.map(Git.objects_in(this.history[.].tree)).flatten, .commits.values, .notes).flatten.unique(.id)
     object_files => .objects.map((path: .path, content: .loose))
     // A new repository records its object format in its config (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
     files => .object_files, [
@@ -268,18 +278,11 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
   }
 
   // A repository on disk is read in the format its config names (https://git-scm.com/docs/gitrepository-layout#_config, https://git-scm.com/docs/hash-function-transition#_repository_format_extension)
-  static opened (root: Location) => Git<((root / "config").held as Git.Config).format>.Store(root: root)
+  static opened (root: Location) => Git<((root / "config") as Byte[] as Git.Config).format>.Store(root: root)
 
-  static level := {
-    {at: Location{.scheme is ("https" | "http" | "git" | "ssh")}} => (at as String as Git.Remote).fetched
-    {at: Location} => Git.opened((at / ".git/HEAD").held as boolean ? at / ".git" : at)
-    {store: Git.Store} => store.history
-  }
-
-  static written := {
-    {writing: Language.Writing{.value is History}} => Git.Written(history: writing.value)
-    {written: Git.Written} => Git.rooted(written.files)
-  }
+  // A repository where it is: a remote fetched, else the one on disk (in the `.git` of a working tree)
+  static (at: Location) as (=== Git.Store) => at.scheme is ("https" | "http" | "git" | "ssh") ? (at as Path as Git.Remote).fetched
+    : Git.opened((at / ".git/HEAD") as boolean ? at / ".git" : at)
 
   static stored := {
     {written: Git.Written}.object_files => written.objects as Git.Pack -- (pack => [
@@ -290,8 +293,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class: Language {
 
   tree_at (location: Location, label) => Git.opened(location) -- (store => store.recorded.find(.line ~= ⊢(label as String + "\\")) -- (noted => noted ? store.tree(store.commit(noted.target).tree) : None))
   // A push writes in the format the server names (https://git-scm.com/docs/gitprotocol-capabilities#_object_format)
-  push (history: History, remote: Location) => (remote as String as Git.Remote).advertised("git-receive-pack") -- (offered => Git<offered.format> -- (git =>
-    (remote as String as git.Remote).pushed(Compiler.reduced(Language.Writing(history), git.written), offered.references.find(.name == "refs/heads/" + (history.name ?? "main")).id)))
+  push (history: History, remote: Location) => (remote as Path as Git.Remote).advertised("git-receive-pack") -- (offered => Git<offered.format> -- (git =>
+    (remote as Path as git.Remote).pushed(git.Written(history: history), offered.references.find(.name == "refs/heads/" + (history.name ?? "main")).id)))
 }
-assert !(Git is Language.Lossless)  // VC19 git does not keep snapshots
-assert Git is Language  // VC23 a backend is not a language
+assert !(Git is Lossless)  // VC19 git does not keep snapshots

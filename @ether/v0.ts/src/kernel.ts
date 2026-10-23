@@ -2007,8 +2007,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     x = refer(0, rule, closure, s, e, 0);
     if (x) { put(r, K_NAME); put(r + 12, (x - 1) >> 16); put(r + 16, (x - 1) & 0xFFFF); put(r + 20, w(THREAD + T_REFF)); return r; }
     // (`this` written in a rule's body, no hole of it named so: that application's first argument, what it was read on,
-    // wherever the code is read (a value given as an argument, read in the callee, is the caller's `this`))
-    if (rule && !on && word(s, e, W_THIS)) { put(r, K_HELD); put(r + 12, -4); return r; }
+    // wherever the code is read (a value given as an argument, read in the callee, is the caller's `this`); but not in code
+    // the rule inlined, written where nothing is `this` (a class's block in its constructor, `{{block}}`): what that is read
+    // in, `.` (written in a method, `{. ^ degree <= this}` in `root`: as before))
+    const inlined_ = rule && w(rule + R_IN2_F) && s >= w(rule + R_IN2_S) && e <= w(rule + R_IN2_E) && w(w(rule + R_IN2_F) + F_THIS) === w(GLOBAL);
+    if (rule && !on && !inlined_ && word(s, e, W_THIS)) { put(r, K_HELD); put(r + 12, -4); return r; }
     // (its scratch, the next free: what it reads, and what reading it reads in turn, further on)
     const sc = w(t + T_SCRATCH);
     if (sc + 3 * SCRATCH > w(t + T_SCRATCH_END)) { if (DEBUG) debug(D_FAULT, 97, s, e); if (!w(t + T_FAULT)) deep(t, w(t + T_DEPTH)); put(t + T_FAULT, L_DEEP); put(r, K_UNREAD); return r; }

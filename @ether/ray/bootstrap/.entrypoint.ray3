@@ -979,10 +979,10 @@ assert false applying === to false  // RB1 a body's `(l) {operator} {r}` read as
   {other} => .{name}
   alias_{other} => `{name}`
 }
-// A name given a type of two named, `x: A | B` (`(x: Length | Number = 0) => …`): that whole its type, not `(x: A) | B` (but
-// alternatives of named fields, `(LHS: … | RHS: … | String)`, each its own)
-{typed_name}: {first_type: Name} | {other_type: Name} => {typed_name}: ({first_type} | {other_type})
-{valued_name}: {first_valued_type: Name} | {other_valued_type: Name} = {typed_value} ^operator => {valued_name}: ({first_valued_type} | {other_valued_type}) = {typed_value}
+// A name given a type of several, the first named, `x: A | B` (`(x: Length | Number = 0) => …`, `loop: boolean | boolean[]`):
+// that whole its type, not `(x: A) | B` (but alternatives of named fields, `(LHS: … | RHS: … | String)`, each its own)
+{typed_name}: {first_type: Name} | {other_types} => {typed_name}: ({first_type} | {other_types})
+{valued_name}: {first_valued_type: Name} | {other_valued_types} = {typed_value} ^operator => {valued_name}: ({first_valued_type} | {other_valued_types}) = {typed_value}
 // NA1 one of two names written together does not read the rule
 assert {
   Aliased := class {

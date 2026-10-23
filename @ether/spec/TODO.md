@@ -171,6 +171,19 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `(x: A) | B | C`**: only `x: A | B` with A and B names is the whole union (the entrypoint's rule); a structure's
   alternatives of named fields, `(LHS: … | RHS: … | String)`, must stay what they are. And a statement typed so,
   `a: Number | String = 3`, is not 3 (`b: (Number | String) = 3` neither).
+- **`this` in a function is the function, not the `this` where it was written** (`m => (0 ..< 1).map(rr => this.width)`,
+  `n => [1] -- (v => this.width)`: nothing; the function's call rules are `{this}(…)`, its body inlined in them,
+  `{{body}}`). Grid's `changes` reads `this.cells` so. Asking where the function was written (the frame its body was
+  inlined from, counted out, a reading being shared) breaks methods' bodies, inlined too (`root`'s `this`): not kept.
+  (`this` in a class's own block, written at the top, is what is made now: `this.width`.)
+- **A list first among arguments is joined with the rest** (`k.pa(at, 5)`, `at` a `Geometry.Vector`, gives `pa` one list
+  `[0, 0, 5]`: "a value is not of the type it is given to"; `[[1, 2], [3, 4]]` is `[1, 2, 3, 4]`): `,` joins whatever list
+  is before it, gathered (`[…]`) or not. Joining only one still spreading (made by `,`) makes the suite 8× slower and loses
+  tests in Node/Ray/String (a list `,` a list is a join they rely on): not kept. `Grid.put (at: Geometry.Vector, cell)` so
+  never puts a cell, and the first frame is empty.
+- **Geometry gives an Axis a Number where it declares a Length** (`Space.grid`: `extent: axis_entry.value`, the grid's
+  size in cells, against `extent: Length?`): said as an error, and the extent is then the type (all Lengths), so `holds`
+  compares against every Length and runs out of memory when asked twice.
 - **`x -- y` binds looser than `:=`** (as declared, after `=` and `,`): `q := [4, 5] -- (v => …)` is `(q := [4, 5]) -- …`.
   A function in brackets after it is given what is before it (`x -- (made => (@also made Vector) -- made)`); a function
   read another way is not.

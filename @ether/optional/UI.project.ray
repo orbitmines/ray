@@ -70,7 +70,7 @@ UI := class {
     {styled: String}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
     {styled: Geometry.Shape | Choice}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
     {{narrowing}} {narrowed} => Compiler.reduced(narrowed, UI.Scene).narrowed(Program(code: narrowing**))
-    {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as String)])
+    {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as Path)])
       -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
     {placed: *{(.location is Location) && .location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), UI.Scene)])
     {chosen: Choice} => Geometry.Box(content: chosen)
@@ -191,7 +191,7 @@ UI := class {
   Lowered := {
     {field: Geometry.Shape{.content is Choice}} => field.face -- (face => field ~~ (.content = None) ~~ (.children = [face]))
     {frame: Geometry.Shape{.content is Location && .content.video_site && .children.empty}} => frame ~~ (.content = frame.content ~~ .window = new) ~~ (.fill = Geometry.Color(17, 20, 24)) ~~ (.stroke = Geometry.Stroke(Geometry.Color(128, 128, 128))) ~~ (.children = [
-      Geometry.Box(content: "▶ " + (frame.content.alt ?? frame.content.@ as String), origin: frame.size * (1 / 4), size: frame.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
+      Geometry.Box(content: "▶ " + (frame.content.alt ?? frame.content as Path), origin: frame.size * (1 / 4), size: frame.size * (1 / 2), align: center, color: Geometry.Color(246, 247, 249))
     ])
     {image: Geometry.Shape{.content is Location && .content.language === UI.Image}} => image.content.pixels -- (pixels => image ~~ (.content = None) ~~ (.fill = image.fill
       ? (point => (image.painted(image.fill) as Geometry.Color) ~~ .alpha *= pixels.sampled(Geometry.Vector(point.x / image.size.x, point.y / image.size.y)).alpha)
@@ -262,7 +262,7 @@ UI := class {
       assert logo.language === UI.Image && (@./clip.mp4).language === UI.Video && (@./song.mp3).language === UI.Audio  // UI224 a location's extension does not name its format
       assert logo_shape.fields["width"].type.most == 400px  // UI227 a narrowing on a location does not constrain where it is shown
       assert (@./logo.png{alt: "logo"}).alt == "logo"  // UI271 a narrowing after a location literal is not a narrowing
-      assert @./logo.png{alt: "logo"} as String == "./logo.png"  // UI272 a narrowing is read into the location's path
+      assert @./logo.png{alt: "logo"} as Path == "./logo.png"  // UI272 a narrowing is read into the location's path
       alt_of := (name: String) => @./logo.png{alt: name}
       assert alt_of("written").alt == "written"  // UI273 a name in a narrowing is read against the location instead of where it is written
     }
@@ -284,7 +284,7 @@ UI := class {
     narrowing: Program?
     assert (@https://orbitmines.com/a.png?v=2).extension == "png"  // UI225 a query is read as part of the extension
     media => .language === UI.Image || .language === UI.Video || .language === UI.Audio
-    pixels => (this.content as Byte[] as PNG).raster
+    pixels => (this as Byte[] as PNG).raster
     static VideoId := (!"&" && !"?" && !"#")[]
     static Rest := (("&" | "?" | "#"), *)?
     static Embedding := {
@@ -302,7 +302,7 @@ UI := class {
       {pair} => pair
     }
     embedded => Compiler.reduced(this, Location.Embedding) -- (embed => embed === this ? this
-      : ((embed.origin as String) + embed.path + "?" + .query.fields.map(Compiler.reduced(., Location.Embedded)).compact.map(.name + "=" + .value).join("&")
+      : ((embed.origin as Path) + embed.path + "?" + .query.fields.map(Compiler.reduced(., Location.Embedded)).compact.map(.name + "=" + .value).join("&")
         + (.fragment ? "#" + .fragment : "")) as Location)
     video_site => .embedded !== this
     {this}{{narrowing}} ^punctuation => Program(code: narrowing**) -- (narrowing => (this ~~ .narrowing = narrowing)
@@ -569,9 +569,9 @@ String &+= {
   highlighted (language) => (language is String ? Program.extended(language.starts_with(".") ? language : "." + language) : language).painted(this).reduce(acc = this.marked("code") => acc.marked(.style, .from, .to))
   assert ("x := 1".highlighted(".ray")) == "x := 1" && ("x := 1".highlighted(".ray")).pieces.count > 1  // UI233 a highlighted string is not the same string with marks
   assert (choose String{search}).attempt("ray").shown == "ray"  // UI267 a search field is not a text field in the terminal
-  assert (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as String == "https://www.youtube.com/embed/abc?si=xyz&start=65"  // UI268 an embedding drops the query
-  assert (@https://www.youtube.com/watch?v=abc&t=30).embedded as String == "https://www.youtube.com/embed/abc?start=30"  // UI269 a watch link's time is not where the embed starts
-  assert (@https://orbitmines.com/archive).with(search: None) as String == "https://orbitmines.com/archive"  // UI277 an empty query is written
+  assert (@https://youtu.be/abc?si=xyz&t=1m5s).embedded as Path == "https://www.youtube.com/embed/abc?si=xyz&start=65"  // UI268 an embedding drops the query
+  assert (@https://www.youtube.com/watch?v=abc&t=30).embedded as Path == "https://www.youtube.com/embed/abc?start=30"  // UI269 a watch link's time is not where the embed starts
+  assert (@https://orbitmines.com/archive).with(search: None) as Path == "https://orbitmines.com/archive"  // UI277 an empty query is written
   assert (Compiler.reduced(UI.TUI.Stop(), UI.TUI.written) as String) ~= ⊢ "\e[?1004l"  // UI299 stopping does not undo the modes starting set, last first
 }
 
@@ -747,14 +747,14 @@ UI.Direct := class {
 
   Font := class (font: Geometry.Font) => {
     file => .font.family.map(Fonts.named).first
-    glyph (character: Char) => (this.file.held as Byte[] as OpenType)[character]
+    glyph (character: Char) => (this.file as Byte[] as OpenType)[character]
   }
 
   Display := class: UI.Interface (target: Location, title: String = "") => {
     dynamically event: @me/instance
-    start => { (@me/device/opened).held() } when @me/device/opened changes
+    start => { (@me/device/opened)() } when @me/device/opened changes
     stop => None
-    write (raster: Geometry.Raster) => (.title = UI.page.title ?? "") -- (this.target.held = raster)
+    write (raster: Geometry.Raster) => (.title = UI.page.title ?? "") -- ((this.target) = raster)
     read => UI.Input.dispatched(.event)
   }
 }
@@ -803,7 +803,7 @@ UI.HTML := class {
       <meta name="description" content={page.description ?? ""} />
       {UI.HTML.Markup.tags(page).map(Compiler.reduced(., UI.HTML.Markup.meta))}
       {Compiler.reduced((name: "theme-color", content: Compiler.reduced(page.theme, UI.HTML.Style.values)), UI.HTML.Markup.meta) if page.theme}
-      {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as String} />)}
+      {[("canonical", page.canonical), ("icon", page.icon), ("apple-touch-icon", page.apple_icon), ("manifest", page.manifest)]{.1 != None}.map((rel, at) => @html <link rel={rel} href={at as Path} />)}
       {(page.structured ?? []).map(entry => HTML.Element("script", [("type", "application/ld+json")], [HTML.Raw(JSON(root: UI.Linked(entry, context: "https://schema.org").document as JSON.Value) as String)]))}
       <link rel="stylesheet" href="style.css" />
       <script src="app.js" defer />
@@ -840,11 +840,11 @@ UI.HTML := class {
     rules := {
       {page: Geometry.Shape{.solved && !.parent}} => HTML.Document(head: [UI.HTML.Markup.head(UI.page)], body: @html <body {page.dom_named}>{page.children}</body>)
       {image: Geometry.Shape{.content is Location && .content.language === UI.Image && .fill}} => @html <span {image.dom_named} role="img" aria-label={image.label} />
-      {image: Geometry.Shape{.content is Location && .content.language === UI.Image}} => @html <img {image.dom_named} src={image.content.@ as String} alt={image.label} loading="lazy" />
-      {video: Geometry.Shape{.content is Location && .content.language === UI.Video}} => @html <video {video.dom_named} src={video.content.@ as String} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
-      {audio: Geometry.Shape{.content is Location && .content.language === UI.Audio}} => @html <audio {audio.dom_named} src={audio.content.@ as String} controls />
-      {frame: Geometry.Shape{.content is Location && .content.video_site}} => @html <iframe {frame.dom_named} src={frame.content.embedded.@ as String} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
-      {link: Geometry.Shape{.content is Location}} => @html <a {link.dom_named} href={link.content.@ as String} target={"_blank" if link.content.window == new} rel={"noopener noreferrer" if link.content.window == new}>{link.children}</a>
+      {image: Geometry.Shape{.content is Location && .content.language === UI.Image}} => @html <img {image.dom_named} src={image.content as Path} alt={image.label} loading="lazy" />
+      {video: Geometry.Shape{.content is Location && .content.language === UI.Video}} => @html <video {video.dom_named} src={video.content as Path} controls={video.content.controls} muted={video.content.muted} loop={video.content.looping} />
+      {audio: Geometry.Shape{.content is Location && .content.language === UI.Audio}} => @html <audio {audio.dom_named} src={audio.content as Path} controls />
+      {frame: Geometry.Shape{.content is Location && .content.video_site}} => @html <iframe {frame.dom_named} src={frame.content.embedded as Path} title={frame.content.alt ?? ""} allow="fullscreen; picture-in-picture; encrypted-media" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin" />
+      {link: Geometry.Shape{.content is Location}} => @html <a {link.dom_named} href={link.content as Path} target={"_blank" if link.content.window == new} rel={"noopener noreferrer" if link.content.window == new}>{link.children}</a>
       {text: Geometry.Shape{.content is String && .font.weight >= 600 && .font.size >= 2em}} => @html <h1 {text.dom_named}>{text.dom_spans}</h1>
       {text: Geometry.Shape{.content is String && .font.weight >= 600 && .font.size >= 1.5em}} => @html <h2 {text.dom_named}>{text.dom_spans}</h2>
       {text: Geometry.Shape{.content is String && .font.weight >= 600}} => @html <h3 {text.dom_named}>{text.dom_spans}</h3>
@@ -978,7 +978,7 @@ UI.HTML := class {
       {frame: Geometry.Shape{.content is Location && .content.video_site}} => @css { border: 0; aspect-ratio: 16/9; width: 100%; }
       {shape: Geometry.Shape} => []
     }
-    mask (image: Geometry.Shape) => "url(\"", image.content.@ as String, "\") center/", image.content.fit == fill ? "100% 100%" : image.content.fit as String, " no-repeat"
+    mask (image: Geometry.Shape) => "url(\"", image.content as Path, "\") center/", image.content.fit == fill ? "100% 100%" : image.content.fit as String, " no-repeat"
 
     sized (shape: Geometry.Shape, along: "width" | "height") => (shape.`along`, shape.fields[along].type) -- ((given, bounds) => @css {
       {along}: {UI.HTML.Style.percent(given) if given is Number};
@@ -1173,7 +1173,7 @@ UI.HTML := class {
   }
 
   Package := class (files: (path: String, content: *)[]) => {
-    write (to: Location) => .files.for((to / .path).held = .content)
+    write (to: Location) => .files.for(file => (to / file.path) = file.content)
     document => .files{.path == "index.html"}.first.content
     sheet => .files{.path == "style.css"}.first.content
   }
@@ -1182,7 +1182,7 @@ UI.HTML := class {
       (path: "index.html", content: Compiler.reduced(root, UI.HTML.Markup.rules)),
       (path: "style.css", content: Compiler.reduced(root, UI.HTML.Style.rules)),
       (path: "app.js", content: Compiler.reduced(root, UI.HTML.Script.rules)),
-      root.reachable{.content is Location && .content.media}.map((path: .content.name, content: .content)),
+      root.reachable{.content is Location && .content.media}.map((path: .content.name, content: .content as Byte[])),
       [UI.page.icon, UI.page.apple_icon, UI.page.manifest]{!= None}.map((path: .name, content: .))
     ].flatten)
   }
@@ -1429,7 +1429,7 @@ UI.TUI := class {
       UI.scene.size = Geometry.Vector(Quantity(quantities: [(quantity: this.size.x, unit: Unit.column)]), Quantity(quantities: [(quantity: this.size.y, unit: Unit.row)]))
       this.emitted(UI.TUI.Start())
         -- ({ this.emitted((@me/device as Clipboard).content as ANSI.Copy) } when (@me/device as Clipboard).content changes)
-        -- ({ (@me/device/opened).held() } when @me/device/opened changes)
+        -- ({ (@me/device/opened)() } when @me/device/opened changes)
     stop => .emitted(UI.TUI.Stop())
     write (frame: UI.TUI.Grid) =>
       this.emitted(frame.framed(this.grid))

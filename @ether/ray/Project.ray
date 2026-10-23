@@ -11,10 +11,10 @@ Project := class: Location {
     // (where it is: bundled with the language, at a URL, a language's own project, or a path; at a version, `@x %v0.1.4-E2027.0A.4`, only
     // with @ether/version-control)
     project: Project? => (Program(code: ("@", .path)){O: {
-      @ether/{bundled_path: Path} => Project.known(Project.bundled(bundled_path) ?? (@ether / bundled_path).held as Project)
-      @{scheme: Char.Word[]}://{remainder: Path} => Project.known(((scheme + "://" + remainder) as Location).held as Project)
+      @ether/{bundled_path: Path} => Project.known(Project.bundled(bundled_path) ?? (@ether / bundled_path) as Project)
+      @{scheme: Char.Word[]}://{remainder: Path} => Project.known(((scheme + "://" + remainder) as Location) as Project)
       @{name: (Char.Word | "-" | "+")[]{Project.named(.) != None}} => Project.named(name)
-      @{local_path: Path} => Project.known((local_path as Location).held as Project)
+      @{local_path: Path} => Project.known((local_path as Location) as Project)
     }}()).load
   }
 
@@ -22,9 +22,9 @@ Project := class: Location {
   assert Project.known(None) == None  // PRJ1 nothing found is a project
   static declared => Project#{.loaded || .loading}.map(.dependencies).flatten
   static declares (name: String) => Project.declared.find(.name == name)
-  static holding (location: Location) => Project#{(location.@ as String) ~= ⊢(.@ as String + "/")}.max((.@ as String).count)
+  static holding (location: Location) => Project#{(location.@ as Path) ~= ⊢(.@ as Path + "/")}.max((.@ as Path).count)
   // a project bundled with the language (`@ether/ui`), and one named by a language's own (`@web`)
-  static bundled (path: String) => (@ether/ray | @ether)#.map(. / path){(. / ".project.ray").held as boolean}.first.held as Project
+  static bundled (path: String) => (("ether/ray" as Location) | ("ether" as Location))#.map(. / path){(. / ".project.ray") as boolean}.first as Project
   static named (name: String) => Project#{.name == name}.first
     ?? Project.known(Project.bundled("$/" + name)) -- (found => found ~~ (.name = name) ~~ .load if found)
   assert Project.named("web").loaded  // PJ2 a language in a mutual dependency is not loaded
@@ -33,7 +33,7 @@ Project := class: Location {
     .loaded && !.loading  // PJ1 a project bundling a language that depends back on it does not finish loading
     & Project.named("web").installed.some(=== .)  // PJ3 a mutual dependency loads a second copy of the project it comes back to
   )
-  static data (location: Location) => Project.holding(location) -- (held => held && !(held is (@ether/ray | @ether)#) && !((location.@ as String) ~= ".ray" ⊣))
+  static data (location: Location) => Project.holding(location) -- (held => held && !(held is (("ether/ray" as Location) | ("ether" as Location))#) && !((location.@ as Path) ~= ".ray" ⊣))
 
   name: String?
   description: String?
@@ -42,8 +42,8 @@ Project := class: Location {
   loaded := false
 
   shadowing => (.parent, .dependencies.project)#
-  sources => .held.children**{!(. is Directory) && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !((.parent / ".project.ray") as boolean))}
-  load: static => .loaded || .loading ? this : this ~~ (.loading = true) ~~ .sources.for(source => ((source as String) as Program)()) ~~ (.loaded = true) ~~ .loading = false
+  sources => .children**{!(. is Directory) && .name ~= ".ray" ⊣ && .name != ".project.ray" && (.parent == this || !((.parent / ".project.ray") as boolean))}
+  load: static => .loaded || .loading ? this : this ~~ (.loading = true) ~~ .sources.for(Program(code: . as String)()) ~~ (.loaded = true) ~~ .loading = false
 }
 
 @{name: (Char.Word | "-" | "+")[]{Project.declares(.)}} ^string => Project.declares(name).project

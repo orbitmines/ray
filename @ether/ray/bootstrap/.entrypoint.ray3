@@ -1390,9 +1390,14 @@ way_value (way) => ((way).reading_count !== None) ? ((((way).reading_value) firs
 // prefers), then fewer; a written text, itself; any other, each span it is, the shortest first. `ways_first`: the first only)
 // (as a rule: a type that is a list, given among other arguments, would be spread into them; its body a call, where `return`
 // leaves it)
+// (a node of its own each time, the type it boxes in it: `Node &+ { }` written in a rule is read once)
+boxed_node (boxed_type) => {
+  boxed_box := Node &+ { }
+  external member (boxed_box) (`boxed`) (boxed_type)
+  boxed_box
+}
 {ways_type} ways_in {ways_text} into {ways_into} first {ways_first} ^keyword => {
-  ways_box := Node &+ { }
-  external member (ways_box) (`boxed`) (ways_type)
+  ways_box := boxed_node(ways_type)
   ways_dynamic := (ways_type).dynamic_frame
   if ways_dynamic !== None {
     external dynamic_in ways_dynamic

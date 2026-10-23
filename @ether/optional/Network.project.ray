@@ -11,7 +11,7 @@
 @ip
 @unicode
 
-// The network holds the locations with a scheme (`@https://…`: `Remote`, below) and the local names.
+// The network holds the locations with a scheme (`@https://…`, below) and the local names.
 @localhost => @`127.0.0.1` | @::1
 @localnetwork =>
   // https://datatracker.ietf.org/doc/html/rfc1918#section-3
@@ -183,7 +183,7 @@ Device &+= {
   // getifaddrs' IFF_UP and IFF_RUNNING on macOS; GetAdaptersAddresses' IfOperStatusUp on Windows); on ether as its
   // network controller reports; in a browser navigator.onLine
   network: (connected: boolean) = (connected: if OS.Linux {
-      (@/sys/class/net).held{!(. as String ~= "/lo" ⊣)}.some(((. / "operstate").held as String).lines.first == "up")
+      (@/sys/class/net).children{!(.@ as Path ~= "/lo" ⊣)}.some(((. / "operstate") as String).lines.first == "up")
     }
     elsif OS.Macos {
       (@c {
@@ -224,36 +224,33 @@ Instance &+= {
 
 {address: Network.URL | Network.Socket.Address | IP | Network.DomainName}: Instance => (address as String) as Instance
 
-assert ("https://orbitmines.com/a" as Location).holder is Remote  // IO12 an http location is not reached over the network
-
-// What holds a location with a scheme, one under `@remote`, or another instance: reached over the network
-Remote := class {
-  at (location: Location) => location.scheme ? location.origin : @remote
-  inner (location: Location) => (location.scheme ? location.path : location.segments[1..].join("/")) as Location
-  over_http (location: Location) => location.scheme ~= ⊢"http"
-  sent (method: HTTP.Method, location: Location, content = None, fields = HTTP.Fields()) => HTTP.send(HTTP.Request(method, target: location, fields, body: content === None ? [] : content as Byte[]))
+// A location with a scheme (not of one letter: a Windows drive, `@C:/`, https://url.spec.whatwg.org/#windows-drive-letter),
+// one under `@remote`, or another instance: reached over the network
+Location{.scheme && .scheme != "file" && .scheme.length > 1 || .segments.first == "remote" || (!== @local && . is Instance)} &+= {
+  // (the instance it is on, and its path there)
+  on => .scheme ? .origin : @remote
+  inner => (.scheme ? .path : .segments[1..].join("/")) as Location
+  over_http => .scheme ~= ⊢"http"
+  sent (method: HTTP.Method, content = None, fields = HTTP.Fields()) => HTTP.send(HTTP.Request(method, target: this, fields, body: content === None ? [] : content as Byte[]))
   // over HTTP: GET's body, else (a collection) its members: WebDAV PROPFIND with Depth 1 answers a 207 multistatus naming
   // the collection and its members (https://www.rfc-editor.org/rfc/rfc4918#section-9.1, https://www.rfc-editor.org/rfc/rfc4918#section-10.2);
-  // an instance: what is held there, asked on it
-  [location: Location] => this.over_http(location)
-    ? this.sent(HTTP.Method.get, location) -- (.ok ? .text : this.members(location))
-    : { this.inner(location).held as * }@(this.at(location))()
-  members (location: Location) => this.sent(HTTP.Method.propfind, location, fields: HTTP.Fields().with("Depth", "1")) -- (.status == 207 ? (.text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
-    .map(href => href ~= ⊢"/" ? location.origin + href : href as Location) : None)
+  // an instance: what is there, asked on it
+  read => .over_http
+    ? .sent(HTTP.Method.get) -- (.ok ? .body : None)
+    : { this.inner as Byte[] }@(this.on)()
+  children => .over_http
+    ? .sent(HTTP.Method.propfind, fields: HTTP.Fields().with("Depth", "1")) -- (.status == 207 ? (.text ~= (*, "<", (Char.Word[], ":")?, "href>", href: (!"<")[], "</", (Char.Word[], ":")?, "href>")[]).href[1..]
+      .map(href => href ~= ⊢"/" ? this.origin + href : href as Location) : [])
+    : { this.inner.children }@(this.on)()
+  as (=== Byte[]) => .read
+  as (=== String) => .read as String
+  as (=== boolean) => .read !== None
   // PUT writes it, DELETE removes it (`= None`)
-  { }[{location: Location}] = {value} ^punctuation => this.over_http(location)
-    ? this.sent(value === None ? HTTP.Method.delete : HTTP.Method.put, location, value).ok
-    : { this.inner(location).held = value }@(this.at(location))()
+  = (value) ^punctuation => .over_http
+    ? .sent(value === None ? HTTP.Method.delete : HTTP.Method.put, value).ok
+    : { (this.inner) = value }@(this.on)()
   // executed: a page is opened by what the host opens it with; on an instance, executed there
-  ({location: Location}, {args}) => this.over_http(location)
-    ? (OS.Browser ? (@js window.open({location as String}))() : OS.Ether ? (location.held as Program)(args) : FileSystem.opened(location as String, args))
-    : { this.inner(location).held(args) }@(this.at(location))()
+  ({args}) => .over_http
+    ? (OS.Browser ? (@js window.open({this as Path}))() : OS.Ether ? ((this as String) as Program)(args) : FileSystem.opened(this as Path, args))
+    : { (this.inner)(args) }@(this.on)()
 }
-
-Holders = {
-  // not a scheme of one letter: that is a Windows drive (`@C:/`, https://url.spec.whatwg.org/#windows-drive-letter)
-  {location: Location{.scheme && .scheme != "file" && .scheme.length > 1}} => Remote()
-  {location: Location{.segments.first == "remote"}} => Remote()
-  // another instance: reached over its socket
-  {location: Location{!== @local && . is Instance}} => Remote()
-} + Holders

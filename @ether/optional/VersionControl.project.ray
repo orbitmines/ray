@@ -85,8 +85,8 @@ Project &+= {
     project: Project? => {
       wanted := "%" + (.version as String)
       (Program(code: ("@", .path)){O: {
-        @ether/{bundled_path: Path} => Project.known((@ether / (bundled_path + wanted)).held as Project)
-        @{scheme: Char.Word[]}://{remainder: Path} => Project.known(((scheme + "://" + remainder + wanted) as Location).held as Project)
+        @ether/{bundled_path: Path} => Project.known((@ether / (bundled_path + wanted)) as Project)
+        @{scheme: Char.Word[]}://{remainder: Path} => Project.known(((scheme + "://" + remainder + wanted) as Location) as Project)
       }}()).load
     }
   }
@@ -101,7 +101,7 @@ Project &+= {
 }
 Program &+= {
   // (what a file in it holds at a label of its history, as a tree)
-  static tree_at (location: Location, label) => (location as History).at(label).tree
+  static tree_at (location: Location, label) => (location as History)[label].tree
   version: Version?
   backwards_compatible => .previous**.every(.targeting(this))
   forwards_compatible => .next**.every(.targeting(this))
@@ -180,11 +180,11 @@ History := class: Iterable (repository: *?, base: History.Commit?, head: History
     // A foreign snapshot: the change between two trees, written as Ray.
     assert {
       text := "x := 1\ny := 2\nz := 3" as Byte[]
-      vs1 := History.placed([(path: "a.ray", content: text)])
-      vs2 := History.placed([(path: "b.ray", content: text)])
+      vs1 := [(path: "a.ray", content: text)]
+      vs2 := [(path: "b.ray", content: text)]
       assert History.change(vs1, vs2) as String == ".[\"b.ray\"] = .[\"a.ray\"]; .[\"a.ray\"] = None"  // VC29 a moved file is not read as a move
       assert (History.valued(vs1) -- History.change(vs1, vs2))["b.ray"] == History.valued(vs1)["a.ray"]  // VC30 a move does not keep the value
-      vt1 := History.placed([(path: "a.ray", content: text), (path: "c.ray", content: text)])
+      vt1 := [(path: "a.ray", content: text), (path: "c.ray", content: text)]
       assert History.change(vt1, vs2).erred  // VC31 a rename two files could have made is not raised
     }
     given (set, written: String) => this
@@ -238,8 +238,8 @@ History := class: Iterable (repository: *?, base: History.Commit?, head: History
   pinned (label, as_of: Stamp? = None) => .ordered{.mentions(label) && (as_of === None || .id == label || .stamp < as_of)}.last.id ?? label
   checkout (label, as_of: Stamp? = None) => this[.pinned(label, as_of)].value
   fix (who, label: History.Label, change) => .commit(who, change, versions: [label])
-  tree => History.placed(.public ? this.value.fields{.value != None}.map((path: .name, content: (.value as String) as Byte[])) : this.files)
-  static placed (files) => files.reduce(held = Location(path: "") => held.placed(.path, .content))
+  // its files: a public history's, each field of its value; else those it is stored as
+  tree => .public ? this.value.fields{.value != None}.map((path: .name, content: (.value as String) as Byte[])) : this.files
 
   fork => .copy ~~ (.base = this.head)
   drop: static => .reset(this.base)
@@ -287,7 +287,7 @@ Character &+= {
 }
 
 {value}%{pin: Version.Pin} ^punctuation => value.history.checkout(pin.label, as_of: &caller.history.last.stamp)
-{at: Location}%{pin: Version.Pin} ^punctuation => (at.held as Program as History).checkout(pin.label, as_of: &caller.history.last.stamp)
+{at: Location}%{pin: Version.Pin} ^punctuation => (at as String as Program as History).checkout(pin.label, as_of: &caller.history.last.stamp)
 
 History &+= {
   as (=== Program) => .written_as()
@@ -307,14 +307,14 @@ History &+= {
   of (name) => .since(None){this[.].value?[name] != this[.previous].value?[name]}.reduce(held = History() => held.extended(.rewritten(((this[.].value?[name]) as String) as Program)))
   object_path (name) => .id as String + "/" + name + ".ray"
   objects => .value.fields.name.map(name => (path: this.object_path(name), content: this.of(name).written_as() as String as Byte[]))
-  pins (commit: History.Commit) => .value.fields.name{this.of(.).find(commit.id)}.map(name => ".[" + (name as String) + "] = @./" + this.object_path(name) + "%[" + commit.id + "]").join("; ") as Program
+  pins (commit: History.Commit) => .value.fields.name{this.of(.).find(commit.id)}.map(name => ".[" + History.quoted(name) + "] = @./" + this.object_path(name) + "%[" + commit.id + "]").join("; ") as Program
   cached => .since(None){.index % 64 == 63 || . === this.head}
   // A cache line: the value at a commit, written as that commit's change.
   cached_at (commit: History.Commit) => commit.rewritten(((this[commit].value) as String) as Program)
 
   // A `.%` location read: the histories of its files, with their caches
-  static (at: Location{.segments.last == ".%"}) as (=== History) => at.held.children -- (files => History.global(files{.name ~= ".ray" ⊣}.map(. as Program as History))
-    ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(. as Program as History))
+  static (at: Location{.segments.last == ".%"}) as (=== History) => at.children -- (files => History.global(files{.name ~= ".ray" ⊣}.map(. as String as Program as History))
+    ~~ .caches = files{.name ~= ".ray.txt" ⊣}.map(. as String as Program as History))
 
   static similar: Probability = 50%
 
@@ -325,15 +325,17 @@ History &+= {
     close{this.similarity(.content, file.content) == close.map(this.similarity(.content, file.content)).max} -- (best =>
       best.count > 1 ? best ~~ ERROR@Rename `rename` : best.first))
 
-  static read_file (file: Location) => (file.content as String) as file.language
-  static valued (tree: Location) => tree.files.reduce(held = {} => held, {(.path): this.read_file(.)})
+  // (files at their paths, each read in the language its extension names)
+  static read_file (file: (path: String, content: Byte[])) => (file.content as String) as (file.path as Location).language
+  static valued (files) => files.reduce(held = {} => held, {(.path): this.read_file(.)})
 
-  static assigned (path: String, to: String) => ".[" + (path as String) + "] = " + to
-  static change (before: Location, after: Location) => before.files{!after.at(.path)} -- (gone =>
-    after.files{!before.at(.path)}.map(file => (file, from: this.renamed_from(file, gone))) -- (added => added.find(.from.erred).from ?? [
-      added{.from}.map(this.assigned(.file.path, ".[" + (.from.path as String) + "]")),
+  static quoted (path: String) => "\"" + path.escaped_line + "\""
+  static assigned (path: String, to: String) => ".[" + History.quoted(path) + "] = " + to
+  static change (before, after) => before{file => !after.some(.path == file.path)} -- (gone =>
+    after{file => !before.some(.path == file.path)}.map(file => (file, from: this.renamed_from(file, gone))) -- (added => added.find(.from.erred).from ?? [
+      added{.from}.map(this.assigned(.file.path, ".[" + History.quoted(.from.path) + "]")),
       gone.map(this.assigned(.path, "None")),
-      after.files{before.at(.path).content != .content && !added.some(a => a.file === . && a.from.content == .content)}.map(this.assigned(.path, ((this.read_file(.)) as String)))
+      after{file => before.find(.path == file.path)?.content != file.content && !added.some(a => a.file === file && a.from.content == file.content)}.map(this.assigned(.path, ((this.read_file(.)) as String)))
     ].flatten.join("; ") as Program))
 
   stored => Store.routed(this).map(.kept_in.language).compact
@@ -394,11 +396,6 @@ Program &+= {
   }
 }
 
-Access &+= {
-  uses => .allowed ? [.allowed, .allowed.previous**].flatten.count : 0
-  once => .uses == 0
-}
-
 Compiler &+= {
   formats := {
     {source} as ({kept: Lossless} | {other}) => source as kept
@@ -450,13 +447,10 @@ Layout := class (root: Location = @./.ether/external/@) => {
   changed (name: String, user: String, branch: String) => .checked_out(name) / "$" / ("@" + user) + ("%" + branch)
 }
 
-// What holds a project's data that nothing else holds (whatever space its location is in, which version control does not
-// know): a mirror of it, or a shard of one. Asked last, after what holds the location's space.
-Mirrored := class {
-  [location: Location] => ERROR@Mirrored `reading a project not held here from a mirror or a shard of it is not written yet`
-}
-Holders = Holders + {
-  {location: Location{Project.data(.)}} => Mirrored()
+// What is at a project's data that nothing else answers (whatever space its location is in, which version control does
+// not know): a mirror of it, or a shard of one. Asked last, after what answers the location's space.
+Location{Project.data(.)} &+= {
+  as (=== Byte[]) => ERROR@Mirrored `reading a project not held here from a mirror or a shard of it is not written yet`
 }
 
 Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
@@ -488,7 +482,7 @@ Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
   static Row := class (type: String, id: String, fields: (name: String, value: String)[]) => {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
     static (instance) as (=== Store.Row) => Store.Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
-      fields: instance.fields{!.unreadable}.map((name: .name, value: ((.value is Character ? .value.name{is UUID}#.first : .value) as String))))
+      fields: instance.fields{!(instance.@?.under(.name).access === none)}.map((name: .name, value: ((.value is Character ? .value.name{is UUID}#.first : .value) as String))))
     instance => (((this.type, "(name: ", ((this.id as UUID) as String), this.fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String) as Program)
     // The store: routed by type, read back as a narrowing.
     assert {
@@ -513,9 +507,9 @@ Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
     // the instances a file holds, and the text holding them, in its language: Ray as what it runs to, a table as its rows
     instances (text: String) => .language === KeyValue ? (text as KeyValue).rows.map(.instance) : ((text as Program)() -- (read => read is Columns ? read.rows.map(.instance) : read))
     written (instances) => .language === Program ? instances as String : (instances.map(. as Store.Row) as .language) as String
-    read (store: Store, type) => (.versioned ? (store.at as History).value : .file ? .instances(store.at.held as String) : (store.at as .language)[type.name].map(row => Store.Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
+    read (store: Store, type) => (.versioned ? (store.at as History).value : .file ? .instances(store.at as String) : (store.at as .language)[type.name].map(row => Store.Row(type: type.name, id: row.id as String, fields: row.fields{.name != "id"}.map((name: .name, value: .value as String))).instance)){is type}
     kept (store: Store, instance) => .versioned ? store.history.appended(store.at, this.language)
-      : .file ? (store.at.held = .written(store.children))
+      : .file ? ((store.at) = .written(store.children))
       : (store.at as .language).executed([instance as Store.Row] as this.language)
     assert Store(at: Location(path: "kept.kv")).kept_in == Store.keyed  // DB9 a .kv location is not kept as keys
   }
@@ -587,7 +581,7 @@ Node &+= {
 }
 
 // `T$ @ L`: every `T` held under the location `L`, each routed by its path below `L` (`profiles: Profile$ @ /@`)
-{type}$ @ {under} ^keyword => type${(.location as String).starts_with(under as String)} @ under
+{type}$ @ {under} ^keyword => type${(.location as Path).starts_with(under as Path)} @ under
 {type}$ = {places} ^keyword => Store.rerouted(type, Program(code: places**))
 {type}$ |= {places} ^keyword => Store.route(type, Program(code: places**))
 

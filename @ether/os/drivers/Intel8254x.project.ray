@@ -5,7 +5,7 @@
 Intel8254x := class (registers: Number) => {
   static takes (function: Number) => Machine.number(function, 2) == 0x8086 && Machine.number(function + 0x0B, 1) == 0x02
   // the receive address 0 (RAL0, RAH0 at 0x5400), as the controller read it from its EEPROM
-  mac => (0..<6).map((@/memory / (this.registers + 0x5400 + .) as String).held)
+  mac => (0..<6).map((@/memory / (this.registers + 0x5400 + .) as String) as Number)
   // STATUS (0x8) bit 1: the link is up
   linked => (Machine.number(.registers + 0x8) / 2).floor % 2 == 1
 }

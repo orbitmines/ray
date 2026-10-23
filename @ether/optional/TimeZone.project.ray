@@ -5,7 +5,7 @@
 
 // Time zones and leap seconds: IANA's tz data (https://data.iana.org/time-zones/tz-link.html), read from where the
 // operating system keeps it, else downloaded (@tzif/zoneinfo).
-LeapSeconds := class ((TimeZone.source.directory / "leap-seconds.list").held as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
+LeapSeconds := class ((TimeZone.source.directory / "leap-seconds.list") as Unicode.Table<(seconds: Decimal, "\t", *)>).rows
   .map(.seconds seconds as Time(epoch: "1900-01-01"))
 {
   at (minute: Time) => this.contains(minute.round(minute) + 1 minute)
@@ -14,14 +14,14 @@ LeapSeconds := class ((TimeZone.source.directory / "leap-seconds.list").held as 
 TimeZone := class (name: String) {
   // IANA tz database compiled to TZif (RFC 8536), one file per zone, read only when that zone is asked for (https://data.iana.org/time-zones/tz-link.html)
   static Zoneinfo := class (directory: Location) {
-    data (zone: String) => ((.directory / zone).held as Byte[] as TZif)
+    data (zone: String) => ((.directory / zone) as Byte[] as TZif)
     at (zone: String, time: Time) => .data(zone).at(time)
     assert {
       summer := "2024-07-01T12:00:00Z" as ISO_8601 as Time
       assert TimeZone("UTC").at(summer).offset == 0 seconds  // TZ14 UTC is off zero on this host
       Counting := class: TimeZone.Zoneinfo {
         asked: String[] = []
-        data (zone: String) => (.asked.push zone) -- ((.directory / zone).held as Byte[] as TZif)
+        data (zone: String) => (.asked.push zone) -- ((.directory / zone) as Byte[] as TZif)
       }
       counting := Counting(directory: @tzif/zoneinfo)
       counting.at("Europe/Amsterdam", summer)
@@ -47,9 +47,9 @@ TimeZone := class (name: String) {
         assert TimeZone("UTC").at(summer).offset == 0 seconds  // TZ13 UTC is off zero on ether
       }
     }
-    version => ((.directory / "version").held as String).trimmed
+    version => ((.directory / "version") as String).trimmed
     assert TimeZone.Zoneinfo(directory: @tzif/zoneinfo).version == "2026c"  // TZ8 the downloaded data is not tzdata 2026c
-    zones => ((.directory / "zones").held as String).lines{.nonempty}
+    zones => ((.directory / "zones") as String).lines{.nonempty}
   }
 
   // Where the zones are read: the host's zoneinfo (tzfile(5): $TZDIR, else /usr/share/zoneinfo,

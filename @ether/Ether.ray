@@ -34,10 +34,10 @@ assert {
 }
 assert none is @local  // CST3 the permission nobody has is not the narrowest
 // On ether, what nobody granted is visible to this instance's characters
-Character &+= { policy: * = @local }
+Character &+= { policy: Accessor = @local }
 
 Node &+= {
-  public => visibility#.some(.reads && @public is .who)
+  public => .@ && .@.lets(@public)
   // Pre-rotation: the next keys are known by their digests only, and count for a rotation once revealed.
   assert {
     idy_next := Key.generated(Ed25519)
@@ -126,7 +126,7 @@ Node &+= {
     crypt.commit(ada, Program(code: { .secret = "kept twice" }))
     crypt_first := crypt.since(None).first
     crypt_line := crypt.head.written(above: crypt.head.previous)
-    crypt_text := History.placed(crypt.files).at(crypt.id as String + ".ray").content as String
+    crypt_text := crypt.files.find(.path == crypt.id as String + ".ray").content as String
     assert !(crypt.public)  // CRYPT1 a history is public by default
     assert crypt_first.wraps.some(.key == crypt_first.id) && crypt_first.key == crypt_first.id  // CRYPT2 the first commit does not bring a content key of its own
     assert crypt.head.key == crypt_first.id  // CRYPT3 a line does not name the content key it uses
@@ -142,7 +142,7 @@ Node &+= {
     assert (crypt_first.rewritten(None) ~~ (.sealed = crypt.head.sealed)).opened is Diagnostic  // CRYPT12 a ciphertext moved to another line opens there
     assert crypt.content_key(crypt.current_key, []).erred  // CRYPT13 the content key opens for nobody's instance key
     assert !(Compiler.reduced(crypt, Compiler.cached).cache_files.first.content as String ~= "kept")  // CRYPT14 a cache of an encrypted history is in plaintext
-    assert crypt.tree.at(crypt.id as String + ".ray")  // CRYPT15 a backend is given the values of an encrypted history instead of its lines
+    assert crypt.tree.some(.path == crypt.id as String + ".ray")  // CRYPT15 a backend is given the values of an encrypted history instead of its lines
     // A public history stays plaintext and has no content key.
     crypt_open := History(repository: Repository()).publish
     crypt_open.commit(ada, Program(code: { .open = 1 }))
@@ -158,8 +158,7 @@ Node &+= {
   }
   assert public  // AC1 there is no public permission
   assert !(private === public)  // AC2 private and public are the same
-  assert Access(who: public).who === public  // AC5 an access forgot who it is for
-  publish: static => this ~~ .access |= Access(public, method: Access.Reading, target: this)
+  publish: static => this ~~ (public.read this)
   assert {
     ada := @local.login(@"ada")
     // A commit is any Ray, run on the value before it (`.`).
@@ -179,10 +178,10 @@ Node &+= {
     assert vl ~= ⊢(vh.head.id as String + "\\ ")  // VC7 a line does not begin with its label
     assert vl ~= "\\ with (@me = @ada; now = "  // VC8 a line does not set who made the commit and when
     assert vl ~= "(0..<100).for"  // VC9 a line does not hold the program as written
-    vt := History.placed(vh.files)
-    vf := vt.at(vh.id as String + ".ray").content as String
+    vt := vh.files
+    vf := vt.find(.path == vh.id as String + ".ray").content as String
     assert vf.lines{.nonempty}.count == 3  // VC10 three commits are other than three lines
-    assert !vt.at("index.ray")  // VC11 a history is written with an index beside its program
+    assert !vt.some(.path == "index.ray")  // VC11 a history is written with an index beside its program
     vb := (vf as Program) as History
     assert vb.head.id == vh.head.id  // VC12 a history read back has other labels
     assert vb.count == 3  // VC13 a history read back has other than its three commits
@@ -252,7 +251,7 @@ Node &+= {
     hr_joined := hr | hr_apart
     assert hr_joined.roots.count == 2  // HB11 a merge of two unrelated histories does not keep both roots
     assert hr_joined.value.a == 1 && hr_joined.value.b == 2  // HB12 a merge of two unrelated histories lost one of them
-    hr_text := History.placed(hr_joined.files).at(hr_joined.id as String + ".ray").content as String
+    hr_text := hr_joined.files.find(.path == hr_joined.id as String + ".ray").content as String
     assert hr_text ~= ". = None; "  // HB13 a second root is written as continuing the line above it
     assert ((hr_text as Program) as History).roots.count == 2  // HB14 a history read back has other than its two roots
     assert (hr + hr_apart).value.b == 2  // HB15 a rebase onto an unrelated history lost its commits
@@ -296,7 +295,7 @@ Node &+= {
     cpy_at := cpy[cpy.head.previous]
     assert cpy_fork.base === cpy.head && cpy_fork.head === cpy.head  // CPY1 a fork does not start at the head it forked
     assert cpy_at.head === cpy.head.previous && cpy_at.value == 1  // CPY2 going back does not stop at the commit gone back to
-    assert [cpy_fork, cpy_at, cpy.squash(ada), cpy.blank, cpy.erased].every(.unreadable && .repository === cpy.repository)  // CPY3 a history made from another is readable by more, or kept elsewhere
+    assert [cpy_fork, cpy_at, cpy.squash(ada), cpy.blank, cpy.erased].every(!.allows(@me) && .repository === cpy.repository)  // CPY3 a history made from another is readable by more, or kept elsewhere
     assert cpy_fork.caches == cpy.caches && cpy_at.caches == cpy.caches  // CPY4 a fork or an earlier version loses the caches
     assert cpy.erased.caches.empty  // CPY5 an erased history keeps caches of its values
     assert cpy[cpy.head.previous.id].head === cpy.head.previous  // CPY6 going back to a label does not find its commit

@@ -187,6 +187,14 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A method written against what follows it takes one word of it** (`0..p.width` is `(0..p).width`; `0 .. p.width` and
   `0..(p.width)` read): the member is read on what the method answered. `..<` so is read whole by a rule in Ray.ray (`0..<p.width`,
   `(0..<.height)` in UI's Grid); `..` is not (a rule `{low}..{high}` would take `..<` too): UI's `(from.x..to.x)` (underlines).
+- **A level of rules applied to a value, `Compiler.reduced(move, UI.TUI.written)`, applies none of its typed rules**
+  (`{move: ANSI.Move} => …`): `reducing` reads the value's code (a name) in the level, and a typed hole asks of the text
+  (cached per type and text), not of the value it names, so a Move or a Style is answered as it is, not written. A text
+  answers itself, a list goes through `{sequences: Iterable}`. The first frame stops here: its parts are not written.
+  (`reducing` answered the level itself before: `reading` is `&+=`.)
+- **A raw fragment's control sequence, `@ansi \e[2;3H`, opened a bracket** (everything after it misread, ANSI's Style
+  no Style): a bracket after `\e` belongs to the escape now. Character.ray's line fragment rule does not take a
+  fragment that begins with `\` (its first is a word, `<`, `(`, a backtick, `"` or `-`).
 - **`x -- y` binds looser than `:=`** (as declared, after `=` and `,`): `q := [4, 5] -- (v => …)` is `(q := [4, 5]) -- …`.
   A function in brackets after it is given what is before it (`x -- (made => (@also made Vector) -- made)`); a function
   read another way is not.

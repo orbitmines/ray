@@ -1,7 +1,7 @@
-# Ether.ray - The Ray Programming Language & Ether
+# Infrastructure for interoperability - Ether.ray
 
 > [!NOTE]
-> This is still a work in progress. Relevant progress is documented in this repo and [here](https://github.com/orbitmines/archive/blob/main/projects/Writing%20-%202025.%20A%20Universal%20Language.md)
+> This is still a work in progress. Relevant progress is documented in this repo.
 
 ---
 <div align="center">
@@ -14,7 +14,7 @@
 
 ## What is this?
 
-This thing is, in essence, a programming language (Ray) and an IDE (Ether), which together act as a theorem prover, version control system, database and rendering engine. Though to me, most importantly, it is here as infrastructure. Infrastructure for the design and implementation of a [different category of (programming) interfaces](https://orbitmines.com/archive/2024-02-orbitmines-as-a-game-project).
+This thing is, in essence, a programming language (Ray) and an ecosystem (Ether), which together act as infrastructure for interoperability; For any existing programming language: whether theorem prover, version control system, database, (rendering engine), or application. To get an extended: [Why?](https://orbitmines.com/almanac/why-extended-introduction).
 
 ---
 

@@ -979,6 +979,10 @@ assert false applying === to false  // RB1 a body's `(l) {operator} {r}` read as
   {other} => .{name}
   alias_{other} => `{name}`
 }
+// A name given a type of two named, `x: A | B` (`(x: Length | Number = 0) => …`): that whole its type, not `(x: A) | B` (but
+// alternatives of named fields, `(LHS: … | RHS: … | String)`, each its own)
+{typed_name}: {first_type: Name} | {other_type: Name} => {typed_name}: ({first_type} | {other_type})
+{valued_name}: {first_valued_type: Name} | {other_valued_type: Name} = {typed_value} ^operator => {valued_name}: ({first_valued_type} | {other_valued_type}) = {typed_value}
 // NA1 one of two names written together does not read the rule
 assert {
   Aliased := class {
@@ -999,9 +1003,26 @@ assert {
 }
 // A value and a block added (§3.2, `A + B`, B over A): the same, a node made of the value, the block read in it
 // (`Vector := Elementwise{…} + { x => this[0] ?? 0 }`)
-{on} + {`{`}{code}{`}`} ^operator => ((on).interior) &+= {
-  {code}
-}
+{on} + {`{`}{code}{`}`} ^operator => (() => {
+  // (the class it is written in, as a class has it (read bare: where it is written): what its code names that it does not,
+  // `V` in G's `V := … + { … }`)
+  composed_outer := class_block
+  composed := ((on).interior) &+= {
+    // (before its code is read: a header in it naming one written there, `distance (other: Vector)` in Vector)
+    outer_block := composed_outer
+    {code}
+    // (a type, as a class is: called with nothing, its own; what it is called on, `G.V(…)`, is it, not G)
+    of := .
+    // (called: by a constructor of its own, `static (x: T) => …`; else what the value makes)
+    {this}({arguments: Arguments}) => ((external member (this) (`made_by`)) === None) ? (on)({arguments}) : this.made_by({arguments})
+    {this}() => ((external member (this) (`made_by`)) === None) ? (on)() : this.made_by()
+  }
+  (composed).outer_block := composed_outer
+  composed
+})()
+// A constructor of a class's own (`static (a: String) => …`, separate constructors override the one its block is): what it is
+// called with read by it, what it answers what the call does (`made_by`)
+static ({parameters}) {`=>`} {body} ^keyword => static made_by ({parameters}) => {body}
 interior => {
   external .
   // (what it holds are members: a bare name never reads them, `.name` does)
@@ -1629,12 +1650,17 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
     superclass := parent
     super := parent
     class_block := .
+    // (the class it is written in, before its block is read: a header in it naming one written there, `d (o: K)` in K)
+    outer_block := outer
     written_in_class => (outer_block === None) ? class_made : outer_block.written_in_class
     static => written_in_class
     {block}
   })
   ((parent).conjoins === true) ? (held &+= ((parent).conjoined.last)) : held
-  made := (held &+ { })
+  // (the class it is written in, its own too: what is asked of the class, not of its block)
+  made := (held &+ {
+    outer_block := outer
+  })
   (held).class_made := made
   (held).outer_block := outer
   (made).class_held := held
@@ -1653,7 +1679,8 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   (parent reads ({fields}) as made) unless (parent === Node) || inherits_structure(`{fields}`, parent)
   made &+= {
     of := .
-    {this}({arguments: Arguments}) => (this &+ {
+    // (a constructor of its own, `static (x: T) => …`, instead, when it has one (asked without `missing`: a class has none))
+    {this}({arguments: Arguments}) => ((external member (this) (`made_by`)) !== None) ? this.made_by({arguments}) : (this &+ {
       ({{fields}}) taking {arguments}
       // (its block, the constructor: read in each one made (what does not depend on it, the class's, once: `hoisted`); a name
       // given by name is not given its default there (`Hierarchy(parent: root)`, `parent: Hierarchy? = None`))
@@ -1661,7 +1688,7 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
         {{block}}
       }
     })
-    {this}() => this(declared)
+    {this}() => ((external member (this) (`made_by`)) !== None) ? this.made_by() : this(declared)
     // (called with a block, `Node({ … })`: one made with nothing given, the block read in it (its names the instance's))
     {this}({`{`}{extension}{`}`}) => (this(declared)) extended_by {
       {extension}
@@ -2433,6 +2460,12 @@ trimmed_text (trim_text) => {
 // after `=` and `,`, looser than both: `x -- .y` is `x.y`; `x ~~ …` the same, answering x.
 // (`--`: what the rest answers, read in what is before it; nothing, `x -- y if c` not taken: what is before it)
 {value} -- {rest} ^operator => ((value).({rest})) ?? value
+// (a function in brackets, `x -- (v => …)`: it given what is before it, its name that value)
+{bracketed_value} -- ({bracketed_rest}) ^operator => (
+  then_on := bracketed_value
+  then_read := (then_on).(({bracketed_rest}))
+  (((then_read).listing !== true) && ((external callable then_read) === true)) ? then_read(then_on) : (then_read ?? then_on)
+)
 {value} ~~ {rest} ^operator => {
   value &+= {
     {rest}

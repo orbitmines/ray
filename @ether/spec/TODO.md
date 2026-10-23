@@ -151,13 +151,16 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `writing.value as String`. Without Language.ray it costs nothing.
 - **Language.ray's header writer reads `.of.header.head`, which no class has** (the entrypoint keeps a header as
   `header_quoted`): no structured value is written through its header; a Location (a Ray) falls to the list writer.
-- **A narrowing's constraint in a class does not see the class's other members by bare name** (`G := class { S := class {
-  static d => 2 }; Y := Number[]{.length == S.d} }`: `[1, 2] is G.Y` is false, `Z := Number[]{.length == 2}` there holds):
-  the constraint is read on the value it checks (`it.({constraint})`), in frames of GLOBAL, so where it was written (G's
-  block) is not reached. Geometry's `Vector := Elementwise{…}{.length == Space.current.dimension} + { … }` so holds for no
-  value (`[0, 0] is Geometry.Vector` false), and `Grid.put (at: Geometry.Vector, …)` rejects every point: the first frame's
-  cells are never put. (A name read as a place nothing defined where it was named, `S` in S's own block read before S
-  is, now reads what the classes it is written in name: `Space.plane`, `Space.current.dimension` hold.)
+- **A single constructor taking nothing is not what the type is called with** (`J := Number[] + { static () => [7, 7] }`:
+  `J()` is not `[7, 7]`): `made_by`, taking nothing, is applied when named, so `(this).made_by` is its value and
+  `this.made_by()` calls that. With another one beside it, `static (x = 0, …)`, it reads (Geometry's Vector).
+- **A name given a type of more than two, `x: A | B | C`, or of other than names (`orientation: -1 | +1 = +1`), reads as
+  `(x: A) | B | C`**: only `x: A | B` with A and B names is the whole union (the entrypoint's rule); a structure's
+  alternatives of named fields, `(LHS: … | RHS: … | String)`, must stay what they are. And a statement typed so,
+  `a: Number | String = 3`, is not 3 (`b: (Number | String) = 3` neither).
+- **`x -- y` binds looser than `:=`** (as declared, after `=` and `,`): `q := [4, 5] -- (v => …)` is `(q := [4, 5]) -- …`.
+  A function in brackets after it is given what is before it (`x -- (made => (@also made Vector) -- made)`); a function
+  read another way is not.
 - **A parameter named bare in a method does not read the field** (`S := class (axes: Number[]) => { dimension =>
   axes.length }`: `S([1, 2]).dimension` is nothing; `.axes.length` reads it).
 - **A rule written outside the entrypoint does not read a block it was given in the node it makes** (`{on} +++ {`{`}{code}

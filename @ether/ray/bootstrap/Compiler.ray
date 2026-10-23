@@ -99,7 +99,7 @@ Node &+= {
 }
 // `@also x T`: x is also a T (its methods x's; a composed one's, `A + { … }`, what was added)
 @also {value} {type} =>
-  {value} including ((({type}) is Compiler.Composition) ? ({type}).second : ({type}).interior)
+  ((({type}) is Compiler.Composition) ? ({value} including ({type}).second) : (({value}) &+= ({type})))
   {value}
 
 Program &+= {

@@ -1616,7 +1616,8 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
 class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   // (`static`, the class: the one whose block this is written in (`outer`, its block's), else this one: `integer: static` of
   // a class written in Decimal's block is a Decimal)
-  outer := this.class_block
+  // (read bare: where the class is written (inside this closure, `this` is not))
+  outer := class_block
   // (built on a conjunction, `class: Iterable & Ordered`: on its parts, not on the conjunction (whose `conjoined` an
   // instance would hold: it is no conjunction itself))
   held := ((((parent).conjoins === true) ? (parent).conjoined.first : (parent)) &+ {

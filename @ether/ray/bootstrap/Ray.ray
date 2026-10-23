@@ -53,6 +53,8 @@ Ordered := class (T = static) => {
   ..< (last: .T) => this == last ? [] : ((this < last ? .succ : .pred)..<last).prepend(this)
   assert ("a".."c").last == "c"  // OR5 a range of characters does not end at its last
 }
+// (written against both, `0..<p.width`, `0..<.height`: to what follows whole, its members too, not a member of `0..<p`)
+{low}..<{high} ^operator => ({low}) ..< ({high})
 
 // (Iterable and Array are made in the entrypoint, their core; what follows is the rest of them)
 Iterable &+= {

@@ -692,6 +692,10 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
     each_taken := taken
     each_part := (((each_taken).listing === true) && ((each_taken).spread === true)) ? each_taken : Array.new.append(each_taken)
     each_taken_at := each_part.head
+    // (more given than places: a list among them composed into the rest by `,` (`.put(at, cell)`, `at` a Vector): a place typed
+    // so takes as many as make one of its type, made one (§ arguments: separated by the types they are given to; written
+    // `[at], cell`, kept whole as written))
+    each_extra := each_part.count - places.count
     while each_place {
       // (a text written among the places, `class a: T, ".", b: U`: no field, it takes nothing; given in its place, `(4, "-", 9)`,
       // that text is passed over)
@@ -700,7 +704,25 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
       unless written_text(each_place.value) || ((each_place.written_name === None) && literal_number(each_place)) {
         each_by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(each_place.value) !== None))
         while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument === true) { each_taken_at = each_taken_at.next }
-        (each_place.value) alone takes ((each_by_name !== None) ? each_by_name.value : (each_taken_at ? each_taken_at.value : declared))
+        each_value := (each_by_name !== None) ? each_by_name.value : (each_taken_at ? each_taken_at.value : declared)
+        if (each_by_name === None) && (each_extra > 0) && each_taken_at && ((each_place.value).type !== None) && !((each_value) is ((each_place.value).type)) {
+          each_group := Array.new.append(each_value)
+          each_walk := each_taken_at.next
+          each_steps := 0
+          each_end := None
+          while each_walk && (each_steps < each_extra) && (each_end === None) {
+            each_group.append(each_walk.value)
+            each_steps = each_steps + 1
+            (each_end = each_walk) if (each_group is ((each_place.value).type))
+            each_walk = each_walk.next
+          }
+          if each_end !== None {
+            each_value = (each_group) &+= ((each_place.value).type)
+            each_extra = each_extra - each_steps
+            each_taken_at = each_end
+          }
+        }
+        (each_place.value) alone takes (each_value)
         each_taken_at = ((each_by_name === None) && each_taken_at) ? each_taken_at.next : each_taken_at
       }
       each_place = each_place.next
@@ -979,6 +1001,10 @@ assert false applying === to false  // RB1 a body's `(l) {operator} {r}` read as
   {other} => .{name}
   alias_{other} => `{name}`
 }
+// A name given a type of several, the first named, `x: A | B` (`(x: Length | Number = 0) => …`, `loop: boolean | boolean[]`):
+// that whole its type, not `(x: A) | B` (but alternatives of named fields, `(LHS: … | RHS: … | String)`, each its own)
+{typed_name}: {first_type: Name} | {other_types} => {typed_name}: ({first_type} | {other_types})
+{valued_name}: {first_valued_type: Name} | {other_valued_types} = {typed_value} ^operator => {valued_name}: ({first_valued_type} | {other_valued_types}) = {typed_value}
 // NA1 one of two names written together does not read the rule
 assert {
   Aliased := class {
@@ -999,9 +1025,26 @@ assert {
 }
 // A value and a block added (§3.2, `A + B`, B over A): the same, a node made of the value, the block read in it
 // (`Vector := Elementwise{…} + { x => this[0] ?? 0 }`)
-{on} + {`{`}{code}{`}`} ^operator => ((on).interior) &+= {
-  {code}
-}
+{on} + {`{`}{code}{`}`} ^operator => (() => {
+  // (the class it is written in, as a class has it (read bare: where it is written): what its code names that it does not,
+  // `V` in G's `V := … + { … }`)
+  composed_outer := class_block
+  composed := ((on).interior) &+= {
+    // (before its code is read: a header in it naming one written there, `distance (other: Vector)` in Vector)
+    outer_block := composed_outer
+    {code}
+    // (a type, as a class is: called with nothing, its own; what it is called on, `G.V(…)`, is it, not G)
+    of := .
+    // (called: by a constructor of its own, `static (x: T) => …`; else what the value makes)
+    {this}({arguments: Arguments}) => ((external member (this) (`made_by`)) === None) ? (on)({arguments}) : this.made_by({arguments})
+    {this}() => ((external member (this) (`made_by`)) === None) ? (on)() : this.made_by()
+  }
+  (composed).outer_block := composed_outer
+  composed
+})()
+// A constructor of a class's own (`static (a: String) => …`, separate constructors override the one its block is): what it is
+// called with read by it, what it answers what the call does (`made_by`)
+static ({parameters}) {`=>`} {body} ^keyword => static made_by ({parameters}) => {body}
 interior => {
   external .
   // (what it holds are members: a bare name never reads them, `.name` does)
@@ -1634,12 +1677,17 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
     superclass := parent
     super := parent
     class_block := .
+    // (the class it is written in, before its block is read: a header in it naming one written there, `d (o: K)` in K)
+    outer_block := outer
     written_in_class => (outer_block === None) ? class_made : outer_block.written_in_class
     static => written_in_class
     {block}
   })
   ((parent).conjoins === true) ? (held &+= ((parent).conjoined.last)) : held
-  made := (held &+ { })
+  // (the class it is written in, its own too: what is asked of the class, not of its block)
+  made := (held &+ {
+    outer_block := outer
+  })
   (held).class_made := made
   (held).outer_block := outer
   (made).class_held := held
@@ -1658,7 +1706,8 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   (parent reads ({fields}) as made) unless (parent === Node) || inherits_structure(`{fields}`, parent)
   made &+= {
     of := .
-    {this}({arguments: Arguments}) => (this &+ {
+    // (a constructor of its own, `static (x: T) => …`, instead, when it has one (asked without `missing`: a class has none))
+    {this}({arguments: Arguments}) => ((external member (this) (`made_by`)) !== None) ? this.made_by({arguments}) : (this &+ {
       ({{fields}}) taking {arguments}
       // (its block, the constructor: read in each one made (what does not depend on it, the class's, once: `hoisted`); a name
       // given by name is not given its default there (`Hierarchy(parent: root)`, `parent: Hierarchy? = None`))
@@ -1666,7 +1715,7 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
         {{block}}
       }
     })
-    {this}() => this(declared)
+    {this}() => ((external member (this) (`made_by`)) !== None) ? this.made_by() : this(declared)
     // (called with a block, `Node({ … })`: one made with nothing given, the block read in it (its names the instance's))
     {this}({`{`}{extension}{`}`}) => (this(declared)) extended_by {
       {extension}
@@ -2438,6 +2487,12 @@ trimmed_text (trim_text) => {
 // after `=` and `,`, looser than both: `x -- .y` is `x.y`; `x ~~ …` the same, answering x.
 // (`--`: what the rest answers, read in what is before it; nothing, `x -- y if c` not taken: what is before it)
 {value} -- {rest} ^operator => ((value).({rest})) ?? value
+// (a function in brackets, `x -- (v => …)`: it given what is before it, its name that value)
+{bracketed_value} -- ({bracketed_rest}) ^operator => (
+  then_on := bracketed_value
+  then_read := (then_on).(({bracketed_rest}))
+  (((then_read).listing !== true) && ((external callable then_read) === true)) ? then_read(then_on) : (then_read ?? then_on)
+)
 {value} ~~ {rest} ^operator => {
   value &+= {
     {rest}

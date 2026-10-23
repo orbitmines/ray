@@ -1273,8 +1273,9 @@ UI.Linked := class (value: *, context: String?) => {
 UI.TUI := class {
   Grid := class (width: Number, height: Number, cells: ANSI.Cell[][]? = None, graphics: (at: Geometry.Vector, bytes: *)[] = [], title: String? = UI.page.title) => {
     // (blank cells unless given: made here, where its width and height are given (a header's default does not see them yet,
-    // spec/TODO.md))
-    (.cells = (0 ..< .height).map(grid_row => (0 ..< this.width).map(grid_column => ANSI.Cell()))) if .cells === None
+    // spec/TODO.md); the width named first, a function written here not seeing `this` (spec/TODO.md))
+    blank_width := .width
+    (.cells = (0 ..< .height).map(grid_row => (0 ..< blank_width).map(grid_column => ANSI.Cell()))) if .cells === None
     space => Geometry.Space.grid(Geometry.Vector(this.width, this.height))
     inside (at: Geometry.Vector) => .space.holds(at)
     put (at: Geometry.Vector, cell: ANSI.Cell) => .cells[at.y][at.x] = cell if .inside(at)

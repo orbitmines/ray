@@ -1480,9 +1480,12 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   name (`x.count.@` is `x.@ / "count"`); `value @ place` puts it somewhere too. A location is a hierarchy (`Location :=
   Ray`): each name under a location is one location, its child (`.parent`), so what is placed there, a grant, stays.
   What it is written in stores nothing but where it is. A write (`x.count = v`, `x.count := v`) gives the value a rule
-  `location => x.@ / "count"`, asked when `.@` is, so it follows where x is; it is written in `.ray`, in Location.ray.
+  `location => x.@ / "count"`, with where x is taken when the write runs: a value somewhere stays there (written
+  elsewhere too, it is not moved), so where x is does not change after. It is written in `.ray`, in Location.ray.
   (2026-10-23, user: from the drafts' `dynamically sub.location &= location / property`; what never asks for `.@`, a
-  compiler level may leave unplaced.)
+  compiler level may leave unplaced. A rule's holes are not seen in a block made in its body, and an argument is read
+  when first asked: the block is given where x is already read, and is made before x is written, since the bootstrap's
+  own writes would otherwise read what is being written.)
 - A location is what is there; there is no holder and no `held`/`content`/`resolved` (2026-10-23, user). A project
   reserving a space adds to the locations in it (`Location{!.scheme || …} &+= { … }` in @ether/filesystem, the URLs in
   @ether/network, `@/memory/N` in @ether/os), with no value in between:

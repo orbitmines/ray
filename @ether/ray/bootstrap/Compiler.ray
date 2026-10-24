@@ -21,17 +21,26 @@ Compiler := class {
   assert 5 + 2 == 7  // CO14 five and two is not seven
   assert 5 + 0 == 5  // CO18 five and a name holding nothing is not five
 
-  default := folding + staged + lowered + inlined + pruned + {
-    {a} - 0 => a
-    {a} * 0 => 0
-    0 * {a} => 0
-    {a} / 1 => a
-    {a}.unique.unique => a.unique
-    {a}.reverse.reverse => a
-    {a}.compact.compact => a.compact
-    {a}.flatten.flatten => a.flatten
-    assert [[1], [2]].flatten.flatten == [1, 2]  // CO29 flattened twice is not flattened once
-    {a}.sort.sort => a.sort
+  // The level the language is read with: each rule a list read twice where once answers the same, applied only to an
+  // Array's (or a String's: what descends from Array) own (a value of another class, with its own `reverse`, as written)
+  default := {
+    {a}.reverse.reverse => ((a).of.descends(Array)) ? a : (a.reverse).reverse
+    {a}.unique.unique => ((a).of.descends(Array)) ? a.unique : (a.unique).unique
+    {a}.compact.compact => ((a).of.descends(Array)) ? a.compact : (a.compact).compact
+    {a}.sort.sort => ((a).of.descends(Array)) ? a.sort : (a.sort).sort
+  }
+  assert {
+    twice_reversed := [1, 2]
+    assert twice_reversed.reverse.reverse === twice_reversed  // CO38 a list reversed twice under the default level is a copy (the rule did not apply)
+  }
+  assert [3, 1, 2].sort.sort == [1, 2, 3]  // CO39 sorted twice under the default level is not sorted
+  assert [1, 1, 2].unique.unique == [1, 2]  // CO40 unique twice under the default level is not unique
+  assert [[1], [2]].flatten.flatten == [1, 2]  // CO29 flattened twice is not flattened once
+  assert {
+    Own_reverse := class {
+      reverse => "reversed"
+    }
+    assert Own_reverse().reverse.reverse == "desrever"  // CO41 a class's own reverse, reversed twice, was taken for a list's
   }
   assert Compiler.default  // CO20 there is no default level
   logic := {
@@ -85,7 +94,8 @@ Compiler := class {
   static reduced (value, level) => value -- (reduced_value => (level is Compiler.Composition) ? Compiler.reduced(Compiler.reduced(reduced_value, level.components.hierarchy.first), level.components.hierarchy.last) : (level reducing reduced_value))
   // (a level as a scope, what the language is read with: one node made of each of its parts, the first's rules seen first)
   static parts_of (parts_level) => (parts_level is Compiler.Composition) ? [Compiler.parts_of((parts_level).first), Compiler.parts_of((parts_level).second)] : [parts_level]
-  static scope_of (scope_level) => {
+  static scope_of (scope_level) => (scope_level is Compiler.Composition) ? Compiler.scope_made_of(scope_level) : scope_level
+  static scope_made_of (scope_level) => {
     scope_made := Compiler.fresh_scope(None)
     scope_parts := Compiler.parts_of(scope_level)
     scope_at := scope_parts.reverse.head
@@ -203,4 +213,4 @@ String &+= {
   escaped_line => #.map(Compiler.reduced(., Escape⁻¹)) as String
 }
 // The level the language is read with, unless a project said otherwise: the default.
-global.O = (O === None) ? Compiler.scope_of(Compiler.default) : O
+external member (global) (`O`) ((O === None) ? Compiler.scope_of(Compiler.default) : O)

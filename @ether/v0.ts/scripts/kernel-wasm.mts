@@ -40,14 +40,14 @@ if (ray) writeFileSync(ray, calls.join('\n') + `\nwj_module(${pages})\n`);
 
 // (`--parts <dir> --module <file>`: the same, in parts each read by a run of its own (`--jobs` at once), as no run holds the
 // whole kernel: every part given each context by name and how many it takes, then its own contexts, about `--statements`
-// lines of them (1200), its bodies written; a context of more than `--slice` statements (1000) written in slices, each a run
+// lines of them (6000), its bodies written; a context of more than `--slice` statements (7000) written in slices, each a run
 // given its cells, its own statements and, of the rest, what its blocks and jumps need (its labels, jumps and returns, and one
 // statement skipped for each run of the others), its body's size written after them; a part of none, the sections around them)
 const parts = arg('--parts');
 if (parts) {
   const { spawn } = await import('node:child_process'), { mkdirSync } = await import('node:fs'), { join } = await import('node:path'), { cpus } = await import('node:os');
   const src = new URL('../src/', import.meta.url).pathname, root = new URL('../', import.meta.url).pathname;
-  const size = Number(arg('--statements') ?? 1200), slice = Number(arg('--slice') ?? 1000), jobs = Number(arg('--jobs') ?? Math.min(8, Math.max(1, cpus().length >> 1)));
+  const size = Number(arg('--statements') ?? 6000), slice = Number(arg('--slice') ?? 7000), jobs = Number(arg('--jobs') ?? Math.min(8, Math.max(1, cpus().length >> 1)));
   mkdirSync(parts, { recursive: true });
   const begun = calls.flatMap((c, k) => c.startsWith('wj_begin(') ? [k] : []);
   const announced = begun.map(k => calls[k].replace(/^wj_begin\((`[^`]*`), \[(.*)\]\)$/, (_, name, params) => `wj_context(${name}, ${params ? params.split(', ').length : 0})`));

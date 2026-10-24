@@ -4,9 +4,9 @@ Deflate := class {
 
   // Huffman codes given by their lengths alone: shorter codes first, equal lengths in symbol order, each the next binary number (https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
   static Huffman := class lengths: Decimal[] {
-    codes => .lengths.enumerate{.value > 0}.sort_by((.value, .index)).reduce(acc = [] => [acc,
+    codes => .lengths.enumerate{.value > 0}.sort((.value, .index)).reduce(acc = [] => [acc,
       (symbol: .index, bits: ((acc.empty ? 0 : (acc.last.bits + 1) * 2 ^ (.value - acc.last.bits.length)) as Binary).padded(.value))])
-    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort_by(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111]  // DF1 the code lengths of section 3.2.2's example do not give its codes
+    assert Deflate.Huffman([3, 3, 3, 3, 3, 2, 4, 4]).codes.sort(.symbol).bits == [0b010, 0b011, 0b100, 0b101, 0b110, 0b00, 0b1110, 0b1111]  // DF1 the code lengths of section 3.2.2's example do not give its codes
     // A symbol is read as the one code whose bits come next, most significant bit first, and written as its code (https://www.rfc-editor.org/rfc/rfc1951#section-3.1.1)
     Symbol => Binary{. is this.codes.bits#} as (bits => this.codes{.bits == bits}.first.symbol)
     bits (symbol: Decimal) => .codes{.symbol == symbol}.first.bits
@@ -14,7 +14,7 @@ Deflate := class {
 
     // Lengths fitted to frequencies: the two least frequent join until one is left, each join one bit deeper (Huffman 1952, https://www.rfc-editor.org/rfc/rfc1951#section-3.2.2)
     static fitted (frequencies: Number[]) => (1..<frequencies{> 0}.count).reduce(held = (nodes: frequencies.enumerate{.value > 0}.map((weight: .value, symbols: [.index])), lengths: [0] * frequencies.count) =>
-      held.nodes.sort_by(.weight) -- (sorted => [sorted[0].symbols, sorted[1].symbols].flatten -- (joined => (
+      held.nodes.sort(.weight) -- (sorted => [sorted[0].symbols, sorted[1].symbols].flatten -- (joined => (
         nodes: [sorted[2..], (weight: sorted[0].weight + sorted[1].weight, symbols: joined)],
         lengths: held.lengths.enumerate.map(.value + (.index is joined# ? 1 : 0))))))
       .lengths.enumerate.map(frequencies[.index] > 0 ? .value max 1 : 0) -- Deflate.Huffman(.)

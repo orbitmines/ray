@@ -20,8 +20,7 @@ Project := class: Location {
 
   static known (found: Project?) => found && (Project#{. == found}.first ?? (found ~~ (static.# ??= []).push .))
   assert Project.known(None) == None  // PRJ1 nothing found is a project
-  static declared => Project#{.loaded || .loading}.map(.dependencies).flatten
-  static declares (name: String) => Project.declared.find(.name == name)
+  static declares (name: String) => Project#{.loaded || .loading}.map(.dependencies).flatten.find(.name == name)
   static holding (location: Location) => Project#{(location.@ as Path) ~= ⊢(.@ as Path + "/")}.max((.@ as Path).count)
   // a project bundled with the language (`@ether/ui`), and one named by a language's own (`@web`)
   static bundled (path: String) => (("ether/ray" as Location) | ("ether" as Location))#.map(. / path){(. / ".project.ray") as boolean}.first as Project

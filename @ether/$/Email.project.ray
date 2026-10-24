@@ -26,6 +26,6 @@ Email := class (local: Email.Local{.length <= 64}, "@", domain: Email.Domain{.le
 }
 
 Character &+= {
-  email => name{is Email}
-  assert Character().named("jane@orbitmines.com").email == "jane@orbitmines.com"  // CHR52 a character named with an email has no email
+  email => this#{is Email}.first
+  assert (Character() &+ "jane@orbitmines.com").email == "jane@orbitmines.com"  // CHR52 a character with an email has no email
 }

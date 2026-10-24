@@ -231,13 +231,39 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   or a text neither): `level reducing value` reads the code `value` in the level, and a typed hole asks about that code,
   not its value. UI's `drawn`, `filled`, `shaded`, `shown`, `Lowered` and Geometry's `Solving`/`Projecting`/
   `Approximating` are written so (the user, 2026-10-23: the old Language model; class headers and `as X` instead).
-- **A program's code is not read again under its level** (`Program(code: { "a" }){O: { {text: String} => 5 }}()` is not
-  5; `Program(code: { 5 })()` is not 5): a block is read where it is written, into a node; calling it runs nothing, and
-  rules added to a closure's node are not seen by its body (it reads where it was written first). `UI.Scene` (the site's
-  reading: `"Ray" ^h1`, `{share}% * {x}`, `a <- b`) and every `Program(…).rendered(level)` need it. The global-`O` level
-  (the optimizations worktree) is what reads a program with a level's rules in scope.
+- **A rule led by a hole typed by a class reads nothing where the class's own rules don't read the text** (`{n: Number}
+  ~!!~ {m} => …`: `4 ~!!~ 5` is unread; untyped, `{n} ~!!~ {m}`, it reads): a typed hole is checked by the type's own
+  rules (Design), and Number's digits are read by a global rule (`{digits: Decimal.String} ^number`), so `4` is no Number
+  to a check. String's quotes were global too; String now has them as its own (`"Ray" ^h1` reads by UI.Scene's
+  `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
+  type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
+  a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
+- **A member named as one of the rule's holes reads the hole** (`{styled: String} … => x.styled(style)`: `.styled` is the hole,
+  not x's method): a name after `.` is x's, never a hole of the rule it is written in. UI.Scene's hole renamed `marked`.
+- **A field holding a closure, named bare, is the closure applied** (`(p).reading === None` for `reading: ((s) => …)`, and
+  `Program(…, reading: (p).reading)` copies nothing); the closure called, `(p).reading(L)`, is as written.
+- **`x.m := v` defines `m` on what x is made of** when x has no `m` of its own and a part of it does (ray-61: `on.made_of :=`
+  in `&+=` wrote on the part; fixed there with `external member`).
+- **UI.Scene under a Program does not make a scene yet** (`(Program(code: { "Ray" }){O: UI.Scene})()` is the text "Ray", not
+  a Box). A level reaches every body its program calls (`level_in` re-reads them all), so Scene's rules apply to UI's and
+  Geometry's own code (Box construction) and Scene as a whole runs out of memory on `"Ray"`. Marking rules made while the
+  level is in scope (re-reading only those) works on one thread but not with `--threads 26 --target wasm` (CO35–37): the
+  level needs to be told which closure is its program. A type check reads without the level. Scene's rules of one hole,
+  `{text: String} => Geometry.Box(content: text)`, `{shape: Geometry.Shape} => shape`, `{value: *} => …`, are readers
+  (a head of holes only, §: read only where the type's own rules read), so they reduce only through `Compiler.reduced(v,
+  UI.Scene)`, which reduces no value by its type (below). Program's call does not reduce its answer by its level either
+  (Compiler.ray: "what it gives read by them"). `"Ray" ^h1` goes round: the style's text `h1` is read as code under the
+  level, every typed and narrowing hole of Scene checked on it (`1` checked a million times: a check that runs a
+  condition is not kept). Site files (`orbitmines.com`'s classes, written in Scene's syntax) are declared before the
+  program runs, so the level would not reach them: a level reaching a program's project is still to be designed.
+- **`assert Program(code: { … }){O: L}() == x` without brackets around the program is false** where `(Program(code: { …
+  }){O: L})() == x` holds (CO35 is written so).
 - **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
   while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
+- **A class written as a header alone, no block, makes nothing of it** (`Pa := class (x: Number = 1)`: `Pa(x: 2) is Pa` and
+  `Pa().x == 1` are false; `class (x: Number = 1) { }` and `=> { }` hold both).
+- **`Compiler.folding + x` is not a composition** (`(Compiler.folding) + x` is): ` + x` is read as a method of the member's
+  value (found by ray-61).
 - **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
   `Dk().b` is 2, but `Dk(a: 5).b` is no Number; `b: Number = 7` and `c: Number = b` are kept). Given anything, the header is
   read as a left side (`({written_parameters}) := arguments_given`) and its defaults with it: the default's code is inside
@@ -247,6 +273,11 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   not. Taking the header's defaults first when everything is given by name (`all_named`, then the names) loses half the
   bootstrap's tests (565 of 1084 pass). Also open: a default reading a field given by name sees that field's own default
   (`Df(a: 5).b` is 2, not 6), and one reading a field after it is not read (Shape's `boundary` reads `space`).
+- **Header defaults read lazily (decided 2026-10-24), not done**: `{name}: {type} = {value}` made lazy (`{name} => { … }`,
+  kept on first read) changes nothing for a header (`Dk(a: 5).b`, `class (c = d + 1, d = 1)`, `parent ?? 3` with `parent`
+  unset: all as before), so a header's places are not read by that rule when anything is given; running the header as code
+  first, then `:=` (`taking`), loses half the bootstrap's tests ("a left side answers a value": the lazy name is called as a
+  place). The place's default needs to be kept unread by the left side itself.
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).
@@ -257,3 +288,26 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - (fixed 2026-10-24) `class: Parent (fields) { … }` without `=>`: a rule's definition whose body is itself a class (`=> class:
   … => { … }`) is read as that class, never defined: written in brackets. A static conversion naming its class
   (`static (x: T) as (=== Space)`) is that class's `from` now (the class's name is not given it while its block is read).
+- **`right-to-left` with names written together defines none of them** (Ray.ray's `right-to-left Σ | ∑ | sum => …`:
+  `[1, 2, 3].sum` is not 6, though `sumA | sumB => …` and `right-to-left sumC => …` each work): `right-to-left`'s body
+  `{operator} => {body}` is read as a definition whose head is the hole, so the alias rule never sees `a | b`. Inlining it
+  (`{{operator}} => {body}`) goes round 6000 deep everywhere; a rule `right-to-left {first} | {others} => …` hangs (a `|` in
+  the body after `=>` is taken as the names').
+
+## Language support in the library
+
+- **`String.plural`/`singular` only know English's trailing "s"** (String.ray): a word's plural and singular should come
+  from Unicode's (CLDR) plural rules for the language it is written in, not from its last letter. Kept until then.
+- **A member a value does not have is read by its `[name]`** (OS.ray: `os.architecture` is `os["architecture"]`, OS.Ether
+  ETH10): what has a `[property]` answers any member it lacks by it, so no delegating member is declared
+  (`architecture => this["architecture"]`). The miss is said by the engine now ("nothing in what it is read on reads `x`").
+- **`!` before any method answering a boolean is its negation** (`a !~= b`, `a !== b`, `a !&& b`, `!exists`): one rule,
+  `{a} ![x] {b} => !(a [x] b)`, and the spelled-out duplicates go (`!~=` in the entrypoint and Node.ray, `!==`, Number's
+  `!&&`/`!||`, Node.ray's `!exists | ∄`). Waits for operator holes, which the kernel has off (`rule_`: `0 && operator_holes`).
+- **A slice by an open range reads nothing** (Ray.ray SL1-SL8: `xs[1..]`, `xs[..<-1]`, `xs[-2..]`, `xs[2..] = 0`): `1..`
+  is the unbounded `1 -> 1` and `..<-1` the backward `-1 <- -2`, so `[range: Range]` walks past the end. A range in `[ ]`
+  should be counted from the end below zero and stop at it, read and written by the one `[range: Range]`.
+- **`~=` is a search loop written by hand** (Node.ray `read_within`): finding a pattern in a text should be the text read
+  as `(skipped: *, found: pattern, *)` (`⊢ p` as `(found: p, *)`, `p ⊣` as `(*, found: p)`), the shortest first. Reading a
+  text `as` such a structure does not find what is inside it yet (tried: PM1, PM3, S127, W15 and String's `contains`,
+  `ends_with`, `words` fail, and one test runs out of memory).

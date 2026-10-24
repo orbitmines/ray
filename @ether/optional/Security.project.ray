@@ -65,7 +65,7 @@ Identity := class (keys: Key[], next: Byte[][] = [], digest = Identity.algorithm
 Delegation := class (from: Character, to: Accessor, scope: Location = Location, until: Time = Time.now + 1 day, signature: Signed?) => {
   hash => (((((this.from.root, this.to is Character ? this.to.root : this.to, this.scope, this.until)) as String) as Byte[]) as this.from.policy().digest).digest
   valid (at: Time = Time.now) => at < .until && .signature.valid && .signature.value == .hash && .from.certified(this.signature.by, World.ether.clock.now)
-  covers (method, target) => .valid() && target.@?.at(method) is .scope
+  covers (method, target) => .valid() && (target.@? / method) is .scope
 }
 
 Verified := Character{.proof}
@@ -313,3 +313,6 @@ Program &+= {
   assert Program(who: @"me", caller: Program(who: @"company")).prompt == "@company wants to run this, originating from @me"  // HOP2 a prompt does not name the whole chain
   assert Program(who: @"solo").prompt == "@solo wants to run this"  // AC57 a prompt for a lone program names more than its runner
 }
+
+// Running as another character, with their grant: as the one they are verified as (`acting`)
+@me = {who} ^punctuation => &.caller.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`

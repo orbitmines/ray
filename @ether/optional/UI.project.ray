@@ -75,10 +75,10 @@ UI := class {
     {aligned_as: Alignment} * {aligned} => Geometry.Box(align: aligned_as, children: [aligned])
     // (`*` reads one operand on each side: a share of an aligned `x`, `100% * center * x`, written as one)
     {share Numeral}% * {share_aligned: Alignment} * {shared} => Geometry.Box(width: share / 100, children: [Geometry.Box(align: share_aligned, children: [shared])])
-    {styled: String | Geometry.Shape | Choice}{ }{`^`}{{expression}} => Compiler.reduced(styled, UI.Scene).styled_by(Program(code: expression**))
+    {marked: String | Geometry.Shape | Choice}{ }{`^`}{{expression}} => Compiler.reduced(marked, UI.Scene).styled_by(Program(code: expression**))
     // (the whole text marked: its shape styled; a character holds no styles yet (`.value ~~ .styles ,= style` is not read))
-    {styled: String}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
-    {styled: Geometry.Shape | Choice}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
+    {marked: String}{ }{`^`}{style: Name} => Compiler.reduced(marked, UI.Scene).styled(style)
+    {marked: Geometry.Shape | Choice}{ }{`^`}{style: Name} => Compiler.reduced(marked, UI.Scene).styled(style)
     {{narrowing}} {narrowed} => Compiler.reduced(narrowed, UI.Scene).narrowed(Program(code: narrowing**))
   }
   assert Program(code: { "a", "b" }){O: UI.Scene}().flow == inline  // UI5 a comma does not flow inline

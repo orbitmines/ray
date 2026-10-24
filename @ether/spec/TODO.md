@@ -238,6 +238,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
   type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
   a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
+- **A member named as one of the rule's holes reads the hole** (`{styled: String} … => x.styled(style)`: `.styled` is the hole,
+  not x's method): a name after `.` is x's, never a hole of the rule it is written in. UI.Scene's hole renamed `marked`.
 - **A field holding a closure, named bare, is the closure applied** (`(p).reading === None` for `reading: ((s) => …)`, and
   `Program(…, reading: (p).reading)` copies nothing); the closure called, `(p).reading(L)`, is as written.
 - **`x.m := v` defines `m` on what x is made of** when x has no `m` of its own and a part of it does (ray-61: `on.made_of :=`

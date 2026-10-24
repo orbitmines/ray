@@ -667,6 +667,8 @@ Path := class: Structure{.consistent & .connected} {
 }
 assert ([1, 2, 3]) is Path  // IT27 a list is not a path
 Array &+= {
+  // `x &= v`: v added at the end of the list x holds
+  &= (appended) => .append(appended)
   push_back | push (x = ?) => (this &= x) -- this
   // Ends gained and lost, and order
   assert ([2].push_back(3).push_front(1)).(

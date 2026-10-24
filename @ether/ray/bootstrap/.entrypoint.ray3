@@ -305,6 +305,7 @@ conjoined := None
 // (held at once: each of them, `1 & 2 & 3` three)
 {a} conjoined_with {b} ^keyword => ({
   conjoins := true
+  destructures := true
   conjoined := (((a).conjoins === true) ? (a).conjoined.listed() : Array.new.append(a)).joined(((b).conjoins === true) ? (b).conjoined : Array.new.append(b))
   contains (x) => conjoined.some((y) => y == x)
   // (called, a type of what it reads and a function of it, `Statements(global)(Program())`: a type that reads as it does, then
@@ -317,6 +318,7 @@ applied_args := None
   applied_from := applied_conj
   applied_made := ({
     conjoins := true
+    destructures := true
   })
   external member (applied_made) (`conjoined`) (applied_from.conjoined)
   external member (applied_made) (`applied_args`) (applied_given)
@@ -499,6 +501,15 @@ assert {
   {this}({arguments}) ^punctuation => {
     external .
     ({{parameters}}) taking {arguments}
+    external label recurring
+    {{body}}
+    external label returned
+  }
+  // (called with what a key read, `f.with_reading(r)(…)`: the key's named parts, what each took of the text, locals of the call)
+  {this}.with_reading({reading})({arguments}) ^punctuation => {
+    external .
+    ({{parameters}}) taking {arguments}
+    (.) takes_reading ({reading})
     external label recurring
     {{body}}
     external label returned
@@ -745,13 +756,15 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
 
 // A list written: `[]` an empty one, `[a, b]` both, `[a]` one; `T[]`, what holds Ts one after another.
 [] ^punctuation => Array.new
-[{inside}] ^punctuation => (((inside).listing === true) && ((inside).spread === true)) ? (inside).gathered : Array.new.append(inside)
+[{inside}] ^punctuation => (((inside).listing === true) && ((inside).spread === true)) ? (inside).gathered : (external names (Array.new.append(inside)) inside _)
 {element}[] ^punctuation => (() => {
   made := ({
     narrows := Node
     // (what each is, kept: asked when the rule that made it is done)
     each := element
     repeats := true
+    // (given a text, read by it: `x: T[] = text`)
+    destructures := true
     // (a text: read as Ts one after another, `abc` as `(ab | c)[]`; anything else, each of it a T)
     holds (it) => {
       kind := each
@@ -931,15 +944,93 @@ satisfies (keeping) => holds_any(.({keeping}))
   narrows := narrowed
   holds (it) => it.({constraint})
 }
+// (by what a text matches, `rules.keys{text ~= .}`: each one it matches, its `length` what it matches of the text (all of it,
+// when it reads all of it), so the longest rule that reads a text is the one matching most, `.sort(.length).last`)
+{narrowed}{`{`}{within_text} ~= .{`}`} ^punctuation => matching_in(narrowed, within_text)
+matching_in (matching_of, matching_text) => {
+  matching_first := None
+  matching_made := None
+  matching_at := (matching_of)#.head
+  while matching_at {
+    matching_one := matching_at.value
+    matching_found := matching_text ~= matching_one
+    if holds_any(matching_found) {
+      // (what it read: the key, with the text it read (what the key's names take when it is called), its length that)
+      matching_read := fresh_reading_of(None)
+      (matching_read) &+= (matching_one)
+      external member (matching_read) (`matched_key`) (matching_one)
+      external member (matching_read) (`matched_text`) (matching_text)
+      external member (matching_read) (`matched_length`) (((matching_text) is matching_one) ? (matching_text).count : (matching_found).count)
+      (matching_read) &+= {
+        length => (.).matched_length
+      }
+      // (a kept key called by what it read: here, where `.` is the reading (the key's own call rule sees the key, a part of it))
+      if (external member (matching_one) (`entry_called`)) !== None {
+        (matching_read) &+= {
+          {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
+        }
+      }
+      if matching_first === None {
+        matching_first = matching_read
+      } else {
+        matching_made = (matching_made === None) ? (matching_first | matching_read) : (matching_made | matching_read)
+      }
+    }
+    matching_at = matching_at.next
+  }
+  (matching_made !== None) ? matching_made : ((matching_first !== None) ? (matching_first | matching_first) : None)
+}
+// (a node of its own each time: `Node &+ { }` written in a rule is read once)
+fresh_reading_of (fresh_none) => Node &+ { }
+// (what a key's names take of the text its reading read: each named part, the span it read, a local of where it is given)
+{reading_into} takes_reading {reading_of} ^keyword => {
+  taking_on := reading_into
+  taking_read := reading_of
+  // (a key called as itself, not by what it read: nothing to take)
+  if (external member (taking_read) (`matched_text`)) !== None {
+    taking_key := (taking_read).matched_key
+    taking_parts := fresh_reading_of(None)
+    external member (taking_parts) (`fields_now`) ((taking_key).listed().append(fields_end))
+    taking_parts = read_into(taking_parts, (taking_read).matched_text) ?? taking_parts
+    taking_at := (taking_key).head
+    while taking_at {
+      taking_name := taking_at.written_name
+      (external member (taking_on) (taking_name) (external member (taking_parts) (taking_name))) if taking_name !== None
+      taking_at = taking_at.next
+    }
+  }
+  taking_on
+}
 // `x as T`: x, when it is a T; a text written as a T is (`"89" as Decimal`: the class as a text, `Decimal as String`, holds it),
 // what T reads it as; another text, none; anything else, what T makes of it (`T.from(x)`; none, by default).
 as {target} ^keyword => {
   converting := .
   wanted := target
-  // (a text read as a class written as a structure, its header: read forward into one (none, when it does not read))
-  ((((wanted).of === wanted) && ((converting).textual === true) && ((wanted).header_quoted !== None)) ? read_as(wanted, converting) : (((((wanted).of === wanted) && literal_text(converting)) ? structure_reads(wanted, converting) : false) ? wanted.destructured(converting) : (converting is wanted) ? converting : (((converting).textual === true) && ((wanted).of === wanted)) ? ((converting is (wanted as String)) ? wanted.destructured(converting) : None) : (wanted.from(converting) ?? ((((converting).listing === true) && ((wanted).of === wanted)) ? wanted.destructured(converting) : None))))
+  // (a text read as a conjunction of a type and a function of what it reads, `Statement[] & (caller) => …`: read as the type;
+  // a text read as a class written as a structure, its header: read forward into one (none, when it does not read))
+  (((wanted).conjoins === true) && ((converting).textual === true)) ? conjunction_read(wanted, converting) : (((((wanted).of === wanted) && ((converting).textual === true) && ((wanted).header_quoted !== None)) ? read_as(wanted, converting) : (((((wanted).of === wanted) && literal_text(converting)) ? structure_reads(wanted, converting) : false) ? wanted.destructured(converting) : (converting is wanted) ? converting : (((converting).textual === true) && ((wanted).of === wanted)) ? ((converting is (wanted as String)) ? wanted.destructured(converting) : None) : (wanted.from(converting) ?? ((((converting).listing === true) && ((wanted).of === wanted)) ? wanted.destructured(converting) : None)))))
 }
 read_as (read_as_class, read_as_text) => read_into(((read_as_class) &+ { }), read_as_text)
+// (read as the conjunction's first part, where it was made (`dynamically`: what it reads, read there); called, its function
+// (the last part) on what was read, with what it is called with)
+conjunction_read (conj_type, conj_text) => {
+  conj_dynamic := (conj_type).dynamic_frame
+  (external dynamic_in conj_dynamic) if conj_dynamic !== None
+  conj_value := (((conj_type).conjoined.first) read_span (conj_text))
+  (external dynamic_out) if conj_dynamic !== None
+  if conj_value !== None {
+    external member (conj_value) (`conjoined_call`) ((conj_type).conjoined.last)
+    (conj_value) &+= {
+      {this}({conj_given}) => (.) conjunction_called (conj_given)
+    }
+  }
+  conj_value
+}
+{conj_on_of} conjunction_called {conj_args_of} ^keyword => {
+  conj_on := conj_on_of
+  conj_args := conj_args_of
+  ((conj_on).conjoined_call).on(conj_on) after conj_args
+}
 from (x) => None
 // (a conversion written in the class converted to, `(x: S) as (=== T) => …`: what T makes of an S)
 ({parameter}) as (=== {type}) {`=>`} {body} => ({type}).from := (({parameter}) => {body})
@@ -1076,6 +1167,30 @@ fresh_reading (fresh_left) => {
 }
 // (the repeat a type is, or the part of a conjunction that is one: `Statement[]` of `Statement[] & (caller) => …`)
 repeat_part_of (repeat_of) => repeat_type((repeat_of).whole) ? repeat_of : (((repeat_of).conjoins === true) ? ((repeat_of).conjoined.find((repeat_part) => repeat_type((repeat_part).whole))) : None)
+// (what reads statements runs them too, `Statement[] & (caller) => …` called: only when what is left does not read, the
+// statement before it, ending a line, is run and the rest read again (what it defined reads now); marked `ran`, it is not
+// run again after)
+reading_runs := None
+// (the statements read so far, before the one being read, not yet run: each run first, in order, when one has to be)
+reading_pending := None
+pending_on (pending_up, pending_one) => {
+  pending_made := Node &+ { }
+  external member (pending_made) (`up`) (pending_up)
+  external member (pending_made) (`one`) (pending_one)
+  pending_made
+}
+run_pending (pending_at, pending_runs) => {
+  if pending_at !== None {
+    run_pending((pending_at).up, pending_runs)
+    pending_statement := (pending_at).one
+    unless (pending_statement.ran) === true {
+      ((pending_runs).conjoined.last).on(Array.new.append(pending_statement)) after ((pending_runs).applied_args)
+      external member (pending_statement) (`ran`) (true)
+      reading_ran = true
+    }
+  }
+}
+reading_ran := false
 // (Ts one after another, all of a text: the first T the shortest span it reads whole after which the rest reads so too; a
 // list of their values, none when it does not read)
 repeated_through (through_each, through_text, through_into) => {
@@ -1100,7 +1215,15 @@ repeated_through (through_each, through_text, through_into) => {
         if (through_pass == 0) ? through_ends : !through_ends {
           through_one := (through_each) whole_read (through_cut.empty ? through_text : through_text.until(through_cut)) into (through_into)
           if through_one !== None {
+            through_pending_was := reading_pending
+            reading_pending = (reading_runs !== None) ? pending_on(reading_pending, through_one) : reading_pending
             through_more := repeated_through(through_each, through_cut, through_into)
+            reading_pending = through_pending_was
+            if (through_more === None) && (through_pass == 0) && (reading_runs !== None) && !(through_cut.empty) && !((through_one.ran) === true) {
+              // (what is left does not read: what was read before it run first, in order, then this one, and the rest read again)
+              run_pending(pending_on(reading_pending, through_one), reading_runs)
+              through_more = repeated_through(through_each, through_cut, through_into)
+            }
             through_found = (through_more !== None) ? through_more.prepend(through_one) : None
           }
         }
@@ -1227,8 +1350,26 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
   if seq_repeat !== None {
     seq_dynamic := (seq_type).dynamic_frame
     (external dynamic_in seq_dynamic) if seq_dynamic !== None
+    seq_runs_was := reading_runs
+    seq_ran_was := reading_ran
+    reading_runs = ((seq_type).applied_args !== None) ? seq_type : None
+    reading_ran = false
     seq_repeated := repeated_through(repeat_each((seq_repeat).whole), seq_text, seq_into)
+    seq_ran_some := reading_ran
+    reading_runs = seq_runs_was
+    reading_ran = seq_ran_was
     (external dynamic_out) if seq_dynamic !== None
+    if seq_ran_some && (seq_repeated !== None) {
+      seq_unran := Array.new
+      seq_unran_at := seq_repeated.head
+      while seq_unran_at {
+        if !(((seq_unran_at.value).ran) === true) {
+          seq_unran.append(seq_unran_at.value)
+        }
+        seq_unran_at = seq_unran_at.next
+      }
+      seq_repeated = seq_unran
+    }
     if seq_repeated !== None {
       seq_repeated_value := (seq_type) applying_to (seq_repeated)
       (seq_repeated_value) given_to (seq_into) as (seq_name)
@@ -1937,7 +2078,7 @@ is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
   // (a text is a String: what it is made of, characters, not asked again)
-  (type === Node) || (value === type) || ((type === global.String) && (value.textual === true)) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && ((type).same_characters(value) !== None)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range === true) && (value.textual === true)) ? ((value).rest.empty && type.one_same(value)) : ((type.listing === true) && (value.textual === true)) ? (((external admits value type) ?? text_reads(type.head, value)) === true) : (type.listing === true) ? (type.one_held(value) === true) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
+  (type === Node) || (value === type) || ((type === global.String) && (value.textual === true)) || ((type.superposes === true) ? type.components.some((component) => value is component) : ((type.textual === true) && ((type).same_characters(type) !== None)) ? ((value.textual === true) && ((type).same_characters(value) !== None)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range === true) && (value.textual === true)) ? ((value).rest.empty && type.one_same(value)) : ((type.listing === true) && (value.textual === true)) ? (((external admits value type) ?? text_reads(type.head, value)) === true) : (type.listing === true) ? ((type.one_held(value) === true) || ((external member (value) (`matched_key`)) === type)) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes === true) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || ((type.members !== None) ? type.members.some((member) => member === value) : false) || ((value.superposes === true) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
 }
 // (a text is a class written as a structure (`class (a: T, `-`, b: U)`, a text among its places; or one typed place alone,
 // `class (x: T)`) when it reads as it is written)
@@ -2019,7 +2160,7 @@ Holding := class (key) => {
     if (keeping_key).listing === true {
       external member (keeping_key) (`entry_called`) (keeping_entry)
       (keeping_key) &+= {
-        {this}({entry_argument}) => (this.entry_called).kept(entry_argument)
+        {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
       }
     }
   }
@@ -2182,7 +2323,8 @@ dynamics := None
 {name ^variable} := {value} ^punctuation => {
   value
   // (shown as what it is given is, a class, an enum; else as a variable)
-  (({name} => value) ^(external shown value variable)) given (value)
+  // (styled as `x ^style` styles it, without reading that rule: one application fewer for every name given a value)
+  (external style (external shown value variable) ({name} => value)) given (value)
 }
 // (one under a key, `x[k] := v`: after it, so a key is not read as a name to define (`x[k] => v`))
 {on}[{key}] := {value} ^punctuation => ((key is String) && !((key).listing === true)) ? member_given(on, key, value) : ((on) keeping (key) as (value))
@@ -2206,7 +2348,7 @@ dynamics := None
 }
 // (a text given to a type that is a list of named positions or a repeat (not a text itself, String): read by it; else as it is)
 // (a rule, not a function: a list given among other arguments would be spread into them)
-{lone_read_type} lone_read {lone_read_given} ^keyword => (((lone_read_given).textual === true) && !((lone_read_type).textual === true) && (named_list(lone_read_type) || ((lone_read_type).repeats === true))) ? ((lone_read_type) read_span (lone_read_given)) : lone_read_given
+{lone_read_type} lone_read {lone_read_given} ^keyword => (((lone_read_given).textual === true) && ((lone_read_type).conjoins === true)) ? (conjunction_read(lone_read_type, lone_read_given) ?? lone_read_given) : ((((lone_read_given).textual === true) && !((lone_read_type).textual === true) && (named_list(lone_read_type) || ((lone_read_type).repeats === true))) ? ((lone_read_type) read_span (lone_read_given)) : lone_read_given)
 // (what a definition answers given its value: a left side made of names answers a list of their places (`(a, b) := list`, a
 // call's parameters): each the value in its place)
 {given} given {value} ^keyword => ((value).writes === true) ? written_parts((given).head, (value).written_value, (value).written_literals) : ((given).listing === true) ? ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given
@@ -3117,6 +3259,9 @@ Char := class: Number { }
 // (a 32-bit integer: its bits, 32 binary digits (Number.ray's `Binary₃₂.Signed`))
 Int32 := class (bits) => { }
 Program := class { }
+// (the level the language is read with, `O`: none until Compiler.ray gives it its default (a project may give another; code
+// may read with another where it is, `with O: …`))
+O := None
 Narrowing := class { }
 Diagnostic := class { }
 assert {

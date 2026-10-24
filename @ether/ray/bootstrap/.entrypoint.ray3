@@ -1745,6 +1745,8 @@ class: {parent} {`{`}{block}{`}`} ^keyword => (class: {parent} (nothing_given = 
 class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (class: Node ({fields}) => { {block} })
 class ({fields}) {`=>`} {`{}`} ^keyword => (class: Node ({fields}) => { })
 class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
+// (its fields written without `=>` before the block, `class ("\e]52;", …) { … }`: the same)
+class ({fields}) {`{`}{block}{`}`} ^keyword => class: Node ({fields}) => { {block} }
 // (what ends a class's fields read as a list (`written_as`; after `class { }` is read: one class, not one each time it is read))
 fields_end := class { }
 // (a class of functions, written with what they take and answer, `class: <yield: (x: Ray): None>(entry: Ray): None { … }`: a

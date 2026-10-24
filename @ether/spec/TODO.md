@@ -236,3 +236,10 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   rules added to a closure's node are not seen by its body (it reads where it was written first). `UI.Scene` (the site's
   reading: `"Ray" ^h1`, `{share}% * {x}`, `a <- b`) and every `Program(…).rendered(level)` need it. The global-`O` level
   (the optimizations worktree) is what reads a program with a level's rules in scope.
+- **`class: Parent (fields) { … }` without `=>` takes no positions** (Geometry's `Color := class: Elementwise ("#", red: …)
+  { … }`: `Color(255, 0, 0).red` is not 255; `Color(red: 255, …)` is): `class: {parent} {block}` reads it, `Elementwise
+  ("#", …)` its parent. A rule `class: {parent: Name} ({fields}) {block}` reads it alone (another keyword), but beside that
+  one it never wins, though it writes more of its text (same node, same pass): not found why. `class (fields) { … }` (no
+  parent) is read now.
+- **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
+  while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.

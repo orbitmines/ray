@@ -91,7 +91,8 @@ Compiler := class {
 
   // (a level made of two, `A + B`: reduced by the first, then what that gives by the second)
   // (the value read where it is given, then reduced: not the code that gives it read at the level)
-  static reduced (value, level) => value -- (reduced_value => (level is Compiler.Composition) ? Compiler.reduced(Compiler.reduced(reduced_value, level.components.hierarchy.first), level.components.hierarchy.last) : (level reducing reduced_value))
+  // (a value, read by the level's own rules: one of one hole whose type it is (`{text: String} => …`) takes it)
+  static reduced (value, level) => value -- (reduced_value => (level is Compiler.Composition) ? Compiler.reduced(Compiler.reduced(reduced_value, level.components.hierarchy.first), level.components.hierarchy.last) : ((external level_reads level reduced_value) ?? (level reducing reduced_value)))
   // (a level as a scope, what the language is read with: one node made of each of its parts, the first's rules seen first)
   static parts_of (parts_level) => (parts_level is Compiler.Composition) ? [Compiler.parts_of((parts_level).first), Compiler.parts_of((parts_level).second)] : [parts_level]
   static scope_of (scope_level) => (scope_level is Compiler.Composition) ? Compiler.scope_made_of(scope_level) : scope_level
@@ -151,6 +152,11 @@ Program &+= {
     shouted := { {a} !!! => a * 100 }
     assert (Program(code: { 3 !!! }){O: shouted})() == 300  // CO36 a program is not read with its level's rules
     assert (Program(code: { 2 + 3 }){O: shouted})() == 5  // CO37 a program read with a level does not read the language too
+  }
+  assert {
+    boxed := { {text: String} => 7 }
+    assert Compiler.reduced("Ray", boxed) == 7  // CO46 a value is not read by a level's rule of one hole of its type
+    assert Compiler.reduced(3, boxed) == 3  // CO47 a value of another type is read by a level's rule of one hole
   }
   // (its code run with its level's rules in scope (in its program, above what is where it is written), what it gives read by them)
   // (the code as it is written, kept to be read again when it runs (`running`, none until given: a block is read where it is

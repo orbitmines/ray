@@ -254,6 +254,10 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   }){O: L})() == x` holds (CO35 is written so).
 - **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
   while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
+- **A class written as a header alone, no block, makes nothing of it** (`Pa := class (x: Number = 1)`: `Pa(x: 2) is Pa` and
+  `Pa().x == 1` are false; `class (x: Number = 1) { }` and `=> { }` hold both).
+- **`Compiler.folding + x` is not a composition** (`(Compiler.folding) + x` is): ` + x` is read as a method of the member's
+  value (found by ray-61).
 - **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
   `Dk().b` is 2, but `Dk(a: 5).b` is no Number; `b: Number = 7` and `c: Number = b` are kept). Given anything, the header is
   read as a left side (`({written_parameters}) := arguments_given`) and its defaults with it: the default's code is inside

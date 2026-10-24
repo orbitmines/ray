@@ -594,6 +594,9 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - In a class body, fields are declared with `:=`.
 - An unset field reads the class default *live*: a later change of the default is seen until the field is assigned.
   Storage keeps only assigned fields, and `x.field%` is empty while the field still follows its default.
+- A header's default is code, read when the field is first read (decided 2026-10-24): it sees every field given at
+  construction and may read fields declared after it (`class (a: Number = 1, b: Number = a + 1)`: `(a: 5).b` is 6; Shape's
+  `space: Space = parent.space ?? Space.current`).
 - A context variable that is declared but not given must be supplied by `with`; using it otherwise is an error, unless
   the declaration is only a narrowing and the field already holds a value of that type.
 - `:=` in a loop body declares a variable of that iteration.
@@ -2904,6 +2907,12 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   levels below that: `page.rendered(UI.HTML.level)`, `page: Program{O: Render.TUI}`. A renderer's aspects are rule sets
   reduced on the Shape, and a value's rendering is a rule on the value's type
   (`{color: Geometry.Color} => "rgba(" …`); there are no records between the Shape and the format.
+- A level's rule of one typed hole dispatches on values too (decided 2026-10-24): `Compiler.reduced(v, L)` splices `v` into
+  L's rules, and `{x: T}` takes it when `v is T` (`{text: String} => Geometry.Box(content: text)` on `"Ray"`). Scene,
+  `drawn`, `filled`, `shaded`, `shown` and `UI.Lowered` stay rules on the type, not `as X` conversions.
+- Code a level reads is read when it is reached (decided 2026-10-24): a class body or field written in a level's syntax
+  (the site's `Index\ {width == 100% …} py … <- { … }`) is read the first time the program reaches it, under the level in
+  scope then. The same files are read by Scene under `UI.Scene`, and by whatever level runs them otherwise.
 - Equivalent means equal as much as possible. Where a target can't show something, the difference is handled by a
   general solution, never a special case (`UI.Lowered`: a choice is a box with its face, an embedded video a link with a
   placeholder, an image a pointwise paint). An image in the TUI is coloured ASCII art from one general sampler (a luminance

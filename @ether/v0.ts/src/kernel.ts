@@ -68,7 +68,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (the kernel's map: a slot for each of its words (0 to 23), the span a parameter is given at M_SPAN (24) and the count each
   // rule is stamped with in the slot after it (25), then the classes it finds, Node at 26 and String at 27, then the
   // program's arguments, 28 (ARGV_SLOT; language.ts writes them there): past all of those)
-  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, W_IS_RANGE = 47, W_MAPPED_BY = 48, W_MAPPED = 49, W_DYNAMIC_IN = 50, W_DYNAMIC_OUT = 51, W_ORIGIN_OF = 52, W_HOISTED = 53, W_MISSING = 54, W_MISSING_NAME = 55, W_CALLABLE = 56, W_MADE_OF = 57, W_FUNCTION_GIVEN = 58, W_NAMED_ARGUMENT = 59, W_DEFINES_TEXT = 60, W_READ_AS = 61, W_RULE = 62, W_STYLE = 63, W_SHOWN = 64, W_OUTER_BLOCK = 65, W_O = 66, W_PREVIOUS = 67, W_DESTRUCTURES = 68, W_LONE_READ = 69, W_LEVEL_IN = 70, W_LEVEL_OUT = 71, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24, M_ARRAYED = 30;
+  const W_CALLER = 0, W_THIS = 1, W_AFTERWARDS = 2, W_REPORT = 3, W_ERRED = 4, W_GOTO = 5, W_LABEL = 6, W_DOT = 7, W_AMP = 8, W_TYPE = 9, W_INCLUDE = 10, W_READ = 11, W_NEXT = 12, W_MEMBERS = 13, W_STATIC = 14, W_UNDEFINED = 15, W_UNSET = 16, W_OPERATED = 17, W_ADMITS = 18, W_HEAD = 19, W_VALUE = 20, W_NARROWS = 21, W_COMPONENTS = 22, W_EACH = 23, W_NONEMPTY = 24, W_LISTING = 25, W_NODE_NAME = 26, W_STRING_NAME = 27, W_OF = 28, W_WRITTEN_AS = 29, W_NAMED = 30, W_WRITTEN_NAME = 31, W_NAMES = 32, W_TAIL = 33, W_NAMED_LIKE = 34, W_MEMBER = 35, W_STRUCTURE_AS = 36, W_OUTPUT = 37, W_ARGUMENTS = 38, W_QUOTED = 39, W_REPEATS = 40, W_SUPERPOSES = 41, W_READABLE = 42, W_TYPED_NAME = 43, W_HEADER_QUOTED = 44, W_TYPE_WRITTEN = 45, W_SPREAD = 46, W_IS_RANGE = 47, W_MAPPED_BY = 48, W_MAPPED = 49, W_DYNAMIC_IN = 50, W_DYNAMIC_OUT = 51, W_ORIGIN_OF = 52, W_HOISTED = 53, W_MISSING = 54, W_MISSING_NAME = 55, W_CALLABLE = 56, W_MADE_OF = 57, W_FUNCTION_GIVEN = 58, W_NAMED_ARGUMENT = 59, W_DEFINES_TEXT = 60, W_READ_AS = 61, W_RULE = 62, W_STYLE = 63, W_SHOWN = 64, W_OUTER_BLOCK = 65, W_O = 66, W_PREVIOUS = 67, W_DESTRUCTURES = 68, W_LONE_READ = 69, W_LEVEL_IN = 70, W_LEVEL_OUT = 71, W_LEVEL_READS = 72, W_IS = 73, ARGV_SLOT = 28, M_TEXT = 0, M_FIRST = 1, M_REST = 2, M_NOTHING = 3, M_GIVEN = 4, M_TAKING = 5, M_SAME = 6, M_UNTIL = 7, M_GLYPHS = 8, M_COUNT = 9, M_TRUTH = 10, M_NUMBER = 11, M_NUMERAL = 12, M_CHARACTER = 13, M_SUPERPOSED = 14, M_SUPERPOSING = 15, M_DOTTED = 16, M_PAST = 17, M_CUTS = 18, M_UNESCAPED = 19, M_INT32 = 20, M_LINKED = 21, M_JOINED = 22, M_KEPT = 23, M_SPAN = 24, M_ARRAYED = 30;
   // (records)
   const N_LAST = 0, N_BASE = 4, N_IS = 8, N_A = 12, N_B = 16, N_PARENT = 20, N_ALSO = 24, NODE = 28;
   const F_RULE = 28, F_CALLER = 32, F_THIS = 36, F_START = 40, F_END = 44, F_CLOSURE = 48, F_RECEIVER = 52, F_TAKES = 56, TAKE = 36;
@@ -87,6 +87,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (TYPE_READER, refused only: a READER of a node other than the language's)
   // (a thread's levels, `external level_in L`: the last first, before the language's `O`)
   const T_LEVELS_N = 600, T_LEVELS = 604, LEVELS = 8;
+  // (the value a level reads, `external level_reads L v`: the text it is spliced in as, and it, while L reads it)
+  const T_SPLICE = 640, T_SPLICE_V = 644;
   const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, STYLE_ASKED = 4194304, STYLED_RULE = 8388608, TYPED_READ = 256, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMERAL_AT2 = 316, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, STYLES = 332, STYLES_CAP = 1 << 20, GROWN_AT = 508;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
@@ -876,6 +878,35 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     set(THREAD + T_LEVELS + 4 * n, node(IS_NODE, 0, 0, 0, lv)); set(THREAD + T_LEVELS_N, n + 1); thread_bodies_cleared(t);
     return w(TRUE_);
   }
+  // (`external level_reads L v`: v read by L's own rules, its readers among them (`{text: String} => …`), v spliced in as a
+  // text of its own; what reads it, applied; none, nothing)
+  function level_reads(t: number, rest: number, z: number, names: number, f: number, self: number): number {
+    let q = rest; while (q < z && b(q) > 32) q++;
+    const lv = block(t, rest, q, names, f, self, 0, 1, 0, self, 0); if (stopped(t)) return 0;
+    const val = q < z ? block(t, skip(q, z), z, names, f, self, 0, 1, 0, self, 0) : 0; if (stopped(t)) return 0;
+    if (!lv || !val || w(lv + N_IS) !== IS_NODE || !latest(lv)) return w(NOTHING);
+    const text = allocb(2); setb(text, 113); setb(text + 1, 118);
+    const hold = node(IS_NODE, 0, 0, w(GLOBAL), 0); bound(text, text + 2, hold, val);
+    const fr = frame(0, 0, hold, text, text + 2, 0, 0, hold, hold), was = w(t + T_SPLICE), was_v = w(t + T_SPLICE_V);
+    put(t + T_SPLICE, text); put(t + T_SPLICE_V, val);
+    const r = reading(t, text, text + 2, 0, 0, latest(lv), hold, 0, w(lv + N_BASE), 0, 0);
+    const read_ = w(r) === K_UNREAD || w(r) === K_EMPTY || stopped(t) ? 0 : ev(t, r, fr, fr, hold, 1, hold, hold);
+    put(t + T_SPLICE, was); put(t + T_SPLICE_V, was_v);
+    return read_ && !stopped(t) ? read_ : w(NOTHING);
+  }
+  // (what a value's method of one argument answers, `a word b`, asked of the language: a and b spliced in as texts of their own)
+  function asked_of(t: number, a: number, k: number, x: number): number {
+    const kw = w(w(WORDS) + 8 * k), kn = w(w(WORDS) + 8 * k + 4);
+    const text = allocb(kn + 10); let at = text;
+    setb(at++, 40); const as_ = at; setb(at++, 113); setb(at++, 97); const ae = at; setb(at++, 41); setb(at++, 32);
+    for (let i = 0; i < kn; i++) setb(at++, b(kw + i));
+    setb(at++, 32); setb(at++, 40); const xs = at; setb(at++, 113); setb(at++, 120); const xe = at; setb(at++, 41);
+    const hold = node(IS_NODE, 0, 0, w(GLOBAL), 0); bound(as_, ae, hold, a); bound(xs, xe, hold, x);
+    const fr = frame(0, 0, hold, text, at, 0, 0, hold, hold);
+    const r = reading(t, text, at, 0, 0, latest(hold), hold, 0, 0, 0, 0);
+    if (w(r) === K_UNREAD || w(r) === K_EMPTY || stopped(t)) return 0;
+    return ev(t, r, fr, fr, hold, 1, hold, hold);
+  }
   function thread_bodies_cleared(t: number) {
     // (made where nothing lets go of it: past where any statement's memory is)
     if (!w(t + T_BODIES)) { const a = xadd(HEAP, 8 * BODIES); if (a <= 0 || a + 8 * BODIES >= w(LIMIT)) return; set(t + T_BODIES, a); }
@@ -922,12 +953,18 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function named_as(at: number, end: number, type: number, sc: number): number {
     if (!worded(at, end)) return 0;
     if (w(THREAD + T_QUIET) >= TYPINGS) return 0;
-    if (read(at, end, latest(w(GLOBAL)), 0, 0, HOLES | METHOD, sc) < 0) return 0;
-    const rule = w(sc + 512);
-    if (w(rule + R_KIND) === VALUE) return w(rule + R_BS) === type ? 1 : 0;
+    // (or the value a level reads, spliced in as a text: one of the type, as the language says what a value is)
+    const sp = w(THREAD + T_SPLICE), spliced = sp && at === sp && end === sp + 2 ? w(THREAD + T_SPLICE_V) : 0;
+    if (spliced === type) return 1;
+    if (!spliced && read(at, end, latest(w(GLOBAL)), 0, 0, HOLES | METHOD, sc) < 0) return 0;
+    const rule = spliced ? 0 : w(sc + 512);
+    if (!spliced && w(rule + R_KIND) === VALUE) return w(rule + R_BS) === type ? 1 : 0;
     const quiet = w(THREAD + T_QUIET), said = w(THREAD + T_SAID), hole = w(THREAD + T_HOLE), fault = w(THREAD + T_FAULT), jump = w(THREAD + T_JUMP_N);
     set(THREAD + T_QUIET, quiet + 1); put(THREAD + T_HOLE, 0);
-    const g = w(GLOBAL), v = apply(THREAD, rule, 0, frame(0, 0, g, at, end, 0, 0, g, g), 0, g, at, end, g, g);
+    const g = w(GLOBAL);
+    let v = 0;
+    if (spliced) { set(THREAD + T_RAN, 1); put(THREAD + T_SPLICE, 0); v = asked_of(THREAD, spliced, W_IS, type) === w(TRUE_) ? type : 0; put(THREAD + T_SPLICE, sp); }
+    else v = apply(THREAD, rule, 0, frame(0, 0, g, at, end, 0, 0, g, g), 0, g, at, end, g, g);
     set(THREAD + T_QUIET, quiet); set(THREAD + T_SAID, said); put(THREAD + T_HOLE, hole); put(THREAD + T_FAULT, fault || (w(THREAD + T_FAULT) === L_DEEP || w(THREAD + T_FAULT) === L_MEMORY || w(THREAD + T_FAULT) === L_FULL ? w(THREAD + T_FAULT) : 0)); put(THREAD + T_JUMP_N, jump);
     return v && v === type ? 1 : 0;
   }
@@ -3531,6 +3568,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // `previous`/`written_name`)
       if (mapped(a, m, M_ARRAYED) && rest < z) return arrayed_read(t, rest, z, names, f, self);
       if (word(a, m, W_LEVEL_IN) || word(a, m, W_LEVEL_OUT)) return levels(t, a, m, rest, z, names, f, self);
+      if (word(a, m, W_LEVEL_READS) && rest < z) return level_reads(t, rest, z, names, f, self);
       // (`linked x`: how many vertices the list x links (Array's `count`); of anything else, nothing)
       if (mapped(a, m, M_LINKED)) { const lnk_x = block(t, rest, z, names, f, self, 0, 1, 0, self, 0); return stopped(t) ? 0 : linked_count(t, lnk_x); }
       // (`external kept` in a type: what its checks answer kept, though they apply its rules (rules that only answer what was

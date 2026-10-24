@@ -262,3 +262,21 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{operator} => {body}` is read as a definition whose head is the hole, so the alias rule never sees `a | b`. Inlining it
   (`{{operator}} => {body}`) goes round 6000 deep everywhere; a rule `right-to-left {first} | {others} => …` hangs (a `|` in
   the body after `=>` is taken as the names').
+
+## Language support in the library
+
+- **`String.plural`/`singular` only know English's trailing "s"** (String.ray): a word's plural and singular should come
+  from Unicode's (CLDR) plural rules for the language it is written in, not from its last letter. Kept until then.
+- **A member a value does not have is read by its `[name]`** (OS.ray: `os.architecture` is `os["architecture"]`, OS.Ether
+  ETH10): what has a `[property]` answers any member it lacks by it, so no delegating member is declared
+  (`architecture => this["architecture"]`). The miss is said by the engine now ("nothing in what it is read on reads `x`").
+- **`!` before any method answering a boolean is its negation** (`a !~= b`, `a !== b`, `a !&& b`, `!exists`): one rule,
+  `{a} ![x] {b} => !(a [x] b)`, and the spelled-out duplicates go (`!~=` in the entrypoint and Node.ray, `!==`, Number's
+  `!&&`/`!||`, Node.ray's `!exists | ∄`). Waits for operator holes, which the kernel has off (`rule_`: `0 && operator_holes`).
+- **A slice by an open range reads nothing** (Ray.ray SL1-SL8: `xs[1..]`, `xs[..<-1]`, `xs[-2..]`, `xs[2..] = 0`): `1..`
+  is the unbounded `1 -> 1` and `..<-1` the backward `-1 <- -2`, so `[range: Range]` walks past the end. A range in `[ ]`
+  should be counted from the end below zero and stop at it, read and written by the one `[range: Range]`.
+- **`~=` is a search loop written by hand** (Node.ray `read_within`): finding a pattern in a text should be the text read
+  as `(skipped: *, found: pattern, *)` (`⊢ p` as `(found: p, *)`, `p ⊣` as `(*, found: p)`), the shortest first. Reading a
+  text `as` such a structure does not find what is inside it yet (tried: PM1, PM3, S127, W15 and String's `contains`,
+  `ends_with`, `words` fail, and one test runs out of memory).

@@ -109,33 +109,3 @@ assert {
   Dependent := class (open: String, \s, close: open) => { }
   assert (`a a` as Dependent).close == `a`  // EX8 a field's type does not see a field before it
 }
-
-// // `(source as Expression) as Program{O: @wasm}`: what a text reads as, a Program; under a level, what that level writes.
-// (read: Expression) as (=== Program) => Program(code: read.statements)
-
-// // WebAssembly, a back end: a level, its rules writing a Program as a module. `@wasm.none`, the declarative setup: a rule a
-// // function, given what applies it (`&`), its statements a loop on where it is (`$at`), each a case of `br_table`; a goto sets
-// // where it is next (when its condition holds), a rule applied is a call of its function. `@wasm` (`@wasm.default`): those,
-// // and every optimization after them (a statement a rule reads, that rule applied without asking what reads it). (Accelerated:
-// // `ray --build=out.wasm --level=none|default file.ray` is the kernel doing it: every rule's body read, each a function in a
-// // module beside the kernel's, its memory the files read; `ray out.wasm` runs it; `ray out.wasm --build=…` builds again from
-// // it. It answers what the kernel reading the files answers.)
-// @wasm => Wasm
-// Wasm := {
-//   none := {
-//     {program: Program} => (`(module (memory (export "memory") 1)`, program.rules.map(as Program{O: @wasm.none}), `(export "run" (func 0)))`) as String
-//     {rule: Expression.Rule} => (
-//       `(func (param $caller i32) (result i32) (local $at i32) (local $value i32) (loop $at (block $done (block`,
-//       rule.statements.map(statement => (`) `, statement as Program{O: @wasm.none})),
-//       `(br $done)) (br_table`, rule.statements.map(.index), `(local.get $at)))) (local.get $value))`
-//     ) as String
-//     {node: `external .`} => `(local.set $value (call $node (local.get $caller)))`
-//     {caller: `external &`} => `(local.set $value (local.get $caller))`
-//     {jump: `external goto`} => (`(br_if $at (`, jump.condition as Program{O: @wasm.none}, `(local.tee $at (i32.const`, jump.label.index, `))))`) as String
-//     {place: `external label`} => ``
-//     {applied: Expression.Statement} => (`(local.set $value (call`, applied.rule.index, `(local.get $caller)))`) as String
-//   }
-//   // (and what is optimized after them: none yet)
-//   default => Wasm
-// }
-// Wasm &+= Wasm.none

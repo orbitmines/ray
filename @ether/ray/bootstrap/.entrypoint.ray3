@@ -2076,9 +2076,9 @@ descends (type) => (. === type) || ((.superclass === None) ? false : .superclass
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
 // (followed lazily, and not again while it is being followed: what a conversion asks is what the value itself is)
 following_conversions := false
-is {type} ^keyword => .admitted_by(type)
-// (what a type admits by structure, the core of `is` (Node.ray's `is (type) => this.admitted_by(type)`))
-admitted_by (type) => {
+is {type} ^keyword => .is(type)
+// (what a type admits by structure)
+is (type) => {
   value := .
   // (a text against a written text or a range of characters: by its characters, nothing it converts to asked)
   value.is_itself(type) || ((!following_conversions) && !(((value).textual === true) && (literal_text(type) || ((type).is_range === true))) && value.followed_is(type))

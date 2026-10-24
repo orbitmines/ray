@@ -131,6 +131,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   1 | +2 | +3 | +4   // 1 | 3 | 6 | 10
   ```
 
+- An operator written as a type (`{x: |}`, `{x: ,}`) is what that operator joined: the operator is a component on the Edge
+  between the values (decided 2026-10-24), so `("a" | "b") is |`, and `"a"` alone is not.
 - `a -> b` reads like `a, b` when `b` is already a value, but it is a recursive step. `ray -> .next` steps through
   `.next` from `ray` until `.next` is None. Direction says which end is initial: `.parent <- a` steps through `.parent`
   from `a` and ends at the root. `<-` walks `.previous` as `->` walks `.next`, so a leftward step is the inverse.

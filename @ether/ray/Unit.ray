@@ -3,7 +3,7 @@
 Quantity := class (quantities, Base = Number) => {
   assert 2 hours as String == "2 hours"  // U42 two hours are not written so
   dynamically assert .quantities.every _, unit => unit == this.quantities.0.unit
-  dynamically assert .quantities.unit as this.quantities.0.unit[] -- .sorted(>)
+  dynamically assert .quantities.unit as this.quantities.0.unit[] -- .sort(>)
 
   `quantity: Quantity` => .quantities ,= quantity
   assert 1d 10h 10m 30s as s == 123030 s  // U52 a juxtaposed quantity is not the sum of its parts
@@ -89,8 +89,6 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   (global[.name] = this) if .name
   assert 25.years == 25 years  // U49 a unit is not reachable as a member
   (global[.symbol] = this) if .symbol
-  (Unit.Spelling[.name] = this) if .name
-  (Unit.Spelling[.symbol] = this) if .symbol
   assert 3 s == 3 seconds  // U43 three s are not seconds
 
   static Temporal => second
@@ -106,12 +104,6 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   as (=== String?) => .name
   assert bit as String == "bit"  // U36 a bit is not called that
 
-  static spelled (spelling) => (spelling is Unit) ? spelling : global[spelling]
-  assert Unit.spelled(second) == second  // U92 a unit spelled as itself is not itself
-  assert Unit.spelled("second") == second  // U93 a unit spelled by its name is not that unit
-  assert Unit.spelled("s") == second  // U94 a unit spelled by its symbol is not that unit
-  // (a unit's name or symbol as written: each unit made gives it its own; read, the unit)
-  static Spelling := { }
 
   compounds / (other: Unit) => Unit.Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
@@ -154,8 +146,7 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
 Unit.None := Unit(global.None)
 
 // (written right after it, or after a space: `16px`, `5 s`)
-{amount: Number}{written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
-{amount: Number} {written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
+{amount: Number}{gap: " "?}{unit: Unit} => Quantity(quantities: [(quantity: amount, unit: unit)])
 assert 2 seconds is Quantity  // HS13 a count before a unit is read as a count, not a quantity
 assert 3.(. minutes == 180 s)  // U54 a number held in a variable does not take a unit after it
 assert (5s).unit == second  // U109 a unit written right after a number is not that unit
@@ -164,8 +155,8 @@ assert (5 s).unit == second  // U111 a unit written after a space is not that un
 
 si_name (symbol, name, symbol_prefix, prefix) => symbol_prefix + symbol + symbol: true | prefix + name ("s" + plural: true)?
 
-// (the prefixes, made once: each unit maps them)
-SI_prefixes := {
+// (the prefixes of a system, made once: each unit maps them)
+SI := (base: 10, prefixes: {
   -30: "q", "quecto"
   -27: "r", "ronto"
   -24: "y", "yocto"
@@ -191,18 +182,10 @@ SI_prefixes := {
   24: "Y", "yotta"
   27: "R", "ronna"
   30: "Q", "quetta"
-}
+})
 
-SI_Unit {symbol: *} {name: *} => {
-  private SI = SI_prefixes
-    .map((magnitude, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), magnitude: magnitude))
-    .reduce(|)
 
-  SI#.for FromUnit => FromUnit.magnitude SI.magnitude - FromUnit.magnitude, SI
-}
-assert 1dab == 10b  // U10 a deka-bit is not ten bits
-
-IEC_prefixes := {
+IEC := (base: 1024, prefixes: {
   1: "Ki", "kibi"
   2: "Mi", "mebi"
   3: "Gi", "gibi"
@@ -213,32 +196,30 @@ IEC_prefixes := {
   8: "Yi", "yobi"
   9: "Ri", "robi"
   10: "Qi", "quebi"
-}
+})
 
-Binary_Unit {symbol: *} {name: *} => {
-  private IEC = IEC_prefixes
-    .map((power, prefixes) => Unit(name: si_name(symbol, name, ...prefixes), power: power))
-    .reduce(|)
+// (a unit with each prefix of a system, `k` 10^3 of it, `Ki` 1024 of it; the prefix "" the unit itself)
+Prefixed {system: *} {symbol: *} {name: *} => system.prefixes.for((exponent, prefixes) => Unit(name: si_name(symbol, name, ...prefixes))
+  -- (made => made.multiple(system.base ^ exponent, global[name]) if exponent != 0))
 
-  IEC#.for FromUnit => FromUnit.multiple 1024^FromUnit.power, global[name]
-}
 
-SI_Unit s "second"
-SI_Unit m "meter"
-SI_Unit g "gram"
-SI_Unit A "ampere"
-SI_Unit K "kelvin"
-SI_Unit mol "mole"
-SI_Unit cd "candela"
+Prefixed SI s "second"
+Prefixed SI m "meter"
+Prefixed SI g "gram"
+Prefixed SI A "ampere"
+Prefixed SI K "kelvin"
+Prefixed SI mol "mole"
+Prefixed SI cd "candela"
 
-SI_Unit b "bit"
-SI_Unit B "byte"
+Prefixed SI b "bit"
+Prefixed SI B "byte"
+assert 1dab == 10b  // U10 a deka-bit is not ten bits
 assert 1 kB == 1000 B  // UB4 a kilobyte is not 1000 bytes
 assert 1 kilometer == 1000 meter  // U104 a kilometer is not 1000 meters
 assert 1 mg == 0.001 g  // U105 a milligram is not a thousandth of a gram
 assert 1 megabyte == 1000 kilobytes  // U106 a megabyte is not 1000 kilobytes
 assert 1 ms == 0.001 s  // U107 a millisecond is not a thousandth of a second
-Binary_Unit B "byte"
+Prefixed IEC B "byte"
 assert 1 KiB == 1024 B  // UB3 a kibibyte is not 1024 bytes
 assert !(1 KiB == 1 kB)  // UB5 a kibibyte is a kilobyte
 assert 1 GiB == 1024 MiB  // U108 a gibibyte is not 1024 mebibytes

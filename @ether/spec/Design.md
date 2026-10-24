@@ -2105,6 +2105,102 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ---
 
+### 20.4 Designed levels
+
+- What is designed and not yet in `Compiler.default`: each joins it when the analysis it asks of the program answers
+  (asked of `Compiler`, so no member of the code itself is mistaken for it) and it is measured to do fewer applications.
+  Until then a rule of these would read every statement its hole is typed by (and run it to ask), so none is in Compiler.ray:
+
+  ```ray
+  designed := {
+    // What every rule below asks of the code it matches, an analysis of the whole program (each answers None until one is
+    // written: a rule asking it does not apply, so the program is as it was):
+    //   .effectless  it writes nothing outside what it makes, says nothing, jumps nowhere (no `external` that does)
+    //   .unread      nothing reads what it answers           .unread_member  nothing reads that member, anywhere
+    //   .known       what it answers is known at build       .invariant      a loop's turns do not change it
+    //   .single      read once, where it is                  .escapes        it outlives the application making it
+    //   .shared      something else holds it too             .used           which members of it anything reads
+    //   .instance_free  a class's body part that does not depend on the instance
+
+    // 1. Demand: a part of a value is made only when something reads it. What is not an effect runs when what it answers
+    // is read, never otherwise; what is an effect runs as written.
+    // (a statement, an argument, a field, a link, a style, a place: the same rule at each size)
+    {unread: *{.effectless && .unread}} => []
+    {on}.{member} := {value: *{.effectless && .unread_member}} => []
+    {on}.{member} = {value: *{.effectless && .unread_member}} => []
+    {name} := {value: *{.effectless && .unread}} => []
+    // (shown in a style: only when something paints; read where nothing paints, the value as it is)
+    {shown: *{.unread_member}} {`^`}{style} => shown
+    // (where a value was written, what made it, its name as written: only when something asks (`where`, `origin_of`, a
+    // diagnostic), else never set)
+    {located: *{.unread_member}} @ {location} => located
+
+    // 2. Representation: a value is held as the cheapest thing that answers every member anything reads of it.
+    // (a list nothing walks by `.next`/`.previous`, nor names a link of: a native array; one only appended and walked
+    // forward: a vector; one read only by count: a number)
+    {list: *{.listing && !.used.next && !.used.previous && !.used.written_name}} => list as Array.Native
+    // (a number nothing reads as a Ray (its links, `.next`): a machine integer, as wide as what it can be)
+    {number: *{(. is Number) && !.used.next && .known_width}} => number as Number.Native
+    // (a text nothing reads by character links: its bytes)
+    {text: *{.textual && !.used.next}} => text as String.Native
+    // (a node whose members are known: fixed offsets, a member a load; a boolean a bit; None nothing)
+    {node: *{.used.known}} => node as Node.Laid_out
+
+    // 3. Staging: what is known at build is worked out there.
+    {known: *{.known && .effectless}} => known()
+    // (dispatch: a call whose receiver's class is known is the rule it reads as, applied, not looked up each time)
+    {receiver: *{.known_class}}.{method}({arguments}) => (receiver.known_class.rule_of(method))(receiver, arguments)
+    // (a statement whose text is known: the rule that reads it, applied; reading leaves the program when no text is read
+    // at run time; the reader made for the rules it has: what Expression reads, specialized to the language it reads)
+    {reading: *{.known_text}} => reading.read_now
+    {reader: *{.known_rules}} => reader.specialized
+
+    // 4. Once, not each time.
+    // (a class's body: what does not depend on the instance, once per class: its methods, rules, statics, its classes)
+    {part: *{.instance_free}} => static part
+    // (in a loop: what its turns do not change, before it)
+    {loop: *{.loops && .invariant_parts}} => loop.hoisted
+    // (the same pure code twice in a scope: once, its value named)
+    {again: *{.effectless && .seen_before}} => again.first_seen
+    // (a pure application by its arguments, kept: the `memoised` level, by default where it pays (read more than once))
+    {f: *{.effectless && .called_again}}({arguments}) => remembered[(f, arguments)] ??= f(arguments)
+    // (a reading by its span and the rules it reads with, kept until a rule that could read that span is added)
+    {span: *{.read_before}} => span.reading
+
+    // 5. Fewer steps for the same answer.
+    // (a rule read once where it is known: its body there, its holes what it is given)
+    {applied: *{.single && .known_rule}} => applied.inlined
+    // (lists made only to be read again: none made: `xs.map(f).map(g)`, `.filter(p).count`, `#.sort(.length).last`)
+    {a}.map({f}).map({g}) => a.map((x) => g(f(x)))
+    {a}.map({f}).count => a.count
+    {a}.sort({k}).last => a.max_by(k)
+    {a}.sort({k}).first => a.min_by(k)
+    {a}.reverse.first => a.last
+    {a}.reverse.last => a.first
+    {a}{`{`}{p}{`}`}.first => a.find((x) => x.({p}))
+    // (a superposition read for one of it: the first that holds, the rest not made)
+    {s: *{.superposes}}{`{`}{p}{`}`}#.first => s.components.find((x) => x.({p}))
+    // (a call last in a body: a jump, not a call; a body calling itself last: a loop)
+    {tail: *{.last_in_body && .calls_itself}} => tail.as_loop
+    // (a closure that captures nothing it changes: its free names given to it, no frame kept)
+    {closure: *{.closure && !.escapes}} => closure.lifted
+    // (declared and read in one scope, nothing reading it by its name as text: a slot, not a rule; given again, the slot
+    // written, no rule shadowing it)
+    {declared: *{.declares && .slot}} => declared.as_slot
+    // (a frame of a block declaring nothing: its parent's)
+    {block: *{.declares_nothing}} => block.inlined
+    // (a jump to a jump: to where that goes)
+    {jump: *{.to_a_jump}} => jump.threaded
+
+    // 6. Memory: what does not outlive what makes it is let go of with it; what nothing else holds is changed in place.
+    {made: *{.made_here && !.escapes}} => made.stacked
+    {updated: *{.updates && !.shared}} => updated.in_place
+
+    // 7. At once: what does not depend on one another, read at once (`concurrently`, a level's choice: it answers the same).
+    {statements: *{.independent}} => concurrently statements
+  }
+  ```
+
 ## 21. The runtime
 
 ### 21.1 The host knows no syntax

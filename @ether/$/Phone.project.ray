@@ -23,7 +23,7 @@ Phone := class (
 }
 
 Character &+= {
-  phone => name{is Phone}
-  assert Character().named("+1 555 123 4567").phone == "+1 555 123 4567"  // CHR53 a character named with a phone number has no phone
-  assert Character().named("Jane Smith").phone == None  // CHR54 a character named with a full name has a phone
+  phone => this#{is Phone}.first
+  assert (Character() &+ "+1 555 123 4567").phone == "+1 555 123 4567"  // CHR53 a character with a phone number has no phone
+  assert (Character() &+ "Jane Smith").phone == None  // CHR54 a character with a full name has a phone
 }

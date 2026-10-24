@@ -199,23 +199,23 @@ UI := class {
   }
 
   Choice &+= {
-    disabled => !&@.may(`=`, this)
+    disabled => !&.caller.may(`=`, this)
     placeholder => [.tried, .tried.previous**].flatten.last
-    options => .goal#
-    listed => !(.goal is (boolean | String | Number | Time | Geometry.Color | Location | Program))
+    options => .returns#
+    listed => !(.returns is (boolean | String | Number | Time | Geometry.Color | Location | Program))
     empty => .tried === None || .tried === .placeholder && !.done || (.tried as String).empty
     typed (text: String) => .attempt((this.tried, text)) -- this
     composed (text: String) => (.tried as String ?? "") -- (now => this.attempt((now{!.styles.contains("composing")}, text.marked("composing")))) -- this
     erased => .attempt(this.tried[..<-1]) -- this
-    activate => .goal is boolean ? .attempt(!this.tried) : .listed ? .attempt(this.options[(this.options.index_of(this.tried) + 1) % this.options.count]) : None
+    activate => .returns is boolean ? .attempt(!this.tried) : .listed ? .attempt(this.options[(this.options.index_of(this.tried) + 1) % this.options.count]) : None
     shown => Compiler.reduced(this, Choice.Showing)
     static Showing := {
-      {chosen: Choice{.goal is boolean}} => chosen.tried ? "[x]" : "[ ]"
-      {chosen: Choice{.goal is Number{least, most}}} => (chosen.tried - chosen.goal.least) / (chosen.goal.most - chosen.goal.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
-      {chosen: Choice{.goal is String{.secret}}} => "•" * (chosen.tried as String).length
+      {chosen: Choice{.returns is boolean}} => chosen.tried ? "[x]" : "[ ]"
+      {chosen: Choice{.returns is Number{least, most}}} => (chosen.tried - chosen.returns.least) / (chosen.returns.most - chosen.returns.least) -- "─" * (. * 10), "●", "─" * (10 - . * 10)
+      {chosen: Choice{.returns is String{.secret}}} => "•" * (chosen.tried as String).length
       {chosen: Choice{.listed}} => "‹ ", chosen.tried as String, " ›"
       {chosen: Choice{.empty}} => (chosen.placeholder as String) ?? ""
-      {chosen: Choice{.goal is Program}} => (chosen.tried as String).highlighted(chosen.goal)
+      {chosen: Choice{.returns is Program}} => (chosen.tried as String).highlighted(chosen.returns)
       {chosen: Choice} => chosen.tried as String
     }
   }
@@ -398,7 +398,7 @@ UI := class {
     text => .content.empty ? "" : .content.tried as String
     select (from: Number = 0, to: Number = .text.length) => (.selected = true) -- this.content.attempt(this.text.marked("selected", from, to)) -- this
     face => Geometry.Box(content: this.content.shown, origin: this.inside.start, size: this.size - this.inside.total, font: this.font, color: this.color, palette: this.palette,
-      white_space: this.content.goal is (String{.multiline} | Program) ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap) -- (shown => this.content.empty ? shown.styled("placeholder") : shown)
+      white_space: this.content.returns is (String{.multiline} | Program) ? Geometry.WhiteSpace.pre_wrap : Geometry.WhiteSpace.nowrap) -- (shown => this.content.empty ? shown.styled("placeholder") : shown)
   }
 
   Theme := class {
@@ -697,7 +697,7 @@ UI.Direct := class {
       UI.Direct.painted(shape.pixels_inside.map(point => (at: shape.placed.applied(point), sample: point)), shape.painted(shape.fill), shape.opacity) if shape.fill,
       UI.Direct.stroked(shape.boundary, shape.placed, shape.stroke.width, shape.painted(shape.stroke.paint)) if shape.stroke,
       Compiler.reduced(shape, UI.Direct.shown) if shape.content,
-      (with UI.Direct.outer = shape.placed * Geometry.Transform.translate(shape.at * -1) { shape.in_place.sort_by(.layer).map(.drawn_writes) }) if shape.visible,
+      (with UI.Direct.outer = shape.placed * Geometry.Transform.translate(shape.at * -1) { shape.in_place.sort(.layer).map(.drawn_writes) }) if shape.visible,
       shape.effects{. is Geometry.Blur}.map(blur => { .blurred(shape.pixels_inside.map(shape.placed.applied(.)), blur.radius as px) })
     ])
   }
@@ -781,7 +781,7 @@ UI.HTML := class {
     // WAI-ARIA aria-label (https://www.w3.org/TR/wai-aria-1.2/#aria-label), the popover attribute (https://html.spec.whatwg.org/multipage/popover.html)
     dom_described => [("aria-label", .label) if .label, ("popover", "manual") if .position is Geometry.Anchored]
     dom_entry => .content -- (chosen => [("placeholder", chosen.placeholder as String) if chosen.placeholder, ("disabled", "") if chosen.disabled,
-      ("min", chosen.goal.least as String) if chosen.goal is Number{least, most}, ("max", chosen.goal.most as String) if chosen.goal is Number{least, most}])
+      ("min", chosen.returns.least as String) if chosen.returns is Number{least, most}, ("max", chosen.returns.most as String) if chosen.returns is Number{least, most}])
     dom_spans => .content.shared_styles -- (shared => this.content.pieces.map(piece => piece.first.styles{!shared.contains(.)} -- (own => own.empty ? HTML.Text(piece)
       : @html <span class={own.join(" ")} style={this.dom_inline(UI.Theme.face(this, piece.first))}>{piece}</span>)))
     dom_inline (face: Geometry.Shape) => [
@@ -852,11 +852,11 @@ UI.HTML := class {
       {text: Geometry.Shape{.content is String}} => @html <p {text.dom_named} dir={text.direction == right-to-left ? "rtl" : "ltr"}>{text.dom_spans}</p>
 
       {form: Geometry.Shape{.children.some(.content is Choice)}} => @html <form {form.dom_named}>{form.children}</form>
-      {field: Geometry.Shape{.content is Choice{.goal is Program}}} => @html <div id={field.dom} class={["painted", field.styles].flatten.join(" ")}>
+      {field: Geometry.Shape{.content is Choice{.returns is Program}}} => @html <div id={field.dom} class={["painted", field.styles].flatten.join(" ")}>
         <pre id="{field.dom}-paint" aria-hidden="true">{field.face.dom_spans}</pre>
         <textarea id="{field.dom}-text" placeholder={field.content.placeholder as String} spellcheck="false">{field.content.empty ? "" : field.content.tried as String}</textarea>
       </div>
-      {field: Geometry.Shape{.content is Choice{.goal is String{.multiline}}}} => @html <textarea {field.dom_named} {field.dom_entry}>{field.content.empty ? "" : field.content.tried as String}</textarea>
+      {field: Geometry.Shape{.content is Choice{.returns is String{.multiline}}}} => @html <textarea {field.dom_named} {field.dom_entry}>{field.content.empty ? "" : field.content.tried as String}</textarea>
       {field: Geometry.Shape{.content is Choice{.listed}}} => @html <select {field.dom_named}>{field.content.options.map(@html <option value={. as String}>{. as String}</option>)}</select>
       {field: Geometry.Shape{.content is Choice}} => @html <input {field.dom_named} type={Compiler.reduced(field.content, UI.HTML.Markup.kinds)} {field.dom_entry} />
       {canvas: Geometry.Shape{.content is Program}} => @html <canvas {canvas.dom_named} width={canvas.size.x as px} height={canvas.size.y as px} />
@@ -876,14 +876,14 @@ UI.HTML := class {
 
     // The input element's type attribute (https://html.spec.whatwg.org/multipage/input.html#attr-input-type)
     kinds := {
-      {chosen: Choice{.goal is String{.secret}}} => "password"
-      {chosen: Choice{.goal is String{search}}} => "search"
-      {chosen: Choice{.goal is boolean}} => "checkbox"
-      {chosen: Choice{.goal is Number{least, most}}} => "range"
-      {chosen: Choice{.goal is Number}} => "number"
-      {chosen: Choice{.goal is Time}} => "datetime-local"
-      {chosen: Choice{.goal is Geometry.Color}} => "color"
-      {chosen: Choice{.goal is Location}} => "file"
+      {chosen: Choice{.returns is String{.secret}}} => "password"
+      {chosen: Choice{.returns is String{search}}} => "search"
+      {chosen: Choice{.returns is boolean}} => "checkbox"
+      {chosen: Choice{.returns is Number{least, most}}} => "range"
+      {chosen: Choice{.returns is Number}} => "number"
+      {chosen: Choice{.returns is Time}} => "datetime-local"
+      {chosen: Choice{.returns is Geometry.Color}} => "color"
+      {chosen: Choice{.returns is Location}} => "file"
       {chosen: Choice} => "text"
     }
 
@@ -1146,7 +1146,7 @@ UI.HTML := class {
           ? @js effect({field.value.program.reads}, () => document.getElementById({this.dom}).className = {field.value.program{O: UI.HTML.Script.state}})
           : @js effect({field.value.program.reads}, () => ray.set({this.dom + "." + field.name}, {field.value.program{O: UI.HTML.Script.state}}))),
         @js document.getElementById({this.dom}).addEventListener("click", (event) => ray.activate({this.dom})) if .focusable,
-        @js document.getElementById("{this.dom}-text").addEventListener("input", (event) => document.getElementById("{this.dom}-paint").textContent = event.target.value) if .content is Choice && .content.goal is Program,
+        @js document.getElementById("{this.dom}-text").addEventListener("input", (event) => document.getElementById("{this.dom}-paint").textContent = event.target.value) if .content is Choice && .content.returns is Program,
         @js document.getElementById({this.dom}).addEventListener("input", (event) => ray.set({this.dom}, event.target.value)) if .content is Choice,
         @js effect({this.content.reads}, () => ray.draw({this.dom}, {this.content.rendered(UI.Direct.level)})) if .content is Program && !(.content is Choice),
         (.position.anchor ?? .parent).dom -- (anchor => [
@@ -1329,7 +1329,7 @@ UI.TUI := class {
       shape.cell_border if shape.stroke,
       shape.effects.map(effect => Compiler.reduced(effect, UI.TUI.shaded(shape))),
       Compiler.reduced(shape, UI.TUI.shown) if shape.content,
-      shape.in_place.sort_by(.layer).map(.cell_writes) if shape.visible,
+      shape.in_place.sort(.layer).map(.cell_writes) if shape.visible,
       shape.cell_scrollbar if ((shape.overflow === scroll) && shape.scrollbar),
       shape.cell_area.map(at => (written_grid => written_grid.underlined(at))) if shape.focused,
       shape.cell_area.map(at => (written_grid => written_grid.linked(at, shape.content))) if (shape.content is Location)

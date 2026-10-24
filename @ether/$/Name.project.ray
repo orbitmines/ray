@@ -33,7 +33,7 @@ FullName := class (written: (FullName.Part, (FullName.Separator, FullName.Part)[
 
 // Kinds of name, told apart by what is written: a name is any of them that matches.
 Character &+= {
-  full_name => name{is FullName}
-  assert Character().named("Jane Smith").full_name == "Jane Smith"  // CHR50 a character named with a full name has no full name
-  assert Character().named("jane@orbitmines.com").full_name == None  // CHR51 a character named with an email has a full name
+  full_name => this#{is FullName}.first
+  assert (Character() &+ "Jane Smith").full_name == "Jane Smith"  // CHR50 a character with a full name has no full name
+  assert (Character() &+ "jane@orbitmines.com").full_name == None  // CHR51 a character with an email has a full name
 }

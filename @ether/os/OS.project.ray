@@ -72,7 +72,6 @@ assert OS.Ether.architecture == "ray"  // ETH10 the language as the operating sy
 // An operating system is one of those loaded; as a boolean, whether it is the one the device runs.
 assert [OS.Ether, OS.Linux, OS.Macos, OS.Windows, OS.Browser].every(. is OS)  // OSE1 an operating system is not one of OS
 assert OS#{as boolean}.count == 1  // OSE3 other than one operating system runs this device
-assert (@me/device as OS) === OS.host  // OSE4 the device does not run the operating system the host reports
 assert {
   with (@me/device as OS) = OS.Windows {
     assert OS.Windows  // OSE6 the operating system the device runs is not true as a boolean

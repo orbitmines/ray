@@ -37,7 +37,7 @@ this => .
   // (kept, for what it is: what is made of X is made of Y, `Number &+= Ray`, 1 is a Ray)
   // (a list of its own: what it read may be what it is made of has, `Chain &+= Array` with Chain made of Iterable, never
   // changed by it)
-  on.made_of := ((on).made_of === None) ? Array.new.append(added) : (on).made_of.listed().append(added)
+  external member (on) (`made_of`) (((on).made_of === None) ? Array.new.append(added) : (on).made_of.listed().append(added))
   on
 }
 {on} &+= {`{`}{code}{`}`} => {
@@ -2076,9 +2076,9 @@ descends (type) => (. === type) || ((.superclass === None) ? false : .superclass
 // (what a value is: itself, or else what it converts to is (the equivalence graph, followed when the value itself is not))
 // (followed lazily, and not again while it is being followed: what a conversion asks is what the value itself is)
 following_conversions := false
-is {type} ^keyword => .admitted_by(type)
-// (what a type admits by structure, the core of `is` (Node.ray's `is (type) => this.admitted_by(type)`))
-admitted_by (type) => {
+is {type} ^keyword => .is(type)
+// (what a type admits by structure)
+is (type) => {
   value := .
   // (a text against a written text or a range of characters: by its characters, nothing it converts to asked)
   value.is_itself(type) || ((!following_conversions) && !(((value).textual === true) && (literal_text(type) || ((type).is_range === true))) && value.followed_is(type))
@@ -3459,6 +3459,11 @@ read {location} ^keyword => external read {location}
 include @./.project.ray
 //include @./*.ray
 include @./Node.ray
+// (what is written between quotes, read by String's own rules too: a hole typed String (`{styled: String}`) reads it, its
+// value the text)
+String &+= {
+  "{text ^string}" ^string => ((external &).text).unescaped
+}
 include @./Ray.ray
 include @./Number.ray
 include @./String.ray

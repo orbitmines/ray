@@ -230,7 +230,7 @@ String &+= {
   nfd => (#.decomposed.flatten as String).ordered
   // Confusable names compare by their UTS #39 skeleton.
   assert "\u00E9".nfd == "e\u0301"  // SKL4 a precomposed letter does not decompose to its base and mark
-  ordered => empty ? "" : first.combining_class == 0 ? first, rest.ordered : .marks.sort_by(.combining_class), this[.marks.count..].ordered
+  ordered => empty ? "" : first.combining_class == 0 ? first, rest.ordered : .marks.sort(.combining_class), this[.marks.count..].ordered
   marks => empty || first.combining_class == 0 ? [] : first, rest.marks
   // UTS #39 §4: skeleton(X) is NFD(X) with each character replaced by its prototype, then NFD again; X and Y are confusable when their skeletons are equal (https://www.unicode.org/reports/tr39/#def-skeleton)
   skeleton => (.nfd#.map(Unicode.confusables[.].prototype ?? [.]).flatten as String).nfd

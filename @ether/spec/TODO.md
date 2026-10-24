@@ -238,11 +238,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
   type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
   a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
-- **A level's rule of one typed hole, applied to a value, has nothing in its hole** (`Compiler.reduced("Ray", { {text: String}
-  => text })` is no "Ray"; `{text: String} => 7` is 7): `external level_reads` (kernel) checks the spliced text `qv` by `is`,
-  but the hole's value is read again by String's own rules and then where the rule was read (the level), neither of which
-  binds `qv`. So `Program(code: { "Ray" }){O: UI.Scene}()` is a Box with no content. Kernel-side; not fixed (2026-10-24: the
-  kernel is being ditched).
 - **A field holding a closure, named bare, is the closure applied** (`(p).reading === None` for `reading: ((s) => …)`, and
   `Program(…, reading: (p).reading)` copies nothing); the closure called, `(p).reading(L)`, is as written.
 - **`x.m := v` defines `m` on what x is made of** when x has no `m` of its own and a part of it does (ray-61: `on.made_of :=`

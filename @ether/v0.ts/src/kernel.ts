@@ -2901,6 +2901,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (w(t + T_PAINTS) && pv < at) comments_read(t, pv, at, self);
       pv = ln;
       if (hoisting && (hoisted(at, ln) || given_here(self, at, ln))) { at = ln; continue; }
+      // (the text a value is spliced in as while a level reads it, `external level_reads L v`, wherever it is read: v)
+      if (w(t + T_SPLICE) && skip(at, ln) === w(t + T_SPLICE) && trim_end(at, ln) === w(t + T_SPLICE) + 2) { answer = w(t + T_SPLICE_V); at = ln; continue; }
       // (a typed hole's code: read by its type's own rules; what none of them reads (a value of it, by its name), where it was written)
       // (the member a `.{member}` reads, `x.name`: read as x's (VALUE_OWN))
       const as_member = w(t + T_MEMBER) === self && at >= w(t + T_MEMBER_S) && at < w(t + T_MEMBER_E) && self !== w(GLOBAL) ? VALUE_OWN : 0;

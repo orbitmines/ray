@@ -238,6 +238,18 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
   type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
   a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
+- **UI.Scene under a Program does not make a scene yet** (`(Program(code: { "Ray" }){O: UI.Scene})()` is the text "Ray", not
+  a Box). A level reaches every body its program calls (`level_in` re-reads them all), so Scene's rules apply to UI's and
+  Geometry's own code (Box construction) and Scene as a whole runs out of memory on `"Ray"`. Marking rules made while the
+  level is in scope (re-reading only those) works on one thread but not with `--threads 26 --target wasm` (CO35–37): the
+  level needs to be told which closure is its program. A type check reads without the level. Scene's rules of one hole,
+  `{text: String} => Geometry.Box(content: text)`, `{shape: Geometry.Shape} => shape`, `{value: *} => …`, are readers
+  (a head of holes only, §: read only where the type's own rules read), so they reduce only through `Compiler.reduced(v,
+  UI.Scene)`, which reduces no value by its type (below). Program's call does not reduce its answer by its level either
+  (Compiler.ray: "what it gives read by them"). `"Ray" ^h1` goes round: the style's text `h1` is read as code under the
+  level, every typed and narrowing hole of Scene checked on it (`1` checked a million times: a check that runs a
+  condition is not kept). Site files (`orbitmines.com`'s classes, written in Scene's syntax) are declared before the
+  program runs, so the level would not reach them: a level reaching a program's project is still to be designed.
 - **`assert Program(code: { … }){O: L}() == x` without brackets around the program is false** where `(Program(code: { …
   }){O: L})() == x` holds (CO35 is written so).
 - **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;

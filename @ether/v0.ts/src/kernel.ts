@@ -1166,7 +1166,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let cyc_mark = 0, cyc_n = 0, cyc_backs = 0, bare = 0;
     // (the level the language is read with, `O`, first: its rules before any the text is read in, a scope of its own (what it is
     // made of, never what it is in); then where the text is)
-    const level_now = thread_level() || w(LEVEL);
+    const level_now = (w(THREAD + T_QUIET) ? 0 : thread_level()) || w(LEVEL);
     let leveling = level_now && !(refuse & VALUE_OWN) && vis ? 1 : 0;
     for (let r = leveling ? latest(level_now) : vis; r && r !== stop;) {
       if (DEBUG) count(K_NODE);

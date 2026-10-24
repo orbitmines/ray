@@ -2102,8 +2102,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (none, read on a value: an operator after a space, or what follows an operator it begins with (`.m == v` on x, `+ part` on a
     // number: the operator's argument): what follows read on
     // that value when it runs (the member's value, the operator's closure), which is not what it is read on here)
+    // (or a word after a member, `.x min 5` on v: a method of the member's value, read on it the same)
     for (let p = s + 1; p < e;) {
-      if (on && b(p) > 32 && b(p - 1) <= 32 && !left && (b(w(CLASSES) + b(p)) === 2 || operated(s, p))) {
+      if (on && b(p) > 32 && b(p - 1) <= 32 && !left && (b(w(CLASSES) + b(p)) === 2 || operated(s, p) || (b(w(CLASSES) + b(p)) === 1 && membered(s, p)))) {
         const o = reading(t, s, p, rule, closure, vis, self, 0, stop, 0, 0);
         if (w(o) !== K_UNREAD && w(o) !== K_EMPTY) { put(r, K_ON); put(r + 12, o); put(r + 16, p); put(r + 20, e); return r; }
       }
@@ -2248,6 +2249,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       }
       p = bracket(p, e) & 1 ? past(p, e) : p + 1;
     }
+    // (or a value, then a word after a space and what follows it, `x min y`: the value's method called on what follows it, read on
+    // the value, below)
+    if (k === K_UNREAD && !w(t + T_DECL) && !w(t + T_HOLE) && !defines(s, e)) {
+      let iv_p = skip(s, e);
+      while (iv_p < e && b(iv_p) > 32) iv_p = bracket(iv_p, e) & 1 ? past(iv_p, e) : iv_p + 1;
+      const iv_q = iv_p < e ? skip(iv_p, e) : e;
+      let iv_z = iv_q;
+      while (iv_z < e && b(w(CLASSES) + b(iv_z)) === 1) iv_z++;
+      if (iv_q > iv_p && iv_z > iv_q && iv_z < e && b(iv_z) <= 32 && skip(iv_z, e) < trim_end(s, e)) {
+        const iv_o = reading(t, s, iv_p, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0);
+        if (w(iv_o) !== K_UNREAD && w(iv_o) !== K_EMPTY) { const iv_r = alloc(READ); put(iv_r, K_ON); put(iv_r + 4, s); put(iv_r + 8, e); put(iv_r + 12, iv_o); put(iv_r + 16, iv_q); put(iv_r + 20, e); return onto(t, iv_r, names, f, self, value, written); }
+      }
+    }
     // (or a member of a type's name nothing reads where it is, `S.d` in a narrowing's constraint: the type as what the code was
     // written in names it, then its members on it, in turn; else unread as before)
     if (k === K_UNREAD && !w(t + T_DECL) && !w(t + T_HOLE) && !w(t + T_LE) && b(s) >= 65 && b(s) <= 90 && names && w(names + N_IS) === IS_FRAME) {
@@ -2370,6 +2384,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     while (i < e && b(i) === 32) i++;
     return i + 1 < e && ((b(i) === 61 && b(i + 1) === 32) || (b(i) === 58 && b(i + 1) === 32)) ? 1 : 0;
   }
+  // (a member read alone, `.x` or `.a.b`: a `.`, then words each after a `.`)
+  function membered(s: number, e: number) { s = skip(s, e); while (e > s && b(e - 1) <= 32) e--; if (s >= e || b(s) !== 46) return 0; for (let mi = s; mi < e; mi++) { const mc = b(mi); if (mc === 46 ? mi + 1 >= e || b(w(CLASSES) + b(mi + 1)) !== 1 : b(w(CLASSES) + mc) !== 1) return 0; } return 1; }
   function worded(s: number, e: number) { s = skip(s, e); while (e > s && b(e - 1) <= 32) e--; if (s >= e) return 0; for (let i = s; i < e; i++) if (b(w(CLASSES) + b(i)) !== 1) return 0; return 1; }
   // (a name declared where it is read: a place there, by that name)
   // (a place: a name given nothing yet, in self; read on, it answers what any value does, not what self has (where it is named,
@@ -2608,6 +2624,21 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (read only by what everything has (`1`, global), on a value with methods (a closure, `==` of `gcd(other) == 1`): its
     // argument; RB2) (but not what an operator leads, `.member`: a member is not an argument, CL19)
     if (w(rest) === K_RULE && w(w(rest + 12) + R_OWNER) === w(GLOBAL) && on !== w(GLOBAL) && b(w(CLASSES) + b(rs2)) !== 2 && !word_headed(w(rest + 12)) && methods_of(on)) { const m = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); if (w(m) === K_RULE) rest = m; }
+    // (a word and what follows it, not read on a value, `min 5` on 2 of `2 min 5`: a method of the value called on what follows
+    // it without brackets, operator-named or not (`double 4`), as `.min 5` reads it, the value's member, then what follows on that)
+    if (w(rest) === K_UNREAD && value && !w(t + T_DECL) && on !== w(GLOBAL) && (w(on + N_IS) === IS_NODE || w(on + N_IS) === IS_TEXT)) {
+      const iw_s = skip(rs2, re2);
+      let iw_z = iw_s;
+      while (iw_z < re2 && b(w(CLASSES) + b(iw_z)) === 1) iw_z++;
+      if (iw_z > iw_s && iw_z < re2 && b(iw_z) <= 32 && skip(iw_z, re2) < trim_end(rs2, re2)) {
+        const iw_m = w(t + T_MEMBER), iw_ms = w(t + T_MEMBER_S), iw_me = w(t + T_MEMBER_E);
+        put(t + T_MEMBER, on); put(t + T_MEMBER_S, iw_s); put(t + T_MEMBER_E, re2);
+        const iw_v = block(t, iw_s, re2, nm, f, on, 0, value, 1, on, 0);
+        put(t + T_MEMBER, iw_m); put(t + T_MEMBER_S, iw_ms); put(t + T_MEMBER_E, iw_me);
+        if (stopped(t)) { put(t + T_DECL, decl_in); return 0; }
+        if (iw_v) { put(t + T_ON, on); put(t + T_DECL, decl_in); return iw_v; }
+      }
+    }
     if (w(rest) === K_UNREAD && !w(t + T_FALLBACK)) { rest = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); fell = w(rest) === K_RULE ? 1 : 0; }
     if (w(rest) !== K_UNREAD) {
       // (a method of a value it is made of, `+` of the 3 in a vertex `3 + Ray`: what it runs on, that value)

@@ -534,7 +534,7 @@ Geometry := class {
   Approximating := (resolution: Length) => {
     {fractal: Fractal} => fractal.approximated(resolution)
   }
-  Preparing := (resolution: Length) => Solving + Projecting + Approximating(resolution)
+  Preparing := (resolution: Length) => Geometry.Solving + Geometry.Projecting + Geometry.Approximating(resolution)
 
   Transition := class (duration: Quantity.Temporal, easing: Easing = ease) => { }
   Settings := {

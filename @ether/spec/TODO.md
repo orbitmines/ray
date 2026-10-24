@@ -223,3 +223,16 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A statement's memory running out is a crash, not a report** (`RAY_STATEMENT_MB=200`, a 20 by 1 TUI grid written: "Worker
   queue failed: memory access out of bounds", no diagnostic naming the statement; at 400 the frame is written). After the
   frame, the run ends in "out of memory (2147483648 bytes, all of it in use)": something after the last statement holds 2 GB.
+- **A word method written both with and without parameters, called infix, reads the one without** (`mn (b) => b` and
+  `mn => 7`: `qb mn 5`, `qb.mn 5` answer 7's reading, not 5): the decided rule (§21.3, brackets read the one with
+  parameters, none the other) takes `mn 5` as `mn` then `5`. Number's `min`/`max` (Ordered's, and Ray's `min =>`) are not
+  hit: `2 min 5`, `pv.x min pv.y` answer 2.
+- **A level reduces no value by its type** (`Compiler.reduced(Kd(1), { {kd: Kd} => "kind" … })` is not "kind", a number
+  or a text neither): `level reducing value` reads the code `value` in the level, and a typed hole asks about that code,
+  not its value. UI's `drawn`, `filled`, `shaded`, `shown`, `Lowered` and Geometry's `Solving`/`Projecting`/
+  `Approximating` are written so (the user, 2026-10-23: the old Language model; class headers and `as X` instead).
+- **A program's code is not read again under its level** (`Program(code: { "a" }){O: { {text: String} => 5 }}()` is not
+  5; `Program(code: { 5 })()` is not 5): a block is read where it is written, into a node; calling it runs nothing, and
+  rules added to a closure's node are not seen by its body (it reads where it was written first). `UI.Scene` (the site's
+  reading: `"Ray" ^h1`, `{share}% * {x}`, `a <- b`) and every `Program(…).rendered(level)` need it. The global-`O` level
+  (the optimizations worktree) is what reads a program with a level's rules in scope.

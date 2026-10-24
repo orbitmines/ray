@@ -215,9 +215,8 @@ Node &+= {
       nonempty_of := base
     }
   }
-  // (the language's `admitted_by`, what Node.ray's `is` asks: the kernel's answer first (the map is read before the library,
-  // so it is this, not `is`))
-  admitted_by (type) => {
+  // (the language's `is`: the kernel's answer first)
+  is (type) => {
     known := external admits this type
     // (not of a range, `"0".."9"`: one of its values, which the kernel reads as a list of them)
     ((known === None) || ((type).is_range === true)) ? (this.is_itself(type) || ((!following_conversions) && !(((this).textual === true) && (literal_text(type) || ((type).is_range === true))) && this.followed_is(type))) : known
@@ -338,7 +337,7 @@ Counted &+= { as (=== Decimal) => Decimal(integer: this as String) }
 // (and written, its digits in ten, as an Int32's are: a method, not a second conversion of a count)
 Counted &+= { as String => .int32.digits }
 // (a count is a number written every way, by superposition: of every class of numbers (`3 is Decimal`))
-Counted &+= { admitted_by (type) => (((type).descends(Number) === true) && !((type) === Counted_char)) || .is_itself(type) || .followed_is(type) }
+Counted &+= { is (type) => (((type).descends(Number) === true) && !((type) === Counted_char)) || .is_itself(type) || .followed_is(type) }
 external numeral `{digits: Decimal.String}`
 // (and in sixteen, `0x0C`: the same count)
 external numeral `0x{digits: Hexadecimal.String}`

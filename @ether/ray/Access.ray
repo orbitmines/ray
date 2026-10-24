@@ -6,14 +6,14 @@ Accessor := Character | Location
 
 Location &+= {
   access: Accessor? = None
-  at (method) => ((method == `=`) || (method == "write")) ? this / "=" : ((method == `()`) || (method == "execute")) ? this / "()" : this
   give (who: Accessor) => this ~~ (.access = ((.access === None) ? who : (.access | who)))
   take (who: Accessor) => this ~~ (.access = .access{!== who})
-  lets (who: Accessor, method = "read") => .at(method).access -- (granted => (granted !== None) ? granted#.some((. == who) || (who is .))
-    : .parent ? .parent.lets(who, method) : who is @me/policy)
+  // (reading where it is; another method, `` `=` `` or `` `()` ``, under it)
+  allows (who: Accessor, method?) => ((method === None) ? this : this / method).access -- (granted => (granted !== None) ? granted#.some((. == who) || (who is .))
+    : .parent ? .parent.allows(who, method) : who is @me/policy)
 }
 Node &+= {
-  allows (who: Accessor, method = "read") => .@ ? .@.lets(who, method) : who is @me/policy
+  allows (who: Accessor, method?) => .@ ? .@.allows(who, method) : who is @me/policy
   // (what the bootstrap leaves here: `internal x`, visible only to what made it)
   right-to-left internal => (.@ ?? (this ~~ (.location = Location(path: ""))).@).give(&.caller)
 }
@@ -24,16 +24,16 @@ assert !(@"anyone" is none)  // CST2 the permission nobody has reaches someone
 
 // `who.read x`, `who.write x`, `who.execute x`: who may, where what x names is (`@ether.read x.count` at `x.@ / "count"`,
 // apart from what holds it; placed somewhere of its own when it is nowhere yet); `who{filter}.read x`, who while the
-// filter holds of them; a field declared so, where the field is
-{who}.{verb: "read" | "write" | "execute"} {target} ^keyword => ((target).@ ?? ((target) ~~ (.location = Location(path: ""))).@).at(verb).give(who)
-{who}{{filter}}.{verb: "read" | "write" | "execute"} {target} ^keyword => (Accessor{((. == who) || (. is who)) && ({filter})}).{verb} {target}
+// filter holds of them (a narrowing like any other); a field declared so, where the field is
+{who}.{verb: "read" | "write" | "execute"} {target} ^keyword => (((target).@ ?? ((target) ~~ (.location = Location(path: ""))).@)
+  -- (place => (verb == "read") ? place : place / ((verb == "write") ? `=` : `()`))).give(who)
 {who}.{verb: "read" | "write" | "execute"} {name ^variable}: {type} ^keyword => {
   ({name}: {type})
-  (.@ / `{name}`).at(verb).give(who)
+  ((.@ / `{name}`) -- (place => (verb == "read") ? place : place / ((verb == "write") ? `=` : `()`))).give(who)
 }
 
 // What one may execute: what someone may execute where it is
-Executable := *{.@ && .@.at(`()`).access !== None}
+Executable := *{.@ && (.@ / `()`).access !== None}
 assert !((count: 1) is Executable)  // LOC59 a value without execute access is an executable
 
 assert {
@@ -47,6 +47,6 @@ assert {
   assert writable.allows(zed, `=`) & !writable.allows(zed)  // AC47 `.write` does not let write, or lets read
   above := Location(path: "above")
   above.give(zed)
-  assert (above / "below").lets(zed) & !(above / "below").lets(zed, `=`)  // AC70 who may read a location may not read what is under it, or may write it
+  assert (above / "below").allows(zed) & !(above / "below").allows(zed, `=`)  // AC70 who may read a location may not read what is under it, or may write it
 }
 assert (count: 1).allows(@me/policy)  // AC51 a value no one was given is not visible to the policy

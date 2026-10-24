@@ -108,29 +108,15 @@ Number &+= {
   assert 5.gcd(3) == 1  // N57 five and three share more than one
   lcm (other: Number) => this * other / .gcd(other)
   assert 2.lcm(3) == 6  // N58 the least common multiple of two and three is not six
-  divides (other: Number) => other % this == 0
-  assert 2.divides(6)  // N61 two does not divide six
-  assert !(4.divides(6))  // N62 four divides six
-  assert 1.divides(5)  // N63 one does not divide five
-  coprime (other: Number) => .gcd(other) == 1
-  assert 2.coprime(3)  // N59 two and three are not coprime
-  assert !(2.coprime(4))  // N60 two and four are coprime
 
   even => .is_zero || .pred.odd
   assert 4.even  // N11 4 is not even
   assert !(3.even)  // NN1 3 is even
   odd => !.even
   assert 5.odd  // N12 5 is not odd
-  half => this / 2
-  assert 6.half == 3  // N64 half of six is not three
-  assert 7.half == 3  // N65 half of seven is not three
-  assert 0.half.is_zero  // N66 half of nothing is not nothing
-  squared => this ^ 2
-  assert 3.squared == 9  // N69 three by itself is not nine
-  assert 1.squared == 1  // N70 one by itself is not one
   // The number line a number is on
-  assert (3 -> +1){. squared > 10}.first == 4  // NL1 the first square past ten is not four squared
-  assert (3 -> +1){. squared > 30}.first == 6  // NL2 the first square past thirty is not six squared
+  assert (3 -> +1){. ^ 2 > 10}.first == 4  // NL1 the first square past ten is not four squared
+  assert (3 -> +1){. ^ 2 > 30}.first == 6  // NL2 the first square past thirty is not six squared
   cos => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k) / (2 * k)!).sum
   sin => (0..10).map(k => (k.even ? 1 : -1) * this ^ (2 * k + 1) / (2 * k + 1)!).sum
 
@@ -213,7 +199,6 @@ Number &+= {
   as (=== String) => this as 10 as String
   assert (3 + 4) as String == "7"  // SN5 a number is not spelled in ten as a text
   assert "ff" as 16 as 16 as String == "ff"  // SN4 ff does not come back from sixteen
-  as (=== String) => this as 10 as String
   assert 7 as String == "7"  // S141 seven does not spell 7
   assert 12 as String == "12"  // S142 twelve does not spell 12
   assert 0 as String == "0"  // S143 nothing does not spell 0

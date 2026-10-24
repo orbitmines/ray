@@ -21,7 +21,7 @@
 
 // A device: the machine that runs the language, superposed with the devices it has (each its own project in `$/`: a
 // keyboard, a pointer, controllers, a camera, the terminal it is played through, …). What a device can do is a path under it, granted like anything else (`@me.execute { (@me/device as Camera) }`); a
-// capability nobody granted is asked for (`&@.ask`).
+// capability nobody granted is asked for (`&.caller.may`).
 Device := class {
   handheld: boolean = false
   opened: Location?
@@ -33,8 +33,8 @@ Device := class {
 
   // What `@me/device` answers: the machine and each device it has, superposed; a place typed by one selects it
   // (`here: Geolocation = @me/device`)
-  // (the operating system it runs among them: the one the host reports, else the language as the operating system)
-  static made => Device() | OS.host | Keyboard | Pointer | Controllers | Camera | Microphone | Clipboard | Geolocation | Motion | Speech
+  // (the operating system it runs among them: what its entrypoint adds, `@me/device &= OS.Linux`)
+  static made => Device() | Keyboard | Pointer | Controllers | Camera | Microphone | Clipboard | Geolocation | Motion | Speech
     | Printer | Display | Storage | Terminal
   assert {
     made := Device.made

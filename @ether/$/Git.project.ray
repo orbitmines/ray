@@ -68,7 +68,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class {
   // Each entry names its object in bytes of the repository's format (https://git-scm.com/docs/hash-function-transition#_object_format)
   Tree := class (entries: (mode: ("0".."7")[] as Git.Mode, " ", name: (!"\x00")[], "\x00", id: Git.Raw)[]) {
     // Tree entries sort as if a directory's name ended in /
-    static (files: (path: String, content: Byte[])[]) as (=== Git.Tree) => Git.Tree(entries: Git.entries(files).sort_by(.files ? .name + "/" : .name).map(entry =>
+    static (files: (path: String, content: Byte[])[]) as (=== Git.Tree) => Git.Tree(entries: Git.entries(files).sort(.files ? .name + "/" : .name).map(entry =>
       (mode: entry.files ? Git.Mode.directory : entry.file as Git.Mode, name: entry.name, id: (entry.files ? entry.files as Git.Object : Git.Object("blob", entry.file)).id as Git.Raw)))
   }
 
@@ -129,7 +129,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class {
       delta && delta.size < object.content.count
         ? Entry(type: Git.Pack.Kind.offset_delta, size: delta.size, base_entry: base, data: Zlib(deflated: Deflate.deflated(delta as Byte[])))
         : Entry(type: Git.Pack.Kind#{.name == object.kind}.first, size: object.content.count, data: Zlib(deflated: Deflate.deflated(object.content))))
-    static (objects: Git.Object[]) as (=== Git.Pack) => objects.sort_by(o => (o.kind, o.content.count)) -- (sorted => Git.Pack(version: 2, count: sorted.count,
+    static (objects: Git.Object[]) as (=== Git.Pack) => objects.sort(o => (o.kind, o.content.count)) -- (sorted => Git.Pack(version: 2, count: sorted.count,
       entries: sorted.reduce(made = [] => made, [Git.Pack.entry(., previous: sorted[.index - 1] if .index > 0, base: made.last)])))
 
     object_at (offset: Number, store) => .entries.find(.at == offset).object(this, store)
@@ -162,7 +162,7 @@ Git<hash: SHA1 | SHA256 = SHA1> := class {
     pack: Git.Raw, checksum: Git.Raw
   ) {
     offset_of (id: Git.Id) => .ids.index_of(id as Git.Raw) -- (at => at === None ? None : this.offsets[at] -- (.large == 1 ? this.larger[.offset] : .offset))
-    static (pack: Git.Pack) as (=== Git.Index) => pack.entries.sort_by(.object(pack, None).id) -- (sorted => Git.Index(version: 2,
+    static (pack: Git.Pack) as (=== Git.Index) => pack.entries.sort(.object(pack, None).id) -- (sorted => Git.Index(version: 2,
       fanout: (0..255).map(byte => sorted{.object(pack, None).id[..1] as Hexadecimal <= byte}.count),
       ids: sorted.map(.object(pack, None).id as Git.Raw), crcs: sorted.map(.crc32),
       offsets: sorted.map((large: 0, offset: .at)), larger: [], pack: pack.checksum))

@@ -65,7 +65,7 @@ Identity := class (keys: Key[], next: Byte[][] = [], digest = Identity.algorithm
 Delegation := class (from: Character, to: Accessor, scope: Location = Location, until: Time = Time.now + 1 day, signature: Signed?) => {
   hash => (((((this.from.root, this.to is Character ? this.to.root : this.to, this.scope, this.until)) as String) as Byte[]) as this.from.policy().digest).digest
   valid (at: Time = Time.now) => at < .until && .signature.valid && .signature.value == .hash && .from.certified(this.signature.by, World.ether.clock.now)
-  covers (method, target) => .valid() && target.@?.at(method) is .scope
+  covers (method, target) => .valid() && (target.@? / method) is .scope
 }
 
 Verified := Character{.proof}
@@ -101,20 +101,20 @@ Character &+= {
   // their signatures, each bound to a session it was asked on, is met.
   recovery (sessions: Noise.Session[] = []) => (.roots = [Key.generated(.policy().signing), Key.generated(.policy().signing)]) -- (made => this.identity.history -- (log =>
     History.Commit(who: this, stamp: log.clock.now, change: Program(code: { .keys = made.map(.published) }), previous: log.head, line: log) -- (event =>
-      Program(name: "recover", who: this, goal: event, from: sessions, code: {
+      Program(name: "recover", who: this, from: sessions, code: {
         sessions.for(.sent(event.hash))
         await Identity.logged(log) -- (policy => policy.recover.met(event, policy))
         log.extended(event)
-      }))))
+      }): event)))
   // A guardian signs the hash only after verifying the person, by its own means.
   vouching (session: Noise.Session, message: Byte[]) => session.received(message) -- (hash =>
-    Program(name: "verify the person recovering", who: this, goal: hash, code: { this.key.signed([hash, session.binding].flatten) }))
+    Program(name: "verify the person recovering", who: this, code: { this.key.signed([hash, session.binding].flatten) }): hash)
 }
 assert !((@"a" == @"a") is Diagnostic)  // VER9 comparing characters errs with @ether/security imported
 
 Program &+= {
-  countersigned (signed: Signed): static => this ~~ (goal.signature |= signed
-    if goal is History.Commit && goal.covers(signed) && from#.some(.binding == (signed.value as Byte[])[goal.hash.count..]))
+  countersigned (signed: Signed): static => this ~~ (returns.signature |= signed
+    if returns is History.Commit && returns.covers(signed) && from#.some(.binding == (signed.value as Byte[])[returns.hash.count..]))
 }
 
 // What security adds to a line: the key-log event it relies on, its signature, its content key with the wraps of it, and
@@ -305,3 +305,14 @@ Compiler &+= {
 }
 
 assert (2 of [1, 2] after 7 days vetoable by 1 of [3]).veto.signers == [3]  // IDY10 a threshold does not read its wait and veto
+
+// A prompt asking whether to run a program names its whole chain of callers, the origin first
+Program &+= {
+  prompt => .hops.map(.PREFIX + .name) -- (named => named.first + " wants to run this"
+    + (named.count > 1 ? ", originating from " + named[1..].join(" <- ") : ""))
+  assert Program(who: @"me", caller: Program(who: @"company")).prompt == "@company wants to run this, originating from @me"  // HOP2 a prompt does not name the whole chain
+  assert Program(who: @"solo").prompt == "@solo wants to run this"  // AC57 a prompt for a lone program names more than its runner
+}
+
+// Running as another character, with their grant: as the one they are verified as (`acting`)
+@me = {who} ^punctuation => &.caller.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`

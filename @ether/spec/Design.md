@@ -364,6 +364,8 @@ are still open are in [Appendix A](#appendix-a-open-questions).
 - Between different rules, the one declared first reads the whole: **declaration order is precedence**, and what is
   declared first binds loosest. The nearer of two rules with the same head wins. A definition read whole beats other
   readings.
+- Rules that each read a value whole, a level's of one hole (`{text: String}`, `{value: *}`): the last declared applies
+  (decided 2026-10-24), so a level lists what reads any value first and the most specific last (UI.Scene).
 - Readings still equal are a superposition (Many). There is a diagnostic only where one value is required.
 - Precedence is pairwise. An operator is placed relative to others by declaration order, by its position after a method
   label (`Node~method`), or with the modifier `precedence(before X)` / `precedence(after X)`.

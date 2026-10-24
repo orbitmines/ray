@@ -137,8 +137,12 @@ Node &+= {
 Program(code: {`{`}{program_code}{`}`}) ^keyword => Program(running: (() => ({program_code})))
 // (a setting, `p{O: level}`: the same program (of the class, a new one), read with that level)
 {setting_of}{`{`}O: {level}{`}`} ^punctuation => Program(code: (setting_of).code, running: (setting_of).running) ~~ (.O = ({level}))
+// (and written with its level, `Program(code: { … }){O: L}`: its code read on L when it runs, L's rules seen in that code and not in
+// what it calls)
+Program(code: {`{`}{program_code}{`}`}){`{`}O: {program_level}{`}`} ^keyword => Program(running: (() => (Compiler.scope_of({program_level})).({program_code})), read_on_level: true) ~~ (.O = ({program_level}))
 Program &+= {
   O | optimizations := Compiler.none
+  read_on_level := false
   assert (Program{O: Compiler.default}).(
     .  // CO21 a program read with a level is nothing
     & .O == Compiler.default  // CO22 it does not say which rules it is read with
@@ -161,7 +165,7 @@ Program &+= {
   // (its code run with its level's rules in scope (in its program, above what is where it is written), what it gives read by them)
   // (the code as it is written, kept to be read again when it runs (`running`, none until given: a block is read where it is
   // written, into a node))
-  {this}() => ((this).running === None) ? (this).code : (((this).O === Compiler.none) ? (this).running() : Compiler.run_under((this).running, (this).O))
+  {this}() => ((this).running === None) ? (this).code : (((this).O === Compiler.none) ? (this).running() : Compiler.reduced(((this).read_on_level === true) ? (this).running() : Compiler.run_under((this).running, (this).O), (this).O))
   compounds + (other: Program) => Program(code: (code, other.code))
   assert 5 /* nothing */ + 1 == 6  // GR8 a block comment between operands is read as something
   assert {

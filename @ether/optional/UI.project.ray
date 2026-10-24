@@ -52,7 +52,19 @@ UI := class {
   }
 
   Scene := {
-    // (a shape is what it is, before anything that reads a value as a shape: a Box read as a Location became one)
+    // (a value read as a shape: by the last of these that reads it, so what reads any value is first and a shape, which is
+    // what it is, last (a Box read as a Location became one))
+    {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
+    // (what a path shows, an entry point (`{*}: Index`) run: its answer)
+    {site: *{.fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering){O: UI.Scene}(), UI.Scene)
+    {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
+    {lines: \n} => Geometry.Box(flow: block, children: lines.components)
+    {chosen: Choice} => Geometry.Box(content: chosen)
+    {placed: *{(.location is Location) && .location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), UI.Scene)])
+    {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as Path)])
+      -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
+    {text: String} => Geometry.Box(content: text)
+    {superposed: |} => Compiler.reduced(@me.choose(superposed), UI.Scene)
     {shape: Geometry.Shape} => shape
     // `f <- x` (F-B2): `x` given to what is written before, `middle center .map(g) <- { … }` is `middle center ({ … }.map(g))`
     {flow_into} <- {flowing} => flow_into(flowing)
@@ -63,22 +75,11 @@ UI := class {
     {aligned_as: Alignment} * {aligned} => Geometry.Box(align: aligned_as, children: [aligned])
     // (`*` reads one operand on each side: a share of an aligned `x`, `100% * center * x`, written as one)
     {share Numeral}% * {share_aligned: Alignment} * {shared} => Geometry.Box(width: share / 100, children: [Geometry.Box(align: share_aligned, children: [shared])])
-    {superposed: |} => Compiler.reduced(@me.choose(superposed), UI.Scene)
-    {text: String} => Geometry.Box(content: text)
     {styled: String | Geometry.Shape | Choice}{ }{`^`}{{expression}} => Compiler.reduced(styled, UI.Scene).styled_by(Program(code: expression**))
     // (the whole text marked: its shape styled; a character holds no styles yet (`.value ~~ .styles ,= style` is not read))
     {styled: String}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
     {styled: Geometry.Shape | Choice}{ }{`^`}{style} => Compiler.reduced(styled, UI.Scene).styled(style)
     {{narrowing}} {narrowed} => Compiler.reduced(narrowed, UI.Scene).narrowed(Program(code: narrowing**))
-    {location: Location} => Geometry.Box(content: location, aspect: location.video_site ? 16 / 9 : None, children: location.media || location.video_site ? [] : [Geometry.Box(content: location.@ as Path)])
-      -- (shown => location.narrowing ? shown.narrowed(location.narrowing) : shown)
-    {placed: *{(.location is Location) && .location#.some(.scheme)}} => Geometry.Box(content: placed.location#{.scheme}.first, children: [Compiler.reduced(placed.copy ~~ (.location = None), UI.Scene)])
-    {chosen: Choice} => Geometry.Box(content: chosen)
-    {lines: \n} => Geometry.Box(flow: block, children: lines.components)
-    {inline: ,} => Geometry.Box(flow: inline, children: inline.components)
-    // (what a path shows, an entry point (`{*}: Index`) run: its answer)
-    {site: *{.fields.some(.name == "{*}")}} => Compiler.reduced(Program(code: UI.Site(index: site).rendering){O: UI.Scene}(), UI.Scene)
-    {value: *} => value.rendering ?? Geometry.Box(flow: grid, columns: 2, children: value.fields.map(.name, .value).flatten)
   }
   assert Program(code: { "a", "b" }){O: UI.Scene}().flow == inline  // UI5 a comma does not flow inline
   assert Program(code: { "x" ^{1 < 2 ? "muted" : "none"} }){O: UI.Scene}().(

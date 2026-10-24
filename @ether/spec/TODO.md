@@ -238,6 +238,15 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
   type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
   a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
+- **A level's rule of one typed hole, applied to a value, has nothing in its hole** (`Compiler.reduced("Ray", { {text: String}
+  => text })` is no "Ray"; `{text: String} => 7` is 7): `external level_reads` (kernel) checks the spliced text `qv` by `is`,
+  but the hole's value is read again by String's own rules and then where the rule was read (the level), neither of which
+  binds `qv`. So `Program(code: { "Ray" }){O: UI.Scene}()` is a Box with no content. Kernel-side; not fixed (2026-10-24: the
+  kernel is being ditched).
+- **A field holding a closure, named bare, is the closure applied** (`(p).reading === None` for `reading: ((s) => …)`, and
+  `Program(…, reading: (p).reading)` copies nothing); the closure called, `(p).reading(L)`, is as written.
+- **`x.m := v` defines `m` on what x is made of** when x has no `m` of its own and a part of it does (ray-61: `on.made_of :=`
+  in `&+=` wrote on the part; fixed there with `external member`).
 - **UI.Scene under a Program does not make a scene yet** (`(Program(code: { "Ray" }){O: UI.Scene})()` is the text "Ray", not
   a Box). A level reaches every body its program calls (`level_in` re-reads them all), so Scene's rules apply to UI's and
   Geometry's own code (Box construction) and Scene as a whole runs out of memory on `"Ray"`. Marking rules made while the
@@ -267,6 +276,11 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   not. Taking the header's defaults first when everything is given by name (`all_named`, then the names) loses half the
   bootstrap's tests (565 of 1084 pass). Also open: a default reading a field given by name sees that field's own default
   (`Df(a: 5).b` is 2, not 6), and one reading a field after it is not read (Shape's `boundary` reads `space`).
+- **Header defaults read lazily (decided 2026-10-24), not done**: `{name}: {type} = {value}` made lazy (`{name} => { … }`,
+  kept on first read) changes nothing for a header (`Dk(a: 5).b`, `class (c = d + 1, d = 1)`, `parent ?? 3` with `parent`
+  unset: all as before), so a header's places are not read by that rule when anything is given; running the header as code
+  first, then `:=` (`taking`), loses half the bootstrap's tests ("a left side answers a value": the lazy name is called as a
+  place). The place's default needs to be kept unread by the left side itself.
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).

@@ -162,13 +162,42 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `writing.value as String`. Without Language.ray it costs nothing.
 - **Language.ray's header writer reads `.of.header.head`, which no class has** (the entrypoint keeps a header as
   `header_quoted`): no structured value is written through its header; a Location (a Ray) falls to the list writer.
-- **A narrowing's constraint in a class does not see the class's other members by bare name** (`G := class { S := class {
-  static d => 2 }; Y := Number[]{.length == S.d} }`: `[1, 2] is G.Y` is false, `Z := Number[]{.length == 2}` there holds):
-  the constraint is read on the value it checks (`it.({constraint})`), in frames of GLOBAL, so where it was written (G's
-  block) is not reached. Geometry's `Vector := Elementwise{…}{.length == Space.current.dimension} + { … }` so holds for no
-  value (`[0, 0] is Geometry.Vector` false), and `Grid.put (at: Geometry.Vector, …)` rejects every point: the first frame's
-  cells are never put. (A name read as a place nothing defined where it was named, `S` in S's own block read before S
-  is, now reads what the classes it is written in name: `Space.plane`, `Space.current.dimension` hold.)
+- **A single constructor taking nothing is not what the type is called with** (`J := Number[] + { static () => [7, 7] }`:
+  `J()` is not `[7, 7]`): `made_by`, taking nothing, is applied when named, so `(this).made_by` is its value and
+  `this.made_by()` calls that. With another one beside it, `static (x = 0, …)`, it reads (Geometry's Vector).
+- **A name given a type of more than two, `x: A | B | C`, or of other than names (`orientation: -1 | +1 = +1`), reads as
+  `(x: A) | B | C`**: only `x: A | B` with A and B names is the whole union (the entrypoint's rule); a structure's
+  alternatives of named fields, `(LHS: … | RHS: … | String)`, must stay what they are. And a statement typed so,
+  `a: Number | String = 3`, is not 3 (`b: (Number | String) = 3` neither).
+- **`this` in a function written in a class's own block is not what is made** (`rows := (0 ..< 1).map(r => this.width)`
+  in a class's block: nothing; `.width` neither). In a method it is the method's `this` now (the frame the function was read
+  from, out through the functions it is written in); a class's block, inlined in its constructor, names what is made only
+  as `.` and `this` directly. Grid names its width before its rows for that.
+- **Arguments are composed by `,`, then separated by the types they are given to** (the user, 2026-10-23): `.put(at, cell)`,
+  `at` a Vector, reaches `put` as `0, 0, cell`; given more than it has places, a place typed so takes as many as make one of
+  its type, made it (`&+=`, its members on it). Only when more are given than places, and only for the first places in
+  order: a place taking a list among defaults, or two lists, is not done. `[at], cell` keeps it whole as written.
+- **Geometry gives an Axis a Number where it declares a Length** (`Space.grid`: `extent: axis_entry.value`, the grid's
+  size in cells, against `extent: Length?`): said as an error, and the extent is then the type (all Lengths), so `holds`
+  compares against every Length and runs out of memory when asked twice. (A Length is a distance with a unit: the grid's
+  extent wants a Quantity, the user, 2026-10-23.)
+- **The CLI's first frame does not fit in 2 GB**: the bootstrap and the 34 files it includes (ray/, $/ devices, os, Device,
+  World, Geometry, ANSI, UI) leave little: "almost all the memory there is is in use" at points that differ from run to run
+  (one thread or many). `RAY_MEMORY` above 2³¹ hangs (above).
+- **A method written against what follows it takes one word of it** (`0..p.width` is `(0..p).width`; `0 .. p.width` and
+  `0..(p.width)` read): the member is read on what the method answered. `..<` so is read whole by a rule in Ray.ray (`0..<p.width`,
+  `(0..<.height)` in UI's Grid); `..` is not (a rule `{low}..{high}` would take `..<` too): UI's `(from.x..to.x)` (underlines).
+- **A level of rules applied to a value, `Compiler.reduced(move, UI.TUI.written)`, applies none of its typed rules**
+  (`{move: ANSI.Move} => …`): `reducing` reads the value's code (a name) in the level, and a typed hole asks of the text
+  (cached per type and text), not of the value it names, so a Move or a Style is answered as it is, not written. A text
+  answers itself, a list goes through `{sequences: Iterable}`. The first frame stops here: its parts are not written.
+  (`reducing` answered the level itself before: `reading` is `&+=`.)
+- **A raw fragment's control sequence, `@ansi \e[2;3H`, opened a bracket** (everything after it misread, ANSI's Style
+  no Style): a bracket after `\e` belongs to the escape now. Character.ray's line fragment rule does not take a
+  fragment that begins with `\` (its first is a word, `<`, `(`, a backtick, `"` or `-`).
+- **`x -- y` binds looser than `:=`** (as declared, after `=` and `,`): `q := [4, 5] -- (v => …)` is `(q := [4, 5]) -- …`.
+  A function in brackets after it is given what is before it (`x -- (made => (@also made Vector) -- made)`); a function
+  read another way is not.
 - **A parameter named bare in a method does not read the field** (`S := class (axes: Number[]) => { dimension =>
   axes.length }`: `S([1, 2]).dimension` is nothing; `.axes.length` reads it).
 - **A rule written outside the entrypoint does not read a block it was given in the node it makes** (`{on} +++ {`{`}{code}
@@ -191,3 +220,40 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **`RAY_MEMORY` above 2³¹ hangs the kernel** (`RAY_MEMORY=3221225472`: a run of the kernel's own translation, two functions,
   never ends, main's kernel as well; 2³¹, the default, ends in two minutes): an address past 2³¹ is negative as a 32-bit
   integer. So the self-hosting check runs at the default, and the translation of `apply_` is at the edge of it.
+- **A statement's memory running out is a crash, not a report** (`RAY_STATEMENT_MB=200`, a 20 by 1 TUI grid written: "Worker
+  queue failed: memory access out of bounds", no diagnostic naming the statement; at 400 the frame is written). After the
+  frame, the run ends in "out of memory (2147483648 bytes, all of it in use)": something after the last statement holds 2 GB.
+- **A word method written both with and without parameters, called infix, reads the one without** (`mn (b) => b` and
+  `mn => 7`: `qb mn 5`, `qb.mn 5` answer 7's reading, not 5): the decided rule (§21.3, brackets read the one with
+  parameters, none the other) takes `mn 5` as `mn` then `5`. Number's `min`/`max` (Ordered's, and Ray's `min =>`) are not
+  hit: `2 min 5`, `pv.x min pv.y` answer 2.
+- **A level reduces no value by its type** (`Compiler.reduced(Kd(1), { {kd: Kd} => "kind" … })` is not "kind", a number
+  or a text neither): `level reducing value` reads the code `value` in the level, and a typed hole asks about that code,
+  not its value. UI's `drawn`, `filled`, `shaded`, `shown`, `Lowered` and Geometry's `Solving`/`Projecting`/
+  `Approximating` are written so (the user, 2026-10-23: the old Language model; class headers and `as X` instead).
+- **A program's code is not read again under its level** (`Program(code: { "a" }){O: { {text: String} => 5 }}()` is not
+  5; `Program(code: { 5 })()` is not 5): a block is read where it is written, into a node; calling it runs nothing, and
+  rules added to a closure's node are not seen by its body (it reads where it was written first). `UI.Scene` (the site's
+  reading: `"Ray" ^h1`, `{share}% * {x}`, `a <- b`) and every `Program(…).rendered(level)` need it. The global-`O` level
+  (the optimizations worktree) is what reads a program with a level's rules in scope.
+- **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
+  while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
+- **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
+  `Dk().b` is 2, but `Dk(a: 5).b` is no Number; `b: Number = 7` and `c: Number = b` are kept). Given anything, the header is
+  read as a left side (`({written_parameters}) := arguments_given`) and its defaults with it: the default's code is inside
+  the left side's text, so `{name}: {type} = {value}`'s body reads `value` as part of the left side (a place), and a place
+  nothing is given (`each takes`, `declared`) keeps that. Shape's header is made of these (`space: Space = parent.space ??
+  Space.current`, `font: … = parent ? … : Font.base`): `Geometry.Box(size: v).space` is None, `Geometry.Shape().space` is
+  not. Taking the header's defaults first when everything is given by name (`all_named`, then the names) loses half the
+  bootstrap's tests (565 of 1084 pass). Also open: a default reading a field given by name sees that field's own default
+  (`Df(a: 5).b` is 2, not 6), and one reading a field after it is not read (Shape's `boundary` reads `space`).
+- **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
+  or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
+  failed).
+- **A text joined of three or more is not the text** (`assert "a" + "b" + "c" == "abc"` fails, `"ab" + "c"` holds; numbers
+  hold): and, written to a terminal, ANSI.Colored's `as String` (six joined, `";2;" + … + ANSI.digits(this.blue)`) says
+  "nothing in what it is read on reads `+ ";" + …`" when Style's `as String` calls it inside a `map` (directly it writes
+  `38;2;255;0;0`); a class written in the entry file with `as String => "r" + ANSI.digits(this.red)` writes nothing.
+- (fixed 2026-10-24) `class: Parent (fields) { … }` without `=>`: a rule's definition whose body is itself a class (`=> class:
+  … => { … }`) is read as that class, never defined: written in brackets. A static conversion naming its class
+  (`static (x: T) as (=== Space)`) is that class's `from` now (the class's name is not given it while its block is read).

@@ -243,3 +243,19 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   parent) is read now.
 - **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
   while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
+- **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
+  `Dk().b` is 2, but `Dk(a: 5).b` is no Number; `b: Number = 7` and `c: Number = b` are kept). Given anything, the header is
+  read as a left side (`({written_parameters}) := arguments_given`) and its defaults with it: the default's code is inside
+  the left side's text, so `{name}: {type} = {value}`'s body reads `value` as part of the left side (a place), and a place
+  nothing is given (`each takes`, `declared`) keeps that. Shape's header is made of these (`space: Space = parent.space ??
+  Space.current`, `font: … = parent ? … : Font.base`): `Geometry.Box(size: v).space` is None, `Geometry.Shape().space` is
+  not. Taking the header's defaults first when everything is given by name (`all_named`, then the names) loses half the
+  bootstrap's tests (565 of 1084 pass). Also open: a default reading a field given by name sees that field's own default
+  (`Df(a: 5).b` is 2, not 6), and one reading a field after it is not read (Shape's `boundary` reads `space`).
+- **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
+  or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
+  failed).
+- **A static conversion naming its own class bare is not read** (Geometry: `static (structure: Graph) as (=== Space) => …` in
+  Space's block, and `Stops`, `Edges`, `Spacing` alike: "nothing in what it is read on reads `Space`"; ANSI's, written
+  `(=== ANSI.Style)`, are): said from `applied`/`called` (a head read as a closure called), not from `onto`, where a type's
+  name read bare would be found; so `Geometry.Edges(…)`'s conversion is never made.

@@ -1675,24 +1675,24 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
     written_types
   }
 }
-class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
+class: {class_parent} ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword => (() => {
   // (`static`, the class: the one whose block this is written in (`outer`, its block's), else this one: `integer: static` of
   // a class written in Decimal's block is a Decimal)
   // (read bare: where the class is written (inside this closure, `this` is not))
   outer := class_block
   // (built on a conjunction, `class: Iterable & Ordered`: on its parts, not on the conjunction (whose `conjoined` an
   // instance would hold: it is no conjunction itself))
-  held := ((((parent).conjoins === true) ? (parent).conjoined.first : (parent)) &+ {
-    superclass := parent
-    super := parent
+  held := ((((class_parent).conjoins === true) ? (class_parent).conjoined.first : (class_parent)) &+ {
+    superclass := class_parent
+    super := class_parent
     class_block := .
     // (the class it is written in, before its block is read: a header in it naming one written there, `d (o: K)` in K)
     outer_block := outer
     written_in_class => (outer_block === None) ? class_made : outer_block.written_in_class
     static => written_in_class
-    {block}
+    {class_body}
   })
-  ((parent).conjoins === true) ? (held &+= ((parent).conjoined.last)) : held
+  ((class_parent).conjoins === true) ? (held &+= ((class_parent).conjoined.last)) : held
   // (the class it is written in, its own too: what is asked of the class, not of its block)
   made := (held &+ {
     outer_block := outer
@@ -1705,23 +1705,23 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
   // (one with no header, `class: P { … }`; of a class written as a structure, read as that structure (made of it, what it
   // reads, it reads), P not taught to read it)
   // (no locals: what this closure declares is declared where the class is written, shared by every class written there)
-  (made reads ({fields}) as made) unless inherits_structure(`{fields}`, parent)
+  (made reads ({class_fields}) as made) unless inherits_structure(`{class_fields}`, class_parent)
   // (a text written in its header: the class kept as the one it is written in (one with no header of its own, made of it, has
   // it too: it reads as that one is written))
-  (member_given(made, "header_quoted", made)) if external quoted `{fields}`
+  (member_given(made, "header_quoted", made)) if external quoted `{class_fields}`
   // (a header that defines what its positions are read by, from what one before them read (`GRAMMAR_RULE_DEF :=
   // BOOTSTRAPPER.CAPTURES…`): read in turn first, each position as it is once the ones before it are given)
-  (member_given(made, "header_defines", true)) if (external defines_text `{fields}`) === true
-  (parent reads ({fields}) as made) unless (parent === Node) || inherits_structure(`{fields}`, parent)
+  (member_given(made, "header_defines", true)) if (external defines_text `{class_fields}`) === true
+  (class_parent reads ({class_fields}) as made) unless (class_parent === Node) || inherits_structure(`{class_fields}`, class_parent)
   made &+= {
     of := .
     // (a constructor of its own, `static (x: T) => …`, instead, when it has one (asked without `missing`: a class has none))
     {this}({arguments: Arguments}) => ((external member (this) (`made_by`)) !== None) ? this.made_by({arguments}) : (this &+ {
-      ({{fields}}) taking {arguments}
+      ({{class_fields}}) taking {arguments}
       // (its block, the constructor: read in each one made (what does not depend on it, the class's, once: `hoisted`); a name
       // given by name is not given its default there (`Hierarchy(parent: root)`, `parent: Hierarchy? = None`))
       external hoisted {
-        {{block}}
+        {{class_body}}
       }
     })
     {this}() => ((external member (this) (`made_by`)) !== None) ? this.made_by() : this(declared)
@@ -1741,22 +1741,22 @@ class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (() => {
 class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
-class: {parent} {`{`}{block}{`}`} ^keyword => (class: {parent} (nothing_given = None) => { {block} })
-class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => (class: Node ({fields}) => { {block} })
+class: {class_parent} {`{`}{class_body}{`}`} ^keyword => (class: {class_parent} (nothing_given = None) => { {class_body} })
+class ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword => (class: Node ({class_fields}) => { {class_body} })
 class ({fields}) {`=>`} {`{}`} ^keyword => (class: Node ({fields}) => { })
-class {`{`}{block}{`}`} ^keyword => class: Node { {block} }
+class {`{`}{class_body}{`}`} ^keyword => class: Node { {class_body} }
 // (its fields written without `=>` before the block, `class ("\e]52;", …) { … }`: the same)
-class ({fields}) {`{`}{block}{`}`} ^keyword => class: Node ({fields}) => { {block} }
+class ({class_fields}) {`{`}{class_body}{`}`} ^keyword => class: Node ({class_fields}) => { {class_body} }
 // (what ends a class's fields read as a list (`written_as`; after `class { }` is read: one class, not one each time it is read))
 fields_end := class { }
 // (a class of functions, written with what they take and answer, `class: <yield: (x: Ray): None>(entry: Ray): None { … }`: a
 // class of its block (what they take and answer not yet checked))
-class: <{generics}>({parameters}): {result} {`{`}{block}{`}`} ^keyword => class: Node { {block} }
+class: <{generics}>({parameters}): {result} {`{`}{class_body}{`}`} ^keyword => class: Node { {class_body} }
 // (written with its fields and `=>`, a definition: read as one)
-{name ^class} := class ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => ({name} := (class ({fields}) => { {block} })) ^class
+{class_name ^class} := class ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword => ({class_name} := (class ({class_fields}) => { {class_body} })) ^class
 // (its block empty, written `{}`: no block for a hole to take)
-{name ^class} := class ({fields}) {`=>`} {`{}`} ^keyword => ({name} := (class ({fields}) => { })) ^class
-{name ^class} := class: {parent} ({fields}) {`=>`} {`{`}{block}{`}`} ^keyword => ({name} := (class: {parent} ({fields}) => { {block} })) ^class
+{class_name ^class} := class ({fields}) {`=>`} {`{}`} ^keyword => ({class_name} := (class ({fields}) => { })) ^class
+{class_name ^class} := class: {class_parent} ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword => ({class_name} := (class: {class_parent} ({class_fields}) => { {class_body} })) ^class
 // (a member of an instance, then an operator: the operator read on the member's value, not on the instance)
 assert {
   Carrying := class (carried) => {
@@ -2114,7 +2114,7 @@ enum {names ^enumMember} ^keyword => {
   .
 }
 // (written with a block: each member reads it too, `ranked => rank` its own)
-enum {names} {`{`}{block}{`}`} ^keyword => (enum {names}) ~~ (.members.for((member) => member &+= { {block} }))
+enum {names} {`{`}{class_body}{`}`} ^keyword => (enum {names}) ~~ (.members.for((member) => member &+= { {class_body} }))
 assert {
   Shape := enum circle (radius: Number) | square (side: Number) | point
   assert Shape.circle.radius === Number  // EM8 a member's field given nothing is not its type (all it may be)
@@ -2535,9 +2535,9 @@ Header := {
 }
 // (with no block, an empty one: `class only: Number`; before the forms with one)
 class {fields: Header} ^keyword => class {fields} { }
-class {fields: Header} {`{`}{block}{`}`} ^keyword => { class: Node ({fields}) => { {block} } }
-{name ^class} := class {header: Header} ^keyword => ({name} := (class ({header}) => { })) ^class
-{name ^class} := class {header: Header} {`{`}{block}{`}`} ^keyword => ({name} := (class ({header}) => { {block} })) ^class
+class {class_fields: Header} {`{`}{class_body}{`}`} ^keyword => { class: Node ({class_fields}) => { {class_body} } }
+{class_name ^class} := class {header: Header} ^keyword => ({class_name} := (class ({header}) => { })) ^class
+{class_name ^class} := class {class_header: Header} {`{`}{class_body}{`}`} ^keyword => ({class_name} := (class ({class_header}) => { {class_body} })) ^class
 // Statements on one line: `a ; b` (declared after everything else here: the loosest of all, `x = 1 ; y = 2` two).
 {first} ; {rest} ^punctuation => {
   {first}

@@ -508,9 +508,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     }
     return at;
   }
-  // (a line beginning with `&` or `|` (`&&`, `||`), then a space: what it reads on is the line above, which it continues)
+  // (a line beginning with `&` or `|` (`&&`, `||`), then a space: what it reads on is the line above, which it continues; and
+  // the parts of a choice, `? a` and `: b`, written on lines of their own)
   function operator_led(q: number, end: number): number {
     const c = b(q);
+    if (c === 58 || c === 63) return q + 1 < end && b(q + 1) === 32 ? 1 : 0;
     if (c !== 38 && c !== 124) return 0;
     const d = b(q + 1) === c ? q + 2 : q + 1;
     return d < end && b(d) === 32 ? 1 : 0;
@@ -1783,7 +1785,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let depth = 0, open = 0;
     for (let p = h - 1, k = 0; p > 0 && k < 65536; p--, k++) { const c = b(p); if (c === 41 || c === 93 || c === 125) depth++; else if (c === 40 || c === 91 || c === 123) { if (depth === 0) { open = c === 40 ? p : 0; break; } depth--; } }
     if (!open) return 0;
-    { let q = open - 1; while (q > 0 && b(q) <= 32) q--; if (b(q) !== 58) return 0; }
+    // (a header: after `:`, after a word with a space between, `class (a = 1, b = a)`, or a statement of a block, what a class
+    // made reads its fields as (`{ ({{fields}}) taking … }`))
+    { let q = open - 1; while (q > 0 && b(q) <= 32) q--; if (b(q) !== 58 && b(q) !== 123 && !(q < open - 1 && b(w(CLASSES) + b(q)) === 1)) return 0; }
     depth = 0;
     for (let p = open, k = 0; k < 65536; p++, k++) { const c = b(p); if (c === 40 || c === 91 || c === 123) depth++; else if (c === 41 || c === 93 || c === 125) { depth--; if (depth === 0) return at < p ? 1 : 0; } }
     return 0;

@@ -1768,8 +1768,11 @@ const section = (id: number, body: number[]) => [id, ...uleb(body.length), ...bo
 const text = (s: string) => vec([...s].map(c => [c.charCodeAt(0)]));
 
 // A module of the program's contexts, each exported by name. Its memory is shared, so threads can run it together.
+// (`RAY_KERNEL_WASM=<file>`: the module in that file instead, as `wasm.ray` writes it (`scripts/kernel-ray.mts --wasm`): the
+// kernel Ray wrote, run)
 export function compile(p: Jmp, pages: number): WebAssembly.Module {
-  const t0 = performance.now(), bytes = module_bytes(p, pages), t1 = performance.now(), module = new WebAssembly.Module(bytes);
+  const given = typeof process !== 'undefined' ? process.env.RAY_KERNEL_WASM : undefined;
+  const t0 = performance.now(), bytes = given ? new Uint8Array(env.fs.readFileSync(given)) : module_bytes(p, pages), t1 = performance.now(), module = new WebAssembly.Module(bytes);
   if (typeof process !== 'undefined' && process.env.RAY_TIMES) console.error(`TIMES wasm bytes ${bytes.length}, made in ${(t1 - t0).toFixed(1)} ms, compiled by the engine in ${(performance.now() - t1).toFixed(1)} ms`);
   return module;
 }

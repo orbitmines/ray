@@ -231,11 +231,15 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   or a text neither): `level reducing value` reads the code `value` in the level, and a typed hole asks about that code,
   not its value. UI's `drawn`, `filled`, `shaded`, `shown`, `Lowered` and Geometry's `Solving`/`Projecting`/
   `Approximating` are written so (the user, 2026-10-23: the old Language model; class headers and `as X` instead).
-- **A program's code is not read again under its level** (`Program(code: { "a" }){O: { {text: String} => 5 }}()` is not
-  5; `Program(code: { 5 })()` is not 5): a block is read where it is written, into a node; calling it runs nothing, and
-  rules added to a closure's node are not seen by its body (it reads where it was written first). `UI.Scene` (the site's
-  reading: `"Ray" ^h1`, `{share}% * {x}`, `a <- b`) and every `Program(…).rendered(level)` need it. The global-`O` level
-  (the optimizations worktree) is what reads a program with a level's rules in scope.
+- **A rule led by a hole typed by a class reads nothing where the class's own rules don't read the text** (`{n: Number}
+  ~!!~ {m} => …`: `4 ~!!~ 5` is unread; untyped, `{n} ~!!~ {m}`, it reads): a typed hole is checked by the type's own
+  rules (Design), and Number's digits are read by a global rule (`{digits: Decimal.String} ^number`), so `4` is no Number
+  to a check. String's quotes were global too; String now has them as its own (`"Ray" ^h1` reads by UI.Scene's
+  `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
+  type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
+  a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
+- **`assert Program(code: { … }){O: L}() == x` without brackets around the program is false** where `(Program(code: { …
+  }){O: L})() == x` holds (CO35 is written so).
 - **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
   while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
 - **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:

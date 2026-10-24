@@ -238,6 +238,11 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
   type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
   a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
+- **An operator written as a type matches nothing** (`{superposed: |}`, `{inline: ,}`, `{lines: \n}` in UI.Scene; `("a" | "b")
+  is |` false). Decided 2026-10-24: the operator is a component on the Edge between the values it joined (Ray, Boundary,
+  Edge), and a value joined by such edges is of it. Tried: a bare `| ^operator => external rule …` breaks every `a | b`;
+  decorating `components` in `{a} | {b}` (in its block, after it with `~~`, or in the `components :=` expression, even
+  guarded) leaves the bootstrap with nothing passing (`{value: a}` in that rule is then not read). Open.
 - **A member named as one of the rule's holes reads the hole** (`{styled: String} … => x.styled(style)`: `.styled` is the hole,
   not x's method): a name after `.` is x's, never a hole of the rule it is written in. UI.Scene's hole renamed `marked`.
 - **A field holding a closure, named bare, is the closure applied** (`(p).reading === None` for `reading: ((s) => …)`, and

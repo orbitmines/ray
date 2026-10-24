@@ -3459,6 +3459,11 @@ read {location} ^keyword => external read {location}
 include @./.project.ray
 //include @./*.ray
 include @./Node.ray
+// (what is written between quotes, read by String's own rules too: a hole typed String (`{styled: String}`) reads it, its
+// value the text)
+String &+= {
+  "{text ^string}" ^string => ((external &).text).unescaped
+}
 include @./Ray.ray
 include @./Number.ray
 include @./String.ray

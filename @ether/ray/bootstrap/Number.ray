@@ -209,6 +209,9 @@ Number &+= {
   assert 12 as 10 as String == "12"  // S68 twelve is not spelled 12 in ten
   assert 5 as 2 as String == "101"  // S69 five is not spelled 101 in two
   assert 255 as 16 as String == "ff"  // SN2 255 is not spelled ff in sixteen
+  // (as a text with no base given: its digits in ten, `"" + move.row`)
+  as (=== String) => this as 10 as String
+  assert (3 + 4) as String == "7"  // SN5 a number is not spelled in ten as a text
   assert "ff" as 16 as 16 as String == "ff"  // SN4 ff does not come back from sixteen
   as (=== String) => this as 10 as String
   assert 7 as String == "7"  // S141 seven does not spell 7
@@ -316,7 +319,8 @@ Number.Named.for((name) => {
     << (places: Number) => static(integer: .integer, [.digit(0)] * places)
     >> (places: Number) => places >= .integer.length ? static(integer: [.digit(0)]) : static(integer: .integer[..<-places])
 
-    as (=== String) => .integer as String
+    // (its digits joined, a text: not the list of them, which is a String already as it is)
+    as (=== String) => .integer.join("")
 
     {fraction: static.String} (): Real => .integer, ".", fraction
 

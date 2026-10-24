@@ -72,6 +72,62 @@ String &+= {
 // Arrays: a list the language links (`Array.new`, its vertices from `head`): what Ray.ray's Iterable answers of it, walking
 // its vertices (as its rules answer, reading it as a Ray a step at a time)
 Array &+= {
+  // (made, given to: by the kernel, as the language does it, the same members on the same nodes (Array's `new`, `append`,
+  // `prepend`, `listed`, `joined`); the one rule every list reads a written value with, `{written}`, kept once for all)
+  list_reading := {
+    {written} => (.).one_written(`{written}`)
+  }
+  // (`new` and `append` natively, `external arrayed new (Array)` and `external arrayed append (.) (value)`: off, TODO(explicit):
+  // with them a suite's tests take twice as long, though reading is a third faster; as the language makes them until found)
+  // (prepend, listed, joined: natively they break under evacuation in tests run by threads, TODO(explicit): until found, the
+  // language's way)
+  prepend (value) => (.).prepended_by_linking(value)
+  listed () => (.).listed_by_linking()
+  joined (other) => (.).joined_by_linking(other)
+  appended_by_linking (value) => {
+    link := Array.linked(value)
+    if .tail {
+      link.previous := .tail
+      .tail.next := link
+    } else {
+      .head := link
+    }
+    .tail := link
+    .
+  }
+  prepended_by_linking (value) => {
+    link := Array.linked(value)
+    if .head {
+      .head.previous := link
+      link.next := .head
+    } else {
+      .tail := link
+    }
+    .head := link
+    .
+  }
+  listed_by_linking () => {
+    made := Array.new
+    at := .head
+    while at {
+      external named_like (made.append(at.value)) at
+      at = at.next
+    }
+    made
+  }
+  joined_by_linking (other) => {
+    joining := .
+    if other.listing {
+      at := (other === joining) ? other.listed().head : other.head
+      while at {
+        external named_like (joining.append(at.value)) at
+        at = at.next
+      }
+    } else {
+      joining.append(other)
+    }
+    joining
+  }
   first => .head ? .head.value : None
   last => .tail ? .tail.value : None
   empty => .head ? false : true
@@ -147,6 +203,8 @@ Array &+= {
     made
   }
 }
+// (the rules every list is given, given to the kernel once)
+external arrayed reading (Array.list_reading)
 // (accelerated: what a value is, where the kernel can tell, as the language's `is` answers: a text against a written text,
 // String, `T+`, `T[]`, a list of types read in order, a superposition of them; itself; Node. Anything else, the language's)
 // (`T+` keeps what it is one or more of, for the kernel to see: the same narrowing)

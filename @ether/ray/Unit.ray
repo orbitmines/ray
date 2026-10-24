@@ -89,6 +89,8 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
   (global[.name] = this) if .name
   assert 25.years == 25 years  // U49 a unit is not reachable as a member
   (global[.symbol] = this) if .symbol
+  (Unit.Spelling[.name] = this) if .name
+  (Unit.Spelling[.symbol] = this) if .symbol
   assert 3 s == 3 seconds  // U43 three s are not seconds
 
   static Temporal => second
@@ -107,6 +109,10 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
 
   compounds / (other: Unit) => Unit.Rate(numerator: this, denominator: other)
     -- .convert x => x * (this as other.static), other.static
+
+  static spelled (spelling) => (spelling is Unit) ? spelling : global[spelling]
+  // (a unit's name or symbol as written: each unit made gives it its own; read, the unit)
+  static Spelling := { }
 
   chainable == (other: Unit) => this === other || .name == other.name
   assert minute == minute  // U58 a unit is not itself
@@ -146,7 +152,8 @@ Unit := class (name + symbol: boolean? + plural: boolean? + singular: !symbol &&
 Unit.None := Unit(global.None)
 
 // (written right after it, or after a space: `16px`, `5 s`)
-{amount: Number}{gap: " "?}{unit: Unit} => Quantity(quantities: [(quantity: amount, unit: unit)])
+{amount: Number}{written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
+{amount: Number} {written: Unit.Spelling} => Quantity(quantities: [(quantity: amount, unit: Unit.spelled(written))])
 assert 2 seconds is Quantity  // HS13 a count before a unit is read as a count, not a quantity
 assert 3.(. minutes == 180 s)  // U54 a number held in a variable does not take a unit after it
 assert (5s).unit == second  // U109 a unit written right after a number is not that unit

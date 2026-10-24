@@ -93,6 +93,7 @@ global["wasm"] := {
   labels := None
   slice_from := None
   slice_to := None
+  announced := None
   natives := None
   hosts := None
   minus_one := None
@@ -250,10 +251,18 @@ wasm_kept_of (made_called, made_cells, made_cells_n, made_params, made_statement
   labels := made_labels
   here := true
 }
+// (every context given before any is begun (`wj_announced`): each body written as its context ends, nothing of it kept)
+wj_announced (unused) => {
+  wasm.announced = true
+}
 wasm_close (unused) => {
   if wasm.called !== None {
-    wasm_put(wasm.given, (wasm_key(wasm.given_n)), (wasm_kept_of(wasm.called, wasm.cells, wasm.cells_n, wasm.params, wasm.statements, wasm.statements_n, wasm.labels)))
-    wasm.given_n = wasm.given_n + 1
+    if wasm.announced === true {
+      wasm_end(0)
+    } else {
+      wasm_put(wasm.given, (wasm_key(wasm.given_n)), (wasm_kept_of(wasm.called, wasm.cells, wasm.cells_n, wasm.params, wasm.statements, wasm.statements_n, wasm.labels)))
+      wasm.given_n = wasm.given_n + 1
+    }
     wasm.called = None
   }
 }

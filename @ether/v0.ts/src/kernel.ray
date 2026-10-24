@@ -694,9 +694,11 @@ kjs &+= {
   }
   // (a function: its body read where its rule is, at the top of the rule's body (in a block of another's, or a closure, that
   // one's rules would be read first, or what this file's reading wrote not seen); in the first reading passed over, `mode`
-  // 4, its body not read (gone past); in the second its context begun, then its end written, but for one not among those
-  // written, 5, passed over as in the first)
+  // 4, its body not read (gone past), and when writing its context given (every one given before the second reading begins,
+  // `wj_announced`: each body written as it ends); in the second its context begun, then its end written, but for one not
+  // among those written, 5, passed over as in the first)
   opening (unused) => {
+    if (kjs.mode == 1) && (kjs.writing === true) { wj_context(kjs.called, kjs_counted(kjs.taken)) }
     if kjs.mode == 1 { kjs.mode = 4 }
     if (kjs.mode == 2) && (kjs.writing === true) { wj_context(kjs.called, kjs_counted(kjs.taken)) }
     if kjs.mode == 2 {
@@ -726,6 +728,7 @@ kjs &+= {
   }
   set_mode (m) => {
     kjs.mode = m
+    if (m == 2) && (kjs.writing === true) { wj_announced(0) }
   }
 }
 // (a line of the kernel's: its constants, each written of constants, its own value)

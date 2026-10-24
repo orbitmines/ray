@@ -11,16 +11,8 @@ OS := class (platform: String) => {
   libraries: String[] = []
   abi: String?
   as (=== boolean) => this === (@me/device as OS)
-  // what the host says of itself (`os["PATH"]`, `os.env.PATH`)
-  [property: String] => OS.reported(property) as String
-  architecture => this["architecture"]
-  // its environment, as the host reports it now (`env.PATH`)
-  env => OS.reported("env")
-
-  // the one the host reports; none: the language as the operating system (@ether/os)
-  // (what the host reports of itself: given by the implementation; none in the language)
-  static reported (property) => None
-  static host: OS => OS#{.platform == (OS.reported("platform") as String)}.first ?? OS.Ether
+  // what it says of itself (`os["PATH"]`, `os.architecture`, `os.env.PATH`): each operating system answers its own
+  // `[property]`, a member it does not have read by it
 }
 // An operating system made here: named by its platform, not the one the device runs.
 assert {

@@ -58,10 +58,9 @@ Location := class: Hierarchy (
   assert ("?a=1&b=2" as Location).query.b == "2"  // LOC21 a query's value is not found by its name
   assert ("?a=1&a=2" as Location).query.a == "2"  // LOC22 with a repeated name, the last value is not the one found
   assert ("?a=1" as Location).query.b == None  // LOC23 a name that is not there has a value
-  static decoded (text: String) => (text.split("+").join(" ") as Byte[]) -- (bytes => Location.unescaped(bytes) as String)
-  static unescaped (bytes: Byte[]) => bytes.empty ? [] : bytes.first == "%" as Byte
-    ? [(bytes[1..<3] as String as Hexadecimal₂) as Byte, Location.unescaped(bytes[3..])].flatten
-    : [bytes.first, Location.unescaped(bytes.rest)].flatten
+  static Escaped := class (parts: (("%", byte: Hexadecimal.Digit₂) | Char)[]) => { }
+  static decoded (text: String) => (text.split("+").join(" ") as Location.Escaped).parts
+    .map(.byte ? [(.byte as String as Hexadecimal) as Byte] : [.] as String as Byte[]).flatten as String
   assert Location.decoded("a%20b") == "a b"  // LOC15 a percent-encoded value is not decoded (RFC 3986 section 2.1)
   assert Location.decoded("a+b") == "a b"  // LOC16 "+" in a query is not a space
   assert Location.decoded("%C3%A9") == "é"  // LOC17 a multi-byte percent sequence is not decoded as UTF-8 ("%C3%A9" is U+00E9)
@@ -136,13 +135,7 @@ assert !("/no/such/place/anywhere" as Location is Directory)  // LOC58 a locatio
 // yet: what is under it is nowhere too. Nothing, true and false are one value everywhere, and are placed nowhere. What
 // is somewhere already stays where it is: written elsewhere too, it is not moved, so nothing is placed under itself, and
 // where what holds it is does not change after.)
-{holder}.{name: Char.Word[]} = {value} => {
-  value
-  ((placed_at, placed) => (placed.({ location => placed_at }) if placed_at !== None))((holder).@.under("{name}"), value) if (holder).@ && !((value).@) && !(((value) === None) || ((value) === true) || ((value) === false))
-  holder ~~ ({name} => value)
-  value
-}
-{holder}.{name: Char.Word[]} := {value} => {
+{holder}.{name: Char.Word[]} {written: "=" | ":="} {value} => {
   value
   ((placed_at, placed) => (placed.({ location => placed_at }) if placed_at !== None))((holder).@.under("{name}"), value) if (holder).@ && !((value).@) && !(((value) === None) || ((value) === true) || ((value) === false))
   holder ~~ ({name} => value)
@@ -160,15 +153,12 @@ assert {
 
 // Written in code (`@"…"` is a character's name, Character.ray): `@scheme://…`, `@/…`, `@./…`, `@../…`, `@C:/…` (a Windows drive,
 // https://url.spec.whatwg.org/#windows-drive-letter), `@name/…`
-@{scheme: Char.Word[]}://{rest: Path} ^string => (scheme + "://" + rest) as Location
+@{written: Path{. ~= "/"}} ^string => written as Location
 assert @https://orbitmines.com/a as Path == "https://orbitmines.com/a"  // LOC63 `@scheme://rest` is not the location written out
-@{start: ("." | "..")?}/{path: Path} ^string => (start + "/" + path) as Location
 assert @/etc/hosts as Path == "/etc/hosts"  // LOC65 `@/path` is not the absolute location
 assert @./a/b as Path == "./a/b"  // LOC66 `@./path` is not the location relative to here
 assert @../a as Path == "../a"  // LOC67 `@../path` is not the location relative to the parent
-@{drive: Char.Letter}:/{path: Path} ^string => (drive + ":/" + path) as Location
 assert @C:/Windows/System32 as Path == "C:/Windows/System32"  // LOC68 `@C:/path` is not a Windows drive location
-@{name: Char.Word[]}/{path: Path} ^string => (name + "/" + path) as Location
 assert @a/b as Path == "a/b"  // LOC69 `@name/path` is not the location under that name
 
 // Reading a location answers what is there and leaves it as it was: the file the library is declared in is read twice.

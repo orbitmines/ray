@@ -853,7 +853,10 @@ wj_module (pages) => {
 
 // (what `--write --value=...` writes, read after all of it: the whole module; its sections around bodies written apart)
 wasm &+= {
-  module (pages) => wj_module(pages)
+  module (pages) => {
+    wj_module(pages)
+    wasm.module_written
+  }
   before_bodies (pages, bytes) => wasm_head(pages, bytes)
   after_bodies (unused) => wasm_tail(0)
   written_bodies (unused) => wj_bodies(0)

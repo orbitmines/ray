@@ -24,7 +24,8 @@ Node &+= {
   assert (1 & 2) + 1 == 2 & 3  // SP3 an operator does not carry through &
 
   // what it holds under a name given as text (`` x.`name` `` where `name` holds the text)
-  member (named: String) => this[named]
+  // (what it answers under that name, its own or what it is made of: not `this[named]`, a Ray's `[at]` a position)
+  member (named: String) => external member (this) (named)
   assert (a: 1, b: 2).member("b") == 2  // NOD8 the member asked by a name given as text is not found
   assert !((a: 1, b: 2).member("b") == 1)  // NOD9 a member asked by name gives another member
   // what it holds under a name given as text, written (`x.set("width", 1)`)

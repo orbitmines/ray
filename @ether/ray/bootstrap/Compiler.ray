@@ -190,6 +190,13 @@ Compiler := class {
     }
     scope_made
   }
+  // (a closure run with a level in scope: its code read with the level's rules first, in this thread, until it answers)
+  static run_under (run_closure, run_level) => {
+    external level_in Compiler.scope_of(run_level)
+    run_answer := run_closure()
+    external level_out
+    run_answer
+  }
   // (a node of its own each time: `Node &+ { }` written in a rule is read once)
   static fresh_scope (fresh_none) => Node &+ { }
   Composition := class (first, second) => {
@@ -231,10 +238,15 @@ Program &+= {
     twice := (x) => x * 2
     assert Program(code: { twice(4) + twice(4) }){O: Compiler.memoised}() == 16  // CO35 a remembered application does not answer what it answered
   }
+  assert {
+    shouted := { {a} !!! => a * 100 }
+    assert (Program(code: { 3 !!! }){O: shouted})() == 300  // CO36 a program is not read with its level's rules
+    assert (Program(code: { 2 + 3 }){O: shouted})() == 5  // CO37 a program read with a level does not read the language too
+  }
   // (its code run with its level's rules in scope (in its program, above what is where it is written), what it gives read by them)
   // (the code as it is written, kept to be read again when it runs (`running`, none until given: a block is read where it is
   // written, into a node))
-  {this}() => ((this).running === None) ? (this).code : (this).running()
+  {this}() => ((this).running === None) ? (this).code : (((this).O === Compiler.none) ? (this).running() : Compiler.run_under((this).running, (this).O))
   compounds + (other: Program) => Program(code: (code, other.code))
   assert 5 /* nothing */ + 1 == 6  // GR8 a block comment between operands is read as something
   assert {

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 // of them at once; their lines one after another, as one run reading it all writes them. `scripts/kernel-jmp.mts --check`
 // holds them against `jmp_of`'s. `--wasm <file>`: the kernel's module instead, written by `wasm.ray` (each range its
 // functions' bodies, as bytes; a run writing none, the sections around them, of `--pages` pages of memory), one after
-// another into that file; `scripts/kernel-wasm.mts --check` holds it against `module_bytes`'.
+// another into that file; `scripts/kernel-wasm.mts --check` holds it against `module_bytes`' (given the same `--pages`).
 const option = (name: string, otherwise: number) => { const at = process.argv.indexOf(name); return at < 0 ? otherwise : Number(process.argv[at + 1]); };
 const named = (name: string) => { const at = process.argv.indexOf(name); return at < 0 ? undefined : process.argv[at + 1]; };
 const budget = option('--lines', 250), jobs = option('--jobs', Math.min(8, Math.max(1, cpus().length >> 1)));
@@ -67,7 +67,7 @@ await Promise.all(Array.from({ length: Math.min(jobs, runs.length) }, async () =
   while (next < runs.length) {
     const k = next++, text = await read(runs[k], wasm ? bytes_of(join(dir, `range-${k}.bin`), 'wasm.written_bodies(0)') : []), { out, said } = written(text);
     results[k] = out;
-    const wrote = wasm ? `${text.match(/WROTE \S+ \S*\((\d+) bytes/)?.[1] ?? 'no'} bytes` : `${out.filter(l => l.startsWith('& ')).length} written`;
+    const wrote = wasm ? `${text.replace(/\x1b\[[0-9;]*m/g, '').match(/WROTE \S+ \((\d+) bytes/)?.[1] ?? 'no'} bytes` : `${out.filter(l => l.startsWith('& ')).length} written`;
     process.stderr.write(`functions ${ranges[k][0]} to ${ranges[k][1] - 1}: ${wrote}${said.length ? `, ${said.length} not read: ${said[0].slice(0, 160)}` : ''}\n`);
   }
 }));

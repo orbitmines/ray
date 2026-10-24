@@ -3532,6 +3532,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         let x = block(t, o1, q1, names, f, self, 0, 1, 0, self, 0);
         // (`int32 numeral x`: the text x read as a numeral; one not beginning with a digit, nothing)
         if (q - rest === 7 && b(rest) === 110) return !stopped(t) && x && w(x + N_IS) === IS_TEXT && w(x + N_B) > w(x + N_A) && b(w(x + N_A)) >= 48 && b(w(x + N_A)) <= 57 ? int32(int32_numeral(w(x + N_A), w(x + N_B))) : w(NOTHING);
+        // (`int32 bytes x`: how many bytes the text x is (a text of bytes, `byte`s joined); of anything else, nothing)
+        if (q - rest === 5 && b(rest) === 98) return !stopped(t) && x && w(x + N_IS) === IS_TEXT ? int32(w(x + N_B) - w(x + N_A)) : w(NOTHING);
         // (a Number the language makes, `Number(next: …)` down to zero (`0`): its count)
         if (!stopped(t) && !int32_is(x)) { const cx = count_of(t, x, names, f); if (cx >= 0) x = counted(cx); }
         if (stopped(t) || !int32_is(x)) return w(NOTHING);
@@ -3539,6 +3541,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (n === 2 && b(rest) === 111 && b(rest + 1) === 102) return int32(vx);
         if (n === 5 && b(rest) === 99) return vx < 0 ? w(NOTHING) : counted(vx);
         if (n === 4 && b(rest) === 116) return int32_text(vx);
+        // (`int32 byte x`: x's last eight bits, a text of that one byte (a Byte held as the backend holds it; texts of bytes
+        // joined by `joined`))
+        if (n === 4 && b(rest) === 98) { const at = alloc(1); setb(at, vx & 255); return node(IS_TEXT, at, at + 1, w(TEXTS) || w(GLOBAL), 0); }
         const o2 = skip(q1, z); let y = block(t, o2, z, names, f, self, 0, 1, 0, self, 0);
         if (!stopped(t) && !int32_is(y)) { const cy = count_of(t, y, names, f); if (cy >= 0) y = counted(cy); }
         if (stopped(t) || !int32_is(y)) return w(NOTHING);

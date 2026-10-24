@@ -416,6 +416,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // ---- reading
 
   // The n bytes at a and at c the same?
+  // (a rule's text, each piece of it, in a text in the order written: whether it can read it at all)
+  function fits(x: number, at: number, end: number): number {
+    let p = at;
+    for (let i = 0; i < w(x + R_PARTS); i++) { const q = x + R_PART + PART * i; if ((w(q) & 15) !== LITERAL) continue; const ls = w(q + 4), ln = w(q + 8); let f = -1; for (let c = p; c + ln <= end; c++) if (same(c, ls, ln)) { f = c; break; } if (f < 0) return 0; p = f + ln; }
+    return 1;
+  }
   function same(a: number, c: number, n: number) { for (let i = 0; i < n; i++) if (b(a + i) !== b(c + i)) return 0; return 1; }
   // At `at`: an opening bracket (1), a closing one (2), a quote (3), neither (0); 4 more for the header's; and 8 times how long
   // it is. The brackets are the header's, and the pairs rules taught (a head that is one hole between two characters).
@@ -1201,6 +1207,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
             // numbers it reads: `Decimal.String` is `"0".."9"`))
             let e = -1;
             // (and on a text of other characters each one byte, none: its digits are `"0".."9"`)
+            // (a level's rule: only where the text it is written with is there, in order, before any hole is read)
+            if (leveling && !fits(x, at, end)) { x = tb && kind ? w(tb + 4 * kind) : w(x); continue; }
             if ((w(x + R_FLAGS) & NUMERAL) && numeral_of(at, end) >= 0) { put(s, at); put(s + 4, end); e = end; } else if ((w(x + R_FLAGS) & NUMERAL) && ascii(at, end)) e = -1; else e = match(x, 0, at, end, s);
             // (a bare name, not read on a value: never a member's (a word-led rule of a node holding members))
             if (e >= 0 && (refuse & MEMBER) && (f & LED) && !(f & STATIC) && b(w(CLASSES) + b(w(x + R_PART + 4))) === 1 && w(x + R_OWNER) && w(w(w(x + R_OWNER) + N_BASE) + R_KIND) === MEMBERS_MARK && !same_block(w(x + R_HEAD), at)) { refused = 1; e = -1; }
@@ -1530,6 +1538,21 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (ft && ft !== w(GLOBAL) && ft !== self && w(ft + N_IS) === IS_NODE) { const v = valued_member(t, ft, s, n) || outer_valued(t, ft, s, n); if (v && v !== w(NOTHING) && w(v + N_IS) !== IS_PLACE) return v; }
     }
     return 0;
+  }
+  // (a function called bare, its `this` none of its own (a node made in its call, given no receiver): the frame of the call
+  // it was made in, the nearest, when that one was given one, `two := (a) => ((b) => this)` (the reading of its body is
+  // shared, so not where that was read); else the frame itself)
+  function called_in(fr: number): number {
+    const lc = w(fr + F_THIS);
+    if (!lc || w(lc + N_IS) !== IS_NODE || w(lc + N_B) !== fr || w(lc + N_ALSO) || w(fr + F_RECEIVER) !== lc) return fr;
+    const fnc = w(lc + N_PARENT), mk = fnc && w(fnc + N_IS) === IS_NODE ? w(fnc + N_B) : 0;
+    if (!(mk > 1 && w(mk + N_IS) === IS_FRAME)) return fr;
+    for (let cf = w(mk + F_CALLER), up = 0; cf && w(cf + N_IS) === IS_FRAME && up < 16; cf = w(cf + F_CALLER), up++) {
+      const ml = w(cf + F_THIS);
+      if (!ml || w(ml + N_IS) !== IS_NODE || w(ml + N_B) !== cf) continue;
+      return w(ml + N_ALSO) && run_node(ml) ? cf : fr;
+    }
+    return fr;
   }
   // (the frame `this` is read in, written in a function's body, inlined in its call (`{{body}}`): where the function was
   // written, the frame it was read from, out through the functions it is written in; not out of a method, read where its
@@ -2343,7 +2366,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // function was read from, out through the functions it is written in (`.all.every(a => this.all.every(…))`); not out of
       // a method, read where its class's constructor read the class's block)
       if (h === -4) { let fr = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? names : 0; if (!fr) return self;
-        fr = written_this(fr, w(r + 4), w(r + 8)); const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
+        fr = called_in(written_this(fr, w(r + 4), w(r + 8))); const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
       const tk = follow(self + F_TAKES + TAKE * h, 0);
       // (a text: in what the kernel's map says texts are (its rules read on it), else in what everything is)
       return node(IS_TEXT, w(tk), w(tk + 4), w(TEXTS) || w(GLOBAL), 0);

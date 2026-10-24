@@ -236,11 +236,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   rules added to a closure's node are not seen by its body (it reads where it was written first). `UI.Scene` (the site's
   reading: `"Ray" ^h1`, `{share}% * {x}`, `a <- b`) and every `Program(…).rendered(level)` need it. The global-`O` level
   (the optimizations worktree) is what reads a program with a level's rules in scope.
-- **`class: Parent (fields) { … }` without `=>` takes no positions** (Geometry's `Color := class: Elementwise ("#", red: …)
-  { … }`: `Color(255, 0, 0).red` is not 255; `Color(red: 255, …)` is): `class: {parent} {block}` reads it, `Elementwise
-  ("#", …)` its parent. A rule `class: {parent: Name} ({fields}) {block}` reads it alone (another keyword), but beside that
-  one it never wins, though it writes more of its text (same node, same pass): not found why. `class (fields) { … }` (no
-  parent) is read now.
 - **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
   while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
 - **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
@@ -255,7 +250,10 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).
-- **A static conversion naming its own class bare is not read** (Geometry: `static (structure: Graph) as (=== Space) => …` in
-  Space's block, and `Stops`, `Edges`, `Spacing` alike: "nothing in what it is read on reads `Space`"; ANSI's, written
-  `(=== ANSI.Style)`, are): said from `applied`/`called` (a head read as a closure called), not from `onto`, where a type's
-  name read bare would be found; so `Geometry.Edges(…)`'s conversion is never made.
+- **A text joined of three or more is not the text** (`assert "a" + "b" + "c" == "abc"` fails, `"ab" + "c"` holds; numbers
+  hold): and, written to a terminal, ANSI.Colored's `as String` (six joined, `";2;" + … + ANSI.digits(this.blue)`) says
+  "nothing in what it is read on reads `+ ";" + …`" when Style's `as String` calls it inside a `map` (directly it writes
+  `38;2;255;0;0`); a class written in the entry file with `as String => "r" + ANSI.digits(this.red)` writes nothing.
+- (fixed 2026-10-24) `class: Parent (fields) { … }` without `=>`: a rule's definition whose body is itself a class (`=> class:
+  … => { … }`) is read as that class, never defined: written in brackets. A static conversion naming its class
+  (`static (x: T) as (=== Space)`) is that class's `from` now (the class's name is not given it while its block is read).

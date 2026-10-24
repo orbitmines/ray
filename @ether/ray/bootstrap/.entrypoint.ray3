@@ -1052,8 +1052,10 @@ assert {
 // A constructor of a class's own (`static (a: String) => …`, separate constructors override the one its block is): what it is
 // called with read by it, what it answers what the call does (`made_by`)
 static ({parameters}) {`=>`} {body} ^keyword => static made_by ({parameters}) => {body}
-// (but a conversion written so, `static (cell: Cell) as (=== Style) => …`: the conversion, no constructor)
-static ({converted_parameter}) as (=== {converted_type}) {`=>`} {converted_body} ^keyword => external static ({converted_parameter}) as (=== {converted_type}) => {converted_body}
+// (but a conversion written so, `static (cell: Cell) as (=== Style) => …`: the conversion, no constructor; the `from` of the
+// class it is written in, whose name is not given it yet while its block is read (its parameters a closure's: an enum's
+// block is each member's, where a head's `code: T` would give the member a `code`))
+static ({converted_parameter}) as (=== {converted_type}) {`=>`} {converted_body} ^keyword => static from (converted_given) => ((({converted_parameter}) => {converted_body}))(converted_given)
 interior => {
   external .
   // (what it holds are members: a bare name never reads them, `.name` does)
@@ -1741,12 +1743,14 @@ class: {class_parent} ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword =>
 class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
+// (its fields written without `=>` before the block, `class: Elementwise ("#", red: …) { … }`: the same)
+class: {class_parent} ({class_fields}) {`{`}{class_body}{`}`} ^keyword => (class: {class_parent} ({class_fields}) => { {class_body} })
 class: {class_parent} {`{`}{class_body}{`}`} ^keyword => (class: {class_parent} (nothing_given = None) => { {class_body} })
 class ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword => (class: Node ({class_fields}) => { {class_body} })
 class ({fields}) {`=>`} {`{}`} ^keyword => (class: Node ({fields}) => { })
 class {`{`}{class_body}{`}`} ^keyword => class: Node { {class_body} }
 // (its fields written without `=>` before the block, `class ("\e]52;", …) { … }`: the same)
-class ({class_fields}) {`{`}{class_body}{`}`} ^keyword => class: Node ({class_fields}) => { {class_body} }
+class ({class_fields}) {`{`}{class_body}{`}`} ^keyword => (class: Node ({class_fields}) => { {class_body} })
 // (what ends a class's fields read as a list (`written_as`; after `class { }` is read: one class, not one each time it is read))
 fields_end := class { }
 // (a class of functions, written with what they take and answer, `class: <yield: (x: Ray): None>(entry: Ray): None { … }`: a

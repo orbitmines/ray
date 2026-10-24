@@ -72,7 +72,7 @@ Geometry := class {
     // Spaces by their axes, holes, fields over points, sampling on a grid (F-G2, F-G4, F-G5, F-G6)
     assert Geometry.Space.grid(Geometry.Vector(4, 4), [true, false]) is Geometry.Space.Cylinder  // FWG1 a grid with one looped axis is not a cylinder
     assert Geometry.Space.grid(Geometry.Vector(4, 4), true) is Geometry.Space.Torus  // FWG2 a grid looped both ways is not a torus
-    static (structure: Graph) as (=== Space) => Space([], graph, Projection.embedding(structure), structure)
+    static (structure: Graph) as (=== Space) => Geometry.Space([], Geometry.graph, Geometry.Projection.embedding(structure), structure)
     static Plane := Space{.dimension == 2 && .axes.every(.extent == None && !.loop)}
     static Grid := Space{.discrete && .vertices == None}
     static Cylinder := Space{.axes{.loop}.count == 1}
@@ -205,7 +205,7 @@ Geometry := class {
     -> (other: Stop) => Stops([this, other])
   }
   Stops := class (stops: Stop<K, V>[], easing: Easing = linear, K = Length, V = Number) => {
-    static (stops: Stop[]) as (=== Stops) => Stops(stops, step)
+    static (stops: Stop[]) as (=== Stops) => Geometry.Stops(stops, Geometry.step)
     -> (other: Stop) => Stops([.stops, [other]].flatten(1), .easing)
     sorted => .stops.sort_by(.at)
     at (position: K) => .sorted -- (position <= .first.at ? .first.value

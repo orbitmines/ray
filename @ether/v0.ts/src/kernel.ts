@@ -421,14 +421,15 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // it is. The brackets are the header's, and the pairs rules taught (a head that is one hole between two characters).
   function bracket(at: number, end: number) {
     // (one byte each, the header's are in the table too: 5 and 6)
-    // (one escaped, `\"`, `\{` (after an odd number of backslashes), as within quotes: opens and closes nothing)
-    if (w(OPEN_LENGTH) === 1 && w(CLOSE_LENGTH) === 1) { const k = b(w(PAIRS) + b(at)); return !k || (b(at - 1) === 92 && escaped(at)) ? 0 : k + 8; }
+    // (one escaped, `\"`, `\{` (after an odd number of backslashes), as within quotes: opens and closes nothing; and the
+    // escape's own that follows `\e`, a control sequence, `\e[2;3H`, `\e]0;`, written bare in a fragment)
+    if (w(OPEN_LENGTH) === 1 && w(CLOSE_LENGTH) === 1) { const k = b(w(PAIRS) + b(at)); return !k || (b(at - 1) === 92 && escaped(at)) || (b(at - 1) === 101 && b(at - 2) === 92 && escaped(at - 1)) ? 0 : k + 8; }
     let l = w(OPEN_LENGTH);
     if (at + l <= end && same(at, w(OPEN), l)) return l * 8 + 5;
     l = w(CLOSE_LENGTH);
     if (at + l <= end && same(at, w(CLOSE), l)) return l * 8 + 6;
     const k = b(w(PAIRS) + b(at));
-    return !k || (b(at - 1) === 92 && escaped(at)) ? 0 : k + 8;
+    return !k || (b(at - 1) === 92 && escaped(at)) || (b(at - 1) === 101 && b(at - 2) === 92 && escaped(at - 1)) ? 0 : k + 8;
   }
   function escaped(at: number): number { let n = 0; while (b(at - 1 - n) === 92) n++; return n & 1; }
   // Past what opens at `at`: to after what closes it (what opens inside it, past that too), or a quote's text.
@@ -509,9 +510,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     }
     return at;
   }
-  // (a line beginning with `&` or `|` (`&&`, `||`), then a space: what it reads on is the line above, which it continues)
+  // (a line beginning with `&` or `|` (`&&`, `||`), then a space: what it reads on is the line above, which it continues; and
+  // the parts of a choice, `? a` and `: b`, written on lines of their own)
   function operator_led(q: number, end: number): number {
     const c = b(q);
+    if (c === 58 || c === 63) return q + 1 < end && b(q + 1) === 32 ? 1 : 0;
     if (c !== 38 && c !== 124) return 0;
     const d = b(q + 1) === c ? q + 2 : q + 1;
     return d < end && b(d) === 32 ? 1 : 0;
@@ -1528,6 +1531,13 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     }
     return 0;
   }
+  // (the frame `this` is read in, written in a function's body, inlined in its call (`{{body}}`): where the function was
+  // written, the frame it was read from, out through the functions it is written in; not out of a method, read where its
+  // class's constructor read the class's block) (not by where the `this` is: a reading is shared by every `this`)
+  function written_this(fr: number, ts: number, te: number): number {
+    for (let hp = 0; hp < 8; hp++) { const fru = w(fr + F_RULE), lit = fru ? w(fru + R_IN2_F) : 0; if (!lit || w(lit + N_IS) !== IS_FRAME || classed(w(fru + R_OWNER)) || (w(lit + F_RULE) && classed(w(w(lit + F_RULE) + R_OWNER)))) break; const wr_ = w(lit + F_CALLER); if (!wr_ || w(wr_ + N_IS) !== IS_FRAME || !w(wr_ + F_RULE)) break; fr = wr_; }
+    return fr;
+  }
   function member_seen(t: number, nd: number, s: number, n: number, on: number, depth: number): number {
     const r = rule_seen(t, nd, s, n, depth), hd = r ? w(r + R_HEAD) : 0;
     return r ? apply(t, r, 0, frame(0, 0, on, 0, 0, 0, 0, on, on), 0, on, w(hd + N_A), w(hd + N_B), on, on) : 0;
@@ -1909,7 +1919,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let depth = 0, open = 0;
     for (let p = h - 1, k = 0; p > 0 && k < 65536; p--, k++) { const c = b(p); if (c === 41 || c === 93 || c === 125) depth++; else if (c === 40 || c === 91 || c === 123) { if (depth === 0) { open = c === 40 ? p : 0; break; } depth--; } }
     if (!open) return 0;
-    { let q = open - 1; while (q > 0 && b(q) <= 32) q--; if (b(q) !== 58) return 0; }
+    // (a header: after `:`, after a word with a space between, `class (a = 1, b = a)`, or a statement of a block, what a class
+    // made reads its fields as (`{ ({{fields}}) taking … }`))
+    { let q = open - 1; while (q > 0 && b(q) <= 32) q--; if (b(q) !== 58 && b(q) !== 123 && !(q < open - 1 && b(w(CLASSES) + b(q)) === 1)) return 0; }
     depth = 0;
     for (let p = open, k = 0; k < 65536; p++, k++) { const c = b(p); if (c === 40 || c === 91 || c === 123) depth++; else if (c === 41 || c === 93 || c === 125) { depth--; if (depth === 0) return at < p ? 1 : 0; } }
     return 0;
@@ -2136,9 +2148,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     }
     // (in what a body inlined, `{{x}}`: the names of where that was written)
     // (in what a rule inlined: its own holes first, the parameters of the rule it is in; then the names where that was written)
-    let x = refer(0, rule, closure, s, e, 1);
+    // (but `this` in a function's body, inlined in its call, `{this}(…)`: not that hole, the function, but `this` where the
+    // function was written, below)
+    const fn_this = rule && word(s, e, W_THIS) && w(rule + R_IN2_F) && s >= w(rule + R_IN2_S) && e <= w(rule + R_IN2_E) && !classed(w(rule + R_OWNER));
+    let x = fn_this ? 0 : refer(0, rule, closure, s, e, 1);
     if (x) { put(r, K_REF); put(r + 12, (x - 1) >> 16); put(r + 16, (x - 1) & 0xFFFF); put(r + 20, w(THREAD + T_REFF)); return r; }
-    x = refer(0, rule, closure, s, e, 0);
+    x = fn_this ? 0 : refer(0, rule, closure, s, e, 0);
     if (x) { put(r, K_NAME); put(r + 12, (x - 1) >> 16); put(r + 16, (x - 1) & 0xFFFF); put(r + 20, w(THREAD + T_REFF)); return r; }
     // (`this` written in a rule's body, no hole of it named so: that application's first argument, what it was read on,
     // wherever the code is read (a value given as an argument, read in the callee, is the caller's `this`); but not in code
@@ -2225,8 +2240,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (none, read on a value: an operator after a space, or what follows an operator it begins with (`.m == v` on x, `+ part` on a
     // number: the operator's argument): what follows read on
     // that value when it runs (the member's value, the operator's closure), which is not what it is read on here)
+    // (or a word after a member, `.x min 5` on v: a method of the member's value, read on it the same)
     for (let p = s + 1; p < e;) {
-      if (on && b(p) > 32 && b(p - 1) <= 32 && !left && (b(w(CLASSES) + b(p)) === 2 || operated(s, p))) {
+      if (on && b(p) > 32 && b(p - 1) <= 32 && !left && (b(w(CLASSES) + b(p)) === 2 || operated(s, p) || (b(w(CLASSES) + b(p)) === 1 && membered(s, p)))) {
         const o = reading(t, s, p, rule, closure, vis, self, 0, stop, 0, 0);
         if (w(o) !== K_UNREAD && w(o) !== K_EMPTY) { put(r, K_ON); put(r + 12, o); put(r + 16, p); put(r + 20, e); return r; }
       }
@@ -2327,7 +2343,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       // function was read from, out through the functions it is written in (`.all.every(a => this.all.every(…))`); not out of
       // a method, read where its class's constructor read the class's block)
       if (h === -4) { let fr = names && w(names + N_IS) === IS_FRAME && w(names + F_RULE) ? names : 0; if (!fr) return self;
-        for (let hp = 0, ts = w(r + 4), te = w(r + 8); hp < 8; hp++) { const fru = w(fr + F_RULE), lit = fru ? w(fru + R_IN2_F) : 0; if (!lit || w(lit + N_IS) !== IS_FRAME || ts < w(fru + R_IN2_S) || te > w(fru + R_IN2_E) || classed(w(fru + R_OWNER)) || (w(lit + F_RULE) && classed(w(w(lit + F_RULE) + R_OWNER)))) break; const wr_ = w(lit + F_CALLER); if (!wr_ || w(wr_ + N_IS) !== IS_FRAME || !w(wr_ + F_RULE)) break; fr = wr_; } const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
+        fr = written_this(fr, w(r + 4), w(r + 8)); const th = w(fr + F_THIS), rc = w(fr + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
       const tk = follow(self + F_TAKES + TAKE * h, 0);
       // (a text: in what the kernel's map says texts are (its rules read on it), else in what everything is)
       return node(IS_TEXT, w(tk), w(tk + 4), w(TEXTS) || w(GLOBAL), 0);
@@ -2370,6 +2386,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
         if (w(o) !== K_UNREAD && w(o) !== K_EMPTY) { const r2 = alloc(READ); put(r2, K_ON); put(r2 + 4, s); put(r2 + 8, e); put(r2 + 12, o); put(r2 + 16, p); put(r2 + 20, e); return onto(t, r2, names, f, self, value, written); }
       }
       p = bracket(p, e) & 1 ? past(p, e) : p + 1;
+    }
+    // (or a value, then a word after a space and what follows it, `x min y`: the value's method called on what follows it, read on
+    // the value, below)
+    if (k === K_UNREAD && !w(t + T_DECL) && !w(t + T_HOLE) && !defines(s, e)) {
+      let iv_p = skip(s, e);
+      while (iv_p < e && b(iv_p) > 32) iv_p = bracket(iv_p, e) & 1 ? past(iv_p, e) : iv_p + 1;
+      const iv_q = iv_p < e ? skip(iv_p, e) : e;
+      let iv_z = iv_q;
+      while (iv_z < e && b(w(CLASSES) + b(iv_z)) === 1) iv_z++;
+      if (iv_q > iv_p && iv_z > iv_q && iv_z < e && b(iv_z) <= 32 && skip(iv_z, e) < trim_end(s, e)) {
+        const iv_o = reading(t, s, iv_p, w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0);
+        if (w(iv_o) !== K_UNREAD && w(iv_o) !== K_EMPTY) { const iv_r = alloc(READ); put(iv_r, K_ON); put(iv_r + 4, s); put(iv_r + 8, e); put(iv_r + 12, iv_o); put(iv_r + 16, iv_q); put(iv_r + 20, e); return onto(t, iv_r, names, f, self, value, written); }
+      }
     }
     // (or a member of a type's name nothing reads where it is, `S.d` in a narrowing's constraint: the type as what the code was
     // written in names it, then its members on it, in turn; else unread as before)
@@ -2493,6 +2522,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     while (i < e && b(i) === 32) i++;
     return i + 1 < e && ((b(i) === 61 && b(i + 1) === 32) || (b(i) === 58 && b(i + 1) === 32)) ? 1 : 0;
   }
+  // (a member read alone, `.x` or `.a.b`: a `.`, then words each after a `.`)
+  function membered(s: number, e: number) { s = skip(s, e); while (e > s && b(e - 1) <= 32) e--; if (s >= e || b(s) !== 46) return 0; for (let mi = s; mi < e; mi++) { const mc = b(mi); if (mc === 46 ? mi + 1 >= e || b(w(CLASSES) + b(mi + 1)) !== 1 : b(w(CLASSES) + mc) !== 1) return 0; } return 1; }
   function worded(s: number, e: number) { s = skip(s, e); while (e > s && b(e - 1) <= 32) e--; if (s >= e) return 0; for (let i = s; i < e; i++) if (b(w(CLASSES) + b(i)) !== 1) return 0; return 1; }
   // (a name declared where it is read: a place there, by that name)
   // (a place: a name given nothing yet, in self; read on, it answers what any value does, not what self has (where it is named,
@@ -2733,6 +2764,21 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (read only by what everything has (`1`, global), on a value with methods (a closure, `==` of `gcd(other) == 1`): its
     // argument; RB2) (but not what an operator leads, `.member`: a member is not an argument, CL19)
     if (w(rest) === K_RULE && w(w(rest + 12) + R_OWNER) === w(GLOBAL) && on !== w(GLOBAL) && b(w(CLASSES) + b(rs2)) !== 2 && !word_headed(w(rest + 12)) && methods_of(on)) { const m = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); if (w(m) === K_RULE) rest = m; }
+    // (a word and what follows it, not read on a value, `min 5` on 2 of `2 min 5`: a method of the value called on what follows
+    // it without brackets, operator-named or not (`double 4`), as `.min 5` reads it, the value's member, then what follows on that)
+    if (w(rest) === K_UNREAD && value && !w(t + T_DECL) && on !== w(GLOBAL) && (w(on + N_IS) === IS_NODE || w(on + N_IS) === IS_TEXT)) {
+      const iw_s = skip(rs2, re2);
+      let iw_z = iw_s;
+      while (iw_z < re2 && b(w(CLASSES) + b(iw_z)) === 1) iw_z++;
+      if (iw_z > iw_s && iw_z < re2 && b(iw_z) <= 32 && skip(iw_z, re2) < trim_end(rs2, re2)) {
+        const iw_m = w(t + T_MEMBER), iw_ms = w(t + T_MEMBER_S), iw_me = w(t + T_MEMBER_E);
+        put(t + T_MEMBER, on); put(t + T_MEMBER_S, iw_s); put(t + T_MEMBER_E, re2);
+        const iw_v = block(t, iw_s, re2, nm, f, on, 0, value, 1, on, 0);
+        put(t + T_MEMBER, iw_m); put(t + T_MEMBER_S, iw_ms); put(t + T_MEMBER_E, iw_me);
+        if (stopped(t)) { put(t + T_DECL, decl_in); return 0; }
+        if (iw_v) { put(t + T_ON, on); put(t + T_DECL, decl_in); return iw_v; }
+      }
+    }
     if (w(rest) === K_UNREAD && !w(t + T_FALLBACK)) { rest = reading(t, rs2, re2, w(nm + F_RULE), w(nm + F_CLOSURE), latest(on), on, METHOD, 0, 0, 1); fell = w(rest) === K_RULE ? 1 : 0; }
     if (w(rest) !== K_UNREAD) {
       // (a method of a value it is made of, `+` of the 3 in a vertex `3 + Ray`: what it runs on, that value)

@@ -4,6 +4,8 @@
 // ECMA-48, Control Functions for Coded Character Sets (https://ecma-international.org/publications-and-standards/standards/ecma-48/), and xterm's control sequences (https://invisible-island.net/xterm/ctlseqs/ctlseqs.html)
 ANSI := class (pieces: (ANSI.Sequence | Char)[]) {
   static extensions := ".ansi"
+  // (a number written in a sequence, in ten: its digits, a text (a `Decimal` too, as the number it is))
+  static digits (number) => (number + 0).int32.digits
   Cell := class (glyph: Char = " ", foreground: Geometry.Color? = None, background: Geometry.Color? = None, styles: ANSI.Attribute# = [], link: Location? = None) => { }
   assert ANSI.Cell("x", foreground: Geometry.Color(255, 0, 0), styles: ANSI.Attribute.italic).(
     (. as ANSI.Style as String) == "\e[0;3;38;2;255;0;0m"  // UI296 a cell's style is not written as one SGR sequence
@@ -14,6 +16,7 @@ ANSI := class (pieces: (ANSI.Sequence | Char)[]) {
   // CUP, Cursor Position (ECMA-48 8.3.21)
   // (header: ("\e[", (row: Decimal, ";", column: Decimal)?, "H"), not read into the class yet: written by UI.TUI.written)
   Move := class (row: Decimal? = None, column: Decimal? = None) => {
+    as String => "\e[" + ((.row === None) ? "" : (ANSI.digits(this.row) + ";" + ANSI.digits(this.column))) + "H"
     at => Geometry.Vector((this.column ?? 1) - 1, (this.row ?? 1) - 1)
     assert {
       moved := @ansi \e[2;3H
@@ -22,24 +25,30 @@ ANSI := class (pieces: (ANSI.Sequence | Char)[]) {
   }
   // ED, Erase in Display (ECMA-48 8.3.39)
   // (header: ("\e[", part: Decimal = 0, "J"))
-  Erase := class (part: Decimal = 0) => { }
+  Erase := class (part: Decimal = 0) => {
+    as String => "\e[" + ANSI.digits(this.part) + "J"
+  }
   // DECSET and DECRST (xterm, "CSI ? Pm h" and "CSI ? Pm l"): 1049 the alternate screen, 25 the cursor, 1000/1002/1006 mouse reports, 2004 bracketed paste, 1004 focus events
   // (header: ("\e[?", number: Decimal, state: "h" | "l"))
   Mode := class (number: Decimal, state: "h" | "l") => {
+    as String => "\e[?" + ANSI.digits(this.number) + .state
     flipped => ANSI.Mode(this.number, this.state == "h" ? "l" : "h")
   }
 
   // SGR, Select Graphic Rendition (ECMA-48 8.3.117): 1 bold, 2 faint, 3 italic, 4 underlined, 7 negative, 9 crossed-out
   Attribute := enum bold (code: "1") | faint (code: "2") | italic (code: "3") | underlined (code: "4") | negative (code: "7") | crossed_out (code: "9") {
     static (code: "1" | "2" | "3" | "4" | "7" | "9") as (=== ANSI.Attribute) => ANSI.Attribute#{.code == code}.first
+    as String => .code
   }
   // SGR 38 and 48, direct colour (";2;r;g;b") or an indexed one (";5;n") (ITU-T T.416 13.1.8; xterm, "Character Attributes")
   // (header: (layer: "38" | "48", ((";2;", red: Decimal, ";", green: Decimal, ";", blue: Decimal) | (";5;", index: Decimal))))
   Colored := class (layer: "38" | "48", red ^#CD5C5C: Decimal? = None, green ^#5CCD5C: Decimal? = None, blue ^#5C5CCD: Decimal? = None, index: Decimal? = None) => {
     color => .index == None ? Geometry.Color(this.red, this.green, this.blue) : ANSI.Palette[.index]
+    as String => .layer + ((.index === None) ? (";2;" + ANSI.digits(this.red) + ";" + ANSI.digits(this.green) + ";" + ANSI.digits(this.blue)) : (";5;" + ANSI.digits(this.index)))
   }
   // (header: ("\e[0", parameters: (";", parameter: Colored | ("1" | "2" | "3" | "4" | "7" | "9") as Attribute)[], "m"))
   Style := class (parameters: * = []) => {
+    as String => "\e[0" + .parameters.map(written_parameter => ";" + (written_parameter.parameter as String)).join("") + "m"
     colored (layer: String) => .parameters.parameter{. is ANSI.Colored && .layer == layer}.last.color
     cell (glyph: Char = " ") => ANSI.Cell(glyph, foreground: this.colored("38"), background: this.colored("48"), styles: this.parameters.parameter{. is ANSI.Attribute}#)
     assert {
@@ -67,10 +76,13 @@ ANSI := class (pieces: (ANSI.Sequence | Char)[]) {
 
   // OSC 0, the window title (xterm, "Operating System Commands")
   // (header: ("\e]0;", text: (!"\a" && !"\e")[], ("\a" | "\e\\")))
-  Title := class (text: String) => { }
+  Title := class (text: String) => {
+    as String => "\e]0;" + .text + "\a"
+  }
   // OSC 8, hyperlinks (https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda)
   // (header: ("\e]8;", parameters: (!";")[] = "", ";", target: (!"\e" && !"\a")[], ("\e\\" | "\a")))
   Hyperlink := class (parameters: String = "", target: String = "") => {
+    as String => "\e]8;" + .parameters + ";" + .target + "\e\\"
     link => .target.empty ? None : .target as Location
   }
   // OSC 52, the clipboard (xterm, "Manipulate Selection Data")

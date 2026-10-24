@@ -194,21 +194,32 @@ Compiler := class {
   static fresh_scope (fresh_none) => Node &+ { }
   Composition := class (first, second) => {
     components => (hierarchy: [first, second])
+    // (and another after it, `A + B + C`: the three, in that order)
+    compounds + (other) => Compiler.Composition(this, other)
     // (called: what was added, called)
-    (arguments) =>
-      second(arguments)
-    () =>
-      second()
+    {this}({arguments}) =>
+      (this).second({arguments})
+    {this}() =>
+      (this).second()
   }
 }
 Node &+= {
   composed (other) => Compiler.Composition(this, other)
+  // (§3.2 `A + B`, what has no `+` of its own: the two composed, a level of them (reduced by A, then B); led by the value,
+  // read only on one: `+ 1` alone is a section)
+  {this} + {other} => (this).composed(other)
+  {this} + {other} + {more} => Compiler.Composition(Compiler.Composition(this, other), more)
 }
 // `@also x T`: x is also a T (its methods x's; a composed one's, `A + { … }`, what was added)
 @also {value} {type} =>
   ((({type}) is Compiler.Composition) ? ({value} including ({type}).second) : (({value}) &+= ({type})))
   {value}
 
+// A program written as code, `Program(code: { … })`: the code kept as written, read when it runs (a block given to it is
+// read where it is written, into a node: nothing to run again)
+Program(code: {`{`}{program_code}{`}`}) ^keyword => Program(running: (() => ({program_code})))
+// (a setting, `p{O: level}`: the same program (of the class, a new one), read with that level)
+{setting_of}{`{`}O: {level}{`}`} ^punctuation => Program(code: (setting_of).code, running: (setting_of).running) ~~ (.O = ({level}))
 Program &+= {
   O | optimizations := Compiler.none
   assert (Program{O: Compiler.default}).(
@@ -221,9 +232,9 @@ Program &+= {
     assert Program(code: { twice(4) + twice(4) }){O: Compiler.memoised}() == 16  // CO35 a remembered application does not answer what it answered
   }
   // (its code run with its level's rules in scope (in its program, above what is where it is written), what it gives read by them)
-  () =>
-    code including O
-    code() -- (given => (given is Program) ? given{O: O}() : (O reducing given))
+  // (the code as it is written, kept to be read again when it runs (`running`, none until given: a block is read where it is
+  // written, into a node))
+  {this}() => ((this).running === None) ? (this).code : (this).running()
   compounds + (other: Program) => Program(code: (code, other.code))
   assert 5 /* nothing */ + 1 == 6  // GR8 a block comment between operands is read as something
   assert {

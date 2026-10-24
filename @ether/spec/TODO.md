@@ -187,6 +187,14 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A method written against what follows it takes one word of it** (`0..p.width` is `(0..p).width`; `0 .. p.width` and
   `0..(p.width)` read): the member is read on what the method answered. `..<` so is read whole by a rule in Ray.ray (`0..<p.width`,
   `(0..<.height)` in UI's Grid); `..` is not (a rule `{low}..{high}` would take `..<` too): UI's `(from.x..to.x)` (underlines).
+- **A level of rules applied to a value, `Compiler.reduced(move, UI.TUI.written)`, applies none of its typed rules**
+  (`{move: ANSI.Move} => …`): `reducing` reads the value's code (a name) in the level, and a typed hole asks of the text
+  (cached per type and text), not of the value it names, so a Move or a Style is answered as it is, not written. A text
+  answers itself, a list goes through `{sequences: Iterable}`. The first frame stops here: its parts are not written.
+  (`reducing` answered the level itself before: `reading` is `&+=`.)
+- **A raw fragment's control sequence, `@ansi \e[2;3H`, opened a bracket** (everything after it misread, ANSI's Style
+  no Style): a bracket after `\e` belongs to the escape now. Character.ray's line fragment rule does not take a
+  fragment that begins with `\` (its first is a word, `<`, `(`, a backtick, `"` or `-`).
 - **`x -- y` binds looser than `:=`** (as declared, after `=` and `,`): `q := [4, 5] -- (v => …)` is `(q := [4, 5]) -- …`.
   A function in brackets after it is given what is before it (`x -- (made => (@also made Vector) -- made)`); a function
   read another way is not.
@@ -212,3 +220,40 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **`RAY_MEMORY` above 2³¹ hangs the kernel** (`RAY_MEMORY=3221225472`: a run of the kernel's own translation, two functions,
   never ends, main's kernel as well; 2³¹, the default, ends in two minutes): an address past 2³¹ is negative as a 32-bit
   integer. So the self-hosting check runs at the default, and the translation of `apply_` is at the edge of it.
+- **A statement's memory running out is a crash, not a report** (`RAY_STATEMENT_MB=200`, a 20 by 1 TUI grid written: "Worker
+  queue failed: memory access out of bounds", no diagnostic naming the statement; at 400 the frame is written). After the
+  frame, the run ends in "out of memory (2147483648 bytes, all of it in use)": something after the last statement holds 2 GB.
+- **A word method written both with and without parameters, called infix, reads the one without** (`mn (b) => b` and
+  `mn => 7`: `qb mn 5`, `qb.mn 5` answer 7's reading, not 5): the decided rule (§21.3, brackets read the one with
+  parameters, none the other) takes `mn 5` as `mn` then `5`. Number's `min`/`max` (Ordered's, and Ray's `min =>`) are not
+  hit: `2 min 5`, `pv.x min pv.y` answer 2.
+- **A level reduces no value by its type** (`Compiler.reduced(Kd(1), { {kd: Kd} => "kind" … })` is not "kind", a number
+  or a text neither): `level reducing value` reads the code `value` in the level, and a typed hole asks about that code,
+  not its value. UI's `drawn`, `filled`, `shaded`, `shown`, `Lowered` and Geometry's `Solving`/`Projecting`/
+  `Approximating` are written so (the user, 2026-10-23: the old Language model; class headers and `as X` instead).
+- **A program's code is not read again under its level** (`Program(code: { "a" }){O: { {text: String} => 5 }}()` is not
+  5; `Program(code: { 5 })()` is not 5): a block is read where it is written, into a node; calling it runs nothing, and
+  rules added to a closure's node are not seen by its body (it reads where it was written first). `UI.Scene` (the site's
+  reading: `"Ray" ^h1`, `{share}% * {x}`, `a <- b`) and every `Program(…).rendered(level)` need it. The global-`O` level
+  (the optimizations worktree) is what reads a program with a level's rules in scope.
+- **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
+  while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
+- **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
+  `Dk().b` is 2, but `Dk(a: 5).b` is no Number; `b: Number = 7` and `c: Number = b` are kept). Given anything, the header is
+  read as a left side (`({written_parameters}) := arguments_given`) and its defaults with it: the default's code is inside
+  the left side's text, so `{name}: {type} = {value}`'s body reads `value` as part of the left side (a place), and a place
+  nothing is given (`each takes`, `declared`) keeps that. Shape's header is made of these (`space: Space = parent.space ??
+  Space.current`, `font: … = parent ? … : Font.base`): `Geometry.Box(size: v).space` is None, `Geometry.Shape().space` is
+  not. Taking the header's defaults first when everything is given by name (`all_named`, then the names) loses half the
+  bootstrap's tests (565 of 1084 pass). Also open: a default reading a field given by name sees that field's own default
+  (`Df(a: 5).b` is 2, not 6), and one reading a field after it is not read (Shape's `boundary` reads `space`).
+- **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
+  or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
+  failed).
+- **A text joined of three or more is not the text** (`assert "a" + "b" + "c" == "abc"` fails, `"ab" + "c"` holds; numbers
+  hold): and, written to a terminal, ANSI.Colored's `as String` (six joined, `";2;" + … + ANSI.digits(this.blue)`) says
+  "nothing in what it is read on reads `+ ";" + …`" when Style's `as String` calls it inside a `map` (directly it writes
+  `38;2;255;0;0`); a class written in the entry file with `as String => "r" + ANSI.digits(this.red)` writes nothing.
+- (fixed 2026-10-24) `class: Parent (fields) { … }` without `=>`: a rule's definition whose body is itself a class (`=> class:
+  … => { … }`) is read as that class, never defined: written in brackets. A static conversion naming its class
+  (`static (x: T) as (=== Space)`) is that class's `from` now (the class's name is not given it while its block is read).

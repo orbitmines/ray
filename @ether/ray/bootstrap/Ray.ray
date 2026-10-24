@@ -53,6 +53,8 @@ Ordered := class (T = static) => {
   ..< (last: .T) => this == last ? [] : ((this < last ? .succ : .pred)..<last).prepend(this)
   assert ("a".."c").last == "c"  // OR5 a range of characters does not end at its last
 }
+// (flattened so many levels deep, `xs.flatten(1)`: not `xs.flatten` given 1)
+{flattening}.flatten({flatten_depth}) ^punctuation => ({flattening}).flattened_to({flatten_depth})
 // (written against both, `0..<p.width`, `0..<.height`: to what follows whole, its members too, not a member of `0..<p`)
 {low}..<{high} ^operator => ({low}) ..< ({high})
 
@@ -258,6 +260,9 @@ Iterable &+= {
   // (what flattening goes into: a narrowing, a list (a Ray of vertices); not a number, a text, a closure, a shape (each also a Ray))
   static flattens (element) => element.narrows || element.listing || (element.commas && element.empty) || (element.of === [].of)
   flatten => .map(element => Ray.flattens(element) ? element.flatten : [element]).concatenated
+  // (so many levels deep, `xs.flatten(1)`: what is in each element, not what is in those)
+  flattened_to (depth: Number) => depth <= 0 ? this : .map(element => Ray.flattens(element) ? ((depth <= 1) ? element : element.flattened_to(depth - 1)) : [element]).concatenated
+  assert ([[1, 2], [[3]]]).flatten(1).count == 3  // IT23 flattening one level deep goes deeper, or not at all
   assert ([1, 2, 3]).flatten.count == 3  // IT22 flattening numbers splices what they are made of
   assert ([[1, [2, [3]]]]).flatten == [1, 2, 3]  // RL1 flattening three levels does not leave one, two and three
   assert ([[1, [2, [3]]]]).flatten(1).count == 2  // RL4 flatten one level does not leave one and the rest

@@ -37,7 +37,7 @@ assert none is @local  // CST3 the permission nobody has is not the narrowest
 Character &+= { policy: Accessor = @local }
 
 Node &+= {
-  public => .@ && .@.lets(@public)
+  public => .@ && .@.allows(@public)
   // Pre-rotation: the next keys are known by their digests only, and count for a rotation once revealed.
   assert {
     idy_next := Key.generated(Ed25519)
@@ -318,7 +318,7 @@ assert ([1, 2, 3]).random  // RN8 a collection does not answer one of itself
 
 assert ([1, 2, 3]).contains((([1, 2, 3]).random))  // RN11 what was chosen is not one of them
 
-assert &@.ask(`()`, (@me/device as Camera)).erred  // AC26 a capability nobody granted does not err
+assert !&.caller.may(`()`, (@me/device as Camera))  // AC26 a capability nobody granted is granted
 // `print(x)`: x written out to this instance, answering x (Almanac §0.3)
 print (x) => (@me/instance = x as String) -- x
 assert print(3) == 3  // PT1 print does not answer what it printed

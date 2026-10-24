@@ -62,7 +62,7 @@ PNG := class (
   pixels (row: Byte[], width: Number) => (row as Binary{.length == .ihdr.depth}[])[..<width * .channels].chunk(this.channels).map(this.ihdr.colored(., this))
   placed => .passes.enumerate.map(pass => this.inflated[this.sizes[..<pass.index].sum ..< this.sizes[..pass.index].sum] -- (bytes => pass.value -- (at =>
     this.rows(bytes, at.width).enumerate.map(row => this.pixels(row.value, at.width).enumerate.map((x: at.x + .index * at.dx, y: at.y + row.index * at.dy, color: .value)))))).flatten
-  raster => .placed -- (all => (0..<ihdr.height).map(y => all{.y == y}.sort_by(.x).color)) as Geometry.Raster
+  raster => .placed -- (all => (0..<ihdr.height).map(y => all{.y == y}.sort(.x).color)) as Geometry.Raster
 
   // Writing: 8-bit truecolour with alpha, filter type 0, not interlaced
   static (raster: Geometry.Raster) as (=== PNG) => PNG(

@@ -3,7 +3,7 @@
 Program &+= {
   serves (at: Location) => !done && from is at
 }
-assert !(Program(name: "find", goal: None).done)  // WO3 a new quest is done
+assert !(Program(name: "find"): None.done)  // WO3 a new quest is done
 // Tasks, references, characters and repositories: what a class says it holds.
 assert Program(name: "walk").(
   !(.stopped)  // TA1 a new quest is stopped
@@ -54,7 +54,7 @@ World := class: Location + Nameable {
       ?? (shadowing ?? parent ?? World.ether)[class.PREFIX, name] if class.PREFIX
     {class.PREFIX}{name: reservable_names{.mixed_script && .skeleton != .}} = {holder} => ERROR@Name `a name that mixes scripts and is confusable is not reserved` if class.PREFIX
     {class.PREFIX}{unique<in: .fold_case.skeleton> name: reservable_names} = {holder} => fields{.name ==<in: .fold_case.skeleton> class.PREFIX + name}.last
-      -- (held => held && !&@.may(`=`, held) ? ERROR@Name `overwrite a name` : this[held.name ?? class.PREFIX + name] = holder) if class.PREFIX
+      -- (held => held && !&.caller.may(`=`, held) ? ERROR@Name `overwrite a name` : this[held.name ?? class.PREFIX + name] = holder) if class.PREFIX
   }
 }
 // A world is a location: what holds places, and is held.
@@ -85,10 +85,10 @@ assert {
   assert (rdr.@b = 3).erred  // RDR3 a held name was overwritten without the issuer's write
   assert (@https://a.b/c).host == "a.b"  // CTH3 a location with an authority lost its host
 }
-// Reaching a program's goal completes it.
+// Reaching what a program returns completes it.
 assert {
   qct_world := World(name: "quests")
-  qct := qct_world.add(Program(name: "q", goal: 1))
+  qct := qct_world.add(Program(name: "q"): 1)
   qct.attempt(1)
   assert qct.done  // QCT1 a reached quest is not done
 }
@@ -144,19 +144,19 @@ Item := class: Nameable {
     assert cite.notes.count == 1  // RF4 a note is not kept
     assert cite.title == "on rays"  // RF5 a reference forgot its title
     // A quest is a program with someone to run it; a step defined nowhere is one they do themselves.
-    errand := Program(name: "fetch", goal: wi)
+    errand := Program(name: "fetch"): wi
     assert !(errand.done)  // QU1 a new quest is already done
     assert errand.abstract.count == 1  // QU2 a quest given only a name is not one step its runner does
     assert errand.stop.done  // QU4 completing a quest does not
-    assert errand.goal == wi  // QU5 a quest forgot what it is for
+    assert errand.returns == wi  // QU5 a quest forgot what it is for
     // Posting answers the quest, the way spawning answers the character.
     assert wg.add(errand) == errand  // QU6 posting a quest does not answer it
-    staged := Program(code: "go(wi)\ntake(wi)", goal: wi)
+    staged := Program(code: "go(wi)\ntake(wi)"): wi
     assert staged.difficulty == 2  // QU3 a quest of two steps is not two hard
     assert staged.who === @me  // QUW1 a quest is not run by whoever made it
     assert wg.quests.count == 1  // QU11 posting a quest does not put it in the world
     // A quest can be stopped; a stopped quest is done.
-    carrying := Program(name: "carry", goal: wi)
+    carrying := Program(name: "carry"): wi
     assert carrying.stop.done  // QU8 stopping a quest does not end it
     sited := Reference(title: "t", subtitle: "s", date: "2025-01-01" as Time, location: @https://a.b | "p")
     assert sited.subtitle == "s"  // WR1 a reference forgot its subtitle
@@ -260,7 +260,7 @@ Reference := class {
   note: String?
 
   year => .date.year
-  claim (who: Character = @me) => Program(name: "claim the authorship", goal: Reference{authors: who}, from: location.world ?? World.ether)
+  claim (who: Character = @me) => Program(name: "claim the authorship", from: location.world ?? World.ether): (Reference{authors: who})
   notes => [.note, .note.previous**].flatten
 }
 
@@ -422,7 +422,7 @@ Character &+= {
     rcv_c := @local.login(@"recovering")
     rcv_log := rcv_c.identity.history
     rcv := rcv_c.recovery()
-    assert !(rcv_log.find(rcv.goal.id))  // RCV1 a recovery is in the key log before its guardians signed it
+    assert !(rcv_log.find(rcv.returns.id))  // RCV1 a recovery is in the key log before its guardians signed it
     rcv_g := @local.login(@"guardian")
     rcv_i := Noise.handshake(true, Key.generated(X25519))
     rcv_r := Noise.handshake(false, Key.generated(X25519))
@@ -432,14 +432,14 @@ Character &+= {
     rcv_mine := rcv_i.session
     rcv_theirs := rcv_r.session
     rcv := rcv_c.recovery([rcv_mine])
-    rcv_message := rcv_mine.sent(rcv.goal.hash)
+    rcv_message := rcv_mine.sent(rcv.returns.hash)
     assert rcv_g.vouching(rcv_theirs, rcv_message) is Program  // RCV2 a guardian signs before verifying the person
-    rcv_signed := rcv_g.key.signed([rcv.goal.hash, rcv_theirs.binding].flatten)
+    rcv_signed := rcv_g.key.signed([rcv.returns.hash, rcv_theirs.binding].flatten)
     rcv.countersigned(rcv_signed)
-    assert rcv.goal.signature#.some(=== rcv_signed)  // RCV3 a guardian's signature over the hash, bound to the session, is not taken
-    rcv.countersigned(rcv_g.key.signed([rcv.goal.hash, [0] * 32].flatten))
-    assert rcv.goal.signature#.count == 1  // RCV4 a signature bound to no session of this recovery is taken
-    assert !(rcv_log.find(rcv.goal.id))  // RCV5 one guardian meets a threshold of two
+    assert rcv.returns.signature#.some(=== rcv_signed)  // RCV3 a guardian's signature over the hash, bound to the session, is not taken
+    rcv.countersigned(rcv_g.key.signed([rcv.returns.hash, [0] * 32].flatten))
+    assert rcv.returns.signature#.count == 1  // RCV4 a signature bound to no session of this recovery is taken
+    assert !(rcv_log.find(rcv.returns.id))  // RCV5 one guardian meets a threshold of two
     assert rcv_c.roots.every(.algorithm === rcv_c.policy().signing)  // RCV6 the new root keys are not of the policy's algorithm
     assert rcv is Program && rcv.who === rcv_c  // RCV7 a recovery is not a program run as the character recovering
   }
@@ -572,7 +572,7 @@ Character &+= {
     assert Program#{who: quiet}.empty  // BEC1 saying a status that holds once said started something
     becoming := @"becoming"
     becoming.status = Broadcasting
-    assert Program#{who: becoming}{goal === Broadcasting}.nonempty  // BEC2 saying a status read off what runs does not start a quest to make it hold
+    assert Program#{who: becoming}{returns === Broadcasting}.nonempty  // BEC2 saying a status read off what runs does not start a quest to make it hold
     hidden := Character(name: "hidden", presence: somewhere) ~~ .status = Invisible
     assert hidden is Invisible  // CS15 a character that went invisible is not
     assert !(hidden is Online)  // CS16 an invisible character is online to someone else
@@ -600,7 +600,7 @@ Character &+= {
   assert !(@"s".status.contains(Online))  // CS4 a character nowhere reads as online
   // Saying a status constrains what may run (W2.15); one read off what runs (`Online`, `Broadcasting`) that does not
   // hold yet is a quest to make it hold, run by the character.
-  .status = {wanted} ^punctuation => (.constraint = wanted) -- (Program(name: "become", who: this, goal: wanted).schedule(this) unless this is wanted)
+  .status = {wanted} ^punctuation => (.constraint = wanted) -- (Program(name: "become", who: this): wanted.schedule(this) unless this is wanted)
   is (wanted) => .instance_of(wanted) && !(.constraint && .constraint is !wanted)
 }
 // An avatar is one of a character's names: its name on a platform, written with `@` (`@github.com/package` is a package of github).
@@ -624,7 +624,6 @@ assert {
   assert away is Offline  // PS1 someone with nowhere to be is not offline
 }
 // A name given to something is the name it answers to afterwards.
-assert @"before".named("after").name == "after"  // WP3 something named is not called that
 assert !(@"s" is Idle)  // CS5 a character nowhere is idle
 assert !(@"s" is Busy)  // CS6 a character with nothing to focus on is busy
 // A character has an identity of its own, and is here when this machine has it.
@@ -678,8 +677,8 @@ Instance := class: Location {
       Instance.keys_in(field.value).for(.zeroised)
       character[field.name] = None
     })
-    Program(name: "delete", who: character, goal: character.history.erased, from: World.ether.clock.now.when + 30 days,
-      code: { character.history = character.history.erased }).schedule(character) if delete_all
+    Program(name: "delete", who: character, from: World.ether.clock.now.when + 30 days,
+      code: { character.history = character.history.erased }): character.history.erased.schedule(character) if delete_all
     character
   }
   // The keys a secret holds: a key, or a list of keys or of tuples holding keys (`world_keys`); never what else a tuple names.
@@ -737,7 +736,7 @@ Online := Character{presence.device.network.connected}
 Offline := Character{!(. is Online)}
 Broadcasting := Character{quests{serves @public}.nonempty}
 Hosting := Character{.presence.hosted#.some(!(. == this))}
-Proxying := Character{quests{goal is Network.Proxy && !done}.nonempty}
+Proxying := Character{quests{returns is Network.Proxy && !done}.nonempty}
 Idle := Character{presence && !device.keyboard.keys.some(.pressed.history.since(None){.value == true}.last.when >= Time.now - 5 minutes)}
 assert !(Idle === Busy)  // CS2 idle and busy are the same
 Busy := Character{focus && !focus.done}

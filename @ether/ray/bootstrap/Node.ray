@@ -28,14 +28,6 @@ Node &+= {
   member (named: String) => external member (this) (named)
   assert (a: 1, b: 2).member("b") == 2  // NOD8 the member asked by a name given as text is not found
   assert !((a: 1, b: 2).member("b") == 1)  // NOD9 a member asked by name gives another member
-  // what it holds under a name given as text, written (`x.set("width", 1)`)
-  set (named: String, setting_value) => this[named] = setting_value
-  assert {
-    held := (width: 1)
-    held.set("width", 4)
-    assert held.width == 4  // NOD10 setting a member by name given as text does not change it
-    assert !(held.width == 1)  // NOD11 the member kept its old value after being set
-  }
   // its fields in order, each its `name`, `type` and `value`, and by name (`x.fields["width"]`): what its class's header and block
   // declare, then (a class) what its own block declares
   fields => (declarations ?? []).map(name => (name: name, value: (this.held(name) ?? this[name])))
@@ -105,7 +97,7 @@ Node &+= {
   assert (1 | 2)#.count == 2  // NOD25 two possible values do not count two
   assert (1 | 2)#.first == 1  // NOD26 the first possible value is not the first written
   assert (1 | 2)#.last == 2  // NOD27 the last possible value is not the last written
-  assert (@me/device as OS)["platform"].nonempty  // IO3 the machine does not name its platform
+  assert (@me/device as OS).platform.nonempty  // IO3 the machine does not name its platform
   assert (1 | 2)#.contains(2)  // NOD28 a possible value is not contained
   assert !(1 | 2)#.contains(3)  // NOD29 a value that is not possible is contained
   assert ("a", "b", "c").join("-") == "a-b-c"  // SJ2 joining a, b and c with a dash is not a-b-c
@@ -145,25 +137,14 @@ Node &+= {
     incremented (a) => a + 1
     assert incremented(1 & 2) == 2 & 3  // SP6 a call does not carry through &
     assert incremented(1 | 2) == 2 | 3  // SP7 a call does not carry through |
-    // Each value remembers where it came from; fixing a source refines what depends on it (U1)
-    doubled (a) => a * 2
-    tripled (a) => a * 3
-    traced := doubled(1) | tripled(2)
-    assert traced#.origin.contains(doubled)  // SP10 a superposed call does not remember what it came from
-    assert traced#{.origin == tripled}.first == 6  // SP11 a value is not selected by its origin
   }
 }
 {value}# ^punctuation => value.#
 
-Composed := class (parts: Node[], joining: Program) => {
-  erred => .parts.some(.erred)
-  assert !Composed(parts: [1, 2], joining: (a, b) => a + b).erred  // NOD40 parts that raised nothing erred
-  assert Composed(parts: [1, 2], joining: (a, b) => a + b).parts.count == 2  // NOD41 a composition lost its parts
-  .{literal property ^property} ^punctuation => .parts.map(x => x[.property]).reduce((acc) => this.joining(acc, .))
-}
 Node &+= {
-  &+ (other) => Composed(parts: [this, other], joining: (a, b) => a & b) ~~ (. &+= this) ~~ (. &+= other)
-  |+ (other) => Composed(parts: [this, other], joining: (a, b) => a | b) ~~ (. &+= this) ~~ (. &+= other)
+  // (each read through both, `&` and `|` carrying it: `(true &+ "A").next == false & "B"`)
+  &+ (other) => (this & other) ~~ (. &+= this) ~~ (. &+= other)
+  |+ (other) => (this | other) ~~ (. &+= this) ~~ (. &+= other)
 }
 
 Node &+= {
@@ -187,11 +168,11 @@ Superposed := Node{.superposed}
 {a} [x] {b: Superposed} => b.each(one => a[x] one)
 // (a call takes its arguments whole, a superposition too (2026-10-17): what it does with them distributes, its operators)
 
-// An operator missing a side is a section: the function of what it misses (`xs.map(+ 1)`, `xs.sorted(<)`, `xs{> 0}`, `(!)`).
+// An operator missing a side is a section: the function of what it misses (`xs.map(+ 1)`, `xs.sort(<)`, `xs{> 0}`, `(!)`).
 Section := class (operator, operand?) => {
   continues => true
   assert [1, 2, 3].map(+ 1) == [2, 3, 4]  // NOD50 a section with its right side missing is not added to each
-  assert [3, 1, 2].sorted(<) == [1, 2, 3]  // NOD51 a section of < does not sort ascending
+  assert [3, 1, 2].sort(<) == [1, 2, 3]  // NOD51 a section of < does not sort ascending
   assert [-1, 2, 3]{> 0} == [2, 3]  // NOD52 a section of > 0 does not filter the positives
   assert !([-1, 2, 3]{> 0} == [-1, 2, 3])  // NOD53 a filter by a section kept everything
   (a, b?) => operand != None ? a [operator] operand : b != None ? a [operator] b : a [operator]
@@ -273,7 +254,6 @@ assert {
 }
 
 Node &+= {
-  is (type) => this.admitted_by(type) ? true : false
   assert 5 is Number  // NOD64 a number is not a Number
   assert !("a" is Number)  // NOD65 a string is a Number
   assert "a" is String  // NOD66 a string is not a String
@@ -391,18 +371,6 @@ assert !(2 * 3 < 5)  // PR32 two times three is below five
 assert 2 ^ 3 * 2 == 16  // PR37 raising does not bind tighter than times
 Object := * - Node
 
-Origin := class (method: Node, arguments: Node) => {
-  == (other) => other === .method || (other is Origin && other.method === .method && other.arguments == .arguments)
-  assert {
-    f := (x) => x
-    assert Origin(f, 1) == Origin(f, 1)  // NOD87 an origin is not equal to the same origin
-    assert !(Origin(f, 1) == Origin(f, 2))  // NOD88 origins with different arguments are equal
-    assert Origin(f, 1) == f  // NOD89 an origin is not equal to its method
-  }
-}
-{f}({a}) | {g}({b}) ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | (g(b).copy ~~ .origin = Origin(g, b))
-{f}({a}) | {rest} ^punctuation => (f(a).copy ~~ .origin = Origin(f, a)) | rest
-{rest} | {g}({b}) ^punctuation => rest | (g(b).copy ~~ .origin = Origin(g, b))
 
 // (`~label` on its own is `this~label`: Node's rule above, `.` being this)
 Node &+= {

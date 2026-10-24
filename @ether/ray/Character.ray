@@ -1,10 +1,6 @@
 Nameable := class {
   static PREFIX: String?
   name: *?
-
-  named (name): static => this ~~ .name |= name
-  assert Nameable.named("Bob").name == "Bob"  // CHR7 naming does not give the name
-  assert !(Nameable.named("Bob").name == "Alice")  // CHR8 naming gives another name
 }
 
 // A character by its name, `@"ada"` (`@"{name}"`): one claimed, made from what it is called
@@ -21,15 +17,8 @@ Character := class: Hierarchy &+ Nameable {
   // principal answers for, a grant's, a delegation's: `==` it, or `is` it when that is a narrowing of principals.)
   chainable == (other) => this === other
   static PREFIX := "@"
-  // (a path, `device/os`: each name a member of what is before it; from where the next `/` is)
-  static walked (at, path) => path.empty ? at : Character.walked_at(at, path, path)
-  static walked_at (at, path, from) => from.empty ? at[path] : (from.first == "/") ? Character.walked(at[path.until(from)], from.rest) : Character.walked_at(at, path, from.rest)
-  assert Character.walked({ a: 1 }, "").a == 1  // CHR46 walking no names does not stay at the start
-  assert Character.walked({ a: { b: 7 } }, "a/b") == 7  // CHR47 walking names does not enter each member in turn
-  assert Character.walked({ a: 1 }, "b") == None  // CHR48 walking into a name that is not there finds something
 
   quests => Program#{who: this}{.running}
-  acting => this
 }
 // (asserted out here: a class's body runs for each one made, so a character made in it would make one again)
 assert @"plc".policy === none  // AC50 the policy nobody has changed is not the permission nobody has

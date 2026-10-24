@@ -5,14 +5,14 @@
 // (here, `.`, unless what runs it as an instance made that its own: World, `Instance.local`)
 @local ^string => Location.local ?? Location(path: ".")
 // (a path under the character running: each name a member of what is before it, `@me/device/opened`)
-@me/{path} ^string => Character.walked(@me, `{path}`)
+@me/{path} ^string => `{path}`.split("/").reduce(at = @me => at[.])
 // Running as another character: only with their grant
-@me = {who} ^punctuation => &@.may(`@me =`, who) ? &.caller = (who is Character ? who.acting : who) : ERROR@Access `running as another character needs their grant`
+@me = {who} ^punctuation => &.caller.may(`@me =`, who) ? &.caller = who : ERROR@Access `running as another character needs their grant`
 Character &+= {
   // as a boolean, whether it is the one running (without @ether/security a character is only itself)
   as (=== boolean) => this === @me
 }
-assert @me.acting == @me  // CHR49 a character is not the character it acts as
+assert @me/device === @me.device  // CHR46 a path under the character running is not its members in turn
 assert @me/quests == @me.quests  // JB7 @me/quests is not the character's selection of its programs
 Program &+= {
   who: * = @me

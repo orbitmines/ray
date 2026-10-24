@@ -223,7 +223,7 @@ History := class: Iterable (repository: *?, base: History.Commit?, head: History
   |= (change): static => .commit(@me, change)
   extended (commit: History.Commit): static => this ~~ .head = commit ~~ (.previous = commit.from !== None ? commit.from.map(this.find(.))# : this.head) ~~ .line = this
 
-  ordered => .since(None).sort_by(.stamp)
+  ordered => .since(None).sort(.stamp)
   static reached (bound, commit: History.Commit) => bound is Time ? !commit.next || commit.next.when > bound
     : bound is History.Commit ? commit.ancestry.some(=== bound)
     : bound is History.Label ? commit.ancestry.some(.mentions(bound))
@@ -256,11 +256,11 @@ History := class: Iterable (repository: *?, base: History.Commit?, head: History
     this.head = (this.since(base).empty ? other.head : other.since(base).empty ? this.head : History.Commit(who, stamp: this.clock.now, change: Program(code: { . }), previous: this.head | other.head, line: this))
     this
   })
-  + (other: History) => other.since(this.common(other)).sort_by(.stamp).reduce(held = this[this.head] => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))
+  + (other: History) => other.since(this.common(other)).sort(.stamp).reduce(held = this[this.head] => .opened -- (plain => held.commit(plain.who, plain.change, message: plain.message, versions: plain.versions)))
   | (other: History) => this[.head].merge(other)
-  &+ (other: History) => .common(other) -- (base => (this.since(base), other.since(base)).flatten.sort_by(.stamp).reduce(held = this[base] => held.extended(.rewritten(.change) ~~ .from = None)))
+  &+ (other: History) => .common(other) -- (base => (this.since(base), other.since(base)).flatten.sort(.stamp).reduce(held = this[base] => held.extended(.rewritten(.change) ~~ .from = None)))
   static global (histories: History[]) => History(head: History.Commit(who: None, stamp: histories.head#.stamp.max, change: Program(code: { . }), previous: histories.head#))
-  squash (who) => .copy ~~ (.head = History.Commit(who, stamp: this.clock.now, change: this.commits.sort_by(.stamp).reduce(held = Program() => held + .opened.change), previous: this.base))
+  squash (who) => .copy ~~ (.head = History.Commit(who, stamp: this.clock.now, change: this.commits.sort(.stamp).reduce(held = Program() => held + .opened.change), previous: this.base))
   cherry_pick (picked: History.Commit): static => picked.opened -- (plain => this.commit(plain.who, plain.change, message: plain.message))
   erased => .ordered.reduce(held = this.blank ~~ (.caches = []) => held.extended(.rewritten(Program(code: { None })) ~~ .from = None))
   revert (reverted: History.Commit) => reverted.opened -- (plain => plain.change⁻¹ ? this.commit(plain.who, plain.change⁻¹) : ERROR@Revert `revert`)
@@ -481,7 +481,7 @@ Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
 
   static Row := class (type: String, id: String, fields: (name: String, value: String)[]) => {
     // A secret (a `none.read` field, W2.1 Storage) is never written to a store, whatever it is called.
-    static (instance) as (=== Store.Row) => Store.Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => instance.named(made) -- made)) as String,
+    static (instance) as (=== Store.Row) => Store.Row(type: instance.static.name, id: (instance.name{is UUID}#.first ?? UUID.v4() -- (made => (instance.name |= made) -- made)) as String,
       fields: instance.fields{!(instance.@?.under(.name).access === none)}.map((name: .name, value: ((.value is Character ? .value.name{is UUID}#.first : .value) as String))))
     instance => (((this.type, "(name: ", ((this.id as UUID) as String), this.fields{.name != "name"}.map(", ", .name, ": ", .value), ")") as String) as Program)
     // The store: routed by type, read back as a narrowing.
@@ -569,7 +569,7 @@ Store := class: Hierarchy (at: Location = @local, format: Store.Format?) => {
   static FSST := class (symbols: String[], codes: Integer[][]) => {
     values => .codes.map(.map(this.symbols[.]).join("") as String)
     static table (strings: String[]) => strings.map(.unique).flatten.unique.map(. as String) -- (singles =>
-      singles, strings.map(s => (0..<s.count - 1).map(s[. .. . + 1] as String)).flatten.unique.sort_by(pair => -strings.map(.find_all(pair).count).sum)[..<255 - singles.count])
+      singles, strings.map(s => (0..<s.count - 1).map(s[. .. . + 1] as String)).flatten.unique.sort(pair => -strings.map(.find_all(pair).count).sum)[..<255 - singles.count])
     static coded (text: String, symbols: String[]) => text.empty ? [] : symbols.index_of(text[..1] as String) -- (pair =>
       pair != None ? [pair, this.coded(text[2..] as String, symbols)].flatten : [symbols.index_of(text[..<1] as String), this.coded(text[1..] as String, symbols)].flatten)
   }

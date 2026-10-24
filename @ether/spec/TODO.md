@@ -257,3 +257,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - (fixed 2026-10-24) `class: Parent (fields) { … }` without `=>`: a rule's definition whose body is itself a class (`=> class:
   … => { … }`) is read as that class, never defined: written in brackets. A static conversion naming its class
   (`static (x: T) as (=== Space)`) is that class's `from` now (the class's name is not given it while its block is read).
+- **`right-to-left` with names written together defines none of them** (Ray.ray's `right-to-left Σ | ∑ | sum => …`:
+  `[1, 2, 3].sum` is not 6, though `sumA | sumB => …` and `right-to-left sumC => …` each work): `right-to-left`'s body
+  `{operator} => {body}` is read as a definition whose head is the hole, so the alias rule never sees `a | b`. Inlining it
+  (`{{operator}} => {body}`) goes round 6000 deep everywhere; a rule `right-to-left {first} | {others} => …` hangs (a `|` in
+  the body after `=>` is taken as the names').

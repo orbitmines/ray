@@ -2366,11 +2366,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (k === K_LATER) { let rr = reading(t, w(r + 4), w(r + 8), w(names + F_RULE), w(names + F_CLOSURE), latest(self), self, 0, 0, 0, 0); const cf = w(names + F_CLOSURE), ct = cf && w(cf + N_IS) === IS_FRAME ? w(cf + F_THIS) : 0; if (w(rr) === K_UNREAD && ct && ct !== self && w(ct + N_IS) === IS_NODE) { const r2 = reading(t, w(r + 4), w(r + 8), w(names + F_RULE), w(names + F_CLOSURE), latest(ct), ct, 0, 0, 0, 0); if (w(r2) !== K_UNREAD) rr = r2; } return ev(t, rr, names, f, self, value, self, self); }
     if ((k === K_NAME || k === K_REF) && w(r + 20)) names = w(r + 20);
     if (DEBUG && k === K_NAME) { let fq = names; for (let d = 0; d <= w(r + 12); d++) { if (!fq || w(fq + N_IS) !== IS_FRAME) { debug(D_FAULT, 1103, w(r + 4), w(r + 8)); debug(D_FAULT, 1104, d, w(r + 20) ? 1 : 0); return 0; } if (d < w(r + 12)) fq = w(fq + F_CLOSURE); } if (w(fq + F_RULE) && w(r + 16) >= w(w(fq + F_RULE) + R_HOLES)) { debug(D_FAULT, 1103, w(r + 4), w(r + 8)); debug(D_FAULT, 1105, w(fq + F_RULE), w(r + 16)); return 0; } }
-    // (the name `x: T` declares, a word (`external unset`, T_UNSETTING while it reads it): that word, not what a rule of that
-    // name answers (`around` of every value, a field `around: Iterable` declared))
+    // (the name `x: T` declares, a word (`external unset`, T_UNSETTING while it reads it), in a list read as a value: that word,
+    // not what a rule of that name answers (`around` of every value, a field `around: Iterable` of a class's fields); in a left
+    // side, as it reads there (a header's, given already))
     if (k === K_NAME && w(t + T_UNSETTING) === 1 && w(t + T_DECL) && self && w(self + N_IS) === IS_NODE) {
       const tk = follow(take(w(r + 20) || names, w(r + 12), w(r + 16)), 0), a = skip(w(tk), w(tk + 4)), z = trim_end(w(tk), w(tk + 4));
-      if (a < z && worded(a, z) && b(a) > 57) return placed(t, a, z, self);
+      if (a < z && worded(a, z) && b(a) > 57 && !in_left(a, z) && !(self !== w(GLOBAL) && own_named(self, a, z)) && !(names && w(names + N_IS) === IS_FRAME && held_in(names, a, z))) return placed(t, a, z, self);
     }
     if (k === K_NAME) return valued(t, take(w(r + 20) || names, w(r + 12), w(r + 16)));
     // (`{x}`: its code, read where it is used (its type said what it matched, not where it is read))
@@ -2389,13 +2390,11 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (w(t + T_DECL) && fixed) { put(t + T_DECL, 0); const v = block(t, w(tk), w(tk + 4), w(tk + T_ORIGIN), f, into, 0, value, 1, w(tk + T_THIS) || into, 0); put(t + T_DECL, 1); return v; }
       // (or code that is one word of the left side, wherever the rule mentions it (`,`'s `list === declared`): a name declared
       // here, not a visible one's value (`(type, depth) := …` with a `type` visible))
-      // (and the name `x: T` declares (`external unset`, T_UNSETTING while it reads it), in a list read as values too: `[(around: T, …)]`
-      // declares `around`, not the value a word of that name reads)
-      const of_left = !lefts() || left_along(direct) || in_left(w(r + 4), w(r + 8)) || (worded(w(tk), w(tk + 4)) && in_left(w(tk), w(tk + 4))) || w(t + T_UNSETTING) === 1;
+      const of_left = !lefts() || left_along(direct) || in_left(w(r + 4), w(r + 8)) || (worded(w(tk), w(tk + 4)) && in_left(w(tk), w(tk + 4)));
       // (not of the left side being read (a member a rule's body reads, `,`'s `.spreading`): read as a value)
       if (w(t + T_DECL) && !of_left) { put(t + T_DECL, 0); const v = ev(t, r, names, f, self, value, written, on); put(t + T_DECL, 1); return v; }
       if (w(t + T_DECL) && worded(w(tk), w(tk + 4)) && of_left) {
-        if (tk !== direct && w(t + T_UNSETTING) !== 1) { put(t + T_DECL, 0); const v = valued(t, tk); put(t + T_DECL, 1); if (v && w(v + N_IS) === IS_TEXT && worded(w(v + N_A), w(v + N_B))) return placed(t, w(v + N_A), w(v + N_B), into); }
+        if (tk !== direct) { put(t + T_DECL, 0); const v = valued(t, tk); put(t + T_DECL, 1); if (v && w(v + N_IS) === IS_TEXT && worded(w(v + N_A), w(v + N_B))) return placed(t, w(v + N_A), w(v + N_B), into); }
         return placed(t, w(tk), w(tk + 4), into);
       }
       // (not one word: what it answers, a text, the name declared (`(on).{key}` given `"inner"`))
@@ -2583,7 +2582,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (the text from s to e has a hole in it)
   function holed(s: number, e: number) { const hole = 5 + 8 * w(OPEN_LENGTH); for (let i = s; i < e; i++) if (bracket(i, e) === hole) return 1; return 0; }
   // (as holed, for a group that is all of a text: a hole's brackets in it, but not in what a part of it is given, after its `=`
-  // (a default in a header, `boundary: Shape = … edges{.from} …`, `b = { 5 }`: code, not a hole))
+  // (a default in a header, `boundary: Shape = … edges{.from} …`, `b = { 5 }`: code, not a hole), nor a narrowing written
+  // against a word (`.map{is \s}`))
   function holed_group(s: number, e: number) {
     const hole = 5 + 8 * w(OPEN_LENGTH);
     let given = 0;
@@ -2592,7 +2592,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (c === 44) { given = 0; i++; continue; }
       if (c === 61 && b(i - 1) === 32 && b(i + 1) === 32) { given = 1; i++; continue; }
       const k = bracket(i, e);
-      if (k === hole && !given) return 1;
+      if (k === hole && !given && b(w(CLASSES) + b(i - 1)) !== 1) return 1;
       if (k & 1) { const p = past(i, e); if (!given && holed(i, p)) return 1; i = p; continue; }
       i++;
     }

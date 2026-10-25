@@ -92,6 +92,8 @@ this => .
 Name := {
   // (the word as written: what it names need not be there, `circle (radius: Number)`)
   {word ^variable} => `{word}`
+  // (the same word each time it is read: what a check of it answers, kept)
+  external kept
 }
 {name}: {type} = {value} ^operator => {
   (value) checked (type)
@@ -103,6 +105,8 @@ Name := {
 // (read by this type: what binds looser where they are written (`,`) first, each part then read here)
 Arguments := {
   {name}: {value} => `{name}` named_as value
+  // (what is given by name, as written: the same each time it is read, what a check of it answers kept)
+  external kept
 }
 {text} named_as {value} ^keyword => {
   {
@@ -1997,6 +2001,7 @@ assert {
 // (a class's, given none by name: each read whole, a value (read as code where it is used, a text or a closure is another's))
 Positions_given := {
   {value: Node} => value
+  external kept
 }
 assert {
   Indexed := class (index) => { }

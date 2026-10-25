@@ -49,8 +49,9 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   (`{value: Node}`), through two holes, the kernel's `word =>` is no closure there. `Kf((x) => x * 3)` reads.
 - **A closure given by name is read as a closure of the name** (`idg(f: (x) => x * 3)`, `Kf(fn: (x) => …)`): `=>` binds
   looser than `name:`, `(f: (x)) => x * 3`.
-- **A named argument whose value is the caller's parameter** (`nw (wrapped) => nm(named_one: wrapped)`, `nw(3)`) is not
-  that value (on main before this too). Repro ~/.cache/ray-scratch/selfhost/co37k.ray (B, C).
+- **A named argument given a function is not a local of the caller** (`nw (wrapped) => nm(named_one: wrapped)`, `nw(3)`;
+  a `:=` local the same; a constant or a global holds): before named arguments were taken too. A class given one so holds
+  it (NA15). Repro ~/.cache/ray-scratch/selfhost/na16.ray (A, B, D, E).
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
   ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).
 - **Reading a text as a class by its header** (`"v0.1.4-E2027.0A.4" as Version`, `Language.part_written` of a header
@@ -325,6 +326,10 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   the header is not read by it. Reading the header as code when everything is given by name (`taking_fields`) holds `Dq(c:
   5).s`, but runs every default eagerly: a worker ran out of memory in the suite (a default making its own class, Shape's
   `boundary`, made again without end), so laziness is needed first.
+  Also tried: `{name}: {type} = {value} => external unset name value` (no change: that rule does not read a header's
+  default given anything), and the header read again as code after `:=` (the kernel's `given_already`, "a header read again
+  in what it was read into: that value kept"): no change, the left side has bound `s` to the `Vq()` call pattern already, so
+  it counts as given. Only `x: (v)` written so reaches the kernel's lazy `x: T` untouched.
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).

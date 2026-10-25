@@ -1854,9 +1854,13 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
   // adds), made of that class too)
   // (a text: its positions read in order (a block among them, `(x := …, f: T)`, its definitions made in the one read, its
   // fields positions too), each field the span its type reads, a written text passed over; anything else, given to them)
-  destructured({given}) => made_as(((((given).textual) ? read_into(((this) &+ { }), given) : None) ?? (made &+ {
-    ({{fields}}) := given
-  })), this, made)
+  // (what it reads bound first: written as `made_as`'s first argument, with the fields' block in it, the body was not read)
+  destructured({given}) => {
+    destructured_one := ((((given).textual) ? read_into(((this) &+ { }), given) : None) ?? (made &+ {
+      ({{fields}}) := given
+    }))
+    made_as(destructured_one, this, made)
+  }
   // (its fields as they are where it is read: each a type (or what it was given), a text written among them itself)
   fields_now => [({{fields}}, fields_end)]
   // (what its fields are written as, in order: each one's type (none, anything), a text written among them itself; read as
@@ -2188,10 +2192,23 @@ header_defines := false
 inherits_structure (header_text, parent_class) => (header_text.same_characters(`nothing_given = None`) !== None) && ((parent_class).header_quoted !== None)
 // (a text is a class written as a structure when it reads as the class is written, the kernel reading it (by every type in it);
 // asked when it is asked: what the class is written as, read while it is defined, is read again for what it is then)
-structure_reads (read_class, read_text) => ((read_class).header_quoted !== None) && written_shape(((read_class).header_quoted).written_as) && ((external readable ((read_class).header_quoted).written_as) === true) && ((external admits read_text ((read_class).header_quoted).written_as) === true)
-written_shape (written) => (written !== None) && (texts_among(written.head) || ((written.head.next === None) && !(written.first === Node) && !((written.first).of === written.first)))
+structure_reads (read_class, read_text) => ((((read_class).header_quoted !== None) ? (read_class).header_quoted : read_class).written_as) written_reads (read_text)
+// (what the kernel cannot tell of, the language reads: by every type in it, as `is` reads a text by a list of types; a rule,
+// not a function: the list would be spread into its arguments)
+{reads_types_of} written_reads {reads_text_of} ^keyword => {
+  reads_types := reads_types_of
+  reads_text := reads_text_of
+  written_shape(reads_types) && (((external readable reads_types) === true) ? ((external admits reads_text reads_types) === true) : text_reads(reads_types.head, reads_text))
+}
+written_shape (written) => (written !== None) && (written.head !== None) && (texts_among(written.head) || ((written.head.next === None) && !(written.first === Node) && !((written.first).of === written.first)))
 // (a text written among the places, or a type that is a position itself (`\s`))
 texts_among (at) => at ? (literal_text(at.value) || positioned_type(at.value) || texts_among(at.next)) : false
+assert {
+  Digits := class (digits: Char.Digit[]{.length >= 1}) => { }
+  assert `25` is Digits  // SR1 a text read by a class of one typed place is not one
+  assert !(`2a` is Digits)  // SR2 a text not read by a class of one typed place is one
+  assert (`25` as Digits).digits == `25`  // SR3 a text as a class of one typed place is not read into it
+}
 assert ("A", "A", "A") is "A"[]  // IS1 is does not ask instance_of
 assert {
   Texty := class: String (x) => {
@@ -2909,6 +2926,8 @@ assert {
   assert misfit[1] == "+"  // TY40 positions that do not fit a structure are taken as a structure
   spanned: Ranged = 3-8
   assert spanned.width == 5  // TY41 text given to a structure is not read by it
+  assert `2-7` is Ranged  // TY42 a text written as a structure is not one
+  assert !(`2+7` is Ranged)  // TY43 a text not written as a structure is one
 }
 assert {
   Bare := class only: Number

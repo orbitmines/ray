@@ -2964,9 +2964,9 @@ Array &+= {
     external member (.) (`tail`) (None)
     external member (.) (`listing`) (true)
     external member (.) (`spread`) (false)
-    // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
-    {written} => (.).one_written(`{written}`)
   }
+  // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
+  {written} => (.).one_written(`{written}`)
   // (where it is entered, Iterable's `entry`: its first vertex)
   entry => .head
   // (a member it does not have (`missing_name`, the kernel's, which asks only when each of its values, one a class made, has it

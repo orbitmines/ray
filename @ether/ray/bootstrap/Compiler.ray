@@ -152,7 +152,10 @@ Compiler := class {
   // (a level made of two, `A + B`: reduced by the first, then what that gives by the second)
   // (the value read where it is given, then reduced: not the code that gives it read at the level)
   // (a value, read by the level's own rules: one of one hole whose type it is (`{text: String} => …`) takes it)
-  static reduced (reduced_value, level) => (level is Compiler.Composition) ? Compiler.reduced(reduced_value: Compiler.reduced(reduced_value: reduced_value, level: level.components.hierarchy.first), level: level.components.hierarchy.last) : ((external level_reads level reduced_value) ?? (level reducing reduced_value))
+  // (and by a level, the value its own argument: a list given beside another would be composed into it, one given by name
+  // to a function is a declaration where it is written)
+  static reducing (reducing_level) => (reducing_value) => (reducing_level is Compiler.Composition) ? Compiler.reducing(reducing_level.components.hierarchy.last)(Compiler.reducing(reducing_level.components.hierarchy.first)(reducing_value)) : ((external level_reads reducing_level reducing_value) ?? (reducing_level reducing reducing_value))
+  static reduced (reduced_value, level) => Compiler.reducing(level)(reduced_value)
   // (a level as a scope, what the language is read with: one made of each of its parts, the first's rules seen first)
   static scope_of (scope_level) => (scope_level is Compiler.Composition) ? level_scope_of(scope_level) : scope_level
   // (a closure run with a level in scope: its code read with the level's rules first, in this thread, until it answers)
@@ -187,18 +190,16 @@ level_scope_of (scope_level) => level_scope_given(level_scope(None), scope_level
 level_scope_given (scope_made, scope_level) => (scope_level is Compiler.Composition) ? level_scope_given(level_scope_given(scope_made, (scope_level).second), (scope_level).first) : ((scope_made) &+= (scope_level))
 // A program written as code, `Program(code: { … })`: the code kept as written, read when it runs (a block given to it is
 // read where it is written, into a node: nothing to run again)
-Program(code: {`{`}{program_code}{`}`}) ^keyword => Program(running: (() => ({program_code})))
+// (its code read when it runs: given a level, read on it, its rules seen in that code and not in what it calls)
+Program(code: {`{`}{program_code}{`}`}) ^keyword => Program(running: ((program_scope = None) => (program_scope === None) ? ({program_code}) : (Compiler.scope_of(program_scope)).({program_code})), read_on_level: true)
 // (a setting, `p{O: level}`: the same program (of the class, a new one), read with that level)
-{setting_of}{`{`}O: {level}{`}`} ^punctuation => Program(code: (setting_of).code, running: (setting_of).running) ~~ (.O = ({level}))
-// (and written with its level, `Program(code: { … }){O: L}`: its code read on L when it runs, L's rules seen in that code and not in
-// what it calls)
-Program(code: {`{`}{program_code}{`}`}){`{`}O: {program_level}{`}`} ^keyword => Program(running: (() => (Compiler.scope_of({program_level})).({program_code})), read_on_level: true) ~~ (.O = ({program_level}))
+{setting_of}{`{`}O: {level}{`}`} ^punctuation => Program(code: (setting_of).code, running: (setting_of).running, read_on_level: (setting_of).read_on_level) ~~ (.O = ({level}))
 // (what a program answers when called (outside Program, whose `{this}()` would read its `running()`): its code run (read on its level when it was written with one, else under it), what
 // that answers read by the level; given by name, a list it answers is not composed into the level after it)
 program_answered (answered_program) => {
   answered_level := (answered_program).O
-  answered_value := ((answered_program).running === None) ? (answered_program).code : ((answered_level === Compiler.none) ? (answered_program).running() : (((answered_program).read_on_level === true) ? (answered_program).running() : Compiler.run_under((answered_program).running, answered_level)))
-  (((answered_program).running === None) || (answered_level === Compiler.none)) ? answered_value : Compiler.reduced(reduced_value: answered_value, level: answered_level)
+  answered_value := ((answered_program).running === None) ? (answered_program).code : ((answered_level === Compiler.none) ? (answered_program).running() : (((answered_program).read_on_level === true) ? (answered_program).running(answered_level) : Compiler.run_under((answered_program).running, answered_level)))
+  (((answered_program).running === None) || (answered_level === Compiler.none)) ? answered_value : Compiler.reducing(answered_level)(answered_value)
 }
 Program &+= {
   O | optimizations := Compiler.none

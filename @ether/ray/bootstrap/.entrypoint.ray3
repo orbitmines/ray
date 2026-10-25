@@ -786,7 +786,13 @@ assert {
 // (a section calling each, `xs.for(.(caller))`: each one called with caller (`.( )` of one called by brackets); and given
 // without brackets, `.statement#.for .(caller)`)
 {method}(.({called_with})) ^punctuation => .{method}((it) => it.(.({called_with})))
-{calling_on}.{method: Name} .({called_with}) ^punctuation => (calling_on).{method}((it) => it.(.({called_with})))
+{calling_on}.{method: Name} .({called_with}) ^punctuation => (calling_on).{method}((it) => it({called_with}))
+assert {
+  called_with := []
+  calling := Array.new.append((given_to) => called_with.append(given_to))
+  calling.for .(5)
+  assert called_with.count == 1  // SC1 a section without brackets did not call each one with what it was given
+}
 // `code**`: what is written, as a program.
 {code}** ^operator => Program(code: {code})
 

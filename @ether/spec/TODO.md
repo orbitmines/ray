@@ -361,4 +361,7 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{x}: {type} => external unset x type` takes any left side as a place, so `(Program(name: "choose"): String).name` is unset
   and it is no Choice; Program's `returns` (Program.ray, "`Program(…): T`") is never given. Tried: a rule
   `{typed_program: Program}: {program_returns}` (setting `returns`): it never fires, in a statement, a function's body or
-  brackets (the typed hole does not take `Program(…)` written; an untyped one would replace every `x: T`).
+  brackets (the typed hole does not take `Program(…)` written; an untyped one would replace every `x: T`). Nor `{p: *{. is Program}}: {r}`
+  or `{c}({args}): {r}`, as a block's statement either: `X(…): T` is a declared call place before any rule reads it (the
+  kernel's left side, as with header defaults), and `:` outside brackets binds looser than `=>` (`choose {type} => P: type`
+  types the rule), in brackets `name: v` is a named part.

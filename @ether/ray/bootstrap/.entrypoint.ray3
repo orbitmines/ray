@@ -955,7 +955,13 @@ narrowed_possible (narrowing) => {
 answers_true (answered) => ((answered) === true) || (((answered).superposes) && (answered).components.some((each_answered) => answers_true(each_answered)))
 holds_any (held_condition) => ((held_condition).superposes) ? (held_condition).components.some((each_held) => holds_any(each_held)) : ((held_condition) ? true : false)
 // (what a step holds keeps it, `xs[{p}]`'s `Filtered`: the condition read on it, holding when one of what it is does)
-satisfies (keeping) => holds_any(.({keeping}))
+// (a condition read on a value that answers a function, a predicate given (`xs.some(p)`) or a section (`{> 0}`): that function
+// of the value)
+{condition_read} called_on {condition_value} ^keyword => {
+  condition_now := condition_read
+  (((condition_now).listing !== true) && ((external callable condition_now) === true)) ? (condition_now)(condition_value) : condition_now
+}
+satisfies (keeping) => holds_any((.({keeping})) called_on (.))
 {narrowed}{`{`}{constraint}{`}`} ^punctuation => {
   narrowed_whole := narrowed
   (narrowed_whole === None) ? None : ((narrowed_whole).listing) ? (
@@ -963,16 +969,20 @@ satisfies (keeping) => holds_any(.({keeping}))
     narrowed_at := (narrowed_whole).head
     while narrowed_at {
       narrowed_one := narrowed_at.value
-      (narrowed_kept.append(narrowed_one) if holds_any(narrowed_one.({constraint})))
+      (narrowed_kept.append(narrowed_one) if holds_any((narrowed_one.({constraint})) called_on (narrowed_one)))
       narrowed_at = narrowed_at.next
     }
     narrowed_kept
   ) : Narrowing &+ {
     narrows := narrowed
-    holds (it) => it.({constraint})
+    holds (it) => (it.({constraint})) called_on (it)
     // (called with what makes one, `Box(size: v)` of `Box := Shape{…}`: what it narrows makes it; with nothing, one chosen)
     {this}({arguments: Arguments}) => (narrowed)({arguments})
   }
+}
+assert {
+  narrowed_by := (x) => x == 2
+  assert [1, 2, 3]{narrowed_by}.count == 1  // NA16 a list narrowed by a function keeps what it does not hold for
 }
 // (by what a text matches, `rules.keys{text ~= .}`: each one it matches, its `length` what it matches of the text (all of it,
 // when it reads all of it), so the longest rule that reads a text is the one matching most, `.sort(.length).last`)

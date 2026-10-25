@@ -347,7 +347,10 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   a String; given a Location (`"Ray" @ (l)`, l `@https://orbitmines.com`), (that was a probe named `p`, UI's `p {amount} {spaced}`
   padding keyword reading it). What remains: a URL is not read as a Location, `"https://orbitmines.com" as Location` is None
   (Location.ray's header structure, read by `read_as`/`read_into`), so `@https://…` is no Location and Scene's `placed`
-  (`.location is Location`) does not take it.
+  (`.location is Location`) does not take it. Why: a text is no `Char[]` (`"a"[0] is Char`, but
+  `"a" is Char` and `"abc" is Char[]` are false; `Char.Word[]`, a superposition of ranges, reads), and Location's header is
+  `Char{…}[]`s. Tried: Char a range of every character (`"\0".."\u{10FFFF}"`: enumerated, 6000 deep); Char `is_range` with
+  `one_same` true (`"a" is Char` holds, `Char[]` still reads nothing, `{!= ":"}` not checked, every character a range).
   Also: a field holding None is not a place (`t.marked = 5`: "a left side answers a value, not a place"), and at a file's top
   level `u := x ~~ (.m = v)` sets nothing (as a statement it does).
 - **`Program(…): T` is no Program answering T** (Choice.ray `choose {type} => Program(name: "choose"): type`; UI239, UI270, CN8):

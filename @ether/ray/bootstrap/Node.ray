@@ -34,6 +34,21 @@ Node &+= {
   assert (a: 1, b: 2).fields.map(.name) == ["a", "b"]  // NOD12 the fields of a value are not its names in order
   assert (a: 1, b: 2).fields.map(.value) == [1, 2]  // NOD13 the fields of a value do not hold their values in order
   assert (a: 1, b: 2).fields.count == 2  // NOD14 a value of two fields does not have two fields
+  // another value like it: of its class, holding what it holds
+  copy => {
+    copied := fresh_reading_of(None)
+    copied &+= this
+    external member (copied) (`of`) ((this).of)
+    copied
+  }
+  assert {
+    original := "Ray"
+    original ~~ (.marker = 7)
+    copied := original.copy
+    copied ~~ (.marker = 8)
+    assert copied is String && copied == "Ray"  // NOD91 a copy of a text is not a text like it
+    assert original.marker == 7 && copied.marker == 8  // NOD92 a copy changed changes what it copies
+  }
 
   chainable != (other) => !(this == other)
   assert 1 != 2  // NOD15 different values are not unequal
@@ -204,7 +219,7 @@ Node &+= {
   // where it is (`@x.@`, `value.@`)
   .@ ^punctuation => .location
   // placed there too, `value @ place` (a method of the value: `x := @name` is no value placed)
-  @ (location) ^keyword => this ~~ (.location |= location)
+  @ (placed_at) ^keyword => this ~~ (.location := either_of(.location)(placed_at))
 }
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
 // A value as another given a value, `(x as T) = v`: what it is as T, given it by its own `=` (`(@me/device as Terminal) = x`
@@ -307,9 +322,18 @@ read_within (text, pattern) => (
     at_start := pattern is Anchored && pattern.at_start
     at_end := pattern is Anchored && pattern.at_end
     wanted := pattern is Anchored ? pattern.pattern : pattern
-    // (at each place in it, from the first: a beginning of the text there that is what is wanted, the shortest first)
-    start := text
+    // (at each place in it, from the first: a beginning of the text there that is what is wanted, the shortest first; none
+    // tried when a text the pattern reads only where it is written is not in it at all)
+    start := texts_needed(wanted).every((needed) => text ~= needed) ? text : None
     index := 0
+    // (a text: where it begins, at each place once)
+    if literal_text(wanted) && !at_end {
+      while (start !== None && found.not) {
+        if text_begins(start, wanted) { found = start.until(text_past(start, wanted)) ~~ .index = index }
+        start = (at_start || start.empty) ? None : start.rest
+        index = index.succ
+      }
+    }
     while (start !== None && found.not) {
       cut := start
       while (cut !== None && found.not) {
@@ -323,6 +347,31 @@ read_within (text, pattern) => (
   }
   found
 )
+
+// (the texts a structure reads only where they are written: those among its positions, and its positions' types', each
+// structure once; not what a repeat or one of alternatives reads, which may be none)
+texts_needed (needed_of) => {
+  needed_found := Array.new
+  needed_seen := Array.new
+  needed_todo := Array.new.append(needed_of)
+  while !(needed_todo.empty) {
+    needed_type := needed_todo.first
+    needed_todo = needed_todo.rest
+    if ((needed_type).listing === true) && !((needed_type).is_range === true) && !repeat_type(needed_type) && !(needed_seen.contains(needed_type)) {
+      needed_seen.append(needed_type)
+      needed_at := (needed_type).head
+      while needed_at {
+        if literal_text(needed_at.value) {
+          needed_found.append(needed_at.value)
+        } else {
+          needed_todo.append(field_type_of(needed_at))
+        }
+        needed_at = needed_at.next
+      }
+    }
+  }
+  needed_found
+}
 
 Node &+= {
   right-to-left trivially => instance ? this : ?

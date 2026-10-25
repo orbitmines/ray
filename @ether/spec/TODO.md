@@ -318,6 +318,13 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `Dq(c: 5).s` is a Vq, but errors stop being said (`assert false` passes) and the entry file is not read; and `external valued`
   (the default read with nothing being declared): no change, the left side has read it already. A class being made is told by
   a flag set with `external member` (`Making.now = true` in its block defines a name there).
+  Found 2026-10-25 (ray-61): a default written as the type, in brackets, `s: (Vq())`, is read lazily by the kernel's `x: T`
+  (read when first asked for, kept): it holds given anything by name or by position, and one making its own class reads
+  (`Hr := class (r: (Hr(r: 5)))`, `Hr().r.r` is 5); `s: Vq = Vq()`, `s: Vq = (Vq())`, `s = Vq()` lose it, and a default
+  reading a field after it (`a: (b + 1), b = 2`) does not read. `{name}: {type} = {value} => {name}: {value}` is not that:
+  the header is not read by it. Reading the header as code when everything is given by name (`taking_fields`) holds `Dq(c:
+  5).s`, but runs every default eagerly: a worker ran out of memory in the suite (a default making its own class, Shape's
+  `boundary`, made again without end), so laziness is needed first.
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).

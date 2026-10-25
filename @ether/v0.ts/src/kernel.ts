@@ -88,7 +88,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (a thread's levels, `external level_in L`: the last first, before the language's `O`)
   const T_LEVELS_N = 600, T_LEVELS = 604, LEVELS = 8;
   // (the value a level reads, `external level_reads L v`: the text it is spliced in as, and it, while L reads it)
-  const T_SPLICE = 640, T_SPLICE_V = 644;
+  const T_SPLICE = 640, T_SPLICE_V = 644, T_SPLICED = 648;
   const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, STYLE_ASKED = 4194304, STYLED_RULE = 8388608, TYPED_READ = 256, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMERAL_AT2 = 316, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, STYLES = 332, STYLES_CAP = 1 << 20, GROWN_AT = 508;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
@@ -888,10 +888,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const text = allocb(2); setb(text, 113); setb(text + 1, 118);
     const hold = node(IS_NODE, 0, 0, w(GLOBAL), 0); bound(text, text + 2, hold, val);
     const fr = frame(0, 0, hold, text, text + 2, 0, 0, hold, hold), was = w(t + T_SPLICE), was_v = w(t + T_SPLICE_V);
-    put(t + T_SPLICE, text); put(t + T_SPLICE_V, val);
+    const was_on = w(t + T_SPLICED);
+    put(t + T_SPLICE, text); put(t + T_SPLICE_V, val); put(t + T_SPLICED, 0);
     const r = reading(t, text, text + 2, 0, 0, latest(lv), hold, 0, w(lv + N_BASE), 0, 0);
-    const read_ = w(r) === K_UNREAD || w(r) === K_EMPTY || stopped(t) ? 0 : ev(t, r, fr, fr, hold, 1, hold, hold);
-    put(t + T_SPLICE, was); put(t + T_SPLICE_V, was_v);
+    put(t + T_SPLICED, 1);
+    const read_ = w(r) === K_UNREAD || w(r) === K_EMPTY || stopped(t) ? 0 : ev(t, r, fr, fr, w(GLOBAL), 1, hold, 0);
+    put(t + T_SPLICE, was); put(t + T_SPLICE_V, was_v); put(t + T_SPLICED, was_on);
     return read_ && !stopped(t) ? read_ : w(NOTHING);
   }
   // (what a value's method of one argument answers, `a word b`, asked of the language: a and b spliced in as texts of their own)
@@ -1154,8 +1156,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     for (let n = w(r + R_PARTS); k < n; k++) { const q = r + R_PART + PART * k, kind = w(q) & 15; if (kind === SPACE) continue; if (kind === LITERAL) return b(w(q + 4)) === 44 ? 1 : 0; return 0; }
     return 0;
   }
-  // (whether what is read from at is what brackets hold, `(` or `[` before it: items, which `,` separates)
-  function enclosed(at: number): number { let q = at - 1; while (q > 0 && b(q) <= 32 && b(q) !== 10) q--; return b(q) === 40 || b(q) === 91 ? 1 : 0; }
+  // (whether what is read from at is what brackets hold, `(` or `[` the innermost open around it: items, which `,` separates,
+  // past the items before it (`[1, c ? a : b, 3]`'s `c`) and lines (a header written over several); a block's `{`, none)
+  function enclosed(at: number): number {
+    let q = at - 1, depth = 0;
+    for (let n = 0; q > 0 && n < 8192; n++, q--) {
+      const c = b(q);
+      if (c === 34 || c === 96) { const quote = c; q--; while (q > 0 && !(b(q) === quote && b(q - 1) !== 92)) q--; continue; }
+      if (c === 41 || c === 93 || c === 125) depth++;
+      else if (c === 40 || c === 91) { if (depth === 0) return 1; depth--; }
+      else if (c === 123) { if (depth === 0) return 0; depth--; }
+    }
+    return 0;
+  }
   // (from a choice's ` ? ` at p: just past its ` : `, choices in it counted, brackets skipped; none, 0)
   function choice_end(p: number, end: number): number {
     let depth = 1;
@@ -2047,6 +2060,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function reading(t: number, s: number, e: number, rule: number, closure: number, vis: number, self: number, want: number, stop: number, refuse: number, on: number): number {
     s = skip(s, e); while (e > s && b(e - 1) <= 32) e--;
     if (DEBUG) count(K_READING);
+    // (the text a value is spliced in as while what a level read of it runs (`external level_reads L v`): v; before what
+    // was read of that text, which is the level's reading of it)
+    if (w(t + T_SPLICED) && s === w(t + T_SPLICE) && e === w(t + T_SPLICE) + 2) { const rv = alloc(READ); put(rv, K_HELD); put(rv + 4, s); put(rv + 8, e); put(rv + 12, -5); return rv; }
     // (what a hole being declared reads, the names in it: no reader reads them)
     if (w(t + T_HOLE)) refuse |= READER;
     // (read once: the same text, with the same rules and names, is the same reading; not one in a frame, nor one nothing read)
@@ -2396,6 +2412,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (k === K_HELD) {
       const h = w(r + 12);
       if (h === -1) return w(self + F_CALLER);
+      if (h === -5) return w(t + T_SPLICE_V);
       // (`this`: what it was read on; else what it is read in, and in a method, a node made there is what that is read on)
       // (but a class called, `x.C(…)`: the class (what it makes is of it), not x)
       if (h === -2) { const th = w(self + F_THIS), rc = w(self + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
@@ -2557,6 +2574,17 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function making(n: number) { const by = w(n + N_B); return w(n + N_IS) === IS_NODE && by && w(by + N_IS) === IS_FRAME && !w(by + N_B) ? 1 : 0; }
   // (the text from s to e has a hole in it)
   function holed(s: number, e: number) { const hole = 5 + 8 * w(OPEN_LENGTH); for (let i = s; i < e; i++) if (bracket(i, e) === hole) return 1; return 0; }
+  // (as holed, for a group that is all of a text: a hole's brackets around a name or a text written in them (`({x})`, `[{x}]`),
+  // not a block (`{ 5 }`) nor a narrowing written against what it narrows (`edges{.from}` of a default in a header))
+  function holed_group(s: number, e: number) {
+    const hole = 5 + 8 * w(OPEN_LENGTH), open = w(OPEN_LENGTH), cl = w(CLASSES);
+    for (let i = s; i < e; i++) {
+      if (bracket(i, e) !== hole) continue;
+      const c = b(i + open), p = i > s ? b(i - 1) : 0;
+      if ((b(cl + c) === 1 || c === 96) && b(cl + p) !== 1 && p !== 41 && p !== 93) return 1;
+    }
+    return 0;
+  }
   // (the text from s to e a pattern: a hole in it, not in brackets (`{x} + {y}`; `({x} => {y}).style` is code), that is none
   // of the holes of what it was written in, `names`)
   // (a group that is all of it, `({x})`, `[{x}]`, a pattern too; and what is quoted is not in brackets)
@@ -2566,7 +2594,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     for (let i = s; i < e;) {
       const k = bracket(i, e);
       if (k === hole) { if (!names || !w(names + F_RULE) || !ref(w(names + F_RULE), w(names + F_CLOSURE), i, past(i, e), 1)) return 1; i = past(i, e); continue; }
-      if ((k & 3) === 1) { const p = past(i, e); if (p >= e && holed(i, p)) return 1; i = p; continue; }
+      if ((k & 3) === 1) { const p = past(i, e); if (p >= e && holed_group(i, p)) return 1; i = p; continue; }
       i++;
     }
     return 0;
@@ -3063,6 +3091,17 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   }
   // (a rule composing what its holes take: two or more, the text between them characters each on its own (`,`), no operator
   // and no bracket or quote)
+  // (a rule giving a place a value: two holes, `=` alone between them)
+  function assigns(rule: number): number {
+    if (w(rule + R_HOLES) !== 2) return 0;
+    let eq = 0;
+    for (let k = 0; k < w(rule + R_PARTS); k++) {
+      const q = rule + R_PART + PART * k;
+      if ((w(q) & 15) !== LITERAL) continue;
+      for (let i = 0; i < w(q + 8); i++) { const c = b(w(q + 4) + i); if (c <= 32) continue; if (c !== 61 || eq) return 0; eq = 1; }
+    }
+    return eq;
+  }
   function composes(rule: number): number {
     if (w(rule + R_HOLES) < 2) return 0;
     let lit = 0;
@@ -3310,12 +3349,15 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (read on its own: what is being read where it is asked for (a jump, a left side, a hole) left as it is)
     const js = w(t + T_JUMP_S), jn = w(t + T_JUMP_N), jv = w(t + T_JUMP_V), hole = w(t + T_HOLE), decl = w(t + T_DECL), le = w(t + T_LE), fault = w(t + T_FAULT);
     put(t + T_JUMP_N, 0); put(t + T_HOLE, 0); put(t + T_DECL, 0); put(t + T_LE, 0); put(t + T_FAULT, 0);
+    // (in a test, of a rule made before it: written in by none (another thread reads it; what the test makes is let go of with
+    // it), what it reads kept there only when it is not the test's own)
+    const own = !w(THREAD + T_REG_AT) || in_region(rule);
     // (while it is being read: nothing, a type read again inside itself goes no deeper)
-    put(rule + R_BS, w(NOTHING));
+    if (own) put(rule + R_BS, w(NOTHING));
     const fv = valued(t, w(bv + N_A));
-    if (!fv) put(rule + R_BS, bv);
+    if (!fv && own) put(rule + R_BS, bv);
     put(t + T_JUMP_S, js); put(t + T_JUMP_N, jn); put(t + T_JUMP_V, jv); put(t + T_HOLE, hole); put(t + T_DECL, decl); put(t + T_LE, le); if (!w(t + T_FAULT)) put(t + T_FAULT, fault);
-    if (fv) put(rule + R_BS, fv);
+    if (fv && (own || !in_region(fv))) put(rule + R_BS, fv);
     return fv;
   }
   function apply_(t: number, rule: number, caps: number, names: number, f: number, self: number, s: number, e: number, written: number, on: number): number {
@@ -3716,6 +3758,22 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a left side being read, a rule composing parts of it (its head holes apart by a character on its own, `{a}, {b}`): each
     // part read as a left side first, a word a name declared here, whatever its body then reads them as (`,`'s `list ===
     // declared`, a visible `type` not its value: GN3); a rule of an operator (`{x}: {type}`, `{x} ^{style}`) reads its own)
+    // (a default in a left side, `b = 0`, `s: T = T()` (§6.1, §10.1): the place declared, given the default when it is first
+    // asked for, unless it holds a value already; what a call gives it replaces that) (in what a call or a value is made in:
+    // the global one's rules are too many to look through for each)
+    if (w(t + T_DECL) && lefts() && in_left(s, e) && kind !== DEFINE && !(w(rule + R_FLAGS) & METHOD) && self !== w(GLOBAL) && w(self + N_IS) === IS_NODE && assigns(rule)) {
+      const tn = applied + F_TAKES, tv = applied + F_TAKES + TAKE, a = skip(w(tn), w(tn + 4)), z = trim_end(a, w(tn + 4));
+      let we = a; while (we < z && b(w(CLASSES) + b(we)) === 1) we++;
+      if (we > a && (we === z || b(skip(we, z)) === 58)) {
+        // (a typed one, `s: T`: read as a left side, its place given its type)
+        if (we < z) { valued(t, tn); if (stopped(t)) return 0; }
+        const pl = placed(t, a, we, self), lo = follow(tv, 1), lth = lo ? w(lo + T_THIS) || self : 0;
+        if (pl && w(pl + N_IS) === IS_PLACE && lo && lth && w(lth + N_IS) === IS_NODE) {
+          if (!given_already(place_in(pl) || self, a, we, pl)) { const kc = alloc(TAKE); for (let i = 0; i < TAKE; i += 4) put(kc + i, w(lo + i)); put(kc + T_STATE, 0); put(kc + T_VALUE, 0); bound(w(pl + N_A), w(pl + N_B), place_in(pl) || self, node(IS_LAZY, kc, 0, lth, 0)); }
+          return pl;
+        }
+      }
+    }
     if (w(t + T_DECL) && lefts() && in_left(s, e) && kind !== DEFINE && !(w(rule + R_FLAGS) & METHOD) && composes(rule)) for (let i = 0; i < w(rule + R_HOLES); i++) {
       const tk = applied + F_TAKES + TAKE * i, a = skip(w(tk), w(tk + 4)); let z = w(tk + 4); while (z > a && b(z - 1) <= 32) z--;
       if (a >= z || !in_left(a, z)) continue;
@@ -4666,10 +4724,13 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     put(tk + T_VALUE, v); aput(tk + T_STATE, 2);
   }
   function valued(t: number, tk: number): number {
+    // (a take of the text a value is spliced in as, while what a level read of it runs: the value)
+    if (w(t + T_SPLICED) && skip(w(tk), w(tk + 4)) === w(t + T_SPLICE) && trim_end(w(tk), w(tk + 4)) === w(t + T_SPLICE) + 2) return w(t + T_SPLICE_V);
     let state = aload(tk + T_STATE);
     if (state === 2) return resolved(t, tk);
     if (state === 3) return w(tk + T_VALUE);
-    if (!state && w(t + T_GIVEN_N) && !NOGIVEN) { const g = given(tk); if (g) { put(tk + T_VALUE, g); aput(tk + T_STATE, 3); return g; } }
+    // (one made before the test it is in: given here only, nothing written in it)
+    if (!state && w(t + T_GIVEN_N) && !NOGIVEN) { const g = given(tk); if (g) { if (older(tk)) return g; put(tk + T_VALUE, g); aput(tk + T_STATE, 3); return g; } }
     // (a take of what another took, `{x}` or `x`: that one's value, read once where it was written, kept there (and here))
     const source = follow(tk, 1);
     // (one word, read as a left side through what refers to it (`(name)` given `seen`): which one, so that what it names,

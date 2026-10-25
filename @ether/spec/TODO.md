@@ -309,6 +309,11 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   already read (kept: the pattern again; `{{x}}` the same), and run before `taking` it breaks `Dk()`. Traps met: a class with
   no header has `nothing_given = None` for one; `x: T` reads `x: T = v` too (last declared wins); a `,` of its own must come
   after the places; a closure of nothing named bare is applied; `read_within` on every construction recurses.
+  Also tried: the arguments taken into a block of their own first (a block keeps what `:=` declares in it; `(x).( … := … )`
+  declares where the code is written), the header then read as code, and what was given in its positions copied back: with it,
+  `Dq(c: 5).s` is a Vq, but errors stop being said (`assert false` passes) and the entry file is not read; and `external valued`
+  (the default read with nothing being declared): no change, the left side has read it already. A class being made is told by
+  a flag set with `external member` (`Making.now = true` in its block defines a name there).
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).

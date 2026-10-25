@@ -43,7 +43,9 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   …)` answers the first program's code for every program after (CO37; `(Program(code: { 8 }){O: shouted})()` is 7 after a
   `{ 7 }` one). Tried 2026-10-25: the closure's call rule as `{this}({arguments: Arguments})` plus `taking` giving one
   Named of its parameter's name its value: named calls work (NA16–19), but ~20 tests of closures given as arguments
-  (`#.map(x => x * 2)`, `.contains(2)`, `reduce(acc = 0 => …)`) fail and the suite is slower. Repros:
+  (`#.map(x => x * 2)`, `.contains(2)`, `reduce(acc = 0 => …)`) fail and the suite is slower: read by Arguments' rules, a
+  bare closure `x => x * 2` is a rule defined there, not a closure (`(x) => x * 2` reads; an Arguments rule
+  `{p} {`=>`} {b} => ((p) => b)` reads far more than closures). Repros:
   ~/.cache/ray-scratch/selfhost/co37f.ray, co37j.ray, co37k.ray; trees tv3/tv4.
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
   ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).

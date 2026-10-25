@@ -354,7 +354,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   forever: `=` keeps the code, and `|`'s holes are code). (3) Code in `x ~~ ( … )` is read in x: the parameter `location` was
   the text's own `location` field (renamed `placed_at`). Still open: on a text, `.location = v` sets nothing (`:=` does), a name
   from where `~~ ( … )` is written (`loc`) is not found in a text (in an instance it is), and `.m` in a rule's hole
-  (`.location |= 5` through the `|=` rule) is not the `~~` block's. `"W" @ 5` without brackets does not call the method.
+  (`.location |= 5` through the `|=` rule) is not the `~~` block's. `"W" @ 5` without brackets does not call the method. `@` now sets `.location :=` itself (`|=`'s `.m` is not the block's): `"Ray" @ (6)` is placed,
+  a String; given a Location (`"Ray" @ (l)`, l `@https://orbitmines.com`), its `of` is then Location too and its copy no String.
   Also: a field holding None is not a place (`t.marked = 5`: "a left side answers a value, not a place"), and at a file's top
   level `u := x ~~ (.m = v)` sets nothing (as a statement it does).
 - **`Program(…): T` is no Program answering T** (Choice.ray `choose {type} => Program(name: "choose"): type`; UI239, UI270, CN8):

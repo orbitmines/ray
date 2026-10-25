@@ -219,7 +219,7 @@ Node &+= {
   // where it is (`@x.@`, `value.@`)
   .@ ^punctuation => .location
   // placed there too, `value @ place` (a method of the value: `x := @name` is no value placed)
-  @ (placed_at) ^keyword => this ~~ (.location |= placed_at)
+  @ (placed_at) ^keyword => this ~~ (.location := either_of(.location)(placed_at))
 }
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
 // A value as another given a value, `(x as T) = v`: what it is as T, given it by its own `=` (`(@me/device as Terminal) = x`

@@ -656,7 +656,7 @@ assert {
   {
     named_on := on
     named_passed := names_given
-    if ((named_passed).listing) && ((named_passed).spread === true) {
+    if ((named_passed).listing) && ((named_passed).spread) {
       named_at := (named_passed).head
       while named_at {
         if (named_at.value).named_argument === true { (named_on) declares ((named_at.value).name) as ((named_at.value).value) }
@@ -683,7 +683,7 @@ assert {
   {
     place_was := place
     alone_taken := taken
-    unless (alone_taken === declared) || ((alone_taken).named_argument === true) {
+    unless (alone_taken === declared) || ((alone_taken).named_argument) {
       // (a text given to a field typed as positions with names, or as Ts one after another: read by it)
       alone_type := (place_was).type
       alone_read := (((alone_taken).textual) && (named_list(alone_type) || ((alone_type).repeats))) ? ((alone_type) read_span (alone_taken)) : alone_taken
@@ -701,7 +701,7 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
   {
     each_place := places.head
     each_taken := taken
-    each_part := (((each_taken).listing) && ((each_taken).spread === true)) ? each_taken : Array.new.append(each_taken)
+    each_part := (((each_taken).listing) && ((each_taken).spread)) ? each_taken : Array.new.append(each_taken)
     each_taken_at := each_part.head
     // (more given than places: a list among them composed into the rest by `,` (`.put(at, cell)`, `at` a Vector): a place typed
     // so takes as many as make one of its type, made one (§ arguments: separated by the types they are given to; written
@@ -718,8 +718,8 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
       if written_text(each_place.value) && each_taken_at && ((each_taken_at.value).textual) && ((each_taken_at.value).same_characters(each_place.value) !== None) { each_taken_at = each_taken_at.next }
       // (and a number written among them, `(id: Byte, 44, data: Byte[])`: no name, no field)
       unless written_text(each_place.value) || ((each_place.written_name === None) && literal_number(each_place)) {
-        each_by_name := each_part.find((named_part) => ((named_part).named_argument === true) && ((named_part).name.same_characters(each_place.value) !== None))
-        while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument === true) { each_taken_at = each_taken_at.next }
+        each_by_name := each_part.find((named_part) => ((named_part).named_argument) && ((named_part).name.same_characters(each_place.value) !== None))
+        while (each_by_name === None) && each_taken_at && ((each_taken_at.value).named_argument) { each_taken_at = each_taken_at.next }
         each_value := (each_by_name !== None) ? each_by_name.value : (each_taken_at ? each_taken_at.value : declared)
         if (each_by_name === None) && each_surplus && each_taken_at && ((each_place.value).type !== None) && !((each_value) is ((each_place.value).type)) {
           each_group := Array.new.append(each_value)
@@ -763,7 +763,7 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
 [] ^punctuation => Array.new
 // (`()`: nothing between brackets, the list a `,` makes of nothing: `(1, ())` is `[1]`)
 () ^punctuation => Array.new.spreading
-[{inside}] ^punctuation => (((inside).listing) && ((inside).spread === true)) ? (inside).gathered : (external names (Array.new.append(inside)) inside _)
+[{inside}] ^punctuation => (((inside).listing) && ((inside).spread)) ? (inside).gathered : (external names (Array.new.append(inside)) inside _)
 {element}[] ^punctuation => (() => {
   made := ({
     narrows := Node
@@ -1417,7 +1417,7 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
       seq_way_text := seq_text.until((seq_way_at.value).reading_left)
       seq_way_value := seq_maps ? (external mapped (seq_place) (seq_way_text)) : seq_way_read
       // (what it read keeps what it was read by, a position's: written as a type after it, that type)
-      (external member (seq_way_value) (`read_as`) (seq_type)) if (seq_way_value !== None) && (seq_name !== None) && (seq_into !== None) && ((seq_into).header_defines === true) && ((seq_type).listing) && !((seq_type).is_range)
+      (external member (seq_way_value) (`read_as`) (seq_type)) if (seq_way_value !== None) && (seq_name !== None) && (seq_into !== None) && ((seq_into).header_defines) && ((seq_type).listing) && !((seq_type).is_range)
       (seq_way_value) given_to (seq_into) as (seq_name)
       seq_after := seq_read(seq_at.next, (seq_way_at.value).reading_left, seq_whole, seq_stops, seq_into)
       if seq_after !== None {
@@ -1440,7 +1440,7 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
           external member (seq_whole_way) (`reading_parts`) (true)
           external member (seq_whole_way) (`reading_from`) (seq_text)
           seq_longer_value := seq_maps ? (external mapped (seq_place) (seq_text.until(seq_longer))) : ((seq_type) applying_to (way_value(seq_whole_way)))
-          (external member (seq_longer_value) (`read_as`) (seq_type)) if (seq_longer_value !== None) && (seq_name !== None) && (seq_into !== None) && ((seq_into).header_defines === true)
+          (external member (seq_longer_value) (`read_as`) (seq_type)) if (seq_longer_value !== None) && (seq_name !== None) && (seq_into !== None) && ((seq_into).header_defines)
           (seq_longer_value) given_to (seq_into) as (seq_name)
           seq_longer_after := seq_read(seq_at.next, seq_longer, seq_whole, seq_stops, seq_into)
           if seq_longer_after !== None {
@@ -1718,7 +1718,7 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
 // given, then the positions read again in the one read (what a definition among
 // them says of a field before it is that field as read, `GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES…`); one read by its parts
 // the first way it reads; any other, with the ones after it)
-fields_read (fields_into, fields_first, fields_text) => ((fields_into).header_defines === true) ? (fields_in_turn(fields_into, fields_first, fields_text) ?? fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into))) : (fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into)) ?? fields_in_turn(fields_into, fields_first, fields_text))
+fields_read (fields_into, fields_first, fields_text) => ((fields_into).header_defines) ? (fields_in_turn(fields_into, fields_first, fields_text) ?? fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into))) : (fields_given(fields_into, seq_read(fields_first, fields_text, true, true, fields_into)) ?? fields_in_turn(fields_into, fields_first, fields_text))
 fields_in_turn (fields_into, fields_first, fields_text) => {
   fields_at := fields_first
   fields_rest := fields_text
@@ -2106,7 +2106,7 @@ is_itself (type) => {
   // (`global.String`: the language's, not a member of the value named so (a class's own `String => this as String`))
   value := .
   // (a text is a String: what it is made of, characters, not asked again)
-  (type === Node) || (value === type) || ((type === global.String) && (value.textual)) || ((value.superposes) && edged(value, type)) || ((type === composed_edge) && (value.listing) && (value.spread === true)) || ((type.superposes) ? type.components.some((component) => value is component) : ((type.textual) && ((type).same_characters(type) !== None)) ? ((value.textual) && ((type).same_characters(value) !== None)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range) && (value.textual)) ? ((value).rest.empty && type.one_same(value)) : ((type.listing) && (value.textual)) ? (((external admits value type) ?? text_reads(type.head, value)) === true) : (type.listing) ? ((type.one_held(value) === true) || ((external member (value) (`matched_key`)) === type)) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || (((type.members !== None) && !type.members.some((member) => member === type)) ? type.members.some((member) => member === value) : false) || ((value.superposes) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
+  (type === Node) || (value === type) || ((type === global.String) && (value.textual)) || ((value.superposes) && edged(value, type)) || ((type === composed_edge) && (value.listing) && (value.spread)) || ((type.superposes) ? type.components.some((component) => value is component) : ((type.textual) && ((type).same_characters(type) !== None)) ? ((value.textual) && ((type).same_characters(value) !== None)) : (type.conjoins === true) ? type.conjoined.every((part) => value is part) : ((type.is_range) && (value.textual)) ? ((value).rest.empty && type.one_same(value)) : ((type.listing) && (value.textual)) ? (((external admits value type) ?? text_reads(type.head, value)) === true) : (type.listing) ? ((type.one_held(value) === true) || ((external member (value) (`matched_key`)) === type)) : ((value.of === None) ? false : value.of.descends(type)) || ((type.superposes) ? type.components.some((component) => value is component) : false) || ((type.narrows !== None) ? ((value is type.narrows) && type.holds(value)) : false) || (((type.members !== None) && !type.members.some((member) => member === type)) ? type.members.some((member) => member === value) : false) || ((value.superposes) ? value.components.every((component) => component is type) : false) || (((type.of === type) && literal_text(value)) ? structure_reads(type, value) : false))
 }
 // (a text is a class written as a structure (`class (a: T, `-`, b: U)`, a text among its places; or one typed place alone,
 // `class (x: T)`) when it reads as it is written)
@@ -2380,7 +2380,7 @@ dynamics := None
 {lone_read_type} lone_read {lone_read_given} ^keyword => (((lone_read_given).textual) && ((lone_read_type).conjoins === true)) ? (conjunction_read(lone_read_type, lone_read_given) ?? lone_read_given) : ((((lone_read_given).textual) && !((lone_read_type).textual) && (named_list(lone_read_type) || ((lone_read_type).repeats))) ? ((lone_read_type) read_span (lone_read_given)) : lone_read_given)
 // (what a definition answers given its value: a left side made of names answers a list of their places (`(a, b) := list`, a
 // call's parameters): each the value in its place)
-{given} given {value} ^keyword => ((given).listing) ? (((value).writes === true) ? written_parts((given).head, (value).written_value, (value).written_literals) : ((((value).textual) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value)))) : given
+{given} given {value} ^keyword => ((given).listing) ? (((value).writes) ? written_parts((given).head, (value).written_value, (value).written_literals) : ((((value).textual) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value)))) : given
 // (a text is destructured only by places with a text written among them, `(a, `-`, b)`: a parameter list given a text, or
 // String itself (which is textual), takes it whole)
 written_among (at) => at ? (written_text(at.value) || literal_text((at.value).type) || positioned_type(at.value) || written_among(at.next)) : false
@@ -2652,7 +2652,7 @@ trimmed_text (trim_text) => {
 // its value, the list seeing the place it sits in, by that name; no `,`
 // in it, which would read itself)
 {list}, {other} ^punctuation => {
-  (list === declared) ? other : ((other === declared) ? list : ((((list).listing) && ((external typed_name list) === None)) ? ((((other).listing) && ((external typed_name other) === None)) ? (list).listed().joined(other) : (external names ((list).listed().append(other)) _ other)) : ((((other).listing) && ((other).spread === true) && ((external typed_name other) === None)) ? (external names ((other).listed().prepend(list)) list _) : (external names (Array.new.append(list).append(other)) list other))).spreading)
+  (list === declared) ? other : ((other === declared) ? list : ((((list).listing) && ((external typed_name list) === None)) ? ((((other).listing) && ((external typed_name other) === None)) ? (list).listed().joined(other) : (external names ((list).listed().append(other)) _ other)) : ((((other).listing) && ((other).spread) && ((external typed_name other) === None)) ? (external names ((other).listed().prepend(list)) list _) : (external names (Array.new.append(list).append(other)) list other))).spreading)
 }
 // The rest read with `.` what is before it, all of it on the line (`1, 2 -- .map(+1)`, `found = x ~~ .index = i`), declared
 // after `=` and `,`, looser than both: `x -- .y` is `x.y`; `x ~~ …` the same, answering x.

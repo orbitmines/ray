@@ -238,11 +238,21 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
   type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
   a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
-- **An operator written as a type matches nothing** (`{superposed: |}`, `{inline: ,}`, `{lines: \n}` in UI.Scene; `("a" | "b")
-  is |` false). Decided 2026-10-24: the operator is a component on the Edge between the values it joined (Ray, Boundary,
-  Edge), and a value joined by such edges is of it. Tried: a bare `| ^operator => external rule …` breaks every `a | b`;
-  decorating `components` in `{a} | {b}` (in its block, after it with `~~`, or in the `components :=` expression, even
-  guarded) leaves the bootstrap with nothing passing (`{value: a}` in that rule is then not read). Open.
+- **A hole named as a name the body's callees use shadows it there** (`{text: String} => Ph(flow: 5)`: Ph's construction reads
+  String's own `text` holes as the reader's; `{styled}` shadowed `.styled`, `{inline}` the flow `inline`): a rule's hole names
+  reach every body it calls. Scene's holes renamed `marked`, `inlined`.
+- **A list given as an argument beside another is composed into it** (`f(list, x)` is `f(list..., x)`; `[list], x` keeps it
+  whole): Compiler.reduced is called by name. A named argument is code read in the callee (`this` there is the callee's): its
+  value read into a local first (`program_answered`).
+- **In a rule's body, `x.m` after `=>` without brackets binds to the rule** (`{text: String} => text.count` is `(… => text).count`;
+  `=> (text.count)` is as meant).
+- **A member added to a list's links changes the list** (`.all`, `Colour#`, `==`): the operators' edges are not kept on links;
+  a superposition is of `|`'s edge (only `|` makes one), a list `,` made (`spread`) of `,`'s.
+- **`(1 | 2 | 3).every(x => x < 4)` is false** (main too); `.all` (a section reduced) is not `== (1 | 2 | 3)`.
+- **Program's `{this}()` reads `x()` in a Program method's body as itself** (its `this` untyped): what a program answers is a
+  function outside Program (`program_answered`).
+- **Tests inside a static class's body run only when something makes it** (Ray.ray RR53 in `Graph.Simple`).
+- **CO37 under Program's `+`**: `(Program(code: { 2 + 3 }){O: shouted})()` is 5 at top level, not in Compiler.ray's test block.
 - **A member named as one of the rule's holes reads the hole** (`{styled: String} … => x.styled(style)`: `.styled` is the hole,
   not x's method): a name after `.` is x's, never a hole of the rule it is written in. UI.Scene's hole renamed `marked`.
 - **A field holding a closure, named bare, is the closure applied** (`(p).reading === None` for `reading: ((s) => …)`, and

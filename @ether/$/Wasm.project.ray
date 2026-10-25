@@ -197,6 +197,43 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   }
   // (a module written: the header, then its sections)
   static module_bytes (sections) => [0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00].joined(Wasm.bytes_all(sections))
+  // (where a key is among a node's: by identity, the key itself, not what equals it)
+  static key_index (keys, key, at) => keys.empty ? None : ((keys.first === key) ? at : Wasm.key_index(keys: keys.rest, key: key, at: at + 1))
+  static zeros (n) => (n == 0) ? [] : [0].joined(Wasm.zeros(n - 1))
+  // (a module of functions, each its body's statements dispatched (`dispatched`), what applies it local 0: the first the
+  // program's, exported as `main`; the memory it runs in imported (`m.memory`, shared, of `pages` pages), where the next node
+  // is made global 0 (from `free`))
+  static module_of (pages, free, bodies) => Wasm.module_bytes([
+    Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F]), Wasm.Vec(elements: [0x7F])]])),
+    Wasm.Written_section(id: 2, data: Wasm.Vec(elements: [[Wasm.Name(text: "m"), Wasm.Name(text: "memory"), 0x02, 0x03, pages, pages]])),
+    Wasm.Written_section(id: 3, data: Wasm.Vec(Wasm.zeros(bodies.count))),
+    Wasm.Written_section(id: 6, data: Wasm.Vec(elements: [[0x7F, 0x01, 0x41, Wasm.Signed.encoded(free).bytes, 0x0B]])),
+    Wasm.Written_section(id: 7, data: Wasm.Vec(elements: [[Wasm.Name(text: "main"), 0x00, 0]])),
+    Wasm.Written_section(id: 10, data: Wasm.Vec(Wasm.codes_of(bodies)))
+  ])
+  static codes_of (bodies) => bodies.empty ? [] : [Wasm.Written_code(function: [Wasm.Vec(elements: [[2, 0x7F]]), Wasm.dispatched(bodies.first), 0x20, 2, 0x0B])].joined(Wasm.codes_of(bodies.rest))
+  // An Expression's node as Expression reads it (`none` on it): its statements the first function, each of its rules the
+  // next, in order, a rule its body's statements; a statement read by one of the given things (`external .`, `&`, its
+  // reading's `rule`), what `none` writes for it; any other a call of the rule its key is
+  static expressed (read_node, pages, free) => Wasm.module_of(pages: pages, free: free, bodies: Wasm.bodies_of(keys: read_node.rules.keyed.map((entry) => entry.key), statement_lists: Array.new.append(read_node.statements).joined(read_node.rules.keyed.map((entry) => entry.kept.body))))
+  static bodies_of (keys, statement_lists) => statement_lists.empty ? Array.new : Array.new.append(Wasm.statement_ops_of(keys: keys, statements: statement_lists.first)).joined(Wasm.bodies_of(keys: keys, statement_lists: statement_lists.rest))
+  static statement_ops_of (keys, statements) => statements.empty ? Array.new : Array.new.append(Wasm.statement_op(keys: keys, statement: statements.first)).joined(Wasm.statement_ops_of(keys: keys, statements: statements.rest))
+  static statement_op (keys, statement) => ((statement).rule === None) ? [0x20, 0, 0x10, Wasm.key_index(keys: keys, key: statement.statement, at: 0) + 1, 0x21, 2] : Wasm.external_ops((statement).rule)
+  // (a rule's statements, Expression's: each a case of a `br_table` in a loop, the innermost first, where it is (local 1)
+  // choosing the first; each statement where its block ends, falling to the next; a jump given where it goes then, the loop
+  // again)
+  static dispatched (statement_ops) => Wasm.dispatch_head(statement_ops.count).joined(Wasm.case_ends(statement_ops)).joined([0x0B, 0x0B])
+  static dispatch_head (n) => [0x03, 0x40, 0x02, 0x40].joined(Wasm.blocks(n)).joined([0x20, 1, 0x0E, Wasm.Vec(Wasm.upto(n)), n])
+  static blocks (n) => (n == 0) ? [] : [0x02, 0x40].joined(Wasm.blocks(n - 1))
+  static upto (n) => (n == 0) ? [] : Wasm.upto(n - 1).joined([n - 1])
+  static case_ends (ends_of) => ends_of.empty ? [] : [0x0B].joined(ends_of.first).joined(Wasm.case_ends(ends_of.rest))
+  // (a jump, `external goto`, from the statement at `index` of `count` to the one at `target`: there, then the loop again)
+  static goto_ops (target, index, count) => [0x41, target, 0x21, 1, 0x0C, count - index]
+  // (and one given a condition, `goto (label, condition)`: its ops first, the jump only when it holds, one block further in)
+  static goto_if_ops (condition, target, index, count) => condition.joined([0x04, 0x40, 0x41, target, 0x21, 1, 0x0C, count - index + 1, 0x0B])
+  // (a statement of one of the given things, Expression's `external .` and `external &`: what `none` writes for it (a node
+  // made where global 0 says, what applies it stored in it, global 0 past it; what applies it, the value))
+  static external_ops (given) => (given == `.`) ? [0x23, 0, 0x22, 2, 0x20, 0, 0x36, 2, 0, 0x23, 0, 0x41, Wasm.node, 0x6A, 0x24, 0] : ((given == `&`) ? [0x20, 0, 0x21, 2] : [])
 
   // Instructions (5.4): an op, then what it takes. An expression is instructions until `end`.
   // (each op named as WAT writes it: `prefix.name` the enum `prefix`'s member `name`, the dots after the first `_`
@@ -464,3 +501,5 @@ assert Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(ele
 assert Wasm.Written_section(id: 7, data: Wasm.Vec(elements: [[Wasm.Name(text: "f"), 0x00, 0]])).bytes == [7, 5, 1, 1, 102, 0, 0]  // WA9 an export of function 0 as f is not these bytes
 assert Wasm.Written_section(id: 10, data: Wasm.Vec(elements: [Wasm.Written_code(function: [Wasm.Vec(elements: []), 0x20, 0, 0x0B])])).bytes == [10, 6, 1, 4, 0, 32, 0, 11]  // WA10 a body answering its parameter is not these bytes
 assert Wasm.Written_code(function: [Wasm.Vec(elements: []), Wasm.local.get, 0, Wasm.local.get, 1, Wasm.i32.add, Wasm.Op.end]).bytes == [7, 0, 0x20, 0, 0x20, 1, 0x6A, 0x0B]  // WA11 a body adding its two parameters is not these bytes
+assert Wasm.goto_ops(target: 2, index: 0, count: 3) == [0x41, 2, 0x21, 1, 0x0C, 3]  // WA12 a jump from the first of three statements to the third is not where it goes, then the loop again
+assert Wasm.external_ops(`&`) == [0x20, 0, 0x21, 2]  // WA13 what applies it is not its value

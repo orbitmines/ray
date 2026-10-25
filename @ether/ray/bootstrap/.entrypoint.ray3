@@ -786,7 +786,13 @@ assert {
 // (a section calling each, `xs.for(.(caller))`: each one called with caller (`.( )` of one called by brackets); and given
 // without brackets, `.statement#.for .(caller)`)
 {method}(.({called_with})) ^punctuation => .{method}((it) => it.(.({called_with})))
-{calling_on}.{method: Name} .({called_with}) ^punctuation => (calling_on).{method}((it) => it.(.({called_with})))
+{calling_on}.{method: Name} .({called_with}) ^punctuation => (calling_on).{method}((it) => it({called_with}))
+assert {
+  called_with := []
+  calling := Array.new.append((given_to) => called_with.append(given_to))
+  calling.for .(5)
+  assert called_with.count == 1  // SC1 a section without brackets did not call each one with what it was given
+}
 // `code**`: what is written, as a program.
 {code}** ^operator => Program(code: {code})
 
@@ -1949,13 +1955,13 @@ class: {class_parent} ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword =>
   (extending).({extension_code})
   extending
 }
-// (with no block, an empty one; before the forms with one, which read what it does and more)
-class: {parent} ^keyword => class: {parent} { }
 // (a class written as a structure: `class a: T, ".", b: U { … }`, each named position a field; before the
 // others, which read the rest of what it reads: `class: P { … }`)
 // (its fields written without `=>` before the block, `class: Elementwise ("#", red: …) { … }`: the same)
 class: {class_parent} ({class_fields}) {`{`}{class_body}{`}`} ^keyword => (class: {class_parent} ({class_fields}) => { {class_body} })
 class: {class_parent} {`{`}{class_body}{`}`} ^keyword => (class: {class_parent} (nothing_given = None) => { {class_body} })
+// (with no block, an empty one)
+class: {parent} ^keyword => class: {parent} { }
 class ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword => (class: Node ({class_fields}) => { {class_body} })
 class ({fields}) {`=>`} {`{}`} ^keyword => (class: Node ({fields}) => { })
 class {`{`}{class_body}{`}`} ^keyword => class: Node { {class_body} }

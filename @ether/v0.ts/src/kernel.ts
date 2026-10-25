@@ -3361,12 +3361,15 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (read on its own: what is being read where it is asked for (a jump, a left side, a hole) left as it is)
     const js = w(t + T_JUMP_S), jn = w(t + T_JUMP_N), jv = w(t + T_JUMP_V), hole = w(t + T_HOLE), decl = w(t + T_DECL), le = w(t + T_LE), fault = w(t + T_FAULT);
     put(t + T_JUMP_N, 0); put(t + T_HOLE, 0); put(t + T_DECL, 0); put(t + T_LE, 0); put(t + T_FAULT, 0);
+    // (in a test, of a rule made before it: written in by none (another thread reads it; what the test makes is let go of with
+    // it), what it reads kept there only when it is not the test's own)
+    const own = !w(THREAD + T_REG_AT) || in_region(rule);
     // (while it is being read: nothing, a type read again inside itself goes no deeper)
-    put(rule + R_BS, w(NOTHING));
+    if (own) put(rule + R_BS, w(NOTHING));
     const fv = valued(t, w(bv + N_A));
-    if (!fv) put(rule + R_BS, bv);
+    if (!fv && own) put(rule + R_BS, bv);
     put(t + T_JUMP_S, js); put(t + T_JUMP_N, jn); put(t + T_JUMP_V, jv); put(t + T_HOLE, hole); put(t + T_DECL, decl); put(t + T_LE, le); if (!w(t + T_FAULT)) put(t + T_FAULT, fault);
-    if (fv) put(rule + R_BS, fv);
+    if (fv && (own || !in_region(fv))) put(rule + R_BS, fv);
     return fv;
   }
   function apply_(t: number, rule: number, caps: number, names: number, f: number, self: number, s: number, e: number, written: number, on: number): number {
@@ -4740,7 +4743,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let state = aload(tk + T_STATE);
     if (state === 2) return resolved(t, tk);
     if (state === 3) return w(tk + T_VALUE);
-    if (!state && w(t + T_GIVEN_N) && !NOGIVEN) { const g = given(tk); if (g) { put(tk + T_VALUE, g); aput(tk + T_STATE, 3); return g; } }
+    // (one made before the test it is in: given here only, nothing written in it)
+    if (!state && w(t + T_GIVEN_N) && !NOGIVEN) { const g = given(tk); if (g) { if (older(tk)) return g; put(tk + T_VALUE, g); aput(tk + T_STATE, 3); return g; } }
     // (a take of what another took, `{x}` or `x`: that one's value, read once where it was written, kept there (and here))
     const source = follow(tk, 1);
     // (one word, read as a left side through what refers to it (`(name)` given `seen`): which one, so that what it names,

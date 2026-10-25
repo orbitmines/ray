@@ -347,3 +347,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   as `(skipped: *, found: pattern, *)` (`⊢ p` as `(found: p, *)`, `p ⊣` as `(*, found: p)`), the shortest first. Reading a
   text `as` such a structure does not find what is inside it yet (tried: PM1, PM3, S127, W15 and String's `contains`,
   `ends_with`, `words` fail, and one test runs out of memory).
+- **`x.copy` answers nothing** (since the .ray3 entrypoint; the old `copy =>` made a node of the same class, fields and
+  diagnostics): 23 uses (`branched`, Scene's `placed.copy ~~ (.location = None)`, UI230), and `~~` changes the value itself, so
+  without it `"Ray" @ loc` loses its location everywhere. Tried: a fresh node given the value's (`fresh_reading_of(None) ~~ (.
+  &+= v)`): a record's fields are kept, but it is no String (`textual` is the kernel's) and no instance of the class (`.of`);
+  `p + ""`, `p[0..]`, `p[..]`, `[p] as String`, `p.reduce(,)`, `p.replace(…)` give `p` itself or nothing.

@@ -36,6 +36,15 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   an inline pattern matches (`{name: (Char.Word | "-")[]}`), but see below.
 - **A matched hole typed by an inline pattern is still read as code**: with `@yd:{p: Char.Word[]} => p`, `(@yd:x)` reports
   `nothing reads x`.
+- **Named arguments given a function or static method are not taken by name** (only a class's call reads
+  `{arguments: Arguments}`, so only NA9–NA15, classes, are tested): in a closure's `{this}({arguments})`, `f(x: v)` reads
+  `x: v` as the declaration `{x}: {type}` (value if unset) where the arguments are read, never a Named. A second call
+  from the same function keeps the first call's value: `program_answered` → `Compiler.reduced(reduced_value: …, level:
+  …)` answers the first program's code for every program after (CO37; `(Program(code: { 8 }){O: shouted})()` is 7 after a
+  `{ 7 }` one). Tried 2026-10-25: the closure's call rule as `{this}({arguments: Arguments})` plus `taking` giving one
+  Named of its parameter's name its value: named calls work (NA16–19), but ~20 tests of closures given as arguments
+  (`#.map(x => x * 2)`, `.contains(2)`, `reduce(acc = 0 => …)`) fail and the suite is slower. Repros:
+  ~/.cache/ray-scratch/selfhost/co37f.ray, co37j.ray, co37k.ray; trees tv3/tv4.
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
   ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).
 - **Reading a text as a class by its header** (`"v0.1.4-E2027.0A.4" as Version`, `Language.part_written` of a header

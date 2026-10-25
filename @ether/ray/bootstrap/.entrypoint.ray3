@@ -659,11 +659,11 @@ assert {
     if ((named_passed).listing) && ((named_passed).spread) {
       named_at := (named_passed).head
       while named_at {
-        if (named_at.value).named_argument === true { (named_on) declares ((named_at.value).name) as ((named_at.value).value) }
+        if (named_at.value).named_argument { (named_on) declares ((named_at.value).name) as ((named_at.value).value) }
         named_at = named_at.next
       }
     } else {
-      if (named_passed).named_argument === true { (named_on) declares ((named_passed).name) as ((named_passed).value) }
+      if (named_passed).named_argument { (named_on) declares ((named_passed).name) as ((named_passed).value) }
     }
   }
   true
@@ -920,7 +920,7 @@ assert {
 // (and a member of one, `in?.reading(text)`: of x, which is None's when x is (a member of None is None), not of each)
 {x}?.{member} ^operator => (x).{member}
 // What a value can be, `x#` (`#x`): an enumeration's members, a superposition's components, else itself alone.
-possible => (.members) ? .members : (((.superposes) === true) ? .components : ((((.narrows).superposes) === true) ? narrowed_possible(.) : [.]))
+possible => (.members) ? .members : (((.superposes)) ? .components : ((((.narrows).superposes)) ? narrowed_possible(.) : [.]))
 // (a narrowing of a superposition: those of its values it holds for, `(1 | 2 | 3){. > 1}#` 2 and 3)
 narrowed_possible (narrowing) => {
   narrowing_kept := Array.new
@@ -1654,7 +1654,7 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
   // class))
   if ((ways_by).conjoins === true) {
     ways_part_at := ((ways_by).conjoined).head
-    while ways_part_at && (((ways_part_at.value) === ways_by) || !(repeat_type((ways_part_at.value).whole) || (((ways_part_at.value).listing) === true) || (((ways_part_at.value).of) === (ways_part_at.value)))) {
+    while ways_part_at && (((ways_part_at.value) === ways_by) || !(repeat_type((ways_part_at.value).whole) || (((ways_part_at.value).listing)) || (((ways_part_at.value).of) === (ways_part_at.value)))) {
       ways_part_at = ways_part_at.next
     }
     if ways_part_at === None {
@@ -2186,7 +2186,7 @@ Holding := class (key) => {
     keeping_on.keyed.append(keeping_entry)
     // (a key that is a list, a pattern (`rules[[rule: GRAMMAR_RULE]] := (caller) => …`): called, what it is kept under is
     // called (a statement read by it, `.statement(caller)`))
-    if (keeping_key).listing === true {
+    if (keeping_key).listing {
       external member (keeping_key) (`entry_called`) (keeping_entry)
       (keeping_key) &+= {
         {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
@@ -2990,7 +2990,7 @@ Array &+= {
     missing_all ? superposed_of(missing_values) : None
   }
   // (a range, what it can be (`#`): its values)
-  members => ((.is_range) === true) ? this : None
+  members => ((.is_range)) ? this : None
   // (none, empty: as a text is, by what it holds, not by counting it (Iterable's `count == 0`, counted by `reduce`, which
   // asks `empty`))
   empty => .head === None

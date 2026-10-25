@@ -361,3 +361,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   or `{c}({args}): {r}`, as a block's statement either: `X(…): T` is a declared call place before any rule reads it (the
   kernel's left side, as with header defaults), and `:` outside brackets binds looser than `=>` (`choose {type} => P: type`
   types the rule), in brackets `name: v` is a named part.
+- **A choice inside a list takes the rest of the list** (found by ray-61 bisecting Shape's header): `[1, true ? 1 : 2, 3]` is
+  two parts, `[true ? 1 : 2, 3]` and `[1, (true ? 1 : 2), 3]` are right. `,` reads its parts with no `,` in them, so the
+  rest after the first `,` is read by `c ? a : b`, its `b` taking `2, 3`. Shape's `boundary: Shape = … ? … : box(size), flow: …`
+  takes every field after it (given `content:`, only fields 1–8 hold, so Box has no size). Tried: a rule
+  `{condition} ? {yes} : {no}, {rest} => ((condition) ? yes : no), rest` (worse: `[1, false ? 1 : 2, 3][1]` no longer 2).

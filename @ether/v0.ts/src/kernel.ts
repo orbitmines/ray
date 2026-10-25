@@ -88,7 +88,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   // (a thread's levels, `external level_in L`: the last first, before the language's `O`)
   const T_LEVELS_N = 600, T_LEVELS = 604, LEVELS = 8;
   // (the value a level reads, `external level_reads L v`: the text it is spliced in as, and it, while L reads it)
-  const T_SPLICE = 640, T_SPLICE_V = 644;
+  const T_SPLICE = 640, T_SPLICE_V = 644, T_SPLICED = 648;
   const DEFINES = 1, LED = 2, HOLES = 4, DEAD = 8, VALUE_OWN = 8192, METHOD = 16, READER = 32, LEFT = 64, TYPE_READER = 128, GIVES = 1024, TAKES = 2048, OWNS = 4096, GLYPHS = 16384, NUMERAL = 32768, SUPERPOSING = 65536, REFUSES = 131072, MEMBER = 262144, STATIC = 524288, CALLS = 1048576, CUTS = 2097152, STYLE_ASKED = 4194304, STYLED_RULE = 8388608, TYPED_READ = 256, MEMBERS_MARK = 99, GLYPHED = 288, GLYPHED_N = 4096, NUMBERS = 276, TRUE_ = 280, FALSE_ = 284, NUMERAL_AT = 296, NUMERAL_AT2 = 316, NUMBER_OPS = 304, CHARS = 312, COUNTED = 320, SUPER_NODE = 324, SUPERPOSING_AT = 328, POOL = 344, POOL_N = 348, POOL_LOCK = 352, POOL_BYTES = 364, POOL_CAP = 1 << 15, KEPT_N = 368, KEPT = 372, KEPT_CAP = 34, STYLES = 332, STYLES_CAP = 1 << 20, GROWN_AT = 508;
   // (a reading: [kind, start, end, a, c, d])
   const K_EMPTY = 0, K_UNREAD = 1, K_LATER = 2, K_RULE = 3, K_REF = 4, K_NAME = 5, K_HELD = 6, K_ON = 7, READ = 32;
@@ -888,10 +888,12 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     const text = allocb(2); setb(text, 113); setb(text + 1, 118);
     const hold = node(IS_NODE, 0, 0, w(GLOBAL), 0); bound(text, text + 2, hold, val);
     const fr = frame(0, 0, hold, text, text + 2, 0, 0, hold, hold), was = w(t + T_SPLICE), was_v = w(t + T_SPLICE_V);
-    put(t + T_SPLICE, text); put(t + T_SPLICE_V, val);
+    const was_on = w(t + T_SPLICED);
+    put(t + T_SPLICE, text); put(t + T_SPLICE_V, val); put(t + T_SPLICED, 0);
     const r = reading(t, text, text + 2, 0, 0, latest(lv), hold, 0, w(lv + N_BASE), 0, 0);
-    const read_ = w(r) === K_UNREAD || w(r) === K_EMPTY || stopped(t) ? 0 : ev(t, r, fr, fr, hold, 1, hold, hold);
-    put(t + T_SPLICE, was); put(t + T_SPLICE_V, was_v);
+    put(t + T_SPLICED, 1);
+    const read_ = w(r) === K_UNREAD || w(r) === K_EMPTY || stopped(t) ? 0 : ev(t, r, fr, fr, w(GLOBAL), 1, hold, 0);
+    put(t + T_SPLICE, was); put(t + T_SPLICE_V, was_v); put(t + T_SPLICED, was_on);
     return read_ && !stopped(t) ? read_ : w(NOTHING);
   }
   // (what a value's method of one argument answers, `a word b`, asked of the language: a and b spliced in as texts of their own)
@@ -2047,6 +2049,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function reading(t: number, s: number, e: number, rule: number, closure: number, vis: number, self: number, want: number, stop: number, refuse: number, on: number): number {
     s = skip(s, e); while (e > s && b(e - 1) <= 32) e--;
     if (DEBUG) count(K_READING);
+    // (the text a value is spliced in as while what a level read of it runs (`external level_reads L v`): v, kept; before
+    // what was read of that text, which is the level's reading of it)
+    if (w(t + T_SPLICED) && s === w(t + T_SPLICE) && e === w(t + T_SPLICE) + 2) { const rv = alloc(READ); put(rv, K_HELD); put(rv + 4, s); put(rv + 8, e); put(rv + 12, -5); put(rv + 16, w(t + T_SPLICE_V)); return rv; }
     // (what a hole being declared reads, the names in it: no reader reads them)
     if (w(t + T_HOLE)) refuse |= READER;
     // (read once: the same text, with the same rules and names, is the same reading; not one in a frame, nor one nothing read)
@@ -2396,6 +2401,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (k === K_HELD) {
       const h = w(r + 12);
       if (h === -1) return w(self + F_CALLER);
+      if (h === -5) return w(r + 16);
       // (`this`: what it was read on; else what it is read in, and in a method, a node made there is what that is read on)
       // (but a class called, `x.C(…)`: the class (what it makes is of it), not x)
       if (h === -2) { const th = w(self + F_THIS), rc = w(self + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }
@@ -4664,6 +4670,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     put(tk + T_VALUE, v); aput(tk + T_STATE, 2);
   }
   function valued(t: number, tk: number): number {
+    // (a take of the text a value is spliced in as, while what a level read of it runs: the value)
+    if (w(t + T_SPLICED) && skip(w(tk), w(tk + 4)) === w(t + T_SPLICE) && trim_end(w(tk), w(tk + 4)) === w(t + T_SPLICE) + 2) return w(t + T_SPLICE_V);
     let state = aload(tk + T_STATE);
     if (state === 2) return resolved(t, tk);
     if (state === 3) return w(tk + T_VALUE);

@@ -3732,8 +3732,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // part read as a left side first, a word a name declared here, whatever its body then reads them as (`,`'s `list ===
     // declared`, a visible `type` not its value: GN3); a rule of an operator (`{x}: {type}`, `{x} ^{style}`) reads its own)
     // (a default in a left side, `b = 0`, `s: T = T()` (§6.1, §10.1): the place declared, given the default when it is first
-    // asked for, unless it holds a value already; what a call gives it replaces that)
-    if (w(t + T_DECL) && lefts() && in_left(s, e) && kind !== DEFINE && !(w(rule + R_FLAGS) & METHOD) && assigns(rule)) {
+    // asked for, unless it holds a value already; what a call gives it replaces that) (in what a call or a value is made in:
+    // the global one's rules are too many to look through for each)
+    if (w(t + T_DECL) && lefts() && in_left(s, e) && kind !== DEFINE && !(w(rule + R_FLAGS) & METHOD) && self !== w(GLOBAL) && w(self + N_IS) === IS_NODE && assigns(rule)) {
       const tn = applied + F_TAKES, tv = applied + F_TAKES + TAKE, a = skip(w(tn), w(tn + 4)), z = trim_end(a, w(tn + 4));
       let we = a; while (we < z && b(w(CLASSES) + b(we)) === 1) we++;
       if (we > a && (we === z || b(skip(we, z)) === 58)) {

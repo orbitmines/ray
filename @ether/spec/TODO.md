@@ -36,17 +36,21 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   an inline pattern matches (`{name: (Char.Word | "-")[]}`), but see below.
 - **A matched hole typed by an inline pattern is still read as code**: with `@yd:{p: Char.Word[]} => p`, `(@yd:x)` reports
   `nothing reads x`.
-- **Named arguments given a function or static method are not taken by name** (only a class's call reads
-  `{arguments: Arguments}`, so only NA9–NA15, classes, are tested): in a closure's `{this}({arguments})`, `f(x: v)` reads
-  `x: v` as the declaration `{x}: {type}` (value if unset) where the arguments are read, never a Named. A second call
-  from the same function keeps the first call's value: `program_answered` → `Compiler.reduced(reduced_value: …, level:
-  …)` answers the first program's code for every program after (CO37; `(Program(code: { 8 }){O: shouted})()` is 7 after a
-  `{ 7 }` one). Tried 2026-10-25: the closure's call rule as `{this}({arguments: Arguments})` plus `taking` giving one
-  Named of its parameter's name its value: named calls work (NA16–19), but ~20 tests of closures given as arguments
-  (`#.map(x => x * 2)`, `.contains(2)`, `reduce(acc = 0 => …)`) fail and the suite is slower: read by Arguments' rules, a
-  bare closure `x => x * 2` is a rule defined there, not a closure (`(x) => x * 2` reads; an Arguments rule
-  `{p} {`=>`} {b} => ((p) => b)` reads far more than closures). Repros:
-  ~/.cache/ray-scratch/selfhost/co37f.ray, co37j.ray, co37k.ray; trees tv3/tv4.
+- **A type's rules read beneath its hole too**: while a typed hole is read (`{arguments: Arguments}`), its type's rules
+  match code run beneath it as well: a rule `{p: Name} {`=>`} {b} => …` in Arguments matched `{name} => value` in `:=`'s
+  body (rules applied 6000 deep), `{v} => (v) as_argument` reads itself without end, and a second type of arguments
+  beside Arguments (one for classes) broke every function call. So Arguments has one rule, `{name}: {value}`; a call given
+  none by name is read by the call's untyped rule (a closure's, where `xs.map(x => x * 2)` is a closure: the kernel's
+  `word =>` after `(` reads as one only through one hole), or a class's `Positions_given` (each read whole, a value).
+- **An argument read as code is read again where it is used** (Arguments' `{value} => value`, tried): a field given a
+  text or a closure (`Carrying(`a`).carried`, `Kf((x) => x * 3).fn`) is read again as the instance's member, where
+  `(external &).text` and `.` are another's (lost CI2, CI6, MP1; a kernel thread crashed in `text_admits`).
+- **A closure written bare given a class is a rule** (`Kf(x => x * 3).fn`): read whole by `Positions_given`
+  (`{value: Node}`), through two holes, the kernel's `word =>` is no closure there. `Kf((x) => x * 3)` reads.
+- **A closure given by name is read as a closure of the name** (`idg(f: (x) => x * 3)`, `Kf(fn: (x) => …)`): `=>` binds
+  looser than `name:`, `(f: (x)) => x * 3`.
+- **A named argument whose value is the caller's parameter** (`nw (wrapped) => nm(named_one: wrapped)`, `nw(3)`) is not
+  that value (on main before this too). Repro ~/.cache/ray-scratch/selfhost/co37k.ray (B, C).
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
   ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).
 - **Reading a text as a class by its header** (`"v0.1.4-E2027.0A.4" as Version`, `Language.part_written` of a header

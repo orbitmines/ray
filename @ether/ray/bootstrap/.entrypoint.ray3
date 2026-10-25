@@ -99,6 +99,18 @@ Name := {
   // (nothing holds no member: a default of nothing keeps no type, `x: T = None`)
   ({name}.type = type) unless value === None
 }
+// A call's arguments (§10.1): each a value, or one given by name, `f(x: 5)`: the callee's `x` given 5, read where it is written.
+// (read by this type: what binds looser where they are written (`,`) first, each part then read here)
+Arguments := {
+  {name}: {value} => `{name}` named_as value
+}
+{text} named_as {value} ^keyword => {
+  {
+    external member (.) (`name`) (text)
+    external member (.) (`value`) (value)
+    external member (.) (`named_argument`) (true)
+  }
+}
 // An optional one, `x?: T`: nothing unless it is given (`x: T = None`).
 {name}?: {type} ^operator => {name}: ({type})? = None
 assert {
@@ -505,6 +517,14 @@ assert {
     {{body}}
     external label returned
   }
+  // (given one by name, `f(x: 5)`: the parameter of that name given it (each other read where it is written, as above))
+  {this}({arguments: Arguments}) ^punctuation => {
+    external .
+    ({{parameters}}) taking {arguments}
+    external label recurring
+    {{body}}
+    external label returned
+  }
   // (called with what a key read, `f.with_reading(r)(…)`: the key's named parts, what each took of the text, locals of the call)
   {this}.with_reading({reading})({arguments}) ^punctuation => {
     external .
@@ -608,7 +628,7 @@ assert {
 // (rules, not closures: a closure's parameters are given by these)
 // (their holes named apart from the call's, whose `parameters` and `arguments` they are given, and from the labels of `if`
 // in its body (`passed`))
-// (what is not an argument given by name: anything but a Named, below)
+// (what is not an argument given by name: anything but one given by name (`named_as`, below))
 named_argument := false
 // (the function answering a value, whatever it is given)
 answering (answered) => (anything) => answered
@@ -977,6 +997,7 @@ satisfies (keeping) => holds_any((.({keeping})) called_on (.))
     narrows := narrowed
     holds (it) => (it.({constraint})) called_on (it)
     // (called with what makes one, `Box(size: v)` of `Box := Shape{…}`: what it narrows makes it; with nothing, one chosen)
+    {this}({arguments}) => (narrowed)({arguments})
     {this}({arguments: Arguments}) => (narrowed)({arguments})
   }
 }
@@ -1894,6 +1915,13 @@ class: {class_parent} ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword =>
   made &+= {
     of := .
     // (a constructor of its own, `static (x: T) => …`, instead, when it has one (asked without `missing`: a class has none))
+    // (given none by name: each read whole as a value, where it is written)
+    {this}({arguments: Positions_given}) => ((external member (this) (`made_by`)) !== None) ? this.made_by({arguments}) : (this &+ {
+      ({{class_fields}}) taking {arguments}
+      external hoisted {
+        {{class_body}}
+      }
+    })
     {this}({arguments: Arguments}) => ((external member (this) (`made_by`)) !== None) ? this.made_by({arguments}) : (this &+ {
       ({{class_fields}}) taking {arguments}
       // (its block, the constructor: read in each one made (what does not depend on it, the class's, once: `hoisted`); a name
@@ -1954,17 +1982,10 @@ assert {
   }
   assert Holding_class.Inner(true).own  // CI7 a class called as a member of another made one of that other (`this` the class it is a member of)
 }
-// A call's arguments (§10.1): each a value, or one given by name, `f(x: 5)`: the callee's `x` given 5, read where it is written.
-// (read by this type: what binds looser where they are written (`,`) first, each part then read here)
-Named := class (name, value) => {
-  named_argument := true
-}
-Arguments := {
-  // (any value: a head that is one hole alone takes one word)
+// (a class's, given none by name: each read whole, a value (read as code where it is used, a text or a closure is another's))
+Positions_given := {
   {value: Node} => value
-  {name}: {value} => `{name}` named_as value
 }
-{text} named_as {value} ^keyword => Named(text, value)
 assert {
   Indexed := class (index) => { }
   indexed_at (at) => Indexed(index: at)
@@ -1979,6 +2000,25 @@ assert {
   assert Defaulting(second: true, first: false).second  // NA14 fields given by name in another order kept their defaults
   defaulting_of (given) => Defaulting(first: true, second: given)
   assert defaulting_of(true).second  // NA15 a named argument given a parameter was read where the arguments' type is (the call's own names unseen)
+  named_one_of (named_one) => named_one
+  assert named_one_of(named_one: true)  // NA17 one argument given a function by name was not its parameter's value
+  assert (named_one_of(named_one: 1) == 1) && (named_one_of(named_one: 2) == 2)  // NA18 a second call given by name kept the first's value
+  named_right_of (left, right) => right
+  assert named_right_of(right: true, left: false)  // NA19 arguments given a function by name were taken by position
+  named_wrapping (wrapped) => named_one_of(named_one: wrapped)
+  assert named_wrapping(true)  // NA20 a parameter given on by name was not its value
+  Named_static := class {
+    static named_first (first_one, second_one) => first_one
+  }
+  assert Named_static.named_first(second_one: false, first_one: true)  // NA21 arguments given a static method by name were taken by position
+  assert (Named_static.named_first(first_one: 3, second_one: 4) == 3) && (Named_static.named_first(first_one: 5, second_one: 6) == 5)  // NA22 a second call of a static method given by name kept the first's value
+  Holding_closure := class (held_function) => { }
+  assert Holding_closure((x) => x * 3).held_function(3) == 9  // NA23 a closure given a class's field was not that field's value
+  given_closure_of (given_function) => given_function(4)
+  assert given_closure_of(x => x * 3) == 12  // NA24 a closure written bare given a function was not its parameter's value
+  Narrowed_holder := class (held) => { }
+  Small_holder := Narrowed_holder{.held < 5}
+  assert Small_holder(3).held == 3  // NA25 a narrowed class given a value without a name did not hold it
 }
 assert {
   .{x}? => x

@@ -36,6 +36,22 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   an inline pattern matches (`{name: (Char.Word | "-")[]}`), but see below.
 - **A matched hole typed by an inline pattern is still read as code**: with `@yd:{p: Char.Word[]} => p`, `(@yd:x)` reports
   `nothing reads x`.
+- **A type's rules read beneath its hole too**: while a typed hole is read (`{arguments: Arguments}`), its type's rules
+  match code run beneath it as well: a rule `{p: Name} {`=>`} {b} => …` in Arguments matched `{name} => value` in `:=`'s
+  body (rules applied 6000 deep), `{v} => (v) as_argument` reads itself without end, and a second type of arguments
+  beside Arguments (one for classes) broke every function call. So Arguments has one rule, `{name}: {value}`; a call given
+  none by name is read by the call's untyped rule (a closure's, where `xs.map(x => x * 2)` is a closure: the kernel's
+  `word =>` after `(` reads as one only through one hole), or a class's `Positions_given` (each read whole, a value).
+- **An argument read as code is read again where it is used** (Arguments' `{value} => value`, tried): a field given a
+  text or a closure (`Carrying(`a`).carried`, `Kf((x) => x * 3).fn`) is read again as the instance's member, where
+  `(external &).text` and `.` are another's (lost CI2, CI6, MP1; a kernel thread crashed in `text_admits`).
+- **A closure written bare given a class is a rule** (`Kf(x => x * 3).fn`): read whole by `Positions_given`
+  (`{value: Node}`), through two holes, the kernel's `word =>` is no closure there. `Kf((x) => x * 3)` reads.
+- **A closure given by name is read as a closure of the name** (`idg(f: (x) => x * 3)`, `Kf(fn: (x) => …)`): `=>` binds
+  looser than `name:`, `(f: (x)) => x * 3`.
+- **A named argument given a function is not a local of the caller** (`nw (wrapped) => nm(named_one: wrapped)`, `nw(3)`;
+  a `:=` local the same; a constant or a global holds): before named arguments were taken too. A class given one so holds
+  it (NA15). Repro ~/.cache/ray-scratch/selfhost/na16.ray (A, B, D, E).
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
   ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).
 - **Reading a text as a class by its header** (`"v0.1.4-E2027.0A.4" as Version`, `Language.part_written` of a header
@@ -238,6 +254,21 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `{styled: String}{ }{`^`}{style}`). A name is a value of a type only when it names the type itself (`named_as`, `v ===
   type`), and only a global one: `box ^h1` with `box` a Shape is no `{styled: Geometry.Shape}`, nor is a value typed by
   a narrowing (`{placed: *{…}}`, `{site: *{…}}`, `{v: *{. == 3}}` on `3`). UI.Scene is made of these.
+- **A hole named as a name the body's callees use shadows it there** (`{text: String} => Ph(flow: 5)`: Ph's construction reads
+  String's own `text` holes as the reader's; `{styled}` shadowed `.styled`, `{inline}` the flow `inline`): a rule's hole names
+  reach every body it calls. Scene's holes renamed `marked`, `inlined`.
+- **A list given as an argument beside another is composed into it** (`f(list, x)` is `f(list..., x)`; `[list], x` keeps it
+  whole): Compiler.reduced is called by name. A named argument is code read in the callee (`this` there is the callee's): its
+  value read into a local first (`program_answered`).
+- **In a rule's body, `x.m` after `=>` without brackets binds to the rule** (`{text: String} => text.count` is `(… => text).count`;
+  `=> (text.count)` is as meant).
+- **A member added to a list's links changes the list** (`.all`, `Colour#`, `==`): the operators' edges are not kept on links;
+  a superposition is of `|`'s edge (only `|` makes one), a list `,` made (`spread`) of `,`'s.
+- **`(1 | 2 | 3).every(x => x < 4)` is false** (main too); `.all` (a section reduced) is not `== (1 | 2 | 3)`.
+- **Program's `{this}()` reads `x()` in a Program method's body as itself** (its `this` untyped): what a program answers is a
+  function outside Program (`program_answered`).
+- **Tests inside a static class's body run only when something makes it** (Ray.ray RR53 in `Graph.Simple`).
+- **CO37 under Program's `+`**: `(Program(code: { 2 + 3 }){O: shouted})()` is 5 at top level, not in Compiler.ray's test block.
 - **A member named as one of the rule's holes reads the hole** (`{styled: String} … => x.styled(style)`: `.styled` is the hole,
   not x's method): a name after `.` is x's, never a hole of the rule it is written in. UI.Scene's hole renamed `marked`.
 - **A field holding a closure, named bare, is the closure applied** (`(p).reading === None` for `reading: ((s) => …)`, and
@@ -264,20 +295,14 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `Pa().x == 1` are false; `class (x: Number = 1) { }` and `=> { }` hold both).
 - **`Compiler.folding + x` is not a composition** (`(Compiler.folding) + x` is): ` + x` is read as a method of the member's
   value (found by ray-61).
-- **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
-  `Dk().b` is 2, but `Dk(a: 5).b` is no Number; `b: Number = 7` and `c: Number = b` are kept). Given anything, the header is
-  read as a left side (`({written_parameters}) := arguments_given`) and its defaults with it: the default's code is inside
-  the left side's text, so `{name}: {type} = {value}`'s body reads `value` as part of the left side (a place), and a place
-  nothing is given (`each takes`, `declared`) keeps that. Shape's header is made of these (`space: Space = parent.space ??
-  Space.current`, `font: … = parent ? … : Font.base`): `Geometry.Box(size: v).space` is None, `Geometry.Shape().space` is
-  not. Taking the header's defaults first when everything is given by name (`all_named`, then the names) loses half the
-  bootstrap's tests (565 of 1084 pass). Also open: a default reading a field given by name sees that field's own default
-  (`Df(a: 5).b` is 2, not 6), and one reading a field after it is not read (Shape's `boundary` reads `space`).
-- **Header defaults read lazily (decided 2026-10-24), not done**: `{name}: {type} = {value}` made lazy (`{name} => { … }`,
-  kept on first read) changes nothing for a header (`Dk(a: 5).b`, `class (c = d + 1, d = 1)`, `parent ?? 3` with `parent`
-  unset: all as before), so a header's places are not read by that rule when anything is given; running the header as code
-  first, then `:=` (`taking`), loses half the bootstrap's tests ("a left side answers a value": the lazy name is called as a
-  place). The place's default needs to be kept unread by the left side itself.
+- **Header defaults given anything (done 2026-10-25, ray-61)**: a call given anything reads its header as a left side; there
+  a default, `b = 0`, `s: T = T()`, now declares its place and gives it the default when first asked for, unless it holds a
+  value already, and what the call gives replaces it (kernel `apply_`, `assigns`: §6.1 "a value read inside a left side is a
+  value", §10.1 "the default, run first and overwritten by an argument given"; the language's own reading of a left side
+  gives the same). `Dq(c: 5).s` is a Vq, `Df(a: 5).b` is 6, a default making its own class reads (NA26–NA29). Before, a
+  default was read as part of the left side (`Vq()` a call pattern), and reading the header again as code got the take's
+  cached places. Still open: given nothing, the header is read as code, in order, so a default reading a field after it
+  (`class (a = b + 1, b = 2)`, Shape's `boundary` reading `space`) reads nothing there.
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).
@@ -311,3 +336,33 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   as `(skipped: *, found: pattern, *)` (`⊢ p` as `(found: p, *)`, `p ⊣` as `(*, found: p)`), the shortest first. Reading a
   text `as` such a structure does not find what is inside it yet (tried: PM1, PM3, S127, W15 and String's `contains`,
   `ends_with`, `words` fail, and one test runs out of memory).
+- **`"Ray" @ loc` is not a text placed there (UI230)**: `@ (location) => this ~~ (.location |= location)` had three faults.
+  (1) `copy` answered nothing (since .ray3): now Node's `copy` (a fresh node given the value's, its `of` kept), NOD91/92.
+  (2) `|=` had no rule, so `.location |= v` was read as a superposition and the Location's members joined the text (its `of`
+  both String and Location): now `{name} |= {value} => {name} := either_of({name})(value)` (with `=` it reads itself again
+  forever: `=` keeps the code, and `|`'s holes are code). (3) Code in `x ~~ ( … )` is read in x: the parameter `location` was
+  the text's own `location` field (renamed `placed_at`). Still open: on a text, `.location = v` sets nothing (`:=` does), a name
+  from where `~~ ( … )` is written (`loc`) is not found in a text (in an instance it is), and `.m` in a rule's hole
+  (`.location |= 5` through the `|=` rule) is not the `~~` block's. `"W" @ 5` without brackets does not call the method. `@` now sets `.location :=` itself (`|=`'s `.m` is not the block's): `"Ray" @ (6)` is placed,
+  a String; given a Location (`"Ray" @ (l)`, l `@https://orbitmines.com`), (that was a probe named `p`, UI's `p {amount} {spaced}`
+  padding keyword reading it). What remains: a URL is not read as a Location, `"https://orbitmines.com" as Location` is None
+  (Location.ray's header structure, read by `read_as`/`read_into`), so `@https://…` is no Location and Scene's `placed`
+  (`.location is Location`) does not take it. Why: a text is no `Char[]` (`"a"[0] is Char`, but
+  `"a" is Char` and `"abc" is Char[]` are false; `Char.Word[]`, a superposition of ranges, reads), and Location's header is
+  `Char{…}[]`s. Tried: Char a range of every character (`"\0".."\u{10FFFF}"`: enumerated, 6000 deep); Char `is_range` with
+  `one_same` true (`"a" is Char` holds, `Char[]` still reads nothing, `{!= ":"}` not checked, every character a range).
+  Also: a field holding None is not a place (`t.marked = 5`: "a left side answers a value, not a place"), and at a file's top
+  level `u := x ~~ (.m = v)` sets nothing (as a statement it does).
+- **`Program(…): T` is no Program answering T** (Choice.ray `choose {type} => Program(name: "choose"): type`; UI239, UI270, CN8):
+  `{x}: {type} => external unset x type` takes any left side as a place, so `(Program(name: "choose"): String).name` is unset
+  and it is no Choice; Program's `returns` (Program.ray, "`Program(…): T`") is never given. Tried: a rule
+  `{typed_program: Program}: {program_returns}` (setting `returns`): it never fires, in a statement, a function's body or
+  brackets (the typed hole does not take `Program(…)` written; an untyped one would replace every `x: T`). Nor `{p: *{. is Program}}: {r}`
+  or `{c}({args}): {r}`, as a block's statement either: `X(…): T` is a declared call place before any rule reads it (the
+  kernel's left side, as with header defaults), and `:` outside brackets binds looser than `=>` (`choose {type} => P: type`
+  types the rule), in brackets `name: v` is a named part.
+- **A choice inside a list takes the rest of the list** (found by ray-61 bisecting Shape's header): `[1, true ? 1 : 2, 3]` is
+  two parts, `[true ? 1 : 2, 3]` and `[1, (true ? 1 : 2), 3]` are right. `,` reads its parts with no `,` in them, so the
+  rest after the first `,` is read by `c ? a : b`, its `b` taking `2, 3`. Shape's `boundary: Shape = … ? … : box(size), flow: …`
+  takes every field after it (given `content:`, only fields 1–8 hold, so Box has no size). Tried: a rule
+  `{condition} ? {yes} : {no}, {rest} => ((condition) ? yes : no), rest` (worse: `[1, false ? 1 : 2, 3][1]` no longer 2).

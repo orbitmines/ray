@@ -697,11 +697,14 @@ assert {
 // name, `x: v`, the place of that name (a place, compared, is the name it is), the others the places left, in order)
 // (a position written as a number, `44` among places: the place its numeral names)
 literal_number (number_at) => (external typed_name (number_at.value)) === None && ((external named (number_at.value)) !== None) && ((external named (number_at.value)) is Decimal.String)
+// (whether two lists, from these links on, hold as many)
+lengths_match (one_at, other_at) => one_at ? (other_at ? lengths_match(one_at.next, other_at.next) : false) : !other_at
 {places} each takes {taken} ^keyword => {
   {
     each_place := places.head
     each_taken := taken
-    each_part := (((each_taken).listing) && ((each_taken).spread)) ? each_taken : Array.new.append(each_taken)
+    // (a list written as one value, given to as many places as it holds, more than one: its values in them, `(a, b) := list`)
+    each_part := (((each_taken).listing) && (((each_taken).spread) || (places.head && places.head.next && lengths_match(places.head, (each_taken).head)))) ? each_taken : Array.new.append(each_taken)
     each_taken_at := each_part.head
     // (more given than places: a list among them composed into the rest by `,` (`.put(at, cell)`, `at` a Vector): a place typed
     // so takes as many as make one of its type, made one (§ arguments: separated by the types they are given to; written
@@ -745,6 +748,12 @@ literal_number (number_at) => (external typed_name (number_at.value)) === None &
     }
   }
   true
+}
+assert {
+  (spread_a, spread_b: Number) := [1, 2]
+  assert spread_a == 1 && spread_b == 2  // DS5 a list given to as many places is not its values in them
+  spread_whole := (whole) => whole
+  assert spread_whole([1, 2]).count == 2  // DS6 a list given to one place is not that list
 }
 
 // A section given to a method, `xs.map(.value)`: the function of what it misses.

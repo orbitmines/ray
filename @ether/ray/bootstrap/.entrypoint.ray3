@@ -882,6 +882,9 @@ edged (edged_value, edged_type) => (edged_type === superposed_edge) && ((edged_v
   // among them, its components)
   members := (((a).is_range) || ((b).is_range) || (((a).superposes) && ((a).members !== None))) ? possible_values(a).joined(possible_values(b)) : None
 }) ~~ (. &+= a) ~~ (. &+= b)
+// (`x |= v`: x one of what it was or v; of nothing, v)
+either_of (either_before) => (either_added) => (either_before === None) ? either_added : (either_before | either_added)
+{name} |= {value} => {name} := either_of({name})(value)
 // (`|`, the rule that decorates an edge with alternatives)
 superposing_rule := external rule `{a} | {b}`
 // (values superposed, in order: of one alone, that one its only component)

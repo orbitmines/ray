@@ -347,8 +347,13 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   as `(skipped: *, found: pattern, *)` (`⊢ p` as `(found: p, *)`, `p ⊣` as `(*, found: p)`), the shortest first. Reading a
   text `as` such a structure does not find what is inside it yet (tried: PM1, PM3, S127, W15 and String's `contains`,
   `ends_with`, `words` fail, and one test runs out of memory).
-- **`x.copy` answers nothing** (since the .ray3 entrypoint; the old `copy =>` made a node of the same class, fields and
-  diagnostics): 23 uses (`branched`, Scene's `placed.copy ~~ (.location = None)`, UI230), and `~~` changes the value itself, so
-  without it `"Ray" @ loc` loses its location everywhere. Tried: a fresh node given the value's (`fresh_reading_of(None) ~~ (.
-  &+= v)`): a record's fields are kept, but it is no String (`textual` is the kernel's) and no instance of the class (`.of`);
-  `p + ""`, `p[0..]`, `p[..]`, `[p] as String`, `p.reduce(,)`, `p.replace(…)` give `p` itself or nothing.
+- **`"Ray" @ loc` is not a text placed there (UI230)**: `@ (location) => this ~~ (.location |= location)` had three faults.
+  (1) `copy` answered nothing (since .ray3): now Node's `copy` (a fresh node given the value's, its `of` kept), NOD91/92.
+  (2) `|=` had no rule, so `.location |= v` was read as a superposition and the Location's members joined the text (its `of`
+  both String and Location): now `{name} |= {value} => {name} := either_of({name})(value)` (with `=` it reads itself again
+  forever: `=` keeps the code, and `|`'s holes are code). (3) Code in `x ~~ ( … )` is read in x: the parameter `location` was
+  the text's own `location` field (renamed `placed_at`). Still open: on a text, `.location = v` sets nothing (`:=` does), a name
+  from where `~~ ( … )` is written (`loc`) is not found in a text (in an instance it is), and `.m` in a rule's hole
+  (`.location |= 5` through the `|=` rule) is not the `~~` block's. `"W" @ 5` without brackets does not call the method.
+  Also: a field holding None is not a place (`t.marked = 5`: "a left side answers a value, not a place"), and at a file's top
+  level `u := x ~~ (.m = v)` sets nothing (as a statement it does).

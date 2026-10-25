@@ -34,6 +34,21 @@ Node &+= {
   assert (a: 1, b: 2).fields.map(.name) == ["a", "b"]  // NOD12 the fields of a value are not its names in order
   assert (a: 1, b: 2).fields.map(.value) == [1, 2]  // NOD13 the fields of a value do not hold their values in order
   assert (a: 1, b: 2).fields.count == 2  // NOD14 a value of two fields does not have two fields
+  // another value like it: of its class, holding what it holds
+  copy => {
+    copied := fresh_reading_of(None)
+    copied &+= this
+    external member (copied) (`of`) ((this).of)
+    copied
+  }
+  assert {
+    original := "Ray"
+    original ~~ (.marker = 7)
+    copied := original.copy
+    copied ~~ (.marker = 8)
+    assert copied is String && copied == "Ray"  // NOD91 a copy of a text is not a text like it
+    assert original.marker == 7 && copied.marker == 8  // NOD92 a copy changed changes what it copies
+  }
 
   chainable != (other) => !(this == other)
   assert 1 != 2  // NOD15 different values are not unequal
@@ -204,7 +219,7 @@ Node &+= {
   // where it is (`@x.@`, `value.@`)
   .@ ^punctuation => .location
   // placed there too, `value @ place` (a method of the value: `x := @name` is no value placed)
-  @ (location) ^keyword => this ~~ (.location |= location)
+  @ (placed_at) ^keyword => this ~~ (.location |= placed_at)
 }
 {value} @ {location} = {written} ^punctuation => (location[value] = written) -- (value @ location)
 // A value as another given a value, `(x as T) = v`: what it is as T, given it by its own `=` (`(@me/device as Terminal) = x`

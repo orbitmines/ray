@@ -2574,6 +2574,17 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function making(n: number) { const by = w(n + N_B); return w(n + N_IS) === IS_NODE && by && w(by + N_IS) === IS_FRAME && !w(by + N_B) ? 1 : 0; }
   // (the text from s to e has a hole in it)
   function holed(s: number, e: number) { const hole = 5 + 8 * w(OPEN_LENGTH); for (let i = s; i < e; i++) if (bracket(i, e) === hole) return 1; return 0; }
+  // (as holed, for a group that is all of a text: a hole's brackets around a name or a text written in them (`({x})`, `[{x}]`),
+  // not a block (`{ 5 }`) nor a narrowing written against what it narrows (`edges{.from}` of a default in a header))
+  function holed_group(s: number, e: number) {
+    const hole = 5 + 8 * w(OPEN_LENGTH), open = w(OPEN_LENGTH), cl = w(CLASSES);
+    for (let i = s; i < e; i++) {
+      if (bracket(i, e) !== hole) continue;
+      const c = b(i + open), p = i > s ? b(i - 1) : 0;
+      if ((b(cl + c) === 1 || c === 96) && b(cl + p) !== 1 && p !== 41 && p !== 93) return 1;
+    }
+    return 0;
+  }
   // (the text from s to e a pattern: a hole in it, not in brackets (`{x} + {y}`; `({x} => {y}).style` is code), that is none
   // of the holes of what it was written in, `names`)
   // (a group that is all of it, `({x})`, `[{x}]`, a pattern too; and what is quoted is not in brackets)
@@ -2583,7 +2594,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     for (let i = s; i < e;) {
       const k = bracket(i, e);
       if (k === hole) { if (!names || !w(names + F_RULE) || !ref(w(names + F_RULE), w(names + F_CLOSURE), i, past(i, e), 1)) return 1; i = past(i, e); continue; }
-      if ((k & 3) === 1) { const p = past(i, e); if (p >= e && holed(i, p)) return 1; i = p; continue; }
+      if ((k & 3) === 1) { const p = past(i, e); if (p >= e && holed_group(i, p)) return 1; i = p; continue; }
       i++;
     }
     return 0;

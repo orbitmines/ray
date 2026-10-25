@@ -3585,3 +3585,18 @@ composing_rule := external rule `{list}, {other}`
 composed_edge := (Node &+ { })
 composed_edge &+= composing_rule
 include given
+// A call written with a type, `Program(…): T` (`:` binds the nearest operand, §4.3): what it makes, answering T (its
+// `returns`); its arguments as a call's, those given by name read where they are written (by Arguments) before the rest.
+{typed_called}({typed_arguments}): {typed_returns} ^operator => returning_typed(({typed_called}({typed_arguments})), typed_returns)
+{typed_called}({typed_arguments: Arguments}): {typed_returns} ^operator => returning_typed(({typed_called}({typed_arguments})), typed_returns)
+returning_typed (typed_made, typed_type) => {
+  typed_made.returns = typed_type
+  typed_made
+}
+assert {
+  Returning := class (name: String?, returns: *?) => { }
+  returning_named := Returning(name: "choose"): Number
+  assert returning_named.returns === Number && returning_named.name == "choose"  // TY78 a call written with a type does not answer that type, or loses what it is given by name
+  returning_placed := Returning("choose"): Number
+  assert returning_placed.returns === Number && returning_placed.name == "choose"  // TY79 a call written with a type loses what it is given in place
+}

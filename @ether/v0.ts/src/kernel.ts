@@ -4716,7 +4716,8 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     let state = aload(tk + T_STATE);
     if (state === 2) return resolved(t, tk);
     if (state === 3) return w(tk + T_VALUE);
-    if (!state && w(t + T_GIVEN_N) && !NOGIVEN) { const g = given(tk); if (g) { put(tk + T_VALUE, g); aput(tk + T_STATE, 3); return g; } }
+    // (one made before the test it is in: given here only, nothing written in it)
+    if (!state && w(t + T_GIVEN_N) && !NOGIVEN) { const g = given(tk); if (g) { if (older(tk)) return g; put(tk + T_VALUE, g); aput(tk + T_STATE, 3); return g; } }
     // (a take of what another took, `{x}` or `x`: that one's value, read once where it was written, kept there (and here))
     const source = follow(tk, 1);
     // (one word, read as a left side through what refers to it (`(name)` given `seen`): which one, so that what it names,

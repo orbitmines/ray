@@ -295,41 +295,14 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   `Pa().x == 1` are false; `class (x: Number = 1) { }` and `=> { }` hold both).
 - **`Compiler.folding + x` is not a composition** (`(Compiler.folding) + x` is): ` + x` is read as a method of the member's
   value (found by ray-61).
-- **A default that is an expression is lost when anything is given** (`Dk := class (a: Number = 1, b: Number = a + 1)`:
-  `Dk().b` is 2, but `Dk(a: 5).b` is no Number; `b: Number = 7` and `c: Number = b` are kept). Given anything, the header is
-  read as a left side (`({written_parameters}) := arguments_given`) and its defaults with it: the default's code is inside
-  the left side's text, so `{name}: {type} = {value}`'s body reads `value` as part of the left side (a place), and a place
-  nothing is given (`each takes`, `declared`) keeps that. Shape's header is made of these (`space: Space = parent.space ??
-  Space.current`, `font: … = parent ? … : Font.base`): `Geometry.Box(size: v).space` is None, `Geometry.Shape().space` is
-  not. Taking the header's defaults first when everything is given by name (`all_named`, then the names) loses half the
-  bootstrap's tests (565 of 1084 pass). Also open: a default reading a field given by name sees that field's own default
-  (`Df(a: 5).b` is 2, not 6), and one reading a field after it is not read (Shape's `boundary` reads `space`).
-- **Header defaults read lazily (decided 2026-10-24), not done**: given anything, a class's header is read as a left side
-  (`({written_parameters}) := arguments_given`), and an expression default in it (`s: Vq = Vq()`, `size: Vector = Vector()`,
-  `b = a + 1`) is read there as a place (`Vq()` a call pattern: a node with Vq's fields, no `of`), so `Geometry.Box(content: x)`
-  has no size and no Box given anything can be solved (`.arranged`: `.size.x - …`). Constant defaults hold. Tried (2026-10-25,
-  each reverted): `{name}: {type} = {value}` lazy; the header read as code before or after `:=` (half the tests lost, or the
-  given names passed over and the rest kept as they were); a `Defaulted` level reading the header again for its places (each a
-  name and a closure of its default) and giving what was not given its default: the closure's hole is the take the left side
-  already read (kept: the pattern again; `{{x}}` the same), and run before `taking` it breaks `Dk()`. Traps met: a class with
-  no header has `nothing_given = None` for one; `x: T` reads `x: T = v` too (last declared wins); a `,` of its own must come
-  after the places; a closure of nothing named bare is applied; `read_within` on every construction recurses.
-  Also tried: the arguments taken into a block of their own first (a block keeps what `:=` declares in it; `(x).( … := … )`
-  declares where the code is written), the header then read as code, and what was given in its positions copied back: with it,
-  `Dq(c: 5).s` is a Vq, but errors stop being said (`assert false` passes) and the entry file is not read; and `external valued`
-  (the default read with nothing being declared): no change, the left side has read it already. A class being made is told by
-  a flag set with `external member` (`Making.now = true` in its block defines a name there).
-  Found 2026-10-25 (ray-61): a default written as the type, in brackets, `s: (Vq())`, is read lazily by the kernel's `x: T`
-  (read when first asked for, kept): it holds given anything by name or by position, and one making its own class reads
-  (`Hr := class (r: (Hr(r: 5)))`, `Hr().r.r` is 5); `s: Vq = Vq()`, `s: Vq = (Vq())`, `s = Vq()` lose it, and a default
-  reading a field after it (`a: (b + 1), b = 2`) does not read. `{name}: {type} = {value} => {name}: {value}` is not that:
-  the header is not read by it. Reading the header as code when everything is given by name (`taking_fields`) holds `Dq(c:
-  5).s`, but runs every default eagerly: a worker ran out of memory in the suite (a default making its own class, Shape's
-  `boundary`, made again without end), so laziness is needed first.
-  Also tried: `{name}: {type} = {value} => external unset name value` (no change: that rule does not read a header's
-  default given anything), and the header read again as code after `:=` (the kernel's `given_already`, "a header read again
-  in what it was read into: that value kept"): no change, the left side has bound `s` to the `Vq()` call pattern already, so
-  it counts as given. Only `x: (v)` written so reaches the kernel's lazy `x: T` untouched.
+- **Header defaults given anything (done 2026-10-25, ray-61)**: a call given anything reads its header as a left side; there
+  a default, `b = 0`, `s: T = T()`, now declares its place and gives it the default when first asked for, unless it holds a
+  value already, and what the call gives replaces it (kernel `apply_`, `assigns`: §6.1 "a value read inside a left side is a
+  value", §10.1 "the default, run first and overwritten by an argument given"; the language's own reading of a left side
+  gives the same). `Dq(c: 5).s` is a Vq, `Df(a: 5).b` is 6, a default making its own class reads (NA26–NA29). Before, a
+  default was read as part of the left side (`Vq()` a call pattern), and reading the header again as code got the take's
+  cached places. Still open: given nothing, the header is read as code, in order, so a default reading a field after it
+  (`class (a = b + 1, b = 2)`, Shape's `boundary` reading `space`) reads nothing there.
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).

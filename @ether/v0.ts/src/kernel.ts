@@ -3069,6 +3069,17 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   }
   // (a rule composing what its holes take: two or more, the text between them characters each on its own (`,`), no operator
   // and no bracket or quote)
+  // (a rule giving a place a value: two holes, `=` alone between them)
+  function assigns(rule: number): number {
+    if (w(rule + R_HOLES) !== 2) return 0;
+    let eq = 0;
+    for (let k = 0; k < w(rule + R_PARTS); k++) {
+      const q = rule + R_PART + PART * k;
+      if ((w(q) & 15) !== LITERAL) continue;
+      for (let i = 0; i < w(q + 8); i++) { const c = b(w(q + 4) + i); if (c <= 32) continue; if (c !== 61 || eq) return 0; eq = 1; }
+    }
+    return eq;
+  }
   function composes(rule: number): number {
     if (w(rule + R_HOLES) < 2) return 0;
     let lit = 0;
@@ -3720,6 +3731,21 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     // (a left side being read, a rule composing parts of it (its head holes apart by a character on its own, `{a}, {b}`): each
     // part read as a left side first, a word a name declared here, whatever its body then reads them as (`,`'s `list ===
     // declared`, a visible `type` not its value: GN3); a rule of an operator (`{x}: {type}`, `{x} ^{style}`) reads its own)
+    // (a default in a left side, `b = 0`, `s: T = T()` (§6.1, §10.1): the place declared, given the default when it is first
+    // asked for, unless it holds a value already; what a call gives it replaces that)
+    if (w(t + T_DECL) && lefts() && in_left(s, e) && kind !== DEFINE && !(w(rule + R_FLAGS) & METHOD) && assigns(rule)) {
+      const tn = applied + F_TAKES, tv = applied + F_TAKES + TAKE, a = skip(w(tn), w(tn + 4)), z = trim_end(a, w(tn + 4));
+      let we = a; while (we < z && b(w(CLASSES) + b(we)) === 1) we++;
+      if (we > a && (we === z || b(skip(we, z)) === 58)) {
+        // (a typed one, `s: T`: read as a left side, its place given its type)
+        if (we < z) { valued(t, tn); if (stopped(t)) return 0; }
+        const pl = placed(t, a, we, self), lo = follow(tv, 1), lth = lo ? w(lo + T_THIS) || self : 0;
+        if (pl && w(pl + N_IS) === IS_PLACE && lo && lth && w(lth + N_IS) === IS_NODE) {
+          if (!given_already(place_in(pl) || self, a, we, pl)) { const kc = alloc(TAKE); for (let i = 0; i < TAKE; i += 4) put(kc + i, w(lo + i)); put(kc + T_STATE, 0); put(kc + T_VALUE, 0); bound(w(pl + N_A), w(pl + N_B), place_in(pl) || self, node(IS_LAZY, kc, 0, lth, 0)); }
+          return pl;
+        }
+      }
+    }
     if (w(t + T_DECL) && lefts() && in_left(s, e) && kind !== DEFINE && !(w(rule + R_FLAGS) & METHOD) && composes(rule)) for (let i = 0; i < w(rule + R_HOLES); i++) {
       const tk = applied + F_TAKES + TAKE * i, a = skip(w(tk), w(tk + 4)); let z = w(tk + 4); while (z > a && b(z - 1) <= 32) z--;
       if (a >= z || !in_left(a, z)) continue;

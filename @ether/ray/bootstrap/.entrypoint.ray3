@@ -2019,6 +2019,12 @@ assert {
   Narrowed_holder := class (held) => { }
   Small_holder := Narrowed_holder{.held < 5}
   assert Small_holder(3).held == 3  // NA25 a narrowed class given a value without a name did not hold it
+  Defaulted_after := class (first_given: Number = 0, after_first: Number = first_given + 1) => { }
+  assert Defaulted_after(first_given: 5).after_first == 6  // NA26 a default that is code was lost when a field was given by name
+  assert Defaulted_after(7).after_first == 8  // NA27 a default that is code was lost when a field was given by position
+  assert Defaulted_after().after_first == 1  // NA28 a default that is code did not read the default before it
+  defaulted_after_of (first_given, after_first = first_given * 2) => after_first
+  assert defaulted_after_of(first_given: 4) == 8  // NA29 a function's default that is code was lost when given by name
 }
 assert {
   .{x}? => x

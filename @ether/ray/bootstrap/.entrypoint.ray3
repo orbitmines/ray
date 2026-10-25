@@ -1680,7 +1680,8 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
     return ways_found
   }
   ways_one := one_character(ways_by)
-  ways_cut := ways_from.empty ? None : ways_from.rest
+  // (each span of a text: what is not one, none)
+  ways_cut := (ways_from.empty || !((ways_from).textual === true)) ? None : ways_from.rest
   while (ways_cut !== None) && !(ways_only && !(ways_found.empty)) {
     ways_span := ways_from.until(ways_cut)
     if (ways_by) fits_read (ways_span) {
@@ -3022,11 +3023,11 @@ Array &+= {
   }
   linked (value) => {
     {
-      value := value
-      next := None
-      previous := None
+      external member (.) (`value`) (value)
+      external member (.) (`next`) (None)
+      external member (.) (`previous`) (None)
       // (the name it was written as, the place it sits in: none)
-      written_name := None
+      external member (.) (`written_name`) (None)
     }
   }
 

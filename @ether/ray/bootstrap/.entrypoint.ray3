@@ -370,6 +370,8 @@ assert !(false ?? true)  // BN2 ?? replaces a value that is there
 {condition} ? {yes} : {no} ^operator => (condition) ? yes : no
 assert true ? true : false  // BT3 c ? a : b does not take a when c holds
 assert !(false ? true : false)  // BT4 c ? a : b takes a when c does not hold
+assert [1, true ? 1 : 2, 3].count == 3  // BT6 a choice in a list after its first item takes the items after it
+assert [1, false ? 1 : 2, 3][2] == 3  // BT7 a choice in a list after its first item takes the items after it when it does not hold
 assert false ? false : true  // BT5 c ? a : b does not take b for a named c
 
 // A branch: the block taken read where the branch is (labels named apart from a loop's, which `break` and `continue` go to

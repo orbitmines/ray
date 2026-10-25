@@ -1156,8 +1156,19 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     for (let n = w(r + R_PARTS); k < n; k++) { const q = r + R_PART + PART * k, kind = w(q) & 15; if (kind === SPACE) continue; if (kind === LITERAL) return b(w(q + 4)) === 44 ? 1 : 0; return 0; }
     return 0;
   }
-  // (whether what is read from at is what brackets hold, `(` or `[` before it: items, which `,` separates)
-  function enclosed(at: number): number { let q = at - 1; while (q > 0 && b(q) <= 32 && b(q) !== 10) q--; return b(q) === 40 || b(q) === 91 ? 1 : 0; }
+  // (whether what is read from at is what brackets hold, `(` or `[` the innermost open around it: items, which `,` separates,
+  // past the items before it (`[1, c ? a : b, 3]`'s `c`) and lines (a header written over several); a block's `{`, none)
+  function enclosed(at: number): number {
+    let q = at - 1, depth = 0;
+    for (let n = 0; q > 0 && n < 8192; n++, q--) {
+      const c = b(q);
+      if (c === 34 || c === 96) { const quote = c; q--; while (q > 0 && !(b(q) === quote && b(q - 1) !== 92)) q--; continue; }
+      if (c === 41 || c === 93 || c === 125) depth++;
+      else if (c === 40 || c === 91) { if (depth === 0) return 1; depth--; }
+      else if (c === 123) { if (depth === 0) return 0; depth--; }
+    }
+    return 0;
+  }
   // (from a choice's ` ? ` at p: just past its ` : `, choices in it counted, brackets skipped; none, 0)
   function choice_end(p: number, end: number): number {
     let depth = 1;

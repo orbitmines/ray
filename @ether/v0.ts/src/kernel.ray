@@ -723,6 +723,7 @@ kjs &+= {
       kjs_unclaimed(0)
       kjs_jmp(`set`, `&.value`, kjs.zero, kjs.zero)
       kjs_jmp(`&.caller`, `-`, kjs.zero, kjs.zero)
+      if kjs.writing === true { wj_end(0) }
       kjs.mode = 2
     }
   }

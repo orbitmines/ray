@@ -255,10 +255,15 @@ wasm_kept_of (made_called, made_cells, made_cells_n, made_params, made_statement
 wj_announced (unused) => {
   wasm.announced = true
 }
+// (a context ended where it was begun (`kernel.ray`): what it was given let go of with what reading it made)
+wj_end (unused) => wasm_close(0)
 wasm_close (unused) => {
   if wasm.called !== None {
     if wasm.announced === true {
       wasm_end(0)
+      wasm.cells = None
+      wasm.statements = None
+      wasm.labels = None
     } else {
       wasm_put(wasm.given, (wasm_key(wasm.given_n)), (wasm_kept_of(wasm.called, wasm.cells, wasm.cells_n, wasm.params, wasm.statements, wasm.statements_n, wasm.labels)))
       wasm.given_n = wasm.given_n + 1

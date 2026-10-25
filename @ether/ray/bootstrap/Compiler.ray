@@ -2,17 +2,41 @@
 // program answers, each removable by name (Design §20.1: a level is a scope of rules). A back end's level comes after them
 // (`$/Wasm.project.ray`: `Compiler.default + Wasm.none`).
 Compiler := class {
+  // What a level's rules ask of the code they read: each a Program, the code as it is written (its structure, what reads it),
+  // matched by its shape. `~=` on a Program reads through what its code applies, each rule of it as written, so a call
+  // reaches its body; an external a level replaces is what that level makes of it.
+  // (what it does outside what it makes: says, reads or writes outside it, styles, changes the level it is read with)
+  Effect := `external output` | `external include` | `external read` | `external style` | `external level_in` | `external level_out` | `external dynamic_in` | `external dynamic_out` | (`external member (`, *, `) (`, *, `) (`, *, `)`)
+  // (a jump of it, and where to)
+  Jump := (`external goto `, target: *, \n | ⊣)
+  // (what does nothing outside what it makes: no effect, and every jump to a label written in it)
+  Effectless := Program{!~= Effect && Compiler.jumps_within(.)}
+  static jumps_within (code) => (code ~= Jump)#.every((jump) => code ~= (`external label `, jump.target))
+  // (what reads what changes: a name given again, what is read from outside)
+  Changing := (*, ` = `, *) | `external read`
+  // (what answers the same for the same arguments, and nothing else happens: pure, as in mathematics)
+  Pure := Effectless{!~= Changing}
+  // (a value written as it is, and what is made of those alone)
+  Literal := Decimal.String | ("\"", Unquoted[], "\"") | `true` | `false` | `None`
+  Known := Literal | Pure{!~= Name}
+  assert Program(code: { 1 + 2 }) is Pure  // CO50 two numbers added are not pure
+  assert !(Program(code: { external output `x` }) is Effectless)  // CO51 what says something does nothing outside it
+  assert !(Program(code: { x = 2 }) is Pure)  // CO52 a name given again is pure
+
   none := {
     {value} => value
   }
   // A level is which rules are in scope while a program is read back
   assert Compiler.none  // CO19 there is no level that reads a program as it is written
 
+  // A number given what leaves it as it is: the number (a value of another class, with its own `+`, as written)
   folding := {
-    {a} + 0 => a
-    0 + {a} => a
-    {a} * 1 => a
-    1 * {a} => a
+    {a: Number} + 0 => a
+    0 + {a: Number} => a
+    {a: Number} - 0 => a
+    {a: Number} * 1 => a
+    1 * {a: Number} => a
+    {a: Number} / 1 => a
   }
   assert 5 + 0 == 5  // CO1 five and nothing is not five
   assert 0 + 5 == 5  // CO2 nothing and five is not five
@@ -20,14 +44,36 @@ Compiler := class {
   // What is not written as one of those is untouched
   assert 5 + 2 == 7  // CO14 five and two is not seven
   assert 5 + 0 == 5  // CO18 five and a name holding nothing is not five
+  assert {
+    folded := 5
+    assert (Program(code: { (folded + 0) === folded }){O: Compiler.folding})()  // CO42 a number and nothing is not the number itself under folding (the rule did not apply)
+    Own_plus := class {
+      compounds + (other) => "plus"
+    }
+    assert (Program(code: { Own_plus() + 0 }){O: Compiler.folding})() == "plus"  // CO43 a value with its own + was taken for a number
+  }
 
-  // The level the language is read with: each rule a list read twice where once answers the same, applied only to an
-  // Array's (or a String's: what descends from Array) own (a value of another class, with its own `reverse`, as written)
-  default := {
-    {a}.reverse.reverse => ((a).of.descends(Array)) ? a : (a.reverse).reverse
-    {a}.unique.unique => ((a).of.descends(Array)) ? a.unique : (a.unique).unique
-    {a}.compact.compact => ((a).of.descends(Array)) ? a.compact : (a.compact).compact
-    {a}.sort.sort => ((a).of.descends(Array)) ? a.sort : (a.sort).sort
+  // A boolean negated twice: the boolean
+  logic := {
+    !!{a: boolean} => a
+  }
+  assert (Program(code: { !!true }){O: Compiler.logic})() === true  // CO44 true negated twice is not true under logic
+
+  // Lists made only to be read again: none made (a list's own, an Array's; a value of another class, with its own `map`,
+  // as written)
+  fused := {
+    {a: Array}.reverse.reverse => a
+    {a: Array}.unique.unique => a.unique
+    {a: Array}.compact.compact => a.compact
+    {a: Array}.sort.sort => a.sort
+    {a: Array}.map({f: Effectless}).map({g: Effectless}) => a.map((x) => g(f(x)))
+    {a: Array}.map({f: Effectless}).count => a.count
+    {a: Array}.sort({k: Pure}).last => a.max_by(k)
+    {a: Array}.sort({k: Pure}).first => a.min_by(k)
+    {a: Array}.reverse.first => a.last
+    {a: Array}.reverse.last => a.first
+    {a: Array}{`{`}{p: Effectless}{`}`}.first => a.find((x) => x.({p}))
+    {s: Superposed}{`{`}{p: Effectless}{`}`}#.first => s.components.find((x) => x.({p}))
   }
   assert {
     twice_reversed := [1, 2]
@@ -42,28 +88,34 @@ Compiler := class {
     }
     assert Own_reverse().reverse.reverse == "desrever"  // CO41 a class's own reverse, reversed twice, was taken for a list's
   }
-  assert Compiler.default  // CO20 there is no default level
-  logic := {
-    !!{a} => a as boolean
-    {a} && {a} => a
-    {a} || {a} => a
+  assert [1, 2, 3].map((x) => x + 1).map((x) => x * 2) == [4, 6, 8]  // CO53 two maps fused do not answer what they did one after the other
+
+  // What nothing reads, made only when something does: a statement that does nothing outside what it makes and is not the
+  // last, a name given what does nothing outside and read nowhere after; a style where nothing paints; where a value was
+  // written, where nothing asks
+  demanded := {
+    {statement: Effectless}\n{rest} => rest
+    {name} := {value: Effectless}\n{rest: Program{!~= `{name}`}} => rest
+  }
+  unpainted := {
+    {shown} {`^`}{style} => shown
+  }
+  unlocated := {
+    {located} @ {location} => located
   }
 
   memoised := {
     remembered := {}
     assert Compiler.memoised.remembered.fields.count == 1  // CO36 a pure application with the same arguments is not remembered once
-    {f: Pure}({arguments}) => remembered[(f, arguments)] ??= f(arguments)
+    {f: Pure}({arguments: Known}) => remembered[(f, arguments)] ??= f(arguments)
   }
   // A pure application is remembered by its arguments; the level is removable
   assert Compiler.memoised  // CO33 there is no memoising level
 
-  // Staging: what is known at build is worked out there. A statement whose text is known is the rule that reads it,
-  // applied; an operator on two known values, what it answers; a branch on a known condition, the branch taken.
+  // Staging: what is known at build is worked out there: an operator on two known values, what it answers; a branch on a known
+  // condition, the branch taken
   staged := {
-    {statement: Expression.Statement{.written}} => statement.statement
-    // (two values written as they are, `2 + 3`: what the operator answers of them; `Literal` the type of a value written as it
-    // is, which reads none yet, so this waits for it (written `{literal a}`, a hole named so, it read every `x < 1`))
-    {a: Literal{.known}} {operator} {b: Literal{.known}} => ({a}) {operator} ({b})
+    {a: Known} {operator} {b: Known} => ({a}) {operator} ({b})
     if true {then} else {otherwise} => then
     if false {then} else {otherwise} => otherwise
     if false {then} => None
@@ -75,37 +127,34 @@ Compiler := class {
     unless {condition} {then} => if !condition {then}
   }
   assert (@ray unless c { f() }) as Program{O: Compiler.lowered} == (@ray if !c { f() })  // CS2 unless is not written as if
-  // A rule of one statement, applied where it is known: its statement, its parameters what it is given
+  // A function written where it is applied: its parameters given what it is applied to, its body there; a block that declares
+  // nothing, its statements where it is
   inlined := {
-    {function: Expression.Rule{.statements.count == 1}}({arguments}) => function.statements.first.with(function.parameters, arguments)
+    (({parameters}) => {body})({arguments}) => {
+      ({parameters}) := ({arguments})
+      {body}
+    }
+    {`{`}{block: Program{!~= ` := `}}{`}`} => block
   }
-  // What is never reached: after a return; a statement whose value nothing reads and that does nothing
+  // What is never reached: after a return
   pruned := {
-    return {value}, {unreached} => return value
-    {unread: Pure{!.read}} => []
+    return {value}\n{unreached} => return value
   }
 
-  levels => [none, default, folding, logic, memoised, staged, lowered, inlined, pruned]
-  assert Compiler.levels.count == 9  // CO32 there are other than nine levels
+  // The level the language is read with: each of these
+  default := folding + logic + fused + lowered + pruned
+  assert Compiler.default !== None  // CO20 there is no default level
+
+  levels => [none, default, folding, logic, fused, demanded, unpainted, unlocated, memoised, staged, lowered, inlined, pruned]
+  assert Compiler.levels.count == 13  // CO32 there are other than thirteen levels
   assert Compiler.levels.contains(Compiler.memoised)  // CO34 the memoising level is not one of the levels
 
   // (a level made of two, `A + B`: reduced by the first, then what that gives by the second)
   // (the value read where it is given, then reduced: not the code that gives it read at the level)
   // (a value, read by the level's own rules: one of one hole whose type it is (`{text: String} => …`) takes it)
   static reduced (reduced_value, level) => (level is Compiler.Composition) ? Compiler.reduced(reduced_value: Compiler.reduced(reduced_value: reduced_value, level: level.components.hierarchy.first), level: level.components.hierarchy.last) : ((external level_reads level reduced_value) ?? (level reducing reduced_value))
-  // (a level as a scope, what the language is read with: one node made of each of its parts, the first's rules seen first)
-  static parts_of (parts_level) => (parts_level is Compiler.Composition) ? [Compiler.parts_of((parts_level).first), Compiler.parts_of((parts_level).second)] : [parts_level]
-  static scope_of (scope_level) => (scope_level is Compiler.Composition) ? Compiler.scope_made_of(scope_level) : scope_level
-  static scope_made_of (scope_level) => {
-    scope_made := Compiler.fresh_scope(None)
-    scope_parts := Compiler.parts_of(scope_level)
-    scope_at := scope_parts.reverse.head
-    while scope_at {
-      (scope_made) &+= (scope_at.value)
-      scope_at = scope_at.next
-    }
-    scope_made
-  }
+  // (a level as a scope, what the language is read with: one made of each of its parts, the first's rules seen first)
+  static scope_of (scope_level) => (scope_level is Compiler.Composition) ? level_scope_of(scope_level) : scope_level
   // (a closure run with a level in scope: its code read with the level's rules first, in this thread, until it answers)
   static run_under (run_closure, run_level) => {
     external level_in Compiler.scope_of(run_level)
@@ -113,8 +162,6 @@ Compiler := class {
     external level_out
     run_answer
   }
-  // (a node of its own each time: `Node &+ { }` written in a rule is read once)
-  static fresh_scope (fresh_none) => Node &+ { }
   Composition := class (first, second) => {
     components => (hierarchy: [first, second])
     // (and another after it, `A + B + C`: the three, in that order)
@@ -132,6 +179,12 @@ Node &+= {
   // read only on one: `+ 1` alone is a section)
   {this} + {other} => (this).composed(other)
 }
+// (of a composition, `A + B`: a scope of its own given each part's rules, the second's, then the first's, so the first's are
+// seen first; a node made of nothing else, what a function called bare (not in a method, which would make it of what that
+// method is read on) makes to run in, each time: not made of Node, whose rules would be read first everywhere)
+level_scope (level_none) => (.)
+level_scope_of (scope_level) => level_scope_given(level_scope(None), scope_level)
+level_scope_given (scope_made, scope_level) => (scope_level is Compiler.Composition) ? level_scope_given(level_scope_given(scope_made, (scope_level).second), (scope_level).first) : ((scope_made) &+= (scope_level))
 // A program written as code, `Program(code: { … })`: the code kept as written, read when it runs (a block given to it is
 // read where it is written, into a node: nothing to run again)
 Program(code: {`{`}{program_code}{`}`}) ^keyword => Program(running: (() => ({program_code})))

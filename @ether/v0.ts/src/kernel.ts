@@ -2049,9 +2049,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
   function reading(t: number, s: number, e: number, rule: number, closure: number, vis: number, self: number, want: number, stop: number, refuse: number, on: number): number {
     s = skip(s, e); while (e > s && b(e - 1) <= 32) e--;
     if (DEBUG) count(K_READING);
-    // (the text a value is spliced in as while what a level read of it runs (`external level_reads L v`): v, kept; before
-    // what was read of that text, which is the level's reading of it)
-    if (w(t + T_SPLICED) && s === w(t + T_SPLICE) && e === w(t + T_SPLICE) + 2) { const rv = alloc(READ); put(rv, K_HELD); put(rv + 4, s); put(rv + 8, e); put(rv + 12, -5); put(rv + 16, w(t + T_SPLICE_V)); return rv; }
+    // (the text a value is spliced in as while what a level read of it runs (`external level_reads L v`): v; before what
+    // was read of that text, which is the level's reading of it)
+    if (w(t + T_SPLICED) && s === w(t + T_SPLICE) && e === w(t + T_SPLICE) + 2) { const rv = alloc(READ); put(rv, K_HELD); put(rv + 4, s); put(rv + 8, e); put(rv + 12, -5); return rv; }
     // (what a hole being declared reads, the names in it: no reader reads them)
     if (w(t + T_HOLE)) refuse |= READER;
     // (read once: the same text, with the same rules and names, is the same reading; not one in a frame, nor one nothing read)
@@ -2401,7 +2401,7 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
     if (k === K_HELD) {
       const h = w(r + 12);
       if (h === -1) return w(self + F_CALLER);
-      if (h === -5) return w(r + 16);
+      if (h === -5) return w(t + T_SPLICE_V);
       // (`this`: what it was read on; else what it is read in, and in a method, a node made there is what that is read on)
       // (but a class called, `x.C(…)`: the class (what it makes is of it), not x)
       if (h === -2) { const th = w(self + F_THIS), rc = w(self + F_RECEIVER), it = run_node(th) ? w(th + N_ALSO) : th; return rc !== th && !classed(it) ? rc : it; }

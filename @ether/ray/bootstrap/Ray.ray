@@ -202,7 +202,7 @@ Iterable &+= {
   assert [1, 2].reverse.reverse == [1, 2]  // CO27 turned around twice is not as it was
   assert ([1, 2, 3]).reverse == [3, 2, 1]  // IT5 turned around, one, two and three are not three, two and one
   assert ([1, 2, 3]).reverse.count == 3  // IT7 turning a list around loses something
-  sort => .empty ? [] : .rest{< this.first}.sort, .first, .rest{>= this.first}.sort
+  sort => .empty ? () : .rest{< this.first}.sort, .first, .rest{>= this.first}.sort
   assert [2, 1].sort.sort == [1, 2]  // CO30 sorted twice is not sorted once
   assert [3, 1, 2].sort == [1, 2, 3]  // IT43 sorted, three, one and two are not one, two and three
   assert [3, 1, 2].sort.last == 3  // IT44 sorted, the last is not the largest
@@ -231,7 +231,7 @@ Iterable &+= {
     }
     sorted_made
   }
-  unique => .empty ? [] : .first, .rest{!= this.first}.unique
+  unique => .empty ? () : .first, .rest{!= this.first}.unique
   assert ([1, 2, 1]).unique.count == 2  // IT11 each thing once is not two
   assert ([1, 2, 1]).unique == [1, 2]  // IT12 each thing once is not in the order first seen
 

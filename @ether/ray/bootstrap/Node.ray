@@ -307,9 +307,18 @@ read_within (text, pattern) => (
     at_start := pattern is Anchored && pattern.at_start
     at_end := pattern is Anchored && pattern.at_end
     wanted := pattern is Anchored ? pattern.pattern : pattern
-    // (at each place in it, from the first: a beginning of the text there that is what is wanted, the shortest first)
-    start := text
+    // (at each place in it, from the first: a beginning of the text there that is what is wanted, the shortest first; none
+    // tried when a text the pattern reads only where it is written is not in it at all)
+    start := texts_needed(wanted).every((needed) => text ~= needed) ? text : None
     index := 0
+    // (a text: where it begins, at each place once)
+    if literal_text(wanted) && !at_end {
+      while (start !== None && found.not) {
+        if text_begins(start, wanted) { found = start.until(text_past(start, wanted)) ~~ .index = index }
+        start = (at_start || start.empty) ? None : start.rest
+        index = index.succ
+      }
+    }
     while (start !== None && found.not) {
       cut := start
       while (cut !== None && found.not) {
@@ -323,6 +332,31 @@ read_within (text, pattern) => (
   }
   found
 )
+
+// (the texts a structure reads only where they are written: those among its positions, and its positions' types', each
+// structure once; not what a repeat or one of alternatives reads, which may be none)
+texts_needed (needed_of) => {
+  needed_found := Array.new
+  needed_seen := Array.new
+  needed_todo := Array.new.append(needed_of)
+  while !(needed_todo.empty) {
+    needed_type := needed_todo.first
+    needed_todo = needed_todo.rest
+    if ((needed_type).listing === true) && !((needed_type).is_range === true) && !repeat_type(needed_type) && !(needed_seen.contains(needed_type)) {
+      needed_seen.append(needed_type)
+      needed_at := (needed_type).head
+      while needed_at {
+        if literal_text(needed_at.value) {
+          needed_found.append(needed_at.value)
+        } else {
+          needed_todo.append(field_type_of(needed_at))
+        }
+        needed_at = needed_at.next
+      }
+    }
+  }
+  needed_found
+}
 
 Node &+= {
   right-to-left trivially => instance ? this : ?

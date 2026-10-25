@@ -357,3 +357,8 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   (`.location |= 5` through the `|=` rule) is not the `~~` block's. `"W" @ 5` without brackets does not call the method.
   Also: a field holding None is not a place (`t.marked = 5`: "a left side answers a value, not a place"), and at a file's top
   level `u := x ~~ (.m = v)` sets nothing (as a statement it does).
+- **`Program(…): T` is no Program answering T** (Choice.ray `choose {type} => Program(name: "choose"): type`; UI239, UI270, CN8):
+  `{x}: {type} => external unset x type` takes any left side as a place, so `(Program(name: "choose"): String).name` is unset
+  and it is no Choice; Program's `returns` (Program.ray, "`Program(…): T`") is never given. Tried: a rule
+  `{typed_program: Program}: {program_returns}` (setting `returns`): it never fires, in a statement, a function's body or
+  brackets (the typed hole does not take `Program(…)` written; an untyped one would replace every `x: T`).

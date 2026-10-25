@@ -52,6 +52,17 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A named argument given a function is not a local of the caller** (`nw (wrapped) => nm(named_one: wrapped)`, `nw(3)`;
   a `:=` local the same; a constant or a global holds): before named arguments were taken too. A class given one so holds
   it (NA15). Repro ~/.cache/ray-scratch/selfhost/na16.ray (A, B, D, E).
+- **A closure made inside `Node({ … })` in a class header does not see the header's names** (Expression: `global :=
+  Node({ rules[k] := (caller) => … })`, and `hello`'s closure in `Node`'s `rules := { … }`): called later (a statement run),
+  `Statements`, `Program`, `Node`, any header local read there is not found (an unknown word, a fresh unset place), so
+  `(rhs: Statements(Node(in: this)) = rule.RHS)` in a defined rule's body keeps its text and `external .` in it never runs.
+  The same closure written directly in the header sees them, and a closure in `Node({ … })` at a file's top level sees the
+  file's names (selfhost/nb1.ray). Repro (5 s): ~/.cache/ray-scratch/selfhost/mx5.ray (a mini Expression: header locals
+  `pre_val`, `hdr_5`, `Statements` unseen in the keyed function). Cause: the header's names are members of the instance being
+  read (its code read in it, `x.( … )`), and the Node block is read in the Node instance in turn: only one writer
+  (`T_WRITER`) is kept, and a closure made there loses the outer one. Tried (scratch t227, not landed): a take records the
+  writer it was taken under (`T_WRIT`, TAKE 36 → 40), used when its code is read and in the inlined-code lookup
+  (`R_IN2_F`, its caller frames): the frames that made the closure are gone by the time it runs.
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
   ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).
 - **Reading a text as a class by its header** (`"v0.1.4-E2027.0A.4" as Version`, `Language.part_written` of a header

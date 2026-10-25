@@ -113,3 +113,23 @@ assert {
   Dependent := class (open: String, \s, close: open) => { }
   assert (`a a` as Dependent).close == `a`  // EX8 a field's type does not see a field before it
 }
+assert {
+  Scoped := class (
+    (
+      statements: (
+        Seen := 46
+        Node := class (marked?: Node) => { mark := 1 }
+        Inner := class (in?: Inner) => {
+          rules := { got := (x) => Seen }
+          made => Node()
+        }
+        got_seen := Inner().rules.got(0)
+        made_mark := Inner().made.mark
+        String
+      )
+    )
+  ) => { }
+  scoped := "x" as Scoped
+  assert (external member (scoped) (`got_seen`)) == 46  // EX10 a closure in a class written in a header's statements does not see the header's names
+  assert (external member (scoped) (`made_mark`)) == 1  // EX11 a class's `Node` written in a header's statements is the language's
+}

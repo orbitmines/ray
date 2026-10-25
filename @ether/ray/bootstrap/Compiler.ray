@@ -194,6 +194,8 @@ level_scope_given (scope_made, scope_level) => (scope_level is Compiler.Composit
 Program(code: {`{`}{program_code}{`}`}) ^keyword => Program(running: ((program_scope = None) => (program_scope === None) ? ({program_code}) : (Compiler.scope_of(program_scope)).({program_code})), read_on_level: true)
 // (a setting, `p{O: level}`: the same program (of the class, a new one), read with that level)
 {setting_of}{`{`}O: {level}{`}`} ^punctuation => Program(code: (setting_of).code, running: (setting_of).running, read_on_level: (setting_of).read_on_level) ~~ (.O = ({level}))
+// (and written with its level, `Program(code: { … }){O: L}`: read on L as written there)
+Program(code: {`{`}{program_code}{`}`}){`{`}O: {program_level}{`}`} ^keyword => Program(running: ((program_scope = None) => (Compiler.scope_of({program_level})).({program_code})), read_on_level: true) ~~ (.O = ({program_level}))
 // (what a program answers when called (outside Program, whose `{this}()` would read its `running()`): its code run (read on its level when it was written with one, else under it), what
 // that answers read by the level; given by name, a list it answers is not composed into the level after it)
 program_answered (answered_program) => {

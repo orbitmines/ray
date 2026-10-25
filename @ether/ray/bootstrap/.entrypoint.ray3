@@ -1418,7 +1418,7 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
     // follows reads (a right side of more than one character, `{b}` of `{a} => {b} => x`); asked for only then)
     if ((seq_type).listing === true) && !((seq_type).is_range === true) && (seq_first_way !== None) {
       seq_longer := (seq_first_way.value).reading_left
-      while !(seq_longer.empty) {
+      while !(seq_longer.empty) && !text_begins(seq_longer, "\n") {
         seq_longer = seq_longer.rest
         seq_chain_was := reading_chain
         reading_chain = (seq_type) chained_onto (seq_chain_was)
@@ -1455,7 +1455,7 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
         return ((seq_value) taken_before (seq_rest) named (seq_name))
       }
     }
-    seq_cut = (seq_one || seq_cut.empty) ? None : seq_cut.rest
+    seq_cut = (seq_one || seq_cut.empty || text_begins(seq_cut, "\n")) ? None : seq_cut.rest
   }
   None
 }
@@ -1681,7 +1681,8 @@ ways_of (ways_boxed, ways_from, ways_into, ways_only) => {
     if (ways_by) fits_read (ways_span) {
       ways_found.append((ways_cut) left_after ((ways_by) leaf_read (ways_span)) named (None))
     }
-    ways_cut = (ways_one || ways_cut.empty) ? None : ways_cut.rest
+    // (a span of the line it begins on: what reads text without an end of its own reads up to a newline)
+    ways_cut = (ways_one || ways_cut.empty || text_begins(ways_cut, "\n")) ? None : ways_cut.rest
   }
   ways_found
 }
@@ -2367,7 +2368,7 @@ dynamics := None
 {lone_read_type} lone_read {lone_read_given} ^keyword => (((lone_read_given).textual === true) && ((lone_read_type).conjoins === true)) ? (conjunction_read(lone_read_type, lone_read_given) ?? lone_read_given) : ((((lone_read_given).textual === true) && !((lone_read_type).textual === true) && (named_list(lone_read_type) || ((lone_read_type).repeats === true))) ? ((lone_read_type) read_span (lone_read_given)) : lone_read_given)
 // (what a definition answers given its value: a left side made of names answers a list of their places (`(a, b) := list`, a
 // call's parameters): each the value in its place)
-{given} given {value} ^keyword => ((value).writes === true) ? written_parts((given).head, (value).written_value, (value).written_literals) : ((given).listing === true) ? ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value))) : given
+{given} given {value} ^keyword => ((given).listing === true) ? (((value).writes === true) ? written_parts((given).head, (value).written_value, (value).written_literals) : ((((value).textual === true) && written_among((given).head)) ? (text_read((given).head, value) ? given : (ERROR a text does not read as what it is given to)) : ((given) each takes (value)))) : given
 // (a text is destructured only by places with a text written among them, `(a, `-`, b)`: a parameter list given a text, or
 // String itself (which is textual), takes it whole)
 written_among (at) => at ? (written_text(at.value) || literal_text((at.value).type) || positioned_type(at.value) || written_among(at.next)) : false
@@ -2947,10 +2948,10 @@ Iterable := class { }
 Array := class: Iterable { }
 Array &+= {
   new => Array &+ {
-    head := None
-    tail := None
-    listing := true
-    spread := false
+    external member (.) (`head`) (None)
+    external member (.) (`tail`) (None)
+    external member (.) (`listing`) (true)
+    external member (.) (`spread`) (false)
     // (a list as a type, `{d: "0".."9"}`: what reads as one of its values, that value)
     {written} => (.).one_written(`{written}`)
   }

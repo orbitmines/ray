@@ -29,11 +29,15 @@ Expression := class (
         // (itself, as its rules' bodies name it: `this` there is what a statement calls them on)
         node := this
         rules := {
-          [rule: GRAMMAR_RULE.LHS] := (caller) =>
-            rules[[rule.LHS]] :=
-              (caller) => (rhs: Statements(Node(in: node)) = rule.RHS)(Program(caller: caller))
+          [rule: GRAMMAR_RULE.LHS] := (caller) => {
+            // (the node its body is read in, kept with it: what it reads there, its statements, is its body)
+            body := Node(in: node)
+            rules[[rule.LHS]] := (caller) => (rhs: Statements(body) = rule.RHS)(Program(caller: caller))
+            rules[[rule.LHS]].body = body
+          }
         }
         reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
+        keys => (in === None) ? rules.keys : ((rules.keys === None) ? in.keys : (rules.keys | in.keys))
       }
       // A program running: what applied it, where it is.
       Program := class (caller?: Program, at?: Statement) => { }
@@ -49,7 +53,7 @@ Expression := class (
       // order, each given what applies them.
       Statement := class (
         leading_whitespace: (\s | \n)[],
-        {statement: concurrently context.reading(.)}: context.rules.keys
+        {statement: concurrently context.reading(.)}: context.keys
       ) => {}
       // (the statements as read kept on the node they are read in, `statements`: what each read, its rule and what that took)
       Statements (context: Node) => dynamically Statement[] & (caller: Program) => (

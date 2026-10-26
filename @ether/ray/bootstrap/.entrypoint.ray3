@@ -99,6 +99,11 @@ Name := {
   // (nothing holds no member: a default of nothing keeps no type, `x: T = None`)
   ({name}.type = type) unless value === None
 }
+// (a declaration called, `(rhs: Statements(…) = text)(caller)`: what it declared, as its type reads it, called)
+({declared_name}: {declared_type} = {declared_value})({declared_called}) ^punctuation => {
+  ({declared_name}: {declared_type} = {declared_value})
+  {declared_name}({declared_called})
+}
 // A call's arguments (§10.1): each a value, or one given by name, `f(x: 5)`: the callee's `x` given 5, read where it is written.
 // (read by this type: what binds looser where they are written (`,`) first, each part then read here)
 Arguments := {
@@ -1047,7 +1052,7 @@ matching_in (matching_of, matching_text) => {
       // (a kept key called by what it read: here, where `.` is the reading (the key's own call rule sees the key, a part of it))
       if (external member (matching_one) (`entry_called`)) !== None {
         (matching_read) &+= {
-          {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
+          {this}({entry_argument}) => ((external member (.) (`ran_early`)) === true) ? (external member (.) (`ran_early`) (false)) : (((external member (.) (`ran_early`) (pending_running)) || true) ? ((((.).entry_called).kept).with_reading((.))(entry_argument)) : None)
         }
       }
       if matching_first === None {
@@ -1263,12 +1268,18 @@ pending_on (pending_up, pending_one) => {
   external member (pending_made) (`one`) (pending_one)
   pending_made
 }
+// (while what was read is run before the rest is read: what a key read and runs then is not run again when all of them run,
+// in order, after; once (a jump back runs it again))
+pending_running := false
 run_pending (pending_at, pending_runs) => {
   if pending_at !== None {
     run_pending((pending_at).up, pending_runs)
     pending_statement := (pending_at).one
     unless (pending_statement.ran) === true {
+      pending_running_was := pending_running
+      pending_running = true
       ((pending_runs).conjoined.last).on(Array.new.append(pending_statement)) after ((pending_runs).applied_args)
+      pending_running = pending_running_was
       external member (pending_statement) (`ran`) (true)
       reading_ran = true
     }
@@ -1469,17 +1480,6 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
     reading_runs = seq_runs_was
     reading_ran = seq_ran_was
     (external dynamic_out) if seq_dynamic !== None
-    if seq_ran_some && (seq_repeated !== None) {
-      seq_unran := Array.new
-      seq_unran_at := seq_repeated.head
-      while seq_unran_at {
-        if !(((seq_unran_at.value).ran) === true) {
-          seq_unran.append(seq_unran_at.value)
-        }
-        seq_unran_at = seq_unran_at.next
-      }
-      seq_repeated = seq_unran
-    }
     if seq_repeated !== None {
       seq_repeated_value := (seq_type) applying_to (seq_repeated)
       (seq_repeated_value) given_to (seq_into) as (seq_name)
@@ -2319,7 +2319,7 @@ Holding := class (key) => {
     if (keeping_key).listing {
       external member (keeping_key) (`entry_called`) (keeping_entry)
       (keeping_key) &+= {
-        {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
+        {this}({entry_argument}) => ((external member (.) (`ran_early`)) === true) ? (external member (.) (`ran_early`) (false)) : (((external member (.) (`ran_early`) (pending_running)) || true) ? ((((.).entry_called).kept).with_reading((.))(entry_argument)) : None)
       }
     }
   }

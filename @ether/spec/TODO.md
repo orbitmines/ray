@@ -56,11 +56,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   caller))] := …`): with it, a language read as Expression has no members at all; `rules[[rule.LHS]]`, its left side as
   written, reads (so a left side's holes are not read as holes yet). Repro: ~/.cache/ray-scratch/selfhost/ev0.ray (the
   library's form) vs ev1.ray, through probe3 with ROOT set to the tree's bootstrap (~3 min each).
-- **Two statements where the first's last part could take the next line read as one, or not at all**
-  (`"external .\nexternal &"`: the external key's `args?: Node[]` takes `\nexternal &`; `hello => external .\nhello`: the
-  rule's right side takes `\nhello`): "the longest rule that reads it" reads the whole text as one statement. Open design
-  question: does a statement end at its line (a part of a key not taking a newline), or does the list prefer the shortest
-  spans (`repeated_through` takes the first way, which here reads everything)? Repro: selfhost/mx90.ray (direct, 70 s).
 - **A method called inside a keyed rule a statement runs runs that rule again** (`ctx.reading(rr)` in the rule's body):
   the key's value is called in its reading's node, whose rule `{this}({entry_argument})` reads the body's `x(y)` as a
   call of the key. Calling it from a function outside the reading (tried in 1a46668b, reverted) stopped Expression's

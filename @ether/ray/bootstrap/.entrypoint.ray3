@@ -1277,6 +1277,9 @@ run_pending (pending_at, pending_runs) => {
 reading_ran := false
 // (Ts one after another, all of a text: the first T the shortest span it reads whole after which the rest reads so too; a
 // list of their values, none when it does not read)
+// (the spaces a line begins with; the first line of a text, past the line ends it begins with)
+leading_spaces (spaces_text) => (!(spaces_text.empty) && ((spaces_text.first) == 32)) ? 1 + leading_spaces(spaces_text.rest) : 0
+first_line_of (line_text) => ((line_text.empty) || !((line_text.first) == 10)) ? line_text : first_line_of(line_text.rest)
 repeated_through (through_each, through_text, through_into) => {
   through_found := None
   if through_text.empty {
@@ -1286,7 +1289,30 @@ repeated_through (through_each, through_text, through_into) => {
     // begins one, or nothing does), then any other)
     through_first := ((through_each) ways_in (through_text) into (through_into) first (true)).head
     through_start := (through_first === None) ? None : (through_first.value).reading_left
-    if (through_first !== None) && !((through_start).count == (through_text).count) {
+    // (its first way going on past a line the next one is not deeper than, or none: where that line ends first, the
+    // shortest that reads whole with the rest more of them (a line deeper continues it; a text written over lines reads
+    // only whole))
+    through_indent := leading_spaces(first_line_of(through_text))
+    through_cut_at := through_text
+    through_least := (through_first === None) ? 0 : (through_start).count
+    while (through_found === None) && !(through_cut_at.empty) && !((through_cut_at).count == through_least) {
+      through_cut_at = through_cut_at.rest
+      if !(through_cut_at.empty) && !((through_cut_at).count == through_least) && ((through_cut_at.first) == 10) && (leading_spaces(through_cut_at.rest) <= through_indent) {
+        through_line := (through_each) whole_read (through_text.until(through_cut_at)) into (through_into)
+        if through_line !== None {
+          through_line_was := reading_pending
+          reading_pending = (reading_runs !== None) ? pending_on(reading_pending, through_line) : reading_pending
+          through_after := repeated_through(through_each, through_cut_at, through_into)
+          reading_pending = through_line_was
+          if (through_after === None) && (reading_runs !== None) && !((through_line.ran) === true) {
+            run_pending(pending_on(reading_pending, through_line), reading_runs)
+            through_after = repeated_through(through_each, through_cut_at, through_into)
+          }
+          through_found = (through_after !== None) ? through_after.prepend(through_line) : None
+        }
+      }
+    }
+    if (through_found === None) && (through_first !== None) && !((through_start).count == (through_text).count) {
       through_rest := repeated_through(through_each, through_start, through_into)
       through_found = (through_rest !== None) ? through_rest.prepend(way_value(through_first.value)) : None
     }

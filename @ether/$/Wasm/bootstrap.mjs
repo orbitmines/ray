@@ -1,7 +1,8 @@
-// The native engine's host: what the platform gives it (memory, `log`), a text in, the bytes it writes out.
-//   node .entrypoint.mjs                 rebuild .entrypoint.wasm from .entrypoint.ray, once it rebuilds itself the same
-//   node .entrypoint.mjs check           whether .entrypoint.wasm, reading .entrypoint.ray, writes itself
-//   node .entrypoint.mjs FILE OUT        read FILE, write what it writes to OUT
+// The Wasm level's interim engine, until the native engine runs the full language and builds $/Wasm.project.ray itself.
+// Its host: what the platform gives it (memory, `log`), a text in, the bytes it writes out.
+//   node bootstrap.mjs                 rebuild bootstrap.wasm from bootstrap.ray, once it rebuilds itself the same
+//   node bootstrap.mjs check           whether bootstrap.wasm, reading bootstrap.ray, writes itself
+//   node bootstrap.mjs FILE OUT        read FILE, write what it writes to OUT
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 const here = (name) => fileURLToPath(new URL(name, import.meta.url));
@@ -16,15 +17,15 @@ export const read = async (engine, text) => {
   return { bytes: u8.slice(OUT, OUT + n), keys: i32[NKEYS / 4] };
 };
 const [mode, out] = process.argv.slice(2);
-const source = readFileSync(here('.entrypoint.ray')), seed = readFileSync(here('.entrypoint.wasm'));
+const source = readFileSync(here('bootstrap.ray')), seed = readFileSync(here('bootstrap.wasm'));
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 if (mode === undefined || mode === 'check') {
   const t0 = performance.now();
   const once = (await read(seed, source)).bytes, twice = (await read(once, source)).bytes;
   const ms = Math.round(performance.now() - t0);
   if (!same(once, twice)) { console.log(`not a fixpoint: ${once.length} bytes, then ${twice.length}`); process.exit(1); }
-  if (mode === 'check') { console.log(same(once, seed) ? `fixpoint: .entrypoint.wasm writes itself (${seed.length} bytes, ${ms} ms)` : `.entrypoint.ray changed: rebuild (${seed.length} → ${once.length} bytes)`); process.exit(same(once, seed) ? 0 : 1); }
-  writeFileSync(here('.entrypoint.wasm'), once); console.log(`rebuilt: ${once.length} bytes, a fixpoint (${ms} ms)`);
+  if (mode === 'check') { console.log(same(once, seed) ? `fixpoint: bootstrap.wasm writes itself (${seed.length} bytes, ${ms} ms)` : `bootstrap.ray changed: rebuild (${seed.length} → ${once.length} bytes)`); process.exit(same(once, seed) ? 0 : 1); }
+  writeFileSync(here('bootstrap.wasm'), once); console.log(`rebuilt: ${once.length} bytes, a fixpoint (${ms} ms)`);
 } else {
   const { bytes } = await read(seed, readFileSync(mode)); writeFileSync(out, bytes); console.log(`${bytes.length} bytes`);
 }

@@ -216,14 +216,18 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   // An Expression's node as Expression reads it (`none` on it): its statements the first function, each of its rules the
   // next, in order, a rule its body's statements; a statement read by one of the given things (`external .`, `&`, its
   // reading's `rule`), what `none` writes for it; any other a call of the rule its key is
-  static expressed (read_node, pages, free) => Wasm.module_of(pages: pages, free: free, bodies: Wasm.bodies_of(keys: read_node.rules.keyed.map((entry) => entry.key), statement_lists: Array.new.append(read_node.statements).joined(read_node.rules.keyed.map((entry) => Wasm.body_of(entry)))))
+  static expressed (read_node, pages, free) => Wasm.module_of(pages: pages, free: free, bodies: Wasm.bodies_of(held_rules: read_node.rules.keyed, statement_lists: Array.new.append(read_node.statements).joined(read_node.rules.keyed.map((entry) => Wasm.body_of(entry)))))
   // (a rule's body as Expression keeps it, on what it keeps (`kept`): the node it is read in, its statements once it is
   // applied; none yet, none. Read in two steps: the one read inside the other answers another node)
-  static body_of (entry) => Wasm.kept_statements(external member (entry) (`kept`))
-  static kept_statements (kept) => ((external member (kept) (`body`)).statements) ?? Array.new
-  static bodies_of (keys, statement_lists) => statement_lists.empty ? Array.new : Array.new.append(Wasm.statement_ops_of(keys: keys, statements: statement_lists.first)).joined(Wasm.bodies_of(keys: keys, statement_lists: statement_lists.rest))
-  static statement_ops_of (keys, statements) => statements.empty ? Array.new : Array.new.append(Wasm.statement_op(keys: keys, statement: statements.first)).joined(Wasm.statement_ops_of(keys: keys, statements: statements.rest))
-  static statement_op (keys, statement) => (Wasm.given_of(statement) === None) ? [0x20, 0, 0x10, Wasm.key_index(keys: keys, key: (statement.statement).matched_key, at: 0) + 1, 0x21, 2] : Wasm.external_ops(Wasm.given_of(statement))
+  static body_of (entry) => (Wasm.body_node(entry).statements) ?? Array.new
+  static body_node (entry) => Wasm.kept_body(external member (entry) (`kept`))
+  static kept_body (kept) => external member (kept) (`body`)
+  static bodies_of (held_rules, statement_lists) => statement_lists.empty ? Array.new : Array.new.append(Wasm.statement_ops_of(held_rules: held_rules, statements: statement_lists.first)).joined(Wasm.bodies_of(held_rules: held_rules, statement_lists: statement_lists.rest))
+  static statement_ops_of (held_rules, statements) => statements.empty ? Array.new : Array.new.append(Wasm.statement_op(held_rules: held_rules, statement: statements.first)).joined(Wasm.statement_ops_of(held_rules: held_rules, statements: statements.rest))
+  static statement_op (held_rules, statement) => Wasm.entry_op(held_rules: held_rules, statement: statement, at: Wasm.key_index(keys: held_rules.map((entry) => entry.key), key: (statement.statement).matched_key, at: 0))
+  // (by what the rule its key is keeps: the first of a node's rules the one that makes rules, its statement a definition,
+  // written when the module is (nothing at run time); one with a body a call of its function; one without, a given thing)
+  static entry_op (held_rules, statement, at) => (at == 0) ? [] : ((Wasm.body_node(held_rules[at]) === None) ? Wasm.external_ops(Wasm.given_of(statement)) : [0x20, 0, 0x10, at + 1, 0x21, 2])
   // (what a statement's reading names of the given things: its `rule`, on it or on the key's reading it is)
   static given_of (given_statement) => ((given_statement).rule) ?? (((given_statement).statement).rule)
   // (a rule's statements, Expression's: each a case of a `br_table` in a loop, the innermost first, where it is (local 1)

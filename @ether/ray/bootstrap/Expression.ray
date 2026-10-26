@@ -26,12 +26,18 @@ Expression := class (
     statements: (
       // A node: its rules by their heads; what it does not read, what it is in reads.
       Node := class (in?: Node) => {
+        // (itself, as its rules' bodies name it: `this` there is what a statement calls them on)
+        node := this
         rules := {
-          [rule: GRAMMAR_RULE.LHS] := (caller) =>
-            rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
-              (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
+          [rule: GRAMMAR_RULE.LHS] := (caller) => {
+            // (the node its body is read in, kept with it: what it reads there, its statements, is its body)
+            body := Node(in: node)
+            rules[[rule.LHS]] := (caller) => (rhs: Statements(body) = rule.RHS)(Program(caller: caller))
+            rules[[rule.LHS]].body = body
+          }
         }
         reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
+        keys => (in === None) ? rules.keys : ((rules.keys === None) ? in.keys : (rules.keys | in.keys))
       }
       // A program running: what applied it, where it is.
       Program := class (caller?: Program, at?: Statement) => { }
@@ -47,9 +53,13 @@ Expression := class (
       // order, each given what applies them.
       Statement := class (
         leading_whitespace: (\s | \n)[],
-        {statement: concurrently context.reading(.)}: context.rules.keys
+        {statement: concurrently context.reading(.)}: context.keys
       ) => {}
-      Statements (context: Node) => dynamically Statement[] & (caller: Program) => .statement#.for .(caller)
+      // (the statements as read kept on the node they are read in, `statements`: what each read, its rule and what that took)
+      Statements (context: Node) => dynamically Statement[] & (caller: Program) => (
+        context.statements = .
+        .statement#.for .(caller)
+      )
 
       Statements(global)(Program())
     )
@@ -108,4 +118,24 @@ assert !(`{ }` is `{ }`.map{== \s}(`LHS`))  // EX9 a text's space mapped to LHS 
 assert {
   Dependent := class (open: String, \s, close: open) => { }
   assert (`a a` as Dependent).close == `a`  // EX8 a field's type does not see a field before it
+}
+assert {
+  Scoped := class (
+    (
+      statements: (
+        Seen := 46
+        Node := class (marked?: Node) => { mark := 1 }
+        Inner := class (in?: Inner) => {
+          rules := { got := (x) => Seen }
+          made => Node()
+        }
+        got_seen := Inner().rules.got(0)
+        made_mark := Inner().made.mark
+        String
+      )
+    )
+  ) => { }
+  scoped := "x" as Scoped
+  assert (external member (scoped) (`got_seen`)) == 46  // EX10 a closure in a class written in a header's statements does not see the header's names
+  assert (external member (scoped) (`made_mark`)) == 1  // EX11 a class's `Node` written in a header's statements is the language's
 }

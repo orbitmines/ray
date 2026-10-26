@@ -181,7 +181,38 @@ Each step with the check that says it is done.
    - Check: W1 builds W1 byte for byte, and the library's tests pass on it as on the seed.
 9. **The JIT.**
 
-## 8. Found on the way
+## 8. The native engine (2026-10-26/27)
+
+What there is now, beside the seed (the user: "Just make it work the goal is selfhosting I dont care how we get there"):
+
+- `$/Wasm/bootstrap.ray`: the Wasm level's interim engine, in Ray. Its header is `!language { } {LHS} => {RHS}`. An
+  assembler written as rules (numbers, calls, operators by declaration order, `if`, `when … else`, `while`, locals,
+  memory, functions, sections; `external emit/leb/sleb/const/mark/patch/begin/finish` write bytes) and, in it, the engine.
+  `bootstrap.wasm` is what it builds; `node bootstrap.mjs check` is the fixpoint: the binary reading its source writes
+  itself, byte for byte.
+- The engine reads as the reading model does (`$/Wasm/test/model.mjs`, which agrees with the seed on 618 of
+  `.entrypoint.ray3`'s 628 top-level statements): keys from definitions, holes (typed, in pairs, written against text),
+  pairs and quotes, rank (a definition, then text-led, then the latest), a body read with the rules before it and
+  again with later ones, statements nothing reads read again when their scope gains a rule, chains (`(on).({code})`),
+  methods (`name (p) => body`), a bare hole its value once and a bracketed one its code again, `external .`, `&`,
+  `style`.
+- Checked by `node $/Wasm/test/all.mjs`: every event (a statement and what read it, a key defined, one read again, one
+  left unread, a rule applied) the same as the model's, on the assembler, the seven small languages, `.entrypoint.ray3`,
+  `.entrypoint.ray3` followed by each library file and project (67), and random Expression setups (brackets `{ }`,
+  `( )`, `[ ]`, `< >`, `{{ }}`, `<% %>`; arrows `=>`, `->`, `:=`, `==>`, `~>`; holes, typed holes, pairs, quotes, nested
+  and bracketed bodies, methods, chains, statements nothing reads): 2919 of 2919 the same.
+- Fast without changing an answer: a word table, a table of the bytes pairs begin with, the last plain hole read to its
+  end in one pass, a hole before text tried only where that text is, a key tried only where its first text is and its
+  texts are in order, and the reading's winner (the latest key of the highest rank that reads) found from the highest
+  rank and the latest key down, for keys whose matching only answers (no typed hole). A typed hole runs its type's
+  rule, so its keys are tried in the model's order, those before them settled first. `.entrypoint.ray3` reads in
+  ~100 ms (the model 1.6 s, the seed ~26 s for the language); the engine builds itself in ~35 ms (it was 5 s).
+- Next (the user, 2026-10-27): `.entrypoint.ray`, `.entrypoint.ray3`'s language with only §21.2's externals (`&`, `goto`,
+  labels); the Wasm-specific parts in `$/Wasm.project.ray`; the engine running it, its `assert`s against the seed's
+  results (402 in `.entrypoint.ray3`, 944 in the library), until the native engine builds `$/Wasm.project.ray` itself and
+  the interim engine goes.
+
+## 9. Found on the way
 
 - `jmp_of` reads `kernel.toString()`, the tool's output (esbuild: one line, shadowing locals renamed `kept2`, `0 && x`
   folded), not the source. The reference the kernel read by Ray is held against is `jmp_of` over TypeScript's output of

@@ -83,14 +83,15 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   static Vec := class (elements: Node) => {
     bytes => {
       vec_elements := .elements
-      vec_bytes := Wasm.bytes_all(vec_elements)
-      Wasm.LEB.encoded(vec_elements.count).bytes.joined(vec_bytes)
+      Wasm.LEB.encoded(vec_elements.count).bytes.joined(Wasm.bytes_all(vec_elements))
     }
   }
   // (what anything is written as: a number a byte; a list each of it, in turn; an op its code; anything else, its own bytes)
   // (an op, its code: one byte, or a prefix and a number)
   static bytes_of (x) => (x is Number) ? [x] : (((x).listing === true) ? Wasm.bytes_all(x) : (((x).code !== None) ? Wasm.bytes_of((x).code) : x.bytes))
-  static bytes_all (xs) => xs.empty ? [] : Wasm.bytes_of(xs.first).joined(Wasm.bytes_all(xs.rest))
+  static bytes_all (xs) => xs.map((x) => Wasm.bytes_of(x)).flatten
+  // (bytes after how many they are)
+  static sized (held) => Wasm.LEB.encoded(held.count).bytes.joined(held)
   // (was, before 2026-10-22: `static Name := lazily (size: U32 = text.bytes.count, text: Unicode.UTF-8{bytes.count == size})`;
   // the way back once a text written `as Byte[]` is its UTF-8 bytes and a header writes itself; then `codes` and `bytes` go
   // and WA3 goes back to its form noted at the end of the file)
@@ -99,9 +100,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
     static codes (t) => t.empty ? [] : [t[0]].joined(Wasm.Name.codes(t.rest))
     bytes => {
       name_text := .text
-      name_codes := Wasm.Name.codes(name_text)
-      name_size := Wasm.LEB.encoded(name_codes.count)
-      name_size.bytes.joined(name_codes)
+      Wasm.sized(Wasm.Name.codes(name_text))
     }
   }
 
@@ -112,8 +111,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
     bytes => {
       section_id := .id
       section_held := .data
-      section_data := Wasm.bytes_of(section_held)
-      [section_id].joined(Wasm.LEB.encoded(section_data.count).bytes).joined(section_data)
+      [section_id].joined(Wasm.sized(Wasm.bytes_of(section_held)))
     }
   }
   // (the contents of the section of each id: 0 custom, 1 type, 2 import, 3 function, 4 table, 5 memory, 6 global, 7 export,
@@ -191,8 +189,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   static Written_code := class (function: Node) => {
     bytes => {
       code_held := .function
-      code_bytes := Wasm.bytes_of(code_held)
-      Wasm.LEB.encoded(code_bytes.count).bytes.joined(code_bytes)
+      Wasm.sized(Wasm.bytes_of(code_held))
     }
   }
   // (a module written: the header, then its sections)
@@ -234,6 +231,49 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   // (a statement of one of the given things, Expression's `external .` and `external &`: what `none` writes for it (a node
   // made where global 0 says, what applies it stored in it, global 0 past it; what applies it, the value))
   static external_ops (given) => (given == `.`) ? [0x23, 0, 0x22, 2, 0x20, 0, 0x36, 2, 0, 0x23, 0, 0x41, Wasm.node, 0x6A, 0x24, 0] : ((given == `&`) ? [0x20, 0, 0x21, 2] : [])
+
+  // Texts as byte spans: a node's keys, what its `reading` compares, laid out from `at`, a table first, where each starts
+  // and how long it is (two words each), then their bytes, in order
+  static spans_of (texts, at) => Wasm.span_table(texts: texts, from: at + 8 * texts.count).joined(Wasm.span_bytes(texts))
+  static span_table (texts, from) => texts.empty ? [] : Wasm.word(from).joined(Wasm.word(texts.first.count)).joined(Wasm.span_table(texts: texts.rest, from: from + texts.first.count))
+  static span_bytes (texts) => texts.empty ? [] : Wasm.Name.codes(texts.first).joined(Wasm.span_bytes(texts.rest))
+  // (a word as it is in memory, least significant byte first)
+  static word (v) => [v % 256, (v / 256) % 256, (v / 65536) % 256, v / 16777216]
+  // (`reading` natively, Node's `rules.keys{text ~= .}#.sort(.length).last`: given where a text is (local 0) and how long
+  // (1), which of `count` spans at `at` it starts with, the longest, the last of those as long; none, -1. Locals: the span
+  // (2), the one found (3), its length (4), this one's length (5) and where it is (6), how far it is compared (7))
+  static longest_ops (count, at) => [
+    0x41, 0x7F, 0x21, 3, 0x41, 0, 0x21, 4, 0x41, 0, 0x21, 2,
+    0x02, 0x40, 0x03, 0x40,
+    0x20, 2, 0x41, Wasm.Signed.encoded(count).bytes, 0x4F, 0x0D, 1,
+    0x20, 2, 0x41, 8, 0x6C, 0x22, 6, 0x28, 2, Wasm.LEB.encoded(at + 4).bytes, 0x21, 5,
+    0x20, 6, 0x28, 2, Wasm.LEB.encoded(at).bytes, 0x21, 6,
+    0x02, 0x40,
+    0x20, 5, 0x20, 1, 0x4B, 0x0D, 0,
+    0x20, 5, 0x20, 4, 0x49, 0x0D, 0,
+    0x41, 0, 0x21, 7,
+    0x02, 0x40, 0x03, 0x40,
+    0x20, 7, 0x20, 5, 0x4F, 0x0D, 1,
+    0x20, 0, 0x20, 7, 0x6A, 0x2D, 0, 0,
+    0x20, 6, 0x20, 7, 0x6A, 0x2D, 0, 0,
+    0x47, 0x0D, 2,
+    0x20, 7, 0x41, 1, 0x6A, 0x21, 7, 0x0C, 0,
+    0x0B, 0x0B,
+    0x20, 2, 0x21, 3, 0x20, 5, 0x21, 4,
+    0x0B,
+    0x20, 2, 0x41, 1, 0x6A, 0x21, 2, 0x0C, 0,
+    0x0B, 0x0B,
+    0x20, 3, 0x0B
+  ]
+  // (a module of it: `reading` exported, given where a text is and how long, the spans of `texts` its data at `at`)
+  static reading_module (texts, pages, at) => Wasm.module_bytes([
+    Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F, 0x7F]), Wasm.Vec(elements: [0x7F])]])),
+    Wasm.Written_section(id: 2, data: Wasm.Vec(elements: [[Wasm.Name(text: "m"), Wasm.Name(text: "memory"), 0x02, 0x03, pages, pages]])),
+    Wasm.Written_section(id: 3, data: Wasm.Vec(elements: [0])),
+    Wasm.Written_section(id: 7, data: Wasm.Vec(elements: [[Wasm.Name(text: "reading"), 0x00, 0]])),
+    Wasm.Written_section(id: 10, data: Wasm.Vec(elements: [Wasm.Written_code(function: [Wasm.Vec(elements: [[6, 0x7F]]), Wasm.longest_ops(count: texts.count, at: at)])])),
+    Wasm.Written_section(id: 11, data: Wasm.Vec(elements: [[0x00, 0x41, Wasm.Signed.encoded(at).bytes, 0x0B, Wasm.Vec(Wasm.spans_of(texts: texts, at: at))]]))
+  ])
 
   // Instructions (5.4): an op, then what it takes. An expression is instructions until `end`.
   // (each op named as WAT writes it: `prefix.name` the enum `prefix`'s member `name`, the dots after the first `_`
@@ -503,3 +543,5 @@ assert Wasm.Written_section(id: 10, data: Wasm.Vec(elements: [Wasm.Written_code(
 assert Wasm.Written_code(function: [Wasm.Vec(elements: []), Wasm.local.get, 0, Wasm.local.get, 1, Wasm.i32.add, Wasm.Op.end]).bytes == [7, 0, 0x20, 0, 0x20, 1, 0x6A, 0x0B]  // WA11 a body adding its two parameters is not these bytes
 assert Wasm.goto_ops(target: 2, index: 0, count: 3) == [0x41, 2, 0x21, 1, 0x0C, 3]  // WA12 a jump from the first of three statements to the third is not where it goes, then the loop again
 assert Wasm.external_ops(`&`) == [0x20, 0, 0x21, 2]  // WA13 what applies it is not its value
+assert Wasm.word(300) == [44, 1, 0, 0]  // WA14 a word is not its bytes, least significant first
+assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18, 0, 0, 0, 1, 0, 0, 0, 97, 98, 99]  // WA15 two texts as spans are not where each starts and how long, then their bytes

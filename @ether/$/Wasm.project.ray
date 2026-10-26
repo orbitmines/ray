@@ -216,7 +216,11 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   // An Expression's node as Expression reads it (`none` on it): its statements the first function, each of its rules the
   // next, in order, a rule its body's statements; a statement read by one of the given things (`external .`, `&`, its
   // reading's `rule`), what `none` writes for it; any other a call of the rule its key is
-  static expressed (read_node, pages, free) => Wasm.module_of(pages: pages, free: free, bodies: Wasm.bodies_of(keys: read_node.rules.keyed.map((entry) => entry.key), statement_lists: Array.new.append(read_node.statements).joined(read_node.rules.keyed.map((entry) => (entry.kept.body) ?? Array.new))))
+  static expressed (read_node, pages, free) => Wasm.module_of(pages: pages, free: free, bodies: Wasm.bodies_of(keys: read_node.rules.keyed.map((entry) => entry.key), statement_lists: Array.new.append(read_node.statements).joined(read_node.rules.keyed.map((entry) => Wasm.body_of(entry)))))
+  // (a rule's body as Expression keeps it, on what it keeps (`kept`): the node it is read in, its statements once it is
+  // applied; none yet, none. Read in two steps: the one read inside the other answers another node)
+  static body_of (entry) => Wasm.kept_statements(external member (entry) (`kept`))
+  static kept_statements (kept) => ((external member (kept) (`body`)).statements) ?? Array.new
   static bodies_of (keys, statement_lists) => statement_lists.empty ? Array.new : Array.new.append(Wasm.statement_ops_of(keys: keys, statements: statement_lists.first)).joined(Wasm.bodies_of(keys: keys, statement_lists: statement_lists.rest))
   static statement_ops_of (keys, statements) => statements.empty ? Array.new : Array.new.append(Wasm.statement_op(keys: keys, statement: statements.first)).joined(Wasm.statement_ops_of(keys: keys, statements: statements.rest))
   static statement_op (keys, statement) => (Wasm.given_of(statement) === None) ? [0x20, 0, 0x10, Wasm.key_index(keys: keys, key: (statement.statement).matched_key, at: 0) + 1, 0x21, 2] : Wasm.external_ops(Wasm.given_of(statement))

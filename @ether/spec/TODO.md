@@ -52,6 +52,23 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **A named argument given a function is not a local of the caller** (`nw (wrapped) => nm(named_one: wrapped)`, `nw(3)`;
   a `:=` local the same; a constant or a global holds): before named arguments were taken too. A class given one so holds
   it (NA15). Repro ~/.cache/ray-scratch/selfhost/na16.ray (A, B, D, E).
+- **Expression's key as a pattern of statements does not read** (`rules[(lhs: Statements(node) = rule.LHS)(Program(caller:
+  caller))] := …`): with it, a language read as Expression has no members at all; `rules[[rule.LHS]]`, its left side as
+  written, reads (so a left side's holes are not read as holes yet). Repro: ~/.cache/ray-scratch/selfhost/ev0.ray (the
+  library's form) vs ev1.ray, through probe3 with ROOT set to the tree's bootstrap (~3 min each).
+- **A method called inside a keyed rule a statement runs runs that rule again** (`ctx.reading(rr)` in the rule's body):
+  the key's value is called in its reading's node, whose rule `{this}({entry_argument})` reads the body's `x(y)` as a
+  call of the key. Calling it from a function outside the reading (tried in 1a46668b, reverted) stopped Expression's
+  statements from reading. Repro: selfhost/mx48.ray (direct).
+- **`this` in a rule a statement runs is not the Node its rules are in** (Expression: `Statements(Node(in: this))` in a
+  rule of Node's `rules := { … }`): a key's value is called through its reading (`with_reading`), whose `this` is the node
+  that call was read in, not what holds the key; called as a member (`node.rules.f(…)`) it is. Expression names the node
+  `node := this` in Node's body instead. Repro (70 s, direct): ~/.cache/ray-scratch/selfhost/mx72.ray (`@@G[notnode]`
+  through the reading).
+- **A lowercase name of a header's statements is not seen in a class written there** (`seen := 46`, then `Inner :=
+  class (in?: Inner) => { rules := { got := (x) => seen } }`: nothing reads `seen`): the frames the class was written in
+  are looked in for types only (`valued_member`, a capital first), as an outer class block's are. A capitalized name is
+  seen (EX10).
 - **`&.caller` is nothing at the top of a file** (`@c => &.caller`, `assert @c` fails), so `@me` (`&.caller as Character`,
   ray/.project.ray) is nothing outside a World and every test asking `@me.…` fails (`nothing reads me`).
 - **Reading a text as a class by its header** (`"v0.1.4-E2027.0A.4" as Version`, `Language.part_written` of a header

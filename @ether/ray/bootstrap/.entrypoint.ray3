@@ -99,6 +99,11 @@ Name := {
   // (nothing holds no member: a default of nothing keeps no type, `x: T = None`)
   ({name}.type = type) unless value === None
 }
+// (a declaration called, `(rhs: Statements(…) = text)(caller)`: what it declared, as its type reads it, called)
+({declared_name}: {declared_type} = {declared_value})({declared_called}) ^punctuation => {
+  ({declared_name}: {declared_type} = {declared_value})
+  {declared_name}({declared_called})
+}
 // A call's arguments (§10.1): each a value, or one given by name, `f(x: 5)`: the callee's `x` given 5, read where it is written.
 // (read by this type: what binds looser where they are written (`,`) first, each part then read here)
 Arguments := {
@@ -786,7 +791,13 @@ assert {
 // (a section calling each, `xs.for(.(caller))`: each one called with caller (`.( )` of one called by brackets); and given
 // without brackets, `.statement#.for .(caller)`)
 {method}(.({called_with})) ^punctuation => .{method}((it) => it.(.({called_with})))
-{calling_on}.{method: Name} .({called_with}) ^punctuation => (calling_on).{method}((it) => it.(.({called_with})))
+{calling_on}.{method: Name} .({called_with}) ^punctuation => (calling_on).{method}((it) => it({called_with}))
+assert {
+  called_with := []
+  calling := Array.new.append((given_to) => called_with.append(given_to))
+  calling.for .(5)
+  assert called_with.count == 1  // SC1 a section without brackets did not call each one with what it was given
+}
 // `code**`: what is written, as a program.
 {code}** ^operator => Program(code: {code})
 
@@ -918,15 +929,26 @@ either_of (either_before) => (either_added) => (either_before === None) ? either
 {name} |= {value} => {name} := either_of({name})(value)
 // (`|`, the rule that decorates an edge with alternatives)
 superposing_rule := external rule `{a} | {b}`
-// (values superposed, in order: of one alone, that one its only component)
+// (values superposed, in order: of one alone, that one its only component; each given whole (one that is a list, a key's
+// reading, is not taken apart as a closure's arguments would be))
 superposed_of (superposed_values) => {
   superposed_first := superposed_values.first
-  superposed_made := superposed_values.reduce((either) => either | .)
+  superposed_made := superposed_first
+  superposed_at := superposed_values.head ? superposed_values.head.next : None
+  while superposed_at {
+    superposed_made = superposed_made | superposed_at.value
+    superposed_at = superposed_at.next
+  }
   if superposed_values.count == 1 {
     superposed_made = superposed_first | superposed_first
     external member (superposed_made) (`components`) (Array.new.append(superposed_first))
   }
   superposed_made
+}
+assert {
+  Held := class (part) => { }
+  holding := [Held([1, 2]), Held([3, 4])]
+  assert holding.part#.count == 2  // LM1 a list's member, each value's a list, is not each value's
 }
 // (what one of a superposition can be: a superposition's (its members, else its components), a range's values, else itself)
 possible_values (one) => ((one).superposes) ? (((one).members !== None) ? (one).members.listed() : (one).components.listed()) : (((one).is_range) ? (one).members.listed() : Array.new.append(one))
@@ -1030,7 +1052,7 @@ matching_in (matching_of, matching_text) => {
       // (a kept key called by what it read: here, where `.` is the reading (the key's own call rule sees the key, a part of it))
       if (external member (matching_one) (`entry_called`)) !== None {
         (matching_read) &+= {
-          {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
+          {this}({entry_argument}) => ((external member (.) (`ran_early`)) === true) ? (external member (.) (`ran_early`) (false)) : (((external member (.) (`ran_early`) (pending_running)) || true) ? ((((.).entry_called).kept).with_reading((.))(entry_argument)) : None)
         }
       }
       if matching_first === None {
@@ -1246,12 +1268,18 @@ pending_on (pending_up, pending_one) => {
   external member (pending_made) (`one`) (pending_one)
   pending_made
 }
+// (while what was read is run before the rest is read: what a key read and runs then is not run again when all of them run,
+// in order, after; once (a jump back runs it again))
+pending_running := false
 run_pending (pending_at, pending_runs) => {
   if pending_at !== None {
     run_pending((pending_at).up, pending_runs)
     pending_statement := (pending_at).one
     unless (pending_statement.ran) === true {
+      pending_running_was := pending_running
+      pending_running = true
       ((pending_runs).conjoined.last).on(Array.new.append(pending_statement)) after ((pending_runs).applied_args)
+      pending_running = pending_running_was
       external member (pending_statement) (`ran`) (true)
       reading_ran = true
     }
@@ -1260,6 +1288,9 @@ run_pending (pending_at, pending_runs) => {
 reading_ran := false
 // (Ts one after another, all of a text: the first T the shortest span it reads whole after which the rest reads so too; a
 // list of their values, none when it does not read)
+// (the spaces a line begins with; the first line of a text, past the line ends it begins with)
+leading_spaces (spaces_text) => (!(spaces_text.empty) && ((spaces_text.first) == 32)) ? 1 + leading_spaces(spaces_text.rest) : 0
+first_line_of (line_text) => ((line_text.empty) || !((line_text.first) == 10)) ? line_text : first_line_of(line_text.rest)
 repeated_through (through_each, through_text, through_into) => {
   through_found := None
   if through_text.empty {
@@ -1269,7 +1300,30 @@ repeated_through (through_each, through_text, through_into) => {
     // begins one, or nothing does), then any other)
     through_first := ((through_each) ways_in (through_text) into (through_into) first (true)).head
     through_start := (through_first === None) ? None : (through_first.value).reading_left
-    if (through_first !== None) && !((through_start).count == (through_text).count) {
+    // (its first way going on past a line the next one is not deeper than, or none: where that line ends first, the
+    // shortest that reads whole with the rest more of them (a line deeper continues it; a text written over lines reads
+    // only whole))
+    through_indent := leading_spaces(first_line_of(through_text))
+    through_cut_at := through_text
+    through_least := (through_first === None) ? 0 : (through_start).count
+    while (through_found === None) && !(through_cut_at.empty) && !((through_cut_at).count == through_least) {
+      through_cut_at = through_cut_at.rest
+      if !(through_cut_at.empty) && !((through_cut_at).count == through_least) && ((through_cut_at.first) == 10) && (leading_spaces(through_cut_at.rest) <= through_indent) {
+        through_line := (through_each) whole_read (through_text.until(through_cut_at)) into (through_into)
+        if through_line !== None {
+          through_line_was := reading_pending
+          reading_pending = (reading_runs !== None) ? pending_on(reading_pending, through_line) : reading_pending
+          through_after := repeated_through(through_each, through_cut_at, through_into)
+          reading_pending = through_line_was
+          if (through_after === None) && (reading_runs !== None) && !((through_line.ran) === true) {
+            run_pending(pending_on(reading_pending, through_line), reading_runs)
+            through_after = repeated_through(through_each, through_cut_at, through_into)
+          }
+          through_found = (through_after !== None) ? through_after.prepend(through_line) : None
+        }
+      }
+    }
+    if (through_found === None) && (through_first !== None) && !((through_start).count == (through_text).count) {
       through_rest := repeated_through(through_each, through_start, through_into)
       through_found = (through_rest !== None) ? through_rest.prepend(way_value(through_first.value)) : None
     }
@@ -1426,17 +1480,6 @@ seq_read (seq_at, seq_text, seq_whole, seq_stops, seq_into) => {
     reading_runs = seq_runs_was
     reading_ran = seq_ran_was
     (external dynamic_out) if seq_dynamic !== None
-    if seq_ran_some && (seq_repeated !== None) {
-      seq_unran := Array.new
-      seq_unran_at := seq_repeated.head
-      while seq_unran_at {
-        if !(((seq_unran_at.value).ran) === true) {
-          seq_unran.append(seq_unran_at.value)
-        }
-        seq_unran_at = seq_unran_at.next
-      }
-      seq_repeated = seq_unran
-    }
     if seq_repeated !== None {
       seq_repeated_value := (seq_type) applying_to (seq_repeated)
       (seq_repeated_value) given_to (seq_into) as (seq_name)
@@ -2276,7 +2319,7 @@ Holding := class (key) => {
     if (keeping_key).listing {
       external member (keeping_key) (`entry_called`) (keeping_entry)
       (keeping_key) &+= {
-        {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
+        {this}({entry_argument}) => ((external member (.) (`ran_early`)) === true) ? (external member (.) (`ran_early`) (false)) : (((external member (.) (`ran_early`) (pending_running)) || true) ? ((((.).entry_called).kept).with_reading((.))(entry_argument)) : None)
       }
     }
   }

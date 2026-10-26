@@ -30,7 +30,7 @@ Expression := class (
         node := this
         rules := {
           [rule: GRAMMAR_RULE.LHS] := (caller) =>
-            rules[(lhs: Statements(node) = rule.LHS)(Program(caller: caller))] :=
+            rules[[rule.LHS]] :=
               (caller) => (rhs: Statements(Node(in: node)) = rule.RHS)(Program(caller: caller))
         }
         reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)

@@ -1047,7 +1047,7 @@ matching_in (matching_of, matching_text) => {
       // (a kept key called by what it read: here, where `.` is the reading (the key's own call rule sees the key, a part of it))
       if (external member (matching_one) (`entry_called`)) !== None {
         (matching_read) &+= {
-          {this}({entry_argument}) => called_by_reading(((.).entry_called).kept, (.), entry_argument)
+          {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
         }
       }
       if matching_first === None {
@@ -1060,9 +1060,6 @@ matching_in (matching_of, matching_text) => {
   }
   (matching_made !== None) ? matching_made : ((matching_first !== None) ? (matching_first | matching_first) : None)
 }
-// (a kept key's value called by what it read, from here: not in the reading, whose own rules its body would read (its
-// `(…)` would call the key again))
-called_by_reading (called_value, called_reading, called_argument) => called_value.with_reading(called_reading)(called_argument)
 // (a node of its own each time: `Node &+ { }` written in a rule is read once)
 fresh_reading_of (fresh_none) => Node &+ { }
 // (what a key's names take of the text its reading read: each named part, the span it read, a local of where it is given)
@@ -2296,7 +2293,7 @@ Holding := class (key) => {
     if (keeping_key).listing {
       external member (keeping_key) (`entry_called`) (keeping_entry)
       (keeping_key) &+= {
-        {this}({entry_argument}) => called_by_reading(((.).entry_called).kept, (.), entry_argument)
+        {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
       }
     }
   }

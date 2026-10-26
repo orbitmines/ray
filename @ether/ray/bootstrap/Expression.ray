@@ -26,10 +26,12 @@ Expression := class (
     statements: (
       // A node: its rules by their heads; what it does not read, what it is in reads.
       Node := class (in?: Node) => {
+        // (itself, as its rules' bodies name it: `this` there is what a statement calls them on)
+        node := this
         rules := {
           [rule: GRAMMAR_RULE.LHS] := (caller) =>
-            rules[(lhs: Statements(this) = rule.LHS)(Program(caller: caller))] :=
-              (caller) => (rhs: Statements(Node(in: this)) = rule.RHS)(Program(caller: caller))
+            rules[(lhs: Statements(node) = rule.LHS)(Program(caller: caller))] :=
+              (caller) => (rhs: Statements(Node(in: node)) = rule.RHS)(Program(caller: caller))
         }
         reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
       }

@@ -1,0 +1,1259 @@
+!language   { }   {LHS} => {RHS}
+
+{LHS} => {RHS} => x
+// A number: the constant it is
+{n} => external const {n}
+({g}) => g
+// A call: what it is given, then the function its name is
+{f}() => {
+  external emit 0x10
+  f
+}
+{f}({args}) => {
+  args
+  external emit 0x10
+  f
+}
+// (several given: each in turn; one written against the comma takes no space, `f((a + 1), b)`)
+{a}, {b} => {
+  a
+  b
+}
+// The operators, the tightest first: one declared later binds looser
+{a} * {b} => {
+  a
+  b
+  external emit 0x6C
+}
+{a} / {b} => {
+  a
+  b
+  external emit 0x6E
+}
+{a} % {b} => {
+  a
+  b
+  external emit 0x70
+}
+{a} + {b} => {
+  a
+  b
+  external emit 0x6A
+}
+{a} - {b} => {
+  a
+  b
+  external emit 0x6B
+}
+{a} << {b} => {
+  a
+  b
+  external emit 0x74
+}
+{a} >> {b} => {
+  a
+  b
+  external emit 0x76
+}
+{a} >>s {b} => {
+  a
+  b
+  external emit 0x75
+}
+{a} & {b} => {
+  a
+  b
+  external emit 0x71
+}
+{a} | {b} => {
+  a
+  b
+  external emit 0x72
+}
+{a} < {b} => {
+  a
+  b
+  external emit 0x48
+}
+{a} > {b} => {
+  a
+  b
+  external emit 0x4A
+}
+{a} <= {b} => {
+  a
+  b
+  external emit 0x4C
+}
+{a} >= {b} => {
+  a
+  b
+  external emit 0x4E
+}
+{a} == {b} => {
+  a
+  b
+  external emit 0x46
+}
+{a} != {b} => {
+  a
+  b
+  external emit 0x47
+}
+!{a} => {
+  a
+  external emit 0x45
+}
+{a} && {b} => {
+  a
+  external emit 0x04
+  external emit 0x7F
+  b
+  external emit 0x41
+  external emit 0
+  external emit 0x47
+  external emit 0x05
+  external emit 0x41
+  external emit 0
+  external emit 0x0B
+}
+{a} || {b} => {
+  a
+  external emit 0x04
+  external emit 0x7F
+  external emit 0x41
+  external emit 1
+  external emit 0x05
+  b
+  external emit 0x41
+  external emit 0
+  external emit 0x47
+  external emit 0x0B
+}
+{c} ? {a} : {b} => {
+  c
+  external emit 0x04
+  external emit 0x7F
+  a
+  external emit 0x05
+  b
+  external emit 0x0B
+}
+// Memory: a word, a byte
+load {a} => {
+  a
+  external emit 0x28
+  external emit 2
+  external emit 0
+}
+load8 {a} => {
+  a
+  external emit 0x2D
+  external emit 0
+  external emit 0
+}
+{a} <- {v} => {
+  a
+  v
+  external emit 0x36
+  external emit 2
+  external emit 0
+}
+{a} <-8 {v} => {
+  a
+  v
+  external emit 0x3A
+  external emit 0
+  external emit 0
+}
+// A local: its name, from here on in its function, its value; given one, the get it writes made a set
+var {x} {i} => {
+  {x} => {
+    external emit 0x20
+    external leb {i}
+  }
+}
+{x} = {v} => {
+  v
+  external mark
+  {x}
+  external patch 0x21
+}
+// Statements
+return {v} => {
+  v
+  external emit 0x0F
+}
+trap => external emit 0x00
+drop {v} => {
+  v
+  external emit 0x1A
+}
+exit {n} => {
+  external emit 0x0C
+  external leb {n}
+}
+if {c} do {body} => {
+  c
+  external emit 0x04
+  external emit 0x40
+  body
+  external emit 0x0B
+}
+when {c} do {yes} else {no} => {
+  c
+  external emit 0x04
+  external emit 0x40
+  yes
+  external emit 0x05
+  no
+  external emit 0x0B
+}
+while {c} do {body} => {
+  external emit 0x02
+  external emit 0x40
+  external emit 0x03
+  external emit 0x40
+  c
+  external emit 0x45
+  external emit 0x0D
+  external emit 1
+  body
+  external emit 0x0C
+  external emit 0
+  external emit 0x0B
+  external emit 0x0B
+}
+// A module: its sections; a function declared (its index, how many it takes: its type), then written in that order
+section {id} do {body} => {
+  external emit {id}
+  external begin
+  body
+  external finish
+}
+declare {name} {index} takes {count} => {
+  {name} => external leb {index}
+  external emit {count}
+}
+function {name} locals {count} do {body} => {
+  external begin
+  external emit 1
+  external leb {count}
+  external emit 0x7F
+  external .
+  body
+  external emit 0x0B
+  external finish
+}
+// A name for a number, from here on
+constant {name} {value} => {
+  {name} => external const {value}
+}
+// The engine: where what it keeps is
+constant HEAP 4
+constant SP 8
+constant NKEYS 12
+constant NPAIRS 20
+constant OUTLEN 24
+constant MARKSP 28
+constant BEGINSP 32
+constant OPENA 36
+constant OPENL 40
+constant CLOSEA 44
+constant CLOSEL 48
+constant ARROWA 52
+constant ARROWL 56
+constant TLEN 64
+constant REND 68
+constant RCAP 72
+constant KEYS 4096
+constant PAIRS 20480
+constant MARKS 21504
+constant BEGINS 22528
+constant KW 23552
+constant TEXT 1048576
+constant OUT 5242880
+log => external leb 0
+// The module
+external emit 0
+external emit 97
+external emit 115
+external emit 109
+external emit 1
+external emit 0
+external emit 0
+external emit 0
+section 1 do
+  external emit 8
+  external emit 96
+  external emit 0
+  external emit 1
+  external emit 127
+  external emit 96
+  external emit 1
+  external emit 127
+  external emit 1
+  external emit 127
+  external emit 96
+  external emit 2
+  external emit 127
+  external emit 127
+  external emit 1
+  external emit 127
+  external emit 96
+  external emit 3
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 1
+  external emit 127
+  external emit 96
+  external emit 4
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 1
+  external emit 127
+  external emit 96
+  external emit 5
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 1
+  external emit 127
+  external emit 96
+  external emit 6
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 1
+  external emit 127
+  external emit 96
+  external emit 7
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 127
+  external emit 1
+  external emit 127
+section 2 do
+  external emit 2
+  external emit 1
+  external emit 109
+  external emit 3
+  external emit 108
+  external emit 111
+  external emit 103
+  external emit 0
+  external emit 1
+  external emit 1
+  external emit 109
+  external emit 6
+  external emit 109
+  external emit 101
+  external emit 109
+  external emit 111
+  external emit 114
+  external emit 121
+  external emit 2
+  external emit 0
+  external emit 128
+  external emit 8
+section 3 do
+  external emit 36
+  declare main 1 takes 0
+  declare white 2 takes 1
+  declare word 3 takes 1
+  declare same 4 takes 3
+  declare step 5 takes 3
+  declare fnew 6 takes 0
+  declare indent 7 takes 2
+  declare extent 8 takes 3
+  declare match 9 takes 6
+  declare holeloop 10 takes 6
+  declare paired 11 takes 2
+  declare part 12 takes 2
+  declare keyat 13 takes 1
+  declare rank 14 takes 1
+  declare read 15 takes 6
+  declare copy 16 takes 3
+  declare define 17 takes 3
+  declare addkey 18 takes 2
+  declare lookup 19 takes 3
+  declare trima 20 takes 2
+  declare trime 21 takes 2
+  declare named 22 takes 3
+  declare bound 23 takes 3
+  declare run 24 takes 7
+  declare apply 25 takes 7
+  declare givenop 26 takes 4
+  declare kw 27 takes 4
+  declare kwend 28 takes 4
+  declare number 29 takes 3
+  declare emitb 30 takes 1
+  declare emitleb 31 takes 1
+  declare emitsleb 32 takes 1
+  declare finish 33 takes 0
+  declare alloc 34 takes 1
+  declare language 35 takes 0
+  declare fail 36 takes 1
+section 7 do
+  external emit 1
+  external emit 4
+  external emit 109
+  external emit 97
+  external emit 105
+  external emit 110
+  external emit 0
+  external emit 1
+section 10 do
+  external emit 36
+  function main locals 0 do
+    HEAP <- 8388608
+    SP <- 65536
+    NKEYS <- 0
+    OUTLEN <- 0
+    MARKSP <- 0
+    BEGINSP <- 0
+    ARROWL <- 0
+    drop language()
+    return load OUTLEN
+  function white locals 0 do
+    var c 0
+    return (c == 32) || ((c == 10) || ((c == 9) || (c == 13)))
+  function word locals 0 do
+    var c 0
+    return ((c >= 48) && (c <= 57)) || (((c >= 65) && (c <= 90)) || (((c >= 97) && (c <= 122)) || ((c == 95) || (c >= 128))))
+  function same locals 1 do
+    var a 0
+    var s 1
+    var n 2
+    var j 3
+    j = 0
+    while j < n do
+      if (load8 (a + j)) != (load8 (s + j)) do
+        return 0
+      j = j + 1
+    return 1
+  function step locals 3 do
+    var a 0
+    var f 1
+    var e 2
+    var j 3
+    var pr 4
+    var cnt 5
+    j = 0
+    while j < (load NPAIRS) do
+      pr = PAIRS + (j * 16)
+      cnt = f + (8 + (j * 4))
+      if ((load cnt) > 0) && (((a + (load (pr + 12))) <= e) && same(a, (load (pr + 8)), (load (pr + 12)))) do
+        cnt <- ((load cnt) - 1)
+        f <- ((load f) - 1)
+        return a + (load (pr + 12))
+      if ((a + (load (pr + 4))) <= e) && same(a, (load pr), (load (pr + 4))) do
+        cnt <- ((load cnt) + 1)
+        f <- ((load f) + 1)
+        return a + (load (pr + 4))
+      j = j + 1
+    return a + 1
+  function fnew locals 2 do
+    var f 0
+    var j 1
+    f = load SP
+    SP <- (f + 136)
+    j = 0
+    while j < 34 do
+      (f + (j * 4)) <- 0
+      j = j + 1
+    return f
+  function indent locals 1 do
+    var base 0
+    var a 1
+    var q 2
+    q = a
+    while (q > base) && ((load8 (q - 1)) == 32) do
+      q = q - 1
+    return a - q
+  function extent locals 5 do
+    var base 0
+    var a 1
+    var e 2
+    var ind 3
+    var f 4
+    var q 5
+    var r 6
+    var sp 7
+    sp = load SP
+    ind = indent(base, a)
+    f = fnew()
+    q = a
+    while q < e do
+      if ((load f) == 0) && ((load8 q) == 10) do
+        r = q + 1
+        while (r < e) && ((load8 r) == 32) do
+          r = r + 1
+        if (r >= e) || (((load8 r) == 10) || ((r - (q + 1)) <= ind)) do
+          SP <- sp
+          return q
+      q = step(q, f, e)
+    SP <- sp
+    return q
+  function match locals 4 do
+    var key 0
+    var i 1
+    var a 2
+    var e 3
+    var cap 4
+    var ind 5
+    var p 6
+    var kind 7
+    var q 8
+    var sp 9
+    if i == (load (key + 4)) do
+      return a == e
+    p = part(key, i)
+    kind = load p
+    if kind == 0 do
+      return ((a + (load (p + 8))) <= e) && (same(a, (load (p + 4)), (load (p + 8))) && match(key, (i + 1), (a + (load (p + 8))), e, cap, ind))
+    if kind == 1 do
+      q = a
+      while (q < e) && white(load8 q) do
+        q = q + 1
+        if match(key, (i + 1), q, e, cap, ind) do
+          return 1
+      return 0
+    if ((load (key + 4)) == 1) && (kind == 2) do
+      if e <= a do
+        return 0
+      q = a
+      while q < e do
+        if !word(load8 q) do
+          return 0
+        q = q + 1
+      (cap + (i * 8)) <- a
+      (cap + ((i * 8) + 4)) <- e
+      return 1
+    sp = load SP
+    q = holeloop(key, i, a, e, cap, ind)
+    SP <- sp
+    return q
+  function holeloop locals 9 do
+    var key 0
+    var i 1
+    var a 2
+    var e 3
+    var cap 4
+    var ind 5
+    var p 6
+    var pd 7
+    var tight 8
+    var f 9
+    var q 10
+    var ok 11
+    var r 12
+    var sub 13
+    var gv 14
+    p = part(key, i)
+    pd = paired(key, i)
+    gv = (load key) == 4
+    tight = 0
+    if (!pd) && (!gv) do
+      if i > 0 do
+        if (load part(key, (i - 1))) != 1 do
+          tight = 1
+      if (i + 1) < (load (key + 4)) do
+        if (load part(key, (i + 1))) != 1 do
+          tight = 1
+    f = fnew()
+    sub = fnew()
+    q = a
+    while 1 do
+      if ((load f) == 0) && ((!((!gv) && (q == a))) && (!((q > a) && ((q < e) && (word(load8 (q - 1)) && word(load8 q)))))) do
+        ok = 1
+        if (load p) == 3 do
+          ok = match((load (p + 12)), 0, a, q, sub, ind)
+        if ok do
+          if match(key, (i + 1), q, e, cap, ind) do
+            (cap + (i * 8)) <- a
+            (cap + ((i * 8) + 4)) <- q
+            return 1
+      if q >= e do
+        return 0
+      if ((load f) == 0) && (tight && white(load8 q)) do
+        return 0
+      if (!pd) && (((load f) == 0) && ((load8 q) == 10)) do
+        r = q + 1
+        while (r < e) && ((load8 r) == 32) do
+          r = r + 1
+        if (r - (q + 1)) <= ind do
+          return 0
+      q = step(q, f, e)
+    return 0
+  function paired locals 4 do
+    var key 0
+    var i 1
+    var b 2
+    var c 3
+    var j 4
+    var pr 5
+    if (i == 0) || ((i + 1) >= (load (key + 4))) do
+      return 0
+    b = part(key, (i - 1))
+    c = part(key, (i + 1))
+    if ((load b) != 0) || ((load c) != 0) do
+      return 0
+    j = 0
+    while j < (load NPAIRS) do
+      pr = PAIRS + (j * 16)
+      if (((load (b + 8)) == (load (pr + 4))) && same((load (b + 4)), (load pr), (load (pr + 4)))) && (((load (c + 8)) == (load (pr + 12))) && same((load (c + 4)), (load (pr + 8)), (load (pr + 12)))) do
+        return 1
+      j = j + 1
+    return 0
+  function part locals 0 do
+    var key 0
+    var i 1
+    return (load (key + 8)) + (i * 16)
+  function keyat locals 0 do
+    var k 0
+    return load (KEYS + (k * 4))
+  function rank locals 1 do
+    var k 0
+    var key 1
+    key = keyat(k)
+    return ((((load key) == 1) || (((load key) == 2) || ((load (key + 28)) != 0))) ? 2 : 0) + (((load part(key, 0)) == 0) ? 1 : 0)
+  function read locals 10 do
+    var base 0
+    var a 1
+    var e 2
+    var node 3
+    var x0 4
+    var x1 5
+    var ind 6
+    var end 7
+    var sp 8
+    var trial 9
+    var n 10
+    var best 11
+    var k 12
+    var key 13
+    var bbuf 14
+    var bcap 15
+    ind = indent(base, a)
+    end = extent(base, a, e)
+    sp = load SP
+    trial = sp
+    bbuf = sp + 1024
+    SP <- (sp + 2048)
+    while 1 do
+      n = node
+      while n != 0 do
+        best = 0 - 1
+        k = 0
+        while k < (load NKEYS) do
+          key = keyat(k)
+          if ((load (key + 24)) == n) && ((!((k >= x0) && (k < x1))) && (!((best >= 0) && (rank(k) < rank(best))))) do
+            if match(key, 0, a, end, trial, ind) do
+              best = k
+              drop copy(bbuf, trial, ((load (key + 4)) * 8))
+          k = k + 1
+        if best >= 0 do
+          key = keyat(best)
+          bcap = alloc(((load (key + 4)) * 8) + 8)
+          drop copy(bcap, bbuf, ((load (key + 4)) * 8))
+          REND <- end
+          RCAP <- bcap
+          SP <- sp
+          return best
+        n = load n
+      if (end >= e) || (((load8 end) == 10) && ((load8 (end + 1)) == 10)) do
+        REND <- extent(base, a, e)
+        SP <- sp
+        return 0 - 1
+      end = end + 1
+      while (end < e) && ((load8 end) != 10) do
+        end = end + 1
+    return 0
+  function copy locals 1 do
+    var dst 0
+    var src 1
+    var n 2
+    var j 3
+    j = 0
+    while j < n do
+      (dst + j) <-8 (load8 (src + j))
+      j = j + 1
+    return 0
+  function define locals 11 do
+    var a 0
+    var e 1
+    var kind 2
+    var key 3
+    var parts 4
+    var n 5
+    var q 6
+    var r 7
+    var s 8
+    var p 9
+    var j 10
+    var ol 11
+    var cl 12
+    var isopen 13
+    ol = load OPENL
+    cl = load CLOSEL
+    key = alloc(40)
+    parts = alloc(2048)
+    n = 0
+    q = a
+    while q < e do
+      p = parts + (n * 16)
+      isopen = ((q + ol) <= e) && same(q, (load OPENA), ol)
+      if isopen do
+        r = q + ol
+        while ((r + cl) <= e) && (!same(r, (load CLOSEA), cl)) do
+          r = r + 1
+        p <- 2
+        (p + 4) <- (q + ol)
+        s = q + ol
+        while (s < r) && word(load8 s) do
+          s = s + 1
+        (p + 8) <- s
+        q = r + cl
+      if (!isopen) && white(load8 q) do
+        while (q < e) && white(load8 q) do
+          q = q + 1
+        p <- 1
+      if (!isopen) && ((load p) != 1) do
+        s = q
+        while (q < e) && ((!white(load8 q)) && (!(((q + ol) <= e) && same(q, (load OPENA), ol)))) do
+          q = q + 1
+        p <- 0
+        (p + 4) <- s
+        (p + 8) <- (q - s)
+      n = n + 1
+    key <- kind
+    (key + 4) <- n
+    (key + 8) <- parts
+    (key + 12) <- 0
+    (key + 16) <- 0
+    (key + 20) <- 0
+    (key + 28) <- 0
+    j = 0
+    while j < n do
+      p = parts + (j * 16)
+      if ((load p) == 0) && (((load ARROWL) > 0) && (((load (p + 8)) == (load ARROWL)) && same((load (p + 4)), (load ARROWA), (load ARROWL)))) do
+        (key + 28) <- 1
+      j = j + 1
+    if (n == 3) && (((load parts) == 0) && (((load (parts + 16)) == 2) && ((load (parts + 32)) == 0))) do
+      p = PAIRS + ((load NPAIRS) * 16)
+      p <- (load (parts + 4))
+      (p + 4) <- (load (parts + 8))
+      (p + 8) <- (load (parts + 36))
+      (p + 12) <- (load (parts + 40))
+      NPAIRS <- ((load NPAIRS) + 1)
+    return key
+  function addkey locals 0 do
+    var key 0
+    var node 1
+    (KEYS + ((load NKEYS) * 4)) <- key
+    (key + 24) <- node
+    NKEYS <- ((load NKEYS) + 1)
+    return (load NKEYS) - 1
+  function lookup locals 3 do
+    var na 0
+    var ne 1
+    var frame 2
+    var f 3
+    var j 4
+    var en 5
+    f = frame
+    while f != 0 do
+      j = load (f + 4)
+      while j > 0 do
+        j = j - 1
+        en = f + (8 + (j * 24))
+        if ((load (en + 4)) - (load en)) == (ne - na) do
+          if same((load en), na, (ne - na)) do
+            return en
+      f = load f
+    return 0
+  function trima locals 0 do
+    var a 0
+    var e 1
+    while (a < e) && white(load8 a) do
+      a = a + 1
+    return a
+  function trime locals 0 do
+    var a 0
+    var e 1
+    while (e > a) && white(load8 (e - 1)) do
+      e = e - 1
+    return e
+  function named locals 2 do
+    var a 0
+    var e 1
+    var frame 2
+    var ta 3
+    var te 4
+    ta = trima(a, e)
+    te = trime(ta, e)
+    return lookup(ta, te, frame)
+  function bound locals 6 do
+    var a 0
+    var e 1
+    var frame 2
+    var ta 3
+    var te 4
+    var ol 5
+    var cl 6
+    var b 7
+    var r 8
+    ta = trima(a, e)
+    te = trime(ta, e)
+    ol = load OPENL
+    cl = load CLOSEL
+    if ((te - ta) >= (ol + cl)) && (same(ta, (load OPENA), ol) && same((te - cl), (load CLOSEA), cl)) do
+      b = lookup((ta + ol), (te - cl), frame)
+      if b != 0 do
+        r = bound((load (b + 8)), (load (b + 12)), (load (b + 16)))
+        if r != 0 do
+          return r
+        return b
+    return 0
+  function run locals 6 do
+    var base 0
+    var a 1
+    var e 2
+    var node 3
+    var frame 4
+    var x0 5
+    var x1 6
+    var k 7
+    var end 8
+    var cap 9
+    var plain 10
+    var ref 11
+    var key 12
+    while a < e do
+      while (a < e) && white(load8 a) do
+        a = a + 1
+      if a < e do
+        when ((load8 a) == 47) && ((load8 (a + 1)) == 47) do
+          while (a < e) && ((load8 a) != 10) do
+            a = a + 1
+          else
+          k = read(base, a, e, node, x0, x1)
+          if (k < 0) && (x1 > x0) do
+            k = read(base, a, e, node, x0, (x0 + 1))
+          end = load REND
+          cap = load RCAP
+          plain = 0
+          ref = 0
+          if (k < 0) || ((load keyat(k)) == 3) do
+            plain = named(a, end, frame)
+            if plain == 0 do
+              ref = bound(a, end, frame)
+          if plain != 0 do
+            if (load (plain + 20)) == 0 do
+              drop run(base, (load (plain + 8)), (load (plain + 12)), node, (load (plain + 16)), 0, 0)
+              (plain + 20) <- 1
+          if (plain == 0) && (ref != 0) do
+            drop run(base, (load (ref + 8)), (load (ref + 12)), node, (load (ref + 16)), 0, 0)
+          if ((plain == 0) && (ref == 0)) && (k >= 0) do
+            node = apply(k, cap, base, a, end, node, frame)
+          if ((plain == 0) && (ref == 0)) && (k < 0) do
+            drop fail(a)
+          a = end
+    return 0
+  function apply locals 21 do
+    var k 0
+    var cap 1
+    var base 2
+    var a 3
+    var e 4
+    var node 5
+    var frame 6
+    var key 7
+    var kind 8
+    var j 9
+    var first 10
+    var last 11
+    var la 12
+    var le 13
+    var ra 14
+    var re 15
+    var lb 16
+    var rb 17
+    var bf 18
+    var nk 19
+    var f 20
+    var b 21
+    var z 22
+    var q 23
+    var pf 24
+    var np 25
+    var p 26
+    var sp 27
+    key = keyat(k)
+    kind = load key
+    np = load (key + 4)
+    if (kind == 1) || (kind == 2) do
+      first = 0 - 1
+      j = 0
+      while j < np do
+        p = part(key, j)
+        if ((load p) == 2) || ((load p) == 3) do
+          if first < 0 do
+            first = j
+          last = j
+        j = j + 1
+      la = load (cap + (first * 8))
+      le = load (cap + ((first * 8) + 4))
+      ra = load (cap + (last * 8))
+      re = load (cap + ((last * 8) + 4))
+      lb = bound(la, le, frame)
+      rb = bound(ra, re, frame)
+      bf = frame
+      if lb != 0 do
+        la = load (lb + 8)
+        le = load (lb + 12)
+      if rb != 0 do
+        ra = load (rb + 8)
+        re = load (rb + 12)
+        bf = load (rb + 16)
+      b = trima(ra, re)
+      z = trime(b, re)
+      if ((z - b) >= ((load OPENL) + (load CLOSEL))) && (same(b, (load OPENA), (load OPENL)) && same((z - (load CLOSEL)), (load CLOSEA), (load CLOSEL))) do
+        sp = load SP
+        pf = fnew()
+        q = step(b, pf, z)
+        while (q < z) && ((load pf) > 0) do
+          q = step(q, pf, z)
+        SP <- sp
+        if q == z do
+          ra = b + (load OPENL)
+          re = z - (load CLOSEL)
+      nk = define(la, le, ((kind == 1) ? 2 : 3))
+      (nk + 12) <- ra
+      (nk + 16) <- re
+      drop addkey(nk, node)
+      (nk + 20) <- bf
+      return node
+    if kind == 4 do
+      return givenop((load (cap + 24)), (load (cap + 28)), node, frame)
+    f = alloc(8 + (np * 24))
+    f <- (load (key + 20))
+    (f + 4) <- 0
+    j = 0
+    while j < np do
+      p = part(key, j)
+      if (load p) == 2 do
+        b = f + (8 + ((load (f + 4)) * 24))
+        b <- (load (p + 4))
+        (b + 4) <- (load (p + 8))
+        (b + 8) <- (load (cap + (j * 8)))
+        (b + 12) <- (load (cap + ((j * 8) + 4)))
+        (b + 16) <- frame
+        (b + 20) <- 0
+        (f + 4) <- ((load (f + 4)) + 1)
+      j = j + 1
+    drop run(base, (load (key + 12)), (load (key + 16)), node, f, k, (load NKEYS))
+    return node
+  function givenop locals 2 do
+    var a 0
+    var e 1
+    var node 2
+    var frame 3
+    var n 4
+    var m 5
+    if (load8 a) == 46 do
+      n = alloc(8)
+      n <- node
+      return n
+    if kw(a, e, (KW + 8), 4) do
+      drop emitb(number((a + 4), e, frame))
+      return node
+    if kw(a, e, (KW + 12), 3) do
+      drop emitleb(number((a + 3), e, frame))
+      return node
+    if kw(a, e, (KW + 15), 4) do
+      drop emitsleb(number((a + 4), e, frame))
+      return node
+    if kw(a, e, (KW + 19), 5) do
+      drop emitb(65)
+      drop emitsleb(number((a + 5), e, frame))
+      return node
+    if kw(a, e, (KW + 24), 5) do
+      MARKSP <- ((load MARKSP) - 1)
+      m = load (MARKS + ((load MARKSP) * 4))
+      (OUT + m) <-8 number((a + 5), e, frame)
+      return node
+    if kwend(a, e, (KW + 29), 4) do
+      (MARKS + ((load MARKSP) * 4)) <- (load OUTLEN)
+      MARKSP <- ((load MARKSP) + 1)
+      return node
+    if kwend(a, e, (KW + 33), 5) do
+      (BEGINS + ((load BEGINSP) * 4)) <- (load OUTLEN)
+      BEGINSP <- ((load BEGINSP) + 1)
+      return node
+    if kwend(a, e, (KW + 38), 6) do
+      drop finish()
+      return node
+    return node
+  function kw locals 0 do
+    var a 0
+    var e 1
+    var s 2
+    var n 3
+    return ((e - a) > n) && (same(a, s, n) && white(load8 (a + n)))
+  function kwend locals 0 do
+    var a 0
+    var e 1
+    var s 2
+    var n 3
+    return ((e - a) >= n) && (same(a, s, n) && (trima((a + n), e) == e))
+  function number locals 6 do
+    var a 0
+    var e 1
+    var frame 2
+    var ta 3
+    var te 4
+    var b 5
+    var v 6
+    var c 7
+    var d 8
+    ta = trima(a, e)
+    te = trime(ta, e)
+    b = bound(ta, te, frame)
+    if b != 0 do
+      ta = trima((load (b + 8)), (load (b + 12)))
+      te = trime(ta, (load (b + 12)))
+    v = 0
+    if ((te - ta) > 2) && (((load8 ta) == 48) && ((load8 (ta + 1)) == 120)) do
+      ta = ta + 2
+      while ta < te do
+        c = load8 ta
+        d = (c <= 57) ? (c - 48) : ((c >= 97) ? (c - 87) : (c - 55))
+        v = (v * 16) + d
+        ta = ta + 1
+      return v
+    while ta < te do
+      v = (v * 10) + ((load8 ta) - 48)
+      ta = ta + 1
+    return v
+  function emitb locals 0 do
+    var b 0
+    (OUT + (load OUTLEN)) <-8 b
+    OUTLEN <- ((load OUTLEN) + 1)
+    return 0
+  function emitleb locals 1 do
+    var v 0
+    var b 1
+    while 1 do
+      b = v & 127
+      v = v >> 7
+      if v != 0 do
+        b = b | 128
+      drop emitb(b)
+      if v == 0 do
+        return 0
+    return 0
+  function emitsleb locals 1 do
+    var v 0
+    var b 1
+    while 1 do
+      b = v & 127
+      v = v >>s 7
+      if ((v == 0) && ((b & 64) == 0)) || ((v == (0 - 1)) && ((b & 64) != 0)) do
+        drop emitb(b)
+        return 0
+      drop emitb(b | 128)
+    return 0
+  function finish locals 6 do
+    var at 0
+    var len 1
+    var n 2
+    var v 3
+    var j 4
+    var b 5
+    BEGINSP <- ((load BEGINSP) - 1)
+    at = load (BEGINS + ((load BEGINSP) * 4))
+    len = (load OUTLEN) - at
+    n = 0
+    v = len
+    while 1 do
+      v = v >> 7
+      n = n + 1
+      if v == 0 do
+        exit 2
+    j = load OUTLEN
+    while j > at do
+      j = j - 1
+      (OUT + (j + n)) <-8 (load8 (OUT + j))
+    v = len
+    j = 0
+    while 1 do
+      b = v & 127
+      v = v >> 7
+      if v != 0 do
+        b = b | 128
+      (OUT + (at + j)) <-8 b
+      j = j + 1
+      if v == 0 do
+        exit 2
+    OUTLEN <- ((load OUTLEN) + n)
+    return 0
+  function alloc locals 1 do
+    var n 0
+    var h 1
+    h = load HEAP
+    HEAP <- (h + n)
+    return h
+  function language locals 10 do
+    var p 0
+    var o 1
+    var c 2
+    var cs 3
+    var scope 4
+    var gk 5
+    var parts 6
+    var d0 7
+    var rc 8
+    var j 9
+    p = TEXT
+    while !white(load8 p) do
+      p = p + 1
+    while white(load8 p) do
+      p = p + 1
+    o = p
+    while !white(load8 p) do
+      p = p + 1
+    OPENA <- o
+    OPENL <- (p - o)
+    p = p + 1
+    c = p
+    while !white(load8 p) do
+      p = p + 1
+    CLOSEA <- c
+    CLOSEL <- (p - c)
+    PAIRS <- (load OPENA)
+    (PAIRS + 4) <- (load OPENL)
+    (PAIRS + 8) <- (load CLOSEA)
+    (PAIRS + 12) <- (load CLOSEL)
+    NPAIRS <- 1
+    while white(load8 p) do
+      p = p + 1
+    cs = p
+    while !(((load8 p) == 10) && ((load8 (p + 1)) == 10)) do
+      p = p + 1
+    scope = alloc(8)
+    scope <- 0
+    gk = alloc(40)
+    parts = alloc(64)
+    parts <- 0
+    (parts + 4) <- KW
+    (parts + 8) <- 8
+    (parts + 16) <- 1
+    (parts + 32) <- 2
+    (parts + 36) <- (KW + 44)
+    (parts + 40) <- (KW + 48)
+    (parts + 48) <- 2
+    (parts + 52) <- (KW + 48)
+    (parts + 56) <- (KW + 52)
+    gk <- 4
+    (gk + 4) <- 4
+    (gk + 8) <- parts
+    (gk + 28) <- 0
+    drop addkey(gk, scope)
+    d0 = define(cs, p, 0)
+    j = (load (d0 + 4)) - 1
+    while j >= 0 do
+      if (load part(d0, j)) == 0 do
+        ARROWA <- (load (part(d0, j) + 4))
+        ARROWL <- (load (part(d0, j) + 8))
+      j = j - 1
+    rc = define(cs, p, 1)
+    j = (load (rc + 4)) - 1
+    while j >= 0 do
+      if (load part(rc, j)) == 2 do
+        o = j
+      j = j - 1
+    part(rc, o) <- 3
+    (part(rc, o) + 12) <- d0
+    drop addkey(rc, scope)
+    drop run(TEXT, (p + 2), (TEXT + (load TLEN)), scope, 0, 0, 0)
+    return 0
+  function fail locals 0 do
+    var a 0
+    drop log(a)
+    trap
+    return 0
+section 11 do
+  external emit 1
+  external emit 0
+  external emit 65
+  external emit 128
+  external emit 184
+  external emit 1
+  external emit 11
+  external emit 52
+  external emit 101
+  external emit 120
+  external emit 116
+  external emit 101
+  external emit 114
+  external emit 110
+  external emit 97
+  external emit 108
+  external emit 101
+  external emit 109
+  external emit 105
+  external emit 116
+  external emit 108
+  external emit 101
+  external emit 98
+  external emit 115
+  external emit 108
+  external emit 101
+  external emit 98
+  external emit 99
+  external emit 111
+  external emit 110
+  external emit 115
+  external emit 116
+  external emit 112
+  external emit 97
+  external emit 116
+  external emit 99
+  external emit 104
+  external emit 109
+  external emit 97
+  external emit 114
+  external emit 107
+  external emit 98
+  external emit 101
+  external emit 103
+  external emit 105
+  external emit 110
+  external emit 102
+  external emit 105
+  external emit 110
+  external emit 105
+  external emit 115
+  external emit 104
+  external emit 114
+  external emit 117
+  external emit 108
+  external emit 101
+  external emit 97
+  external emit 114
+  external emit 103
+  external emit 115

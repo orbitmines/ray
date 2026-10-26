@@ -924,15 +924,26 @@ either_of (either_before) => (either_added) => (either_before === None) ? either
 {name} |= {value} => {name} := either_of({name})(value)
 // (`|`, the rule that decorates an edge with alternatives)
 superposing_rule := external rule `{a} | {b}`
-// (values superposed, in order: of one alone, that one its only component)
+// (values superposed, in order: of one alone, that one its only component; each given whole (one that is a list, a key's
+// reading, is not taken apart as a closure's arguments would be))
 superposed_of (superposed_values) => {
   superposed_first := superposed_values.first
-  superposed_made := superposed_values.reduce((either) => either | .)
+  superposed_made := superposed_first
+  superposed_at := superposed_values.head ? superposed_values.head.next : None
+  while superposed_at {
+    superposed_made = superposed_made | superposed_at.value
+    superposed_at = superposed_at.next
+  }
   if superposed_values.count == 1 {
     superposed_made = superposed_first | superposed_first
     external member (superposed_made) (`components`) (Array.new.append(superposed_first))
   }
   superposed_made
+}
+assert {
+  Held := class (part) => { }
+  holding := [Held([1, 2]), Held([3, 4])]
+  assert holding.part#.count == 2  // LM1 a list's member, each value's a list, is not each value's
 }
 // (what one of a superposition can be: a superposition's (its members, else its components), a range's values, else itself)
 possible_values (one) => ((one).superposes) ? (((one).members !== None) ? (one).members.listed() : (one).components.listed()) : (((one).is_range) ? (one).members.listed() : Array.new.append(one))
@@ -1036,7 +1047,7 @@ matching_in (matching_of, matching_text) => {
       // (a kept key called by what it read: here, where `.` is the reading (the key's own call rule sees the key, a part of it))
       if (external member (matching_one) (`entry_called`)) !== None {
         (matching_read) &+= {
-          {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
+          {this}({entry_argument}) => called_by_reading(((.).entry_called).kept, (.), entry_argument)
         }
       }
       if matching_first === None {
@@ -1049,6 +1060,9 @@ matching_in (matching_of, matching_text) => {
   }
   (matching_made !== None) ? matching_made : ((matching_first !== None) ? (matching_first | matching_first) : None)
 }
+// (a kept key's value called by what it read, from here: not in the reading, whose own rules its body would read (its
+// `(…)` would call the key again))
+called_by_reading (called_value, called_reading, called_argument) => called_value.with_reading(called_reading)(called_argument)
 // (a node of its own each time: `Node &+ { }` written in a rule is read once)
 fresh_reading_of (fresh_none) => Node &+ { }
 // (what a key's names take of the text its reading read: each named part, the span it read, a local of where it is given)
@@ -2282,7 +2296,7 @@ Holding := class (key) => {
     if (keeping_key).listing {
       external member (keeping_key) (`entry_called`) (keeping_entry)
       (keeping_key) &+= {
-        {this}({entry_argument}) => (((.).entry_called).kept).with_reading((.))(entry_argument)
+        {this}({entry_argument}) => called_by_reading(((.).entry_called).kept, (.), entry_argument)
       }
     }
   }

@@ -201,21 +201,26 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   // program's, exported as `main`; the memory it runs in imported (`m.memory`, shared, of `pages` pages), where the next node
   // is made global 0 (from `free`))
   static module_of (pages, free, bodies) => Wasm.module_bytes([
-    Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F]), Wasm.Vec(elements: [0x7F])]])),
-    Wasm.Written_section(id: 2, data: Wasm.Vec(elements: [[Wasm.Name(text: "m"), Wasm.Name(text: "memory"), 0x02, 0x03, pages, pages]])),
-    Wasm.Written_section(id: 3, data: Wasm.Vec(Wasm.zeros(bodies.count))),
-    Wasm.Written_section(id: 6, data: Wasm.Vec(elements: [[0x7F, 0x01, 0x41, Wasm.Signed.encoded(free).bytes, 0x0B]])),
-    Wasm.Written_section(id: 7, data: Wasm.Vec(elements: [[Wasm.Name(text: "main"), 0x00, 0]])),
-    Wasm.Written_section(id: 10, data: Wasm.Vec(Wasm.codes_of(bodies)))
+    Wasm.Written_section(1, Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F]), Wasm.Vec(elements: [0x7F])]])),
+    Wasm.Written_section(2, Wasm.memory_import(pages)),
+    Wasm.Written_section(3, Wasm.Vec(Wasm.zeros(bodies.count))),
+    Wasm.Written_section(6, Wasm.global_of(start: Wasm.Signed.encoded(free).bytes)),
+    Wasm.Written_section(7, Wasm.Vec(elements: [[Wasm.Name(text: "main"), 0x00, 0]])),
+    Wasm.Written_section(10, Wasm.Vec(Wasm.codes_of(bodies)))
   ])
-  static codes_of (bodies) => bodies.empty ? [] : [Wasm.Written_code(function: [Wasm.Vec(elements: [[2, 0x7F]]), Wasm.dispatched(bodies.first), 0x20, 2, 0x0B])].joined(Wasm.codes_of(bodies.rest))
+  // (its parts, given what they are made of: a class given by name a value that calls on its caller's parameter does not end)
+  static memory_import (pages) => Wasm.Vec(elements: [[Wasm.Name(text: "m"), Wasm.Name(text: "memory"), 0x02, 0x03, pages, pages]])
+  static global_of (start) => Wasm.Vec(elements: [[0x7F, 0x01, 0x41, start, 0x0B]])
+  static codes_of (bodies) => bodies.empty ? [] : [Wasm.Written_code([Wasm.Vec(elements: [[2, 0x7F]]), Wasm.dispatched(bodies.first), 0x20, 2, 0x0B])].joined(Wasm.codes_of(bodies.rest))
   // An Expression's node as Expression reads it (`none` on it): its statements the first function, each of its rules the
   // next, in order, a rule its body's statements; a statement read by one of the given things (`external .`, `&`, its
   // reading's `rule`), what `none` writes for it; any other a call of the rule its key is
-  static expressed (read_node, pages, free) => Wasm.module_of(pages: pages, free: free, bodies: Wasm.bodies_of(keys: read_node.rules.keyed.map((entry) => entry.key), statement_lists: Array.new.append(read_node.statements).joined(read_node.rules.keyed.map((entry) => entry.kept.body))))
+  static expressed (read_node, pages, free) => Wasm.module_of(pages: pages, free: free, bodies: Wasm.bodies_of(keys: read_node.rules.keyed.map((entry) => entry.key), statement_lists: Array.new.append(read_node.statements).joined(read_node.rules.keyed.map((entry) => (entry.kept.body) ?? Array.new))))
   static bodies_of (keys, statement_lists) => statement_lists.empty ? Array.new : Array.new.append(Wasm.statement_ops_of(keys: keys, statements: statement_lists.first)).joined(Wasm.bodies_of(keys: keys, statement_lists: statement_lists.rest))
   static statement_ops_of (keys, statements) => statements.empty ? Array.new : Array.new.append(Wasm.statement_op(keys: keys, statement: statements.first)).joined(Wasm.statement_ops_of(keys: keys, statements: statements.rest))
-  static statement_op (keys, statement) => ((statement).rule === None) ? [0x20, 0, 0x10, Wasm.key_index(keys: keys, key: statement.statement, at: 0) + 1, 0x21, 2] : Wasm.external_ops((statement).rule)
+  static statement_op (keys, statement) => (Wasm.given_of(statement) === None) ? [0x20, 0, 0x10, Wasm.key_index(keys: keys, key: statement.statement, at: 0) + 1, 0x21, 2] : Wasm.external_ops(Wasm.given_of(statement))
+  // (what a statement's reading names of the given things: its `rule`, on it or on the key's reading it is)
+  static given_of (given_statement) => ((given_statement).rule) ?? (((given_statement).statement).rule)
   // (a rule's statements, Expression's: each a case of a `br_table` in a loop, the innermost first, where it is (local 1)
   // choosing the first; each statement where its block ends, falling to the next; a jump given where it goes then, the loop
   // again)
@@ -267,13 +272,15 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   ]
   // (a module of it: `reading` exported, given where a text is and how long, the spans of `texts` its data at `at`)
   static reading_module (texts, pages, at) => Wasm.module_bytes([
-    Wasm.Written_section(id: 1, data: Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F, 0x7F]), Wasm.Vec(elements: [0x7F])]])),
-    Wasm.Written_section(id: 2, data: Wasm.Vec(elements: [[Wasm.Name(text: "m"), Wasm.Name(text: "memory"), 0x02, 0x03, pages, pages]])),
-    Wasm.Written_section(id: 3, data: Wasm.Vec(elements: [0])),
-    Wasm.Written_section(id: 7, data: Wasm.Vec(elements: [[Wasm.Name(text: "reading"), 0x00, 0]])),
-    Wasm.Written_section(id: 10, data: Wasm.Vec(elements: [Wasm.Written_code(function: [Wasm.Vec(elements: [[6, 0x7F]]), Wasm.longest_ops(count: texts.count, at: at)])])),
-    Wasm.Written_section(id: 11, data: Wasm.Vec(elements: [[0x00, 0x41, Wasm.Signed.encoded(at).bytes, 0x0B, Wasm.Vec(Wasm.spans_of(texts: texts, at: at))]]))
+    Wasm.Written_section(1, Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F, 0x7F]), Wasm.Vec(elements: [0x7F])]])),
+    Wasm.Written_section(2, Wasm.memory_import(pages)),
+    Wasm.Written_section(3, Wasm.Vec(elements: [0])),
+    Wasm.Written_section(7, Wasm.Vec(elements: [[Wasm.Name(text: "reading"), 0x00, 0]])),
+    Wasm.Written_section(10, Wasm.reading_code(Wasm.longest_ops(count: texts.count, at: at))),
+    Wasm.Written_section(11, Wasm.data_of(start: Wasm.Signed.encoded(at).bytes, spans: Wasm.Vec(Wasm.spans_of(texts: texts, at: at))))
   ])
+  static reading_code (ops) => Wasm.Vec(Array.new.append(Wasm.Written_code([Wasm.Vec(elements: [[6, 0x7F]]), ops])))
+  static data_of (start, spans) => Wasm.Vec(elements: [[0x00, 0x41, start, 0x0B, spans]])
 
   // Instructions (5.4): an op, then what it takes. An expression is instructions until `end`.
   // (each op named as WAT writes it: `prefix.name` the enum `prefix`'s member `name`, the dots after the first `_`
@@ -484,6 +491,8 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   // statement where its block ends. Only Expression's four given things are left, so every program is written this way, a
   // text read at run time too (read by Expression, itself written so).
   static none := lazily {
+    // (an Expression as it reads a program: its global node's statements and rules, a module (one page, nodes made from 64))
+    {read: Expression} => Wasm.expressed(read_node: read.global, pages: 1, free: 64)
     {program: Program} => Wasm(sections: [
       (id: 1, data: [(parameters: [i32], results: [i32])]),
       (id: 2, data: [(module: "m", name: "memory", memory: (flags: 0x03, min: program.pages, max: program.pages))]),

@@ -329,6 +329,11 @@ constant ONVIS 296
 constant TA 300
 constant TE 304
 constant HEADV 308
+constant HOST 316
+constant THISV 320
+constant READX0 324
+constant READX1 328
+constant FOUNDD 332
 constant READVIS 312
 constant CHECKS 25088
 constant WORDTAB 24576
@@ -644,7 +649,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 156
+  external emit 158
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -719,89 +724,91 @@ section 3 do
   declare numbered 73 takes 1
   declare numcount 74 takes 1
   declare tookeach 75 takes 10
-  declare takeof 76 takes 1
-  declare hasbind 77 takes 3
-  declare newnode 78 takes 1
-  declare pend 79 takes 8
-  declare run 80 takes 9
-  declare statements 81 takes 9
-  declare apply 82 takes 11
-  declare apply_ 83 takes 11
-  declare givenop 84 takes 7
-  declare givenop_ 85 takes 7
-  declare amp 86 takes 1
-  declare valued 87 takes 4
-  declare textv 88 takes 2
-  declare splicehead 89 takes 3
-  declare membered 90 takes 1
-  declare groups 91 takes 3
-  declare wordv 92 takes 2
-  declare boolv 93 takes 1
-  declare istext 94 takes 1
-  declare natives 95 takes 7
-  declare nothing 96 takes 0
-  declare newcount 97 takes 1
-  declare newchar 98 takes 1
-  declare countof 99 takes 1
-  declare textof 100 takes 2
-  declare wordend 101 takes 2
-  declare mapnative 102 takes 7
-  declare linkcount 103 takes 1
-  declare keyvalue 104 takes 1
-  declare unescape 105 takes 1
-  declare numeralof 106 takes 2
-  declare own 107 takes 3
-  declare callsany 108 takes 1
-  declare functiontyped 109 takes 2
-  declare membertarget 110 takes 7
-  declare said 111 takes 1
-  declare jumped 112 takes 10
-  declare valuejump 113 takes 8
-  declare islabel 114 takes 5
-  declare tests 115 takes 0
-  declare region 116 takes 1
-  declare zero 117 takes 2
-  declare test 118 takes 1
-  declare styled 119 takes 7
-  declare wordish 120 takes 2
-  declare charkind 121 takes 1
-  declare skippair 122 takes 2
-  declare worded 123 takes 2
-  declare leftreads 124 takes 7
-  declare splitat 125 takes 7
-  declare opof 126 takes 4
-  declare prec 127 takes 1
-  declare numop 128 takes 7
-  declare onread 129 takes 3
-  declare merged 130 takes 3
-  declare readon 131 takes 3
-  declare onvalue 132 takes 7
-  declare member 133 takes 2
-  declare kw 134 takes 4
-  declare kwend 135 takes 4
-  declare number 136 takes 3
-  declare emitb 137 takes 1
-  declare emitleb 138 takes 1
-  declare emitsleb 139 takes 1
-  declare finish 140 takes 0
-  declare alloc 141 takes 1
-  declare could 142 takes 3
-  declare retry 143 takes 3
-  declare typenode 144 takes 2
-  declare reads 145 takes 3
-  declare reads_ 146 takes 3
-  declare append 147 takes 2
-  declare method 148 takes 8
-  declare method_ 149 takes 8
-  declare chain 150 takes 6
-  declare unread 151 takes 1
-  declare eachunread 152 takes 0
-  declare stock 153 takes 2
-  declare textpart 154 takes 4
-  declare holepart 155 takes 4
-  declare spacepart 156 takes 2
-  declare language 157 takes 0
-  declare included 158 takes 1
+  declare codeof 76 takes 2
+  declare codeend 77 takes 2
+  declare takeof 78 takes 1
+  declare hasbind 79 takes 3
+  declare newnode 80 takes 1
+  declare pend 81 takes 8
+  declare run 82 takes 9
+  declare statements 83 takes 9
+  declare apply 84 takes 11
+  declare apply_ 85 takes 11
+  declare givenop 86 takes 7
+  declare givenop_ 87 takes 7
+  declare amp 88 takes 1
+  declare valued 89 takes 4
+  declare textv 90 takes 2
+  declare splicehead 91 takes 3
+  declare membered 92 takes 1
+  declare groups 93 takes 3
+  declare wordv 94 takes 2
+  declare boolv 95 takes 1
+  declare istext 96 takes 1
+  declare natives 97 takes 7
+  declare nothing 98 takes 0
+  declare newcount 99 takes 1
+  declare newchar 100 takes 1
+  declare countof 101 takes 1
+  declare textof 102 takes 2
+  declare wordend 103 takes 2
+  declare mapnative 104 takes 7
+  declare linkcount 105 takes 1
+  declare keyvalue 106 takes 1
+  declare unescape 107 takes 1
+  declare numeralof 108 takes 2
+  declare own 109 takes 3
+  declare callsany 110 takes 1
+  declare functiontyped 111 takes 2
+  declare membertarget 112 takes 7
+  declare said 113 takes 1
+  declare jumped 114 takes 10
+  declare valuejump 115 takes 8
+  declare islabel 116 takes 5
+  declare tests 117 takes 0
+  declare region 118 takes 1
+  declare zero 119 takes 2
+  declare test 120 takes 1
+  declare styled 121 takes 7
+  declare wordish 122 takes 2
+  declare charkind 123 takes 1
+  declare skippair 124 takes 2
+  declare worded 125 takes 2
+  declare leftreads 126 takes 7
+  declare splitat 127 takes 7
+  declare opof 128 takes 4
+  declare prec 129 takes 1
+  declare numop 130 takes 7
+  declare onread 131 takes 3
+  declare merged 132 takes 3
+  declare readon 133 takes 3
+  declare onvalue 134 takes 7
+  declare member 135 takes 2
+  declare kw 136 takes 4
+  declare kwend 137 takes 4
+  declare number 138 takes 3
+  declare emitb 139 takes 1
+  declare emitleb 140 takes 1
+  declare emitsleb 141 takes 1
+  declare finish 142 takes 0
+  declare alloc 143 takes 1
+  declare could 144 takes 3
+  declare retry 145 takes 3
+  declare typenode 146 takes 2
+  declare reads 147 takes 3
+  declare reads_ 148 takes 3
+  declare append 149 takes 2
+  declare method 150 takes 8
+  declare method_ 151 takes 8
+  declare chain 152 takes 6
+  declare unread 153 takes 1
+  declare eachunread 154 takes 0
+  declare stock 155 takes 2
+  declare textpart 156 takes 4
+  declare holepart 157 takes 4
+  declare spacepart 158 takes 2
+  declare language 159 takes 0
+  declare included 160 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -812,7 +819,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 156
+  external emit 158
   external emit 1
   function main locals 1 do
     var scope 0
@@ -2272,6 +2279,31 @@ section 10 do
         from = q + 1
       q = q + 1
     return caller
+  function codeof locals 4 do
+    var a 0
+    var e 1
+    var b 2
+    var z 3
+    var f 4
+    var q 5
+    if (load RUNMODE) == 0 do
+      return a
+    b = trima(a, e)
+    z = trime(b, e)
+    if ((z - b) >= ((load OPENL) + (load CLOSEL))) && (same(b, (load OPENA), (load OPENL)) && same((z - (load CLOSEL)), (load CLOSEA), (load CLOSEL))) do
+      if skippair(b, z) == z do
+        return b + (load OPENL)
+    return a
+  function codeend locals 2 do
+    var a 0
+    var e 1
+    var b 2
+    var z 3
+    if codeof(a, e) == a do
+      return e
+    b = trima(a, e)
+    z = trime(b, e)
+    return z - (load CLOSEL)
   function takeof locals 3 do
     var t 0
     var n 1
@@ -2463,7 +2495,7 @@ section 10 do
               value = load (plain + 24)
             if (plain == 0) && (ref != 0) do
               NEXTVIS <-! (load VIS)
-              value = run(base, (load (ref + 8)), (load (ref + 12)), node, (load (ref + 16)), caller, (depth + 1), 0, 0)
+              value = run(base, codeof((load (ref + 8)), (load (ref + 12))), codeend((load (ref + 8)), (load (ref + 12))), node, (load (ref + 16)), caller, (depth + 1), 0, 0)
             if ((plain == 0) && (ref == 0)) && (k >= 0) do
               ANODE <- 0
               v = value
@@ -2667,7 +2699,8 @@ section 10 do
       if q != (0 - 2) do
         return q
     f = newframe((load (key + 20)), (np + 1))
-    (f + 8) <- node
+    (f + 8) <- (((load THISV) != 0) ? (load THISV) : node)
+    THISV <-! 0
     (f + 12) <- caller
     (f + 20) <- rn
     j = 0
@@ -2722,8 +2755,12 @@ section 10 do
     if (load8 a) == 46 do
       n = newnode(node)
       if ((load RUNMODE) != 0) && (frame != 0) do
-        if ((load (frame + 20)) != 0) && ((load (frame + 20)) != node) do
-          (n + 28) <- (load (frame + 20))
+        when ((load (frame + 8)) != 0) && ((load (frame + 8)) != node) do
+          n <- (load (frame + 8))
+          (n + 28) <- node
+          else
+          if ((load (frame + 20)) != 0) && ((load (frame + 20)) != node) do
+            (n + 28) <- (load (frame + 20))
       drop arrpush((load NODES), n)
       if (load MADE) == 0 do
         MADE <- n
@@ -3994,7 +4031,7 @@ section 10 do
       n = load n
     SP <- sp
     return 0 - 1
-  function onvalue locals 3 do
+  function onvalue locals 4 do
     var base 0
     var p 1
     var e 2
@@ -4005,6 +4042,7 @@ section 10 do
     var on 7
     var k 8
     var r 9
+    var hosted 10
     r = numop(base, p, e, v, frame, depth, home)
     if r != (0 - 2) do
       return r
@@ -4026,7 +4064,16 @@ section 10 do
     ANODE <- 0
     READNODE <- (load VIS)
     ONVIS <-! (load VIS)
+    hosted = load HOST
+    if (load RUNMODE) != 0 do
+      when (load8 (load (part(keyat(k), 0) + 4))) == 46 do
+        if (load part(keyat(k), 0)) == 0 do
+          HOST <-! on
+        else
+        if isthis(keyat(k)) && ((home == hosted) && (hosted != 0)) do
+          THISV <-! home
     r = apply(k, (load RCAP), base, p, e, on, frame, on, depth, (0 - 1), on)
+    HOST <-! hosted
     ANODE <- 0
     drop event(82, rel(p), rel(e), k)
     return r

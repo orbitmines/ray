@@ -661,7 +661,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 175
+  external emit 176
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -765,79 +765,80 @@ section 3 do
   declare givenop_ 102 takes 7
   declare amp 103 takes 1
   declare valued 104 takes 4
-  declare textv 105 takes 2
-  declare splicehead 106 takes 3
-  declare membered 107 takes 1
-  declare groups 108 takes 3
-  declare wordv 109 takes 2
-  declare boolv 110 takes 1
-  declare istext 111 takes 1
-  declare natives 112 takes 7
-  declare nothing 113 takes 0
-  declare newcount 114 takes 1
-  declare newchar 115 takes 1
-  declare countof 116 takes 1
-  declare textof 117 takes 2
-  declare wordend 118 takes 2
-  declare mapnative 119 takes 7
-  declare linkcount 120 takes 1
-  declare keyvalue 121 takes 1
-  declare unescape 122 takes 1
-  declare numeralof 123 takes 2
-  declare own 124 takes 3
-  declare callsany 125 takes 1
-  declare functiontyped 126 takes 2
-  declare membertarget 127 takes 7
-  declare said 128 takes 1
-  declare jumped 129 takes 10
-  declare valuejump 130 takes 8
-  declare islabel 131 takes 5
-  declare tests 132 takes 0
-  declare region 133 takes 1
-  declare zero 134 takes 2
-  declare test 135 takes 1
-  declare styled 136 takes 7
-  declare wordish 137 takes 2
-  declare charkind 138 takes 1
-  declare skippair 139 takes 2
-  declare worded 140 takes 2
-  declare leftreads 141 takes 7
-  declare splitat 142 takes 7
-  declare tightleft 143 takes 2
-  declare opof 144 takes 4
-  declare prec 145 takes 1
-  declare numop 146 takes 7
-  declare onread 147 takes 3
-  declare merged 148 takes 3
-  declare readon 149 takes 5
-  declare onvalue 150 takes 7
-  declare member 151 takes 2
-  declare kw 152 takes 4
-  declare kwend 153 takes 4
-  declare number 154 takes 3
-  declare emitb 155 takes 1
-  declare emitleb 156 takes 1
-  declare emitsleb 157 takes 1
-  declare finish 158 takes 0
-  declare alloc 159 takes 1
-  declare could 160 takes 3
-  declare retry 161 takes 3
-  declare typenode 162 takes 3
-  declare reads 163 takes 3
-  declare reads_ 164 takes 3
-  declare append 165 takes 2
-  declare method 166 takes 8
-  declare method_ 167 takes 8
-  declare chain 168 takes 6
-  declare unread 169 takes 1
-  declare eachunread 170 takes 0
-  declare stock 171 takes 2
-  declare textpart 172 takes 4
-  declare holepart 173 takes 4
-  declare spacepart 174 takes 2
-  declare language 175 takes 0
-  declare levelread 176 takes 1
-  declare included 177 takes 1
+  declare unsetv 105 takes 7
+  declare textv 106 takes 2
+  declare splicehead 107 takes 3
+  declare membered 108 takes 1
+  declare groups 109 takes 3
+  declare wordv 110 takes 2
+  declare boolv 111 takes 1
+  declare istext 112 takes 1
+  declare natives 113 takes 7
+  declare nothing 114 takes 0
+  declare newcount 115 takes 1
+  declare newchar 116 takes 1
+  declare countof 117 takes 1
+  declare textof 118 takes 2
+  declare wordend 119 takes 2
+  declare mapnative 120 takes 7
+  declare linkcount 121 takes 1
+  declare keyvalue 122 takes 1
+  declare unescape 123 takes 1
+  declare numeralof 124 takes 2
+  declare own 125 takes 3
+  declare callsany 126 takes 1
+  declare functiontyped 127 takes 2
+  declare membertarget 128 takes 7
+  declare said 129 takes 1
+  declare jumped 130 takes 10
+  declare valuejump 131 takes 8
+  declare islabel 132 takes 5
+  declare tests 133 takes 0
+  declare region 134 takes 1
+  declare zero 135 takes 2
+  declare test 136 takes 1
+  declare styled 137 takes 7
+  declare wordish 138 takes 2
+  declare charkind 139 takes 1
+  declare skippair 140 takes 2
+  declare worded 141 takes 2
+  declare leftreads 142 takes 7
+  declare splitat 143 takes 7
+  declare tightleft 144 takes 2
+  declare opof 145 takes 4
+  declare prec 146 takes 1
+  declare numop 147 takes 7
+  declare onread 148 takes 3
+  declare merged 149 takes 3
+  declare readon 150 takes 5
+  declare onvalue 151 takes 7
+  declare member 152 takes 2
+  declare kw 153 takes 4
+  declare kwend 154 takes 4
+  declare number 155 takes 3
+  declare emitb 156 takes 1
+  declare emitleb 157 takes 1
+  declare emitsleb 158 takes 1
+  declare finish 159 takes 0
+  declare alloc 160 takes 1
+  declare could 161 takes 3
+  declare retry 162 takes 3
+  declare typenode 163 takes 3
+  declare reads 164 takes 3
+  declare reads_ 165 takes 3
+  declare append 166 takes 2
+  declare method 167 takes 8
+  declare method_ 168 takes 8
+  declare chain 169 takes 6
+  declare unread 170 takes 1
+  declare eachunread 171 takes 0
+  declare stock 172 takes 2
+  declare textpart 173 takes 4
+  declare holepart 174 takes 4
+  declare spacepart 175 takes 2
+  declare language 176 takes 0
+  declare levelread 177 takes 1
+  declare included 178 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -848,7 +849,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 175
+  external emit 176
   external emit 1
   function main locals 1 do
     var scope 0
@@ -2948,6 +2949,8 @@ section 10 do
                     drop said(a)
                 if (load RUNMODE) != 0 do
                   value = missing ? nothing() : textv(a, end)
+                  if !missing do
+                    (value + 40) <- 1
                   if (!missing) && worded(a, end) do
                     drop valued((((load READIN) != 0) ? (load READIN) : node), trima(a, end), trime(trima(a, end), end), value)
             drop event(82, rel(a), rel(end), k)
@@ -3041,7 +3044,7 @@ section 10 do
       drop event(100, node, frame, (load (key + 24)))
     if (load RUNMODE) != 0 do
       BUDGET <- ((load BUDGET) - 1)
-      if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || ((((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728)) || (((load TESTING) == 0) && (((load HEAP) - (load BUDGETHEAP)) > 8388608)))) do
+      if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || ((((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728)) || (((load TESTING) == 0) && (((load HEAP) - (load BUDGETHEAP)) > 503316480)))) do
         if (load STOP) == 0 do
           drop said(a)
         STOP <- 1
@@ -3368,6 +3371,40 @@ section 10 do
     (key + 44) <- 1
     drop addkey(key, node)
     return key
+  function unsetv locals 5 do
+    var base 0
+    var a 1
+    var e 2
+    var node 3
+    var frame 4
+    var caller 5
+    var depth 6
+    var q 7
+    var v 8
+    var b 9
+    var ta 10
+    var te 11
+    q = a
+    while (q < e) && ((load8 q) > 32) do
+      q = q + 1
+    if trima(q, e) >= e do
+      v = run(base, a, q, node, frame, caller, (depth + 1), 0, 0)
+      if (load JUMPA) != 0 do
+        return 0
+      return boolv((v != 0) && (istext(v) && ((load (v + 40)) == 1)))
+    ta = 0
+    te = 0
+    b = named(a, q, frame)
+    if b != 0 do
+      b = takeof(b)
+      ta = trima((load (b + 8)), (load (b + 12)))
+      te = trime(ta, (load (b + 12)))
+    v = run(base, trima(q, e), e, node, frame, caller, (depth + 1), 0, 0)
+    if (load JUMPA) != 0 do
+      return 0
+    if ((v != 0) && (ta < te)) && worded(ta, te) do
+      drop valued(node, ta, te, v)
+    return v
   function textv locals 0 do
     var a 0
     var e 1
@@ -3521,6 +3558,8 @@ section 10 do
       return run(base, (load g), (load (g + 4)), node, frame, caller, (depth + 1), 0, 0)
     if kw(a, e, WTYPED_NAME, NTYPED_NAME) do
       return nothing()
+    if kw(a, e, WUNSET, NUNSET) do
+      return unsetv(base, trima((a + NUNSET), e), e, node, frame, caller, depth)
     if kw(a, e, WSTATIC, NSTATIC) do
       return run(base, trima((a + NSTATIC), e), e, node, frame, caller, (depth + 1), 0, 0)
     if kw(a, e, WSHOWN, NSHOWN) do

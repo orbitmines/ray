@@ -2,7 +2,7 @@
 // `@./X.ray` beside the file being run, appended where the engine asks)
 import { readFileSync, existsSync } from 'node:fs'; import { dirname, resolve } from 'node:path'; import { fileURLToPath } from 'node:url';
 export const TEXT = 1048576;
-export const host = async (engine, file, { mode = 1, trace = 0, pages = 16384, notests = 0, from = 0, budget = +(process.env.TESTBUDGET ?? 20000), on = () => {} } = {}) => {
+export const host = async (engine, file, { mode = 1, trace = 0, pages = +(process.env.PAGES ?? 32000), notests = 0, from = 0, budget = +(process.env.TESTBUDGET ?? 20000), on = () => {} } = {}) => {
   const text = readFileSync(file); const memory = new WebAssembly.Memory({ initial: pages }); const files = [{ file, at: 0, text }];
   let i32v = null; const ev = (kind, a, b, c) => { on(kind, a, b, c, i32v); return 0; };
   const fetch = (m, n, at) => { const u8 = new Uint8Array(memory.buffer), i32 = new Int32Array(memory.buffer); const loc = Buffer.from(u8.subarray(i32[m / 4], i32[m / 4 + 1])).toString().trim();

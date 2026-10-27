@@ -1,0 +1,166 @@
+// SLEIGH, the language Ghidra describes processors in (https://github.com/NationalSecurityAgency/ghidra/blob/c427352/GhidraDocs/languages/html/sleigh.html):
+// a `.slaspec` is statements defining spaces, registers, tokens and their fields, and tables of constructors, each a
+// pattern over the instruction's bytes, how it is displayed and what it does in p-code. Read here as the instruction set
+// it describes: a machine of those spaces and registers, and instructions whose `()` is their p-code read as a Ray program
+SLEIGH := class: Language (statements: (Blank, Statement)[], Blank) {
+  static extensions := ".slaspec" | ".sinc"
+  static Blank := (" " | \t | \n | \r | ("#", (!\n)[]))[]
+  static Identifier := (Char.Letter | "_" | ".", (Char.Word | ".")[])
+  static Integer := ("0x", Hexadecimal.String) | ("0b", Binary.String) | Decimal
+  static Names := ("[", (Blank, name: Identifier | "_" | ("\"", (!"\"")[], "\"") | Integer)[], Blank, "]") | Identifier
+
+  // Preprocessing (3): `@define NAME "text"` makes `$(NAME)` read as the text from there on; `@include "file"` reads
+  // that file's statements here; `@if defined(X)` … `@else` … `@endif` keeps the statements of the branch that holds
+  static Statement := Define | Include | Conditional | Endian | Alignment | Space | Register | Bitrange | Token | Context
+    | Pcodeop | Attach | Macro | Constructor | With
+  static Define := class ("@define", Blank, name: Identifier, Blank, ("\"", value: (!"\"")[], "\"") | value: (!\n)[]) {
+    () => { `"$(" + name + ")"` => value }
+  }
+  static Include := class ("@include", Blank, "\"", file: (!"\"")[], "\"")
+  static Conditional := class (("@if" | "@ifdef" | "@ifndef"), condition: (!\n)[], then: (Blank, Statement)[],
+    elsewise: (Blank, ("@elif", (!\n)[] | "@else"), (Blank, Statement)[])[], Blank, "@endif")
+
+  // Basic definitions (4): `define endian=little;`, `define space ram type=ram_space size=2 default;`, `define register
+  // offset=0x00 size=1 [ A X Y P ];` (registers laid out in the register space, so `AF` and `A`, `F` are the same bytes)
+  static Endian := class ("define", Blank, "endian", Blank, "=", Blank, order: "little" | "big", Blank, ";")
+  static Alignment := class ("define", Blank, "alignment", Blank, "=", Blank, bytes: Integer, Blank, ";")
+  static Space := class ("define", Blank, "space", Blank, name: Identifier, Blank, "type", Blank, "=", Blank, kind: "ram_space" | "register_space" | "rom_space",
+    Blank, "size", Blank, "=", Blank, size: Integer, (Blank, "wordsize", Blank, "=", Blank, Integer)?, (Blank, default: "default")?, Blank, ";")
+  static Register := class ("define", Blank, "register", Blank, "offset", Blank, "=", Blank, offset: Integer, Blank, "size", Blank, "=", Blank, size: Integer, Blank, names: Names, Blank, ";") {
+    // (each name the next `size` bytes of the register space, read in the description's order; `_` none)
+    placed => names.enumerate{.value != "_"}.map(name => { `name.value` @ register[offset + name.index * size ..< offset + (name.index + 1) * size] })
+  }
+  static Bitrange := class ("define", Blank, "bitrange", ranges: (Blank, name: Identifier, Blank, "=", Blank, of: Identifier, "[", low: Integer, Blank, ",", Blank, size: Integer, "]")[], Blank, ";")
+  // (an operation the description names and does not define: what it does is the processor's, an error until given)
+  static Pcodeop := class ("define", Blank, "pcodeop", Blank, name: Identifier, Blank, ";") {
+    defined => { `name` (arguments) => ERROR@SLEIGH `{name} is not defined by the description` }
+  }
+
+  // Tokens and fields (6): `define token data8 (8) imm8 = (0,7) rel = (0,7) signed;`, a field the bits `low` to `high`
+  // of its token, bit 0 the least significant; a context register's fields the same, over that register (6.4)
+  static Token := class ("define", Blank, "token", Blank, name: Identifier, Blank, "(", bits: Integer, ")", (Blank, "endian", Blank, "=", Blank, order: Identifier)?, fields: (Blank, Field)[], Blank, ";")
+  static Context := class ("define", Blank, "context", Blank, register: Identifier, fields: (Blank, Field)[], Blank, ";")
+  static Field := class (name: Identifier, Blank, "=", Blank, "(", Blank, low: Integer, Blank, ",", Blank, high: Integer, Blank, ")", attributes: (Blank, "signed" | "hex" | "dec" | "noflow")[]) {
+    signed => "signed" is attributes#
+    width => high - low + 1
+    of (token: Binary) => ((token >> low) % 2 ^ (high - low + 1)) -- (signed ? .Signed : .)
+  }
+  // Attaching (7.9): a field read as a register, a name or a value by its number; `_` attaches nothing
+  static Attach := class ("attach", Blank, kind: "variables" | "names" | "values", Blank, fields: Names, Blank, to: Names, Blank, ";")
+
+  // Constructors (7): `name: display is pattern [actions] { semantics }`, `:mnemonic …` one of the instructions; a table
+  // is the constructors of one name, each displayed by its mnemonic and operands, and its value what it `export`s
+  static Constructor := class (table: Identifier?, ":", display: (!(Blank, "is", Blank))[], Blank, "is", Blank, pattern: (!("[" | "{"))[],
+    (Blank, "[", actions: (!"]")[], "]")?, Blank, ("{", semantics: (!"}" | Nested)[], "}") | "unimpl")
+  static Nested := ("{", (!"}" | Nested)[], "}")
+  static Macro := class ("macro", Blank, name: Identifier, Blank, "(", parameters: (Blank, Identifier).join(","), Blank, ")", Blank, "{", body: (!"}" | Nested)[], "}") {
+    defined => { `name` (parameters) => pcode.(body) }
+  }
+  // A table: its constructors, read as the one whose pattern reads the bytes, the more particular (the more bits it fixes)
+  // where several do (7.8.1)
+  static Table := class (constructors: class[]) {
+    (bytes: Byte[]) as (=== Table) => bytes as constructors{bytes is .}.max_by(.fixed)
+  }
+  // `with table : pattern [actions] { … }`: the constructors inside take the table, pattern and actions as their own (7.12)
+  static With := class ("with", Blank, table: Identifier?, Blank, ":", Blank, pattern: (!("[" | "{"))[], ("[", actions: (!"]")[], "]")?, Blank, "{", statements: (Blank, Statement)[], Blank, "}")
+
+  // A pattern (7.4) is a shape over the instruction's bytes, its constraints narrowings of the tokens they read, an
+  // operand a place named as its field or table
+  static patterns := Compiler.none + {
+    {field: Field} = {value} => (`field.name`: token(field){field.of(.) == value})
+    {field: Field} != {value} => (`field.name`: token(field){field.of(.) != value})
+    {field: Field} {comparison: "<" | ">" | "<=" | ">="} {value} => (`field.name`: token(field){field.of(.) comparison value})
+    {field: Field} => (`field.name`: token(field))
+    {table: Table} => (`table.name`: table)
+    {a} & {b} => a & b
+    {a} | {b} => a | b
+    {a} ; {b} => (a, b)
+    // `a ...`: a, and whatever more of the same token follows; `... a` the same before it (7.4.4)
+    {a} ... => (a, *)
+    ... {a} => (*, a)
+    epsilon => ()
+  }
+  // P-code (7.7) read as a Ray program in the machine: places are registers and spaces, `goto` answers where the machine
+  // goes next, and the instruction otherwise goes on to `inst_next`
+  static pcode := Compiler.none + {
+    {place} = {value}; => place = value
+    local {name}:{size} = {value}; => name: Binary{length == 8 * size} = value
+    local {name} = {value}; => name := value
+    // `*[ram]:2 p`, `*:1 p`: the bytes at p in a space, in the description's order
+    *[{space}]:{size} {pointer} => space[pointer ..< pointer + size] as Word
+    *:{size} {pointer} => default_space[pointer ..< pointer + size] as Word
+    {x}[{low},{size}] => (x >> low) % 2 ^ size
+    {x}:{size} => x % 2 ^ (8 * size)
+    goto [{target}]; => return target
+    goto {target}; => return target
+    if ({condition}) goto {target}; => return target if condition
+    call [{target}]; => return target
+    call {target}; => return target
+    return [{target}]; => return target
+    export {value}; => return value
+    build {operand}; => operand()
+    // Operators (7.7.1) written otherwise than Ray's: signed, carries, extensions, logic
+    {a} s< {b} => a.Signed < b.Signed
+    {a} s> {b} => a.Signed > b.Signed
+    {a} s<= {b} => a.Signed <= b.Signed
+    {a} s>= {b} => a.Signed >= b.Signed
+    {a} s>> {b} => a.Signed >> b
+    {a} ^^ {b} => a != b
+    {a} ^ {b} => a ~^^ b
+    {a} & {b} => a ~&& b
+    {a} | {b} => a ~|| b
+    ~{a} => 2 ^ a.length - 1 - a
+    zext({a}) => a
+    sext({a}) => a.Signed
+    carry({a}, {b}) => a + b >= 2 ^ a.length
+    scarry({a}, {b}) => !(-(2 ^ (a.length - 1)) <= a.Signed + b.Signed < 2 ^ (a.length - 1))
+    sborrow({a}, {b}) => !(-(2 ^ (a.length - 1)) <= a.Signed - b.Signed < 2 ^ (a.length - 1))
+    <{label}> => label\
+  }
+
+  // What a description answers: its spaces and registers as a machine, and its tables of constructors, `instruction` the
+  // instructions, each constructor a class: its pattern the header, its display `as String`, its p-code `()`
+  order => statements{is Endian}.first.order
+  fields => statements{is Token | Context}.fields.flatten
+  token (field: Field) => statements{is Token}{field is .fields#}.first.bits / 8 -- (bytes => order == "little" ? <-Byte[]{length == bytes} as Binary : Byte[]{length == bytes} as Binary)
+  fixed (pattern: String) => (pattern ~= (name: Identifier, Blank, "=", Blank, Integer)).map(fields{.name == name}.first.width).sum
+  table (name: String = "instruction") => Table(statements{is Constructor && (.table ?? "instruction") == name}.map(constructor => class (patterns.(constructor.pattern)) {
+    static mnemonic := (constructor.display ~= (⊢, (!" ")[])).first
+    static fixed := fixed(constructor.pattern)
+    as (=== String) => constructor.display
+    // (run at the address it is read at, `inst_start`, answering where the machine goes next)
+    (inst_start: Number = 0) => (inst_next := inst_start + (this as Byte[]).count; pcode.(constructor.semantics); inst_next)
+  }))
+  machine => class (statements{is Space}.map((`.name`: Byte[] = [0] * 2 ^ (8 * .size))))
+    &+ { default_space => `statements{is Space && .default}.first.name` }
+    &+ statements{is Register}.placed.flatten &+ statements{is Macro | Pcodeop}.defined
+
+  static level := {
+    {description: SLEIGH} => description
+  }
+}
+assert {
+  toy := SLEIGH.read(`define endian=little;
+define space ram type=ram_space size=2 default;
+define space register type=register_space size=1;
+define register offset=0x00 size=1 [ A X ];
+define register offset=0x20 size=2 [ PC ];
+define token opbyte (8) op = (0,7) aaa = (5,7);
+define token data8 (8) imm8 = (0,7) rel = (0,7) signed;
+:LDA "#"imm8 is op=0xa9; imm8 { A = imm8; }
+:INX is op=0xe8 { X = X + 1; }
+:NOP is op=0xea { }
+:ANY is op { }`)
+  assert toy.order == "little" && toy.statements{is SLEIGH.Register}.count == 2  // SLG1 the endianness or the registers are not read
+  assert toy.statements{is SLEIGH.Token}[0].fields[1].(name == "aaa" && low == 5 && high == 7) && toy.statements{is SLEIGH.Token}[1].fields[1].signed  // SLG2 a token's fields are not their bits, or rel is not signed
+  assert ([0xa9, 0x05] as toy.table()).(mnemonic == "LDA" && imm8 == 5)  // SLG3 a9 05 is not LDA #5
+  assert [0xa9, 0x05] as toy.table() as Byte[] == [0xa9, 0x05]  // SLG4 LDA is not written back as a9 05
+  assert ([0xea] as toy.table()).mnemonic == "NOP" && ([0x42] as toy.table()).mnemonic == "ANY"  // SLG5 ea is not read as the more particular NOP
+  machine := toy.machine()
+  machine.X = 0x41
+  assert machine.(([0xe8] as toy.table())()) == 1 && machine.X == 0x42  // SLG6 INX does not make 42 of 41 and go on to the next byte
+  machine.register[0x21] = 0x06
+  assert machine.PC == 0x0600  // SLG7 a register is not the bytes of the register space it is laid out at
+}
+assert SLEIGH.pcode.(`if (1 s< 0xff:1) goto 0x10;`) == None && SLEIGH.pcode.(`if (0xff:1 s< 1) goto 0x10;`) == 0x10  // SLG8 a signed comparison or a conditional goto is not read as p-code means it
+assert $.slaspec === SLEIGH  // SLG9 $.slaspec is not SLEIGH

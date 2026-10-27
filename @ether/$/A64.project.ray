@@ -1,0 +1,101 @@
+@xml
+@asl
+
+// A64, the AArch64 instruction set (Arm Architecture Reference Manual for A-profile, DDI 0487), made from Arm's own
+// machine-readable release at a pinned version and written by hand nowhere: an instruction section per file, its
+// register diagrams the words it reads, its encodings what refines them, and its ASL what it does
+A64 := class: Language (instructions: (<-Byte₄ as Instruction)[], rest: Byte[]) {
+  // (Arm's release is under Arm's own licence, so it is fetched by hand and unpacked into the repository's `.ether/external`:
+  // https://developer.arm.com/-/cdn-downloads/permalink/Exploration-Tools-A64-ISA/ISA_A64/ISA_A64_xml_A_profile-2026-06.tar.gz)
+  static Release := @../../.ether/external/arm/ISA_A64_xml_A_profile-2026-06
+  // The machine: the shared pseudocode's variables (`_R`, `_PC`, `SP_EL0`, `PSTATE`, …), its functions and accessors its
+  // methods (`X[n, width]`, `AddWithCarry`, `ConditionHolds`, `BranchTo`)
+  static Shared := (Release / "shared_pseudocode.xml" as XML).elements("ps").map(.text).join(\n) as ASL
+  static Machine := Shared.machine
+  // The instruction sections, not their aliases (`type="alias"`, another spelling of a word an instruction reads)
+  static Sections := Release.children.map(. as XML){.name == "instructionsection" && .["type"] == "instruction"}
+
+  // A box of a register diagram (`<box hibit="31" width="2" name="op">`), its cells the highest bit first: `0` and `1`
+  // fixed, empty a bit of the field, `(0)` and `(1)` what it should be but any is read (and written back as it was read),
+  // a box `constraint="!= 000"` any but that
+  static Box := class (hibit: Number, width: Number = 1, name: String?, constraint: String?, cells: String[]) {
+    static (box: XML.Element) as (=== Box) => Box(box["hibit"], box["width"] ?? 1, box["name"], box["constraint"],
+      box.elements("c").map(.text -- ([.] * (.["colspan"] ?? 1))).flatten)
+    bits => Binary{length == width}{. ~= ⊢cells.map(. is "0" | "1" ? . : ("0" | "1"))⊣}{constraint ? !(. ~= ⊢constraint[3..]⊣) : true}
+    pattern => name ? (`name`: bits) : bits
+    fixed => cells{is "0" | "1"}.count
+  }
+  // An encoding: its class's diagram, each box refined by the encoding's box at the same bit, read as the word's bits from
+  // bit 31; its `()` the decode beside the diagram, then the execute of the section, in the machine. PC moves on four
+  // bytes unless the instruction branched (`BranchTo` sets `_PC` and `__BranchTaken`)
+  static Encoding (section: XML.Element, iclass: XML.Element, encoding: XML.Element) => iclass.elements("regdiagram").first -- (diagram =>
+    class (diagram.elements("box").map(box => encoding.elements("box"){.["hibit"] == box["hibit"]}.first ?? box).map((. as Box).pattern)) {
+      static name := encoding["name"]
+      static mnemonic := encoding.elements("docvars").first.elements("docvar"){.["key"] == "mnemonic"}.first["value"]
+      static fixed := diagram.elements("box").map((encoding.elements("box"){.["hibit"] == .["hibit"]}.first ?? .) as Box).fixed.sum
+      static decode := iclass.elements("ps"){.["name"] == diagram["psname"]}.first.text as ASL.Expression
+      static execute := section.elements("ps_section").first.elements("ps").first.text as ASL.Expression
+      () => (__BranchTaken = false; decode; execute; _PC = _PC + 4 unless __BranchTaken)
+    })
+  static Encodings := Sections.map(section => section.elements("classes").first.elements("iclass").map(iclass =>
+    iclass.elements("encoding").map(Encoding(section, iclass, .)))).flatten
+  // An instruction: the encoding that reads the word, the more particular (fixing more bits) where two do
+  static Instruction := Encodings#
+  static (word: Binary₃₂) as (=== Instruction) => word as Encodings{word is .}.max_by(.fixed)
+  static named (name: String) => Encodings{.name == name}.first
+
+  // Running code placed at `base`: the instruction at `_PC` does what it does, until `_PC` leaves the code or `steps` have run
+  run (machine: Machine, base: Number = 0, steps: Number = ∞) => machine ~~ .(
+    _PC = base
+    taken := 0
+    while taken < steps && base <= _PC < base + 4 * instructions.count {
+      instructions[(_PC - base) / 4]()
+      taken += 1
+    }
+  )
+
+  // The encodings, as the release spells them
+  assert A64.named("ADD_64_addsub_imm").fixed == 9 && A64.named("RET_64R_branch_reg").mnemonic == "RET"  // AA1 ADD (immediate), 64-bit, does not fix the nine bits of ff800000, or RET is not named RET
+  assert 0xb8400c00 as Binary₃₂ is A64.named("LDR_32_ldst_immpre") && A64.named("LDR_64_ldst_pos") != None  // AA2 LDR (immediate) is not read, or b8400c00 is not its 32-bit pre-index spelling
+  assert A64.named("ADD_32_addsub_imm").execute == A64.named("ADD_64_addsub_imm").execute  // AA3 ADD's 32-bit and 64-bit encodings do not share their execute
+  // Words as llvm-mc writes them: add x0, x1, #1; mov x0, #42 (MOVZ); b #-4; b.eq #8; ret; ldr x0, [x1]; udf #0
+  assert (0x91000420 as Binary₃₂ as A64.Instruction).(mnemonic == "ADD" && Rn == 1 && imm12 == 1)  // AA4 91000420 is not add x0, x1, #1
+  assert (0xd2800540 as Binary₃₂ as A64.Instruction).(mnemonic == "MOVZ" && imm16 == 42)  // AA5 d2800540 is not movz x0, #42
+  assert (0x17ffffff as Binary₃₂ as A64.Instruction).mnemonic == "B" && (0x54000040 as Binary₃₂ as A64.Instruction).(mnemonic == "B" && cond == 0)  // AA6 17ffffff is not b, or 54000040 is not b.eq
+  assert (0xd65f03c0 as Binary₃₂ as A64.Instruction).(mnemonic == "RET" && Rn == 30) && (0xf9400020 as Binary₃₂ as A64.Instruction).mnemonic == "LDR"  // AA7 d65f03c0 is not ret, or f9400020 is not ldr
+  assert [0x91000420, 0xd2800540, 0x17ffffff, 0x54000040, 0xd65f03c0, 0xf9400020].every(. as Binary₃₂ as A64.Instruction as Binary₃₂ == .)  // AA8 an instruction is not written back as the word it was read from
+  assert (0x00000000 as Binary₃₂ as A64.Instruction).mnemonic == "UDF"  // AA9 00000000 is not udf #0
+
+  // What each does, by Arm's pseudocode
+  assert {
+    cpu := A64.Machine()
+    at (word: Number) => cpu.((word as Binary₃₂ as A64.Instruction)())
+    cpu.(X[1, 64] = 0x29)
+    at(0x91000420)
+    assert cpu.(X[0, 64]) == 0x2a && cpu.(X[1, 64]) == 0x29  // AA10 add x0, x1, #1 with x1 = 29 does not give 2a, or changes x1
+    at(0x91400422)
+    assert cpu.(X[2, 64]) == 0x1029  // AA11 add x2, x1, #1, lsl #12 does not give 1029
+    cpu.(X[1, 64] = 0xffffffff00000029)
+    at(0x11000420)
+    assert cpu.(X[0, 64]) == 0x2a  // AA12 add w0, w1, #1 is not 2a, zero-extended
+    at(0xd2a000a1)
+    assert cpu.(X[1, 64]) == 0x50000  // AA13 movz x1, #5, lsl #16 is not 50000
+    cpu.(X[1, 64] = 1)
+    at(0xf1000421)
+    assert cpu.(X[1, 64]) == 0 && cpu.PSTATE.(Z == 1 && C == 1 && N == 0)  // AA14 subs x1, x1, #1 of 1 is not 0 with Z and C set
+    cpu._PC = 0x10
+    at(0x54ffffc1)
+    assert cpu._PC == 0x14  // AA15 b.ne is taken though Z is set
+    cpu.(_PC = 0x10; PSTATE.Z = 0)
+    at(0x54ffffc1)
+    assert cpu._PC == 0x8  // AA16 b.ne at 10 with Z clear does not go to 8
+  }
+  // movz x0, #0; movz x1, #2; loop: add x0, x0, #2; subs x1, x1, #1; b.ne loop; ret, at 1000: twice round the loop, then
+  // back to x30, which is 0, where there is no code
+  assert {
+    code := [0x00, 0x00, 0x80, 0xd2, 0x41, 0x00, 0x80, 0xd2, 0x00, 0x08, 0x00, 0x91, 0x21, 0x04, 0x00, 0xf1, 0xc1, 0xff, 0xff, 0x54, 0xc0, 0x03, 0x5f, 0xd6]
+    assert A64.read(code) as Byte[] == code  // AA17 the program is not written back as it was read
+    cpu := A64.read(code).run(A64.Machine(), base: 0x1000)
+    assert cpu.(X[0, 64]) == 4 && cpu.(X[1, 64]) == 0 && cpu.PSTATE.Z == 1 && cpu._PC == 0  // AA18 the loop does not leave four in x0 and return to 0
+  }
+}

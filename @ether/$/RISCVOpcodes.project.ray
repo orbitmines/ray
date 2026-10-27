@@ -1,0 +1,60 @@
+// riscv-opcodes, the RISC-V encodings as the RISC-V project keeps them (https://github.com/riscv/riscv-opcodes): a file per
+// extension (`extensions/rv_i`, …), an instruction a line, its name and what its 32 bits are made of
+RISCVOpcodes := class: Language (lines: (Blank, Line | Pseudo | Import | Comment)[], Blank) {
+  static Blank := (" " | \t | \n)[]
+  static Space := (" " | \t)[]{length > 0}
+  static Name := (Char.Word | ".")[]
+  static Comment := ("#", (!\n)[])
+
+  // The arguments (`arg_lut.csv`): `"rd", 11, 7`, each a name and the highest and lowest bit of the word it takes
+  static Arguments := class (entries: ("\"", name: Name, "\",", Space, high: Decimal, ",", Space, low: Decimal, \n)[]) {
+    [name: String] => entries{.name == name}.first
+  }
+  static arguments := @https://raw.githubusercontent.com/riscv/riscv-opcodes/5783cf3/arg_lut.csv as Arguments
+  assert (`"bimm12hi", 31, 25\n` as RISCVOpcodes.Arguments)["bimm12hi"].high == 31  // ROP7 an argument does not begin at the bit arg_lut.csv says
+
+  // A fixed range, `14..12=0`, `6..2=0x04`, `12=1`: those bits of the word are always that value
+  static Fixed := class (high: Decimal, (".", ".", low: Decimal)?, "=", value: Number) {
+    lowest => low ?? high
+    pattern => value as Binary{length == high - lowest + 1}
+  }
+  // An argument, by its name in `arguments`: the bits it takes are a field of that name
+  static Argument<arguments: Arguments> := class (name: Name) {
+    high => arguments[name].high
+    lowest => arguments[name].low
+    pattern => (`name`: Binary{length == high - lowest + 1})
+  }
+
+  // `addi rd rs1 imm12 14..12=0 6..2=0x04 1..0=3`: the parts in any order, every bit of the word said once
+  static Line<arguments: Arguments = RISCVOpcodes.arguments> := class (mnemonic: Name, parts: (Space, part: Fixed | Argument<arguments>)[], Space?, Comment?) {
+    dynamically assert parts.part.map(.lowest..high).flatten.sort == 0..31
+    // The encoding: the word's bits from the highest, each part a literal or a field
+    encoding => class (parts.part.sort_by(-.high).map(.pattern)) {
+      static mnemonic := mnemonic
+    }
+  }
+  // `$pseudo_op rv_i::addi mv rd rs1 31..20=0 14..12=0 6..2=0x04 1..0=3`: another spelling of an instruction listed in an
+  // extension, its fixed ranges narrowing that instruction's word; `$import rv_i::lui` takes a line of another extension as it is
+  static Pseudo := class ("$pseudo_op", Space, extension: Name, "::", of: Name, Space, line: Line)
+  static Import := class ("$import", Space, extension: Name, "::", of: Name)
+
+  // A file is read as the encodings of its lines, an instruction set's words read as one of them
+  static level := {
+    {opcodes: RISCVOpcodes} => opcodes.lines{is Line}.map(.encoding)
+  }
+}
+assert {
+  table := `"rd", 11, 7\n"rs1", 19, 15\n"imm12", 31, 20\n` as RISCVOpcodes.Arguments
+  addi := `addi    rd rs1 imm12           14..12=0 6..2=0x04 1..0=3` as RISCVOpcodes.Line<arguments: table>
+  assert addi.mnemonic == "addi" && addi.parts.count == 6  // ROP1 a line is not read as its mnemonic and parts
+  assert addi.parts[3].part.high == 14 && addi.parts[3].part.lowest == 12 && addi.parts[4].part.value == 4  // ROP2 a fixed range is not read as its bits and value
+  assert addi.parts[5].part.lowest == 0 && (`12=1` as RISCVOpcodes.Fixed).lowest == 12  // ROP3 a range of one bit is not that bit
+  // addi x1, x0, 5: imm12 5, rs1 0, funct3 0, rd 1, opcode 0010011 (The RISC-V Instruction Set Manual, Volume I, 2.4.1)
+  word := 0x00500093 as Binary₃₂ as addi.encoding
+  assert word.rd == 1 && word.rs1 == 0 && word.imm12 == 5  // ROP4 00500093 is not addi x1, x0, 5
+  assert word as Binary₃₂ == 0x00500093  // ROP5 addi is not written back as the word it was read from
+  assert !(0x00000000 as Binary₃₂ is addi.encoding)  // ROP6 a word another opcode fixes is read as addi
+  assert (`$pseudo_op rv_i::addi mv rd rs1 31..20=0 14..12=0 6..2=0x04 1..0=3` as RISCVOpcodes.Pseudo).of == "addi"  // ROP8 a pseudo-op is not read as another spelling of addi
+  // A line that leaves a bit unsaid is not an encoding (riscv-opcodes' own check, `parse.py`)
+  assert `nop rd 6..2=0x04 1..0=3` as RISCVOpcodes.Line<arguments: table> is Diagnostic  // ROP9 a line that does not say every bit reads
+}

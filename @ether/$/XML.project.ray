@@ -1,0 +1,32 @@
+// Extensible Markup Language (XML) 1.0, Fifth Edition (https://www.w3.org/TR/xml/): a prolog, then one element, each an
+// open tag with attributes, its content of text and elements, and a close tag of the same name
+XML := class: Language (Prolog?, root: Element, Blank) {
+  static extensions := ".xml"
+  static Blank := (" " | \t | \r | \n | Comment)[]
+  // Names (2.3), comments (2.5), processing instructions (2.6), the document type declaration (2.8) passed over as written
+  static Name := (Char.Letter | "_" | ":", (Char.Word | "-" | "." | ":")[])
+  static Comment := ("<!--", (!"-->")[], "-->")
+  static Prolog := (Blank, ("<?", (!"?>")[], "?>") | ("<!DOCTYPE", (!">")[], ">"), Blank)[]
+  // Character and entity references (4.1, 4.6): the five predefined, and characters by number
+  static Reference := ("&lt;" as "<") | ("&gt;" as ">") | ("&amp;" as "&") | ("&apos;" as "'") | ("&quot;" as "\"")
+    | ("&#x", code: Hexadecimal.String, ";") as code as Char | ("&#", code: Decimal.String, ";") as code as Char
+  static Text := (Reference | !("<" | "&"))[]{length > 0} as String
+  static Attribute := class (name: Name, Blank, "=", Blank, ("\"", value: (Reference | !("\"" | "<" | "&"))[] as String, "\"") | ("'", value: (Reference | !("'" | "<" | "&"))[] as String, "'"))
+  // Elements (3.1): `<name a="1">…</name>`, or empty, `<name a="1"/>`
+  static Element := class ("<", name: Name, attributes: (Blank, Attribute)[], Blank,
+    ("/>" | (">", content: (Text | Element | Comment | ("<![CDATA[", text: (!"]]>")[], "]]>"))[], "</", name, Blank, ">"))) {
+    [attribute: String] => attributes{.name == attribute}.first.value
+    elements (name: String? = None) => content{is Element && (name == None || .name == name)}
+    text => content.map(. is Element ? .text : . as String).join("")
+  }
+  static level := {
+    {document: XML} => document.root
+  }
+}
+assert {
+  box := XML.read(`<?xml version="1.0"?><box hibit="31" name="sf"><c>1</c><c>&lt;0&gt;</c><c/></box>`)
+  assert box.name == "box" && box["hibit"] == "31" && box["name"] == "sf"  // XML1 an element is not read as its name and attributes
+  assert box.elements("c").count == 3 && box.elements("c")[1].text == "<0>" && box.elements("c")[2].content == None  // XML2 an element's content, references or an empty element are not read
+  assert XML.read(`<a x='1'>t<!-- c --><b/>u</a>`) as String == `<a x='1'>t<!-- c --><b/>u</a>`  // XML3 a document is not written back as it was read
+}
+assert $.xml === XML  // XML4 $.xml is not XML

@@ -207,10 +207,25 @@ What there is now, beside the seed (the user: "Just make it work the goal is sel
   rank and the latest key down, for keys whose matching only answers (no typed hole). A typed hole runs its type's
   rule, so its keys are tried in the model's order, those before them settled first. `.entrypoint.ray3` reads in
   ~100 ms (the model 1.6 s, the seed ~26 s for the language); the engine builds itself in ~35 ms (it was 5 s).
-- Next (the user, 2026-10-27): `.entrypoint.ray`, `.entrypoint.ray3`'s language with only §21.2's externals (`&`, `goto`,
-  labels); the Wasm-specific parts in `$/Wasm.project.ray`; the engine running it, its `assert`s against the seed's
-  results (402 in `.entrypoint.ray3`, 944 in the library), until the native engine builds `$/Wasm.project.ray` itself and
-  the interim engine goes.
+- Then (2026-10-28) it runs the language: `.entrypoint.ray3` and the library read, the map (`$/Wasm/map.ray`, the seed's
+  `wasm.o.ray`) read after the language, the tests run each in a region of their own. 664 of 1459 pass, 569 of them
+  passing in the seed too (the seed: 944). What it took, each the seed's semantics (kernel.ts): `goto`/labels give a
+  block no value of their own; what nothing reads is a place; a hole between a pair's brackets ends at its close; a take
+  (a hole's value) is read where it was written and keeps its value, a take of another take that one's; `{x}` spliced is
+  code read here, `{ … }` spliced is code, not a block; a body reads only the rules before it with its head, and so does
+  every take, splice and reading on a value from it; a node made by a rule read on a value has that value as its parent
+  and sees where it was written after; `xs.for x => body` is `xs.for((x) => body)`; one or several parameters given
+  their values at once (`taking`), a definition answering its head (`given`), Numbers counted down to zero, as the map's
+  accelerations ask.
+- `@ether/ray/bootstrap/.entrypoint.ray` (the user's choice, 2026-10-28: externals as definitions): `.entrypoint.ray3`
+  with a member written as a definition (`n := v`, `(x).(n := v)`), read through `member_named`, and every other external
+  asked of the level it runs on, `level <request> …`, each request a rule of `$/Wasm/level.ray` (read right after the
+  header, before the language). Its own externals: `&`, `goto`, labels, `.` and `members` (making the node a body runs
+  in). `.entrypoint.wasm` beside it is the engine, written by itself from `$/Wasm/bootstrap.ray`
+  (`node .entrypoint.mjs build`); `node .entrypoint.mjs` runs the language and its tests: 647 of 1444 pass.
+- Next: the tests the seed passes and the engine does not (wrong values ~140, applications cost several times the
+  seed's, so tests run out of their budget), then the native engine building `$/Wasm.project.ray` itself and the interim
+  engine going.
 
 ## 9. Found on the way
 

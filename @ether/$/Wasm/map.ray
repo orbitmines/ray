@@ -1,0 +1,341 @@
+// The kernel's map: what its own kinds of value are in the language (read after the language, for every backend: they run
+// one kernel). What it holds as text, what is written between quotes and what a hole took, is a String; what it holds as
+// nothing is None. (What a String is made of, its characters, the language says (Char[]); the kernel answers it faster.)
+String &+= {
+  external text
+  first => external first
+  rest => external rest
+  // (two texts of the same characters: the first, else nothing; what a character is made of is what the kernel holds)
+  same_characters (other) => external same this other
+  // (what is before where another text, a rest of this one, begins)
+  until (other) => external until this other
+  // (what follows where it begins with another text; it does not, nothing)
+  past (other) => external past this other
+  // (a text, then another: the text of this one's characters, then the other's; a value that is no text, as it is written)
+  compounds + (other) => external joined this (((other).textual === true) ? other : (other as String))
+  // (what is written between quotes, each escape in it what it stands for (String.ray's `Escape`))
+  unescaped => external unescaped this
+  // (and what Ray.ray's Iterable answers of a text, through those, one character after another: as its rules answer)
+  count => {
+    counted := 0
+    at := this
+    while !(at.empty) {
+      counted = counted + 1
+      at = at.rest
+    }
+    counted
+  }
+  last => {
+    at := this
+    while !(at.rest.empty) {
+      at = at.rest
+    }
+    at.first
+  }
+  for (body) => {
+    at := this
+    while !(at.empty) {
+      body(at.first)
+      at = at.rest
+    }
+    this
+  }
+  map (mapping) => {
+    made := Array.new
+    at := this
+    while !(at.empty) {
+      made.append(mapping(at.first))
+      at = at.rest
+    }
+    made
+  }
+  some (predicate) => {
+    at := this
+    while !(at.empty) {
+      if predicate(at.first) { return true }
+      at = at.rest
+    }
+    false
+  }
+  every (predicate) => !(this.some((x) => !predicate(x)))
+  // (`t.map{p}(v)`: its characters, v in place of each one p holds of (a function, v of it), the others kept)
+  map {kept} (mapping) => .empty ? Array.new : (.rest.map{ {kept} }(mapping)).prepend(answers_true((.first).({kept})) ? (((mapping).closure === true) ? mapping(this.first) : mapping) : this.first)
+  find (predicate) => {
+    at := this
+    while !(at.empty) {
+      if predicate(at.first) { return at.first }
+      at = at.rest
+    }
+    None
+  }
+}
+// Arrays: a list the language links (`Array.new`, its vertices from `head`): what Ray.ray's Iterable answers of it, walking
+// its vertices (as its rules answer, reading it as a Ray a step at a time)
+Array &+= {
+  // (made, given to: by the kernel, as the language does it, the same members on the same nodes (Array's `new`, `append`,
+  // `prepend`, `listed`, `joined`); the one rule every list reads a written value with, `{written}`, kept once for all)
+  list_reading := {
+    {written} => (.).one_written(`{written}`)
+  }
+  // (`new` and `append` natively, `external arrayed new (Array)` and `external arrayed append (.) (value)`: off, TODO(explicit):
+  // with them a suite's tests take twice as long, though reading is a third faster; as the language makes them until found)
+  // (prepend, listed, joined: natively they break under evacuation in tests run by threads, TODO(explicit): until found, the
+  // language's way)
+  prepend (value) => (.).prepended_by_linking(value)
+  listed () => (.).listed_by_linking()
+  joined (other) => (.).joined_by_linking(other)
+  appended_by_linking (value) => {
+    link := Array.linked(value)
+    if .tail {
+      link.previous := .tail
+      .tail.next := link
+    } else {
+      .head := link
+    }
+    .tail := link
+    .
+  }
+  prepended_by_linking (value) => {
+    link := Array.linked(value)
+    if .head {
+      .head.previous := link
+      link.next := .head
+    } else {
+      .tail := link
+    }
+    .head := link
+    .
+  }
+  listed_by_linking () => {
+    made := Array.new
+    at := .head
+    while at {
+      external named_like (made.append(at.value)) at
+      at = at.next
+    }
+    made
+  }
+  joined_by_linking (other) => {
+    joining := .
+    if other.listing {
+      at := (other === joining) ? other.listed().head : other.head
+      while at {
+        external named_like (joining.append(at.value)) at
+        at = at.next
+      }
+    } else {
+      joining.append(other)
+    }
+    joining
+  }
+  first => .head ? .head.value : None
+  last => .tail ? .tail.value : None
+  empty => .head ? false : true
+  // (how many vertices it links: what walking them one at a time answers, walked by the kernel; what it cannot walk, walked)
+  count => {
+    linked := external linked this
+    (linked === None) ? .counted_by_walking : linked
+  }
+  counted_by_walking => {
+    counted := 0
+    at := .head
+    while at {
+      counted = counted + 1
+      at = at.next
+    }
+    counted
+  }
+  rest => {
+    made := Array.new
+    at := .head ? .head.next : None
+    while at {
+      made.append(at.value)
+      at = at.next
+    }
+    made
+  }
+  for (body) => {
+    at := .head
+    while at {
+      body(at.value)
+      at = at.next
+    }
+    .
+  }
+  map (mapping) => {
+    made := Array.new
+    at := .head
+    while at {
+      made.append(mapping(at.value))
+      at = at.next
+    }
+    made
+  }
+  // (whether it holds of one: by holding, not by what was found, `[None].some((x) => x === None)`)
+  some (predicate) => {
+    at := .head
+    while at {
+      if predicate(at.value) { return true }
+      at = at.next
+    }
+    false
+  }
+  every (predicate) => !(.some((x) => !predicate(x)))
+  find (predicate) => {
+    at := .head
+    while at {
+      if predicate(at.value) { return at.value }
+      at = at.next
+    }
+    None
+  }
+  // (`xs.map{p}(v)`: v in place of each value p holds of (a function, v of it), the others kept; their names too)
+  map {kept} (mapping) => (this) names_onto (.empty ? Array.new : (.rest.map{ {kept} }(mapping)).prepend(answers_true((.first).({kept})) ? (((mapping).closure === true) ? mapping(this.first) : mapping) : this.first))
+  flatten => .flattened(64)
+  flattened (levels) => {
+    made := Array.new
+    at := .head
+    while at {
+      it := at.value
+      if (it.listing === true) && (levels > 0) { made.joined(it.flattened(levels - 1)) } else { made.append(it) }
+      at = at.next
+    }
+    made
+  }
+}
+// (the rules every list is given, given to the kernel once)
+external arrayed reading (Array.list_reading)
+// (accelerated: what a value is, where the kernel can tell, as the language's `is` answers: a text against a written text,
+// String, `T+`, `T[]`, a list of types read in order, a superposition of them; itself; Node. Anything else, the language's)
+// (`T+` keeps what it is one or more of, for the kernel to see: the same narrowing)
+Node &+= {
+  one_or_more => {
+    base := .
+    base{!(.empty)} &+ {
+      nonempty_of := base
+    }
+  }
+  // (the language's `is`: the kernel's answer first)
+  is (type) => {
+    known := external admits this type
+    // (not of a range, `"0".."9"`: one of its values, which the kernel reads as a list of them)
+    ((known === None) || ((type).is_range === true)) ? (this.is_itself(type) || ((!following_conversions) && !(((this).textual === true) && (literal_text(type) || ((type).is_range === true))) && this.followed_is(type))) : known
+  }
+}
+// (accelerated: where a text is cut between places, the language's `first_cut_in`: the kernel's cut, where `admits` can tell
+// each span; else that rule's loop)
+external cuts `{cut_types} first_cut_in {cut_text}`
+// (None takes no members of its own: given)
+external nothing None
+// (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
+// rule for a list of places)
+external given `{given} given {value}`
+// (accelerated: a list of characters as a type, `Decimal.String` (`"0" | … | "9"`, each one character): what reads as one,
+// the kernel reads (each character one of them), the same as its rules)
+external glyphs `{element}[]`
+// (and a call's one parameter, a name, given one value: defined where the language's `:=` defines it, the node the call
+// runs in. LS4 (`["a", "b"].map((x) => x).last`, a closure's `x` called from one whose parameter is `x`) passes with it and
+// without it now)
+external taking `({written_parameters}) taking {arguments_given}`
+// Numbers: what the kernel holds as a count, a number the kernel counts, is a Counted (`count`), a Number whose `next` the
+// kernel answers (the count before it; of zero, nothing); a numeral is one (the count its digits write), and a text's
+// characters are Counted_chars, Chars (each its code point). Number's own `succ` and operators, named here, on what the kernel
+// can count (counts, or Numbers written one after another down to zero) and what they take counted too: answered by the
+// kernel as the language's rules answer; anything else, by those rules. (An approximation past what the kernel holds as one,
+// 2^31: for later, numbers of any size, or a level answering another type, `u32` for a Decimal; and for characters, a written
+// table of them in the language, this its acceleration.)
+external truth true false
+Counted := class: Number {
+  next => external number next this
+}
+Counted &+= { external count }
+Counted_char := class: Char {
+  next => external number next this
+}
+Counted_char &+= { external character }
+Number &+= { external number succ == < + - * / % }
+// A 32-bit integer (`Binary₃₂.Signed`, Number.ray: its 32 binary digits, the first the sign's, and its rules): each operator
+// what its rules answer, by WebAssembly's i32 instruction, the kernel's (named in words: `~&& ~|| ~^^` its and, or and xor; a
+// shift taken of 32; dividing by zero, nothing). A Number is one with `.int32`; one is a count again with `.count` (none
+// below zero), and its digits in ten with `as String`.
+Int32 &+= {
+  // (made as the class makes one, `of &+ { … }`: a call of the class itself does not read in a method that takes a parameter)
+  static made_from (number) => {
+    made_bits := external int32 of number
+    Int32 &+ { bits := made_bits }
+  }
+  // (a numeral as JavaScript reads one, `0x7FFFFFF0`, `1e6`: past 32 bits, wrapped)
+  static numeral (written) => {
+    numeral_bits := external int32 numeral written
+    Int32 &+ { bits := numeral_bits }
+  }
+  + (other) => {
+    answered := external int32 plus .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  - (other) => {
+    answered := external int32 minus .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  * (other) => {
+    answered := external int32 times .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  / (other) => {
+    answered := external int32 over .bits (other.int32).bits
+    (answered === None) ? None : (.of &+ { bits := answered })
+  }
+  % (other) => {
+    answered := external int32 rem .bits (other.int32).bits
+    (answered === None) ? None : (.of &+ { bits := answered })
+  }
+  ~&& (other) => {
+    answered := external int32 and .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  ~|| (other) => {
+    answered := external int32 or .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  ~^^ (other) => {
+    answered := external int32 xor .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  << (other) => {
+    answered := external int32 shl .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  >> (other) => {
+    answered := external int32 shr .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  >>> (other) => {
+    answered := external int32 shru .bits (other.int32).bits
+    .of &+ { bits := answered }
+  }
+  == (other) => external int32 eq .bits (other.int32).bits
+  != (other) => external int32 ne .bits (other.int32).bits
+  < (other) => external int32 lt .bits (other.int32).bits
+  <= (other) => external int32 le .bits (other.int32).bits
+  > (other) => external int32 gt .bits (other.int32).bits
+  >= (other) => external int32 ge .bits (other.int32).bits
+  int32 => this
+  count => external int32 count .bits
+  digits => external int32 text .bits
+  as (=== String) => external int32 text .bits
+}
+// (what the numeral rule answers, a count: the same value as the Decimal its digits write (`{digits: Decimal.String} =>
+// Decimal(integer: digits)`), by the equivalence graph)
+Counted &+= { as (=== Decimal) => Decimal(integer: this as String) }
+// (and written, its digits in ten, as an Int32's are: a method, not a second conversion of a count)
+Counted &+= { as String => .int32.digits }
+// (a count is a number written every way, by superposition: of every class of numbers (`3 is Decimal`))
+Counted &+= { is (type) => (((type).descends(Number) === true) && !((type) === Counted_char)) || .is_itself(type) || .followed_is(type) }
+external numeral `{digits: Decimal.String}`
+// (and in sixteen, `0x0C`: the same count)
+external numeral `0x{digits: Hexadecimal.String}`
+// (whether a value is superposed, Node's `superposed`: made by `|` or `&` from more than one part, answered by the kernel as
+// that rule answers, without the calls its check makes)
+Node &+= { external superposed }
+// (a text using `.` on its own, `candidate is .`: found by the kernel, as `bare_dot` does)
+String &+= { bare_dot => external dotted this }

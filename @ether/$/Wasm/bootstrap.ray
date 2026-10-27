@@ -4034,15 +4034,15 @@ section 10 do
     BUDGET <- ((load BUDGET) - 1)
     if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || (((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728))) do
       return 0 - 1
-    if charkind(load8 a) != 2 do
-      p = a + 1
+    if (charkind(load8 a) != 2) || (load8 (STEPTAB + (load8 a))) do
+      p = skippair(a, e)
       while p < e do
         c = load8 p
         if ((c > 32) && ((load8 (p - 1)) <= 32)) && (charkind(c) == 2) do
           q = p
           while (q < e) && (charkind(load8 q) == 2) do
             q = q + 1
-          if ((q < e) && ((load8 q) <= 32)) && worded(a, p) do
+          if ((q < e) && ((load8 q) <= 32)) && (worded(a, p) || ((load8 (STEPTAB + (load8 a))) && (skippair(a, e) == trime(a, p)))) do
             if leftreads(base, a, p, node, frame, x0, x1) do
               return p
           p = e

@@ -348,6 +348,8 @@ constant KW 23552
 constant TEXT 1048576
 constant OUT 5242880
 constant COULDC 352
+constant BINDNODE 360
+constant READIN 364
 constant WMEMBER 23659
 constant NMEMBER 6
 constant WMEMBERS 23666
@@ -655,7 +657,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 167
+  external emit 170
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -705,125 +707,128 @@ section 3 do
   declare spanmask 48 takes 3
   declare anchored 49 takes 10
   declare inmask 50 takes 2
-  declare inchain 51 takes 2
-  declare chainsig 52 takes 1
-  declare slot 53 takes 5
-  declare cached 54 takes 5
-  declare keep 55 takes 6
-  declare firstfits 56 takes 3
-  declare numeralpart 57 takes 4
-  declare possible 58 takes 3
-  declare couldk 59 takes 3
-  declare copy 60 takes 3
-  declare quoted 61 takes 2
-  declare past 62 takes 2
-  declare define 63 takes 3
-  declare addkey 64 takes 2
-  declare lookup 65 takes 3
-  declare trima 66 takes 2
-  declare trime 67 takes 2
-  declare named 68 takes 3
-  declare bound 69 takes 3
-  declare newframe 70 takes 2
-  declare bind 71 takes 7
-  declare holenode 72 takes 2
-  declare headhole 73 takes 4
-  declare flagrule 74 takes 3
-  declare holeval 75 takes 6
-  declare holetext 76 takes 3
-  declare accelerated 77 takes 8
-  declare numbered 78 takes 1
-  declare numcount 79 takes 1
-  declare tookeach 80 takes 10
-  declare codeof 81 takes 2
-  declare codeend 82 takes 2
-  declare excluded 83 takes 3
-  declare ownup 84 takes 3
-  declare typedhead 85 takes 2
-  declare takeof 86 takes 1
-  declare hasbind 87 takes 3
-  declare newnode 88 takes 1
-  declare pend 89 takes 8
-  declare run 90 takes 9
-  declare statements 91 takes 9
-  declare apply 92 takes 11
-  declare apply_ 93 takes 11
-  declare givenop 94 takes 7
-  declare givenop_ 95 takes 7
-  declare amp 96 takes 1
-  declare valued 97 takes 4
-  declare textv 98 takes 2
-  declare splicehead 99 takes 3
-  declare membered 100 takes 1
-  declare groups 101 takes 3
-  declare wordv 102 takes 2
-  declare boolv 103 takes 1
-  declare istext 104 takes 1
-  declare natives 105 takes 7
-  declare nothing 106 takes 0
-  declare newcount 107 takes 1
-  declare newchar 108 takes 1
-  declare countof 109 takes 1
-  declare textof 110 takes 2
-  declare wordend 111 takes 2
-  declare mapnative 112 takes 7
-  declare linkcount 113 takes 1
-  declare keyvalue 114 takes 1
-  declare unescape 115 takes 1
-  declare numeralof 116 takes 2
-  declare own 117 takes 3
-  declare callsany 118 takes 1
-  declare functiontyped 119 takes 2
-  declare membertarget 120 takes 7
-  declare said 121 takes 1
-  declare jumped 122 takes 10
-  declare valuejump 123 takes 8
-  declare islabel 124 takes 5
-  declare tests 125 takes 0
-  declare region 126 takes 1
-  declare zero 127 takes 2
-  declare test 128 takes 1
-  declare styled 129 takes 7
-  declare wordish 130 takes 2
-  declare charkind 131 takes 1
-  declare skippair 132 takes 2
-  declare worded 133 takes 2
-  declare leftreads 134 takes 7
-  declare splitat 135 takes 7
-  declare opof 136 takes 4
-  declare prec 137 takes 1
-  declare numop 138 takes 7
-  declare onread 139 takes 3
-  declare merged 140 takes 3
-  declare readon 141 takes 5
-  declare onvalue 142 takes 7
-  declare member 143 takes 2
-  declare kw 144 takes 4
-  declare kwend 145 takes 4
-  declare number 146 takes 3
-  declare emitb 147 takes 1
-  declare emitleb 148 takes 1
-  declare emitsleb 149 takes 1
-  declare finish 150 takes 0
-  declare alloc 151 takes 1
-  declare could 152 takes 3
-  declare retry 153 takes 3
-  declare typenode 154 takes 2
-  declare reads 155 takes 3
-  declare reads_ 156 takes 3
-  declare append 157 takes 2
-  declare method 158 takes 8
-  declare method_ 159 takes 8
-  declare chain 160 takes 6
-  declare unread 161 takes 1
-  declare eachunread 162 takes 0
-  declare stock 163 takes 2
-  declare textpart 164 takes 4
-  declare holepart 165 takes 4
-  declare spacepart 166 takes 2
-  declare language 167 takes 0
-  declare levelread 168 takes 1
-  declare included 169 takes 1
+  declare compose 51 takes 7
+  declare walkinit 52 takes 1
+  declare walknext 53 takes 2
+  declare inchain 54 takes 2
+  declare chainsig 55 takes 1
+  declare slot 56 takes 5
+  declare cached 57 takes 5
+  declare keep 58 takes 6
+  declare firstfits 59 takes 3
+  declare numeralpart 60 takes 4
+  declare possible 61 takes 3
+  declare couldk 62 takes 3
+  declare copy 63 takes 3
+  declare quoted 64 takes 2
+  declare past 65 takes 2
+  declare define 66 takes 3
+  declare addkey 67 takes 2
+  declare lookup 68 takes 3
+  declare trima 69 takes 2
+  declare trime 70 takes 2
+  declare named 71 takes 3
+  declare bound 72 takes 3
+  declare newframe 73 takes 2
+  declare bind 74 takes 7
+  declare holenode 75 takes 2
+  declare headhole 76 takes 4
+  declare flagrule 77 takes 3
+  declare holeval 78 takes 6
+  declare holetext 79 takes 3
+  declare accelerated 80 takes 8
+  declare numbered 81 takes 1
+  declare numcount 82 takes 1
+  declare tookeach 83 takes 10
+  declare codeof 84 takes 2
+  declare codeend 85 takes 2
+  declare excluded 86 takes 3
+  declare ownup 87 takes 3
+  declare typedhead 88 takes 2
+  declare takeof 89 takes 1
+  declare hasbind 90 takes 3
+  declare newnode 91 takes 1
+  declare pend 92 takes 8
+  declare run 93 takes 9
+  declare statements 94 takes 9
+  declare apply 95 takes 11
+  declare apply_ 96 takes 11
+  declare givenop 97 takes 7
+  declare givenop_ 98 takes 7
+  declare amp 99 takes 1
+  declare valued 100 takes 4
+  declare textv 101 takes 2
+  declare splicehead 102 takes 3
+  declare membered 103 takes 1
+  declare groups 104 takes 3
+  declare wordv 105 takes 2
+  declare boolv 106 takes 1
+  declare istext 107 takes 1
+  declare natives 108 takes 7
+  declare nothing 109 takes 0
+  declare newcount 110 takes 1
+  declare newchar 111 takes 1
+  declare countof 112 takes 1
+  declare textof 113 takes 2
+  declare wordend 114 takes 2
+  declare mapnative 115 takes 7
+  declare linkcount 116 takes 1
+  declare keyvalue 117 takes 1
+  declare unescape 118 takes 1
+  declare numeralof 119 takes 2
+  declare own 120 takes 3
+  declare callsany 121 takes 1
+  declare functiontyped 122 takes 2
+  declare membertarget 123 takes 7
+  declare said 124 takes 1
+  declare jumped 125 takes 10
+  declare valuejump 126 takes 8
+  declare islabel 127 takes 5
+  declare tests 128 takes 0
+  declare region 129 takes 1
+  declare zero 130 takes 2
+  declare test 131 takes 1
+  declare styled 132 takes 7
+  declare wordish 133 takes 2
+  declare charkind 134 takes 1
+  declare skippair 135 takes 2
+  declare worded 136 takes 2
+  declare leftreads 137 takes 7
+  declare splitat 138 takes 7
+  declare opof 139 takes 4
+  declare prec 140 takes 1
+  declare numop 141 takes 7
+  declare onread 142 takes 3
+  declare merged 143 takes 3
+  declare readon 144 takes 5
+  declare onvalue 145 takes 7
+  declare member 146 takes 2
+  declare kw 147 takes 4
+  declare kwend 148 takes 4
+  declare number 149 takes 3
+  declare emitb 150 takes 1
+  declare emitleb 151 takes 1
+  declare emitsleb 152 takes 1
+  declare finish 153 takes 0
+  declare alloc 154 takes 1
+  declare could 155 takes 3
+  declare retry 156 takes 3
+  declare typenode 157 takes 2
+  declare reads 158 takes 3
+  declare reads_ 159 takes 3
+  declare append 160 takes 2
+  declare method 161 takes 8
+  declare method_ 162 takes 8
+  declare chain 163 takes 6
+  declare unread 164 takes 1
+  declare eachunread 165 takes 0
+  declare stock 166 takes 2
+  declare textpart 167 takes 4
+  declare holepart 168 takes 4
+  declare spacepart 169 takes 2
+  declare language 170 takes 0
+  declare levelread 171 takes 1
+  declare included 172 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -834,7 +839,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 167
+  external emit 170
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1675,8 +1680,9 @@ section 10 do
     lo = 0
     wr = 0
     msk = load SP
-    SP <- (msk + 296)
+    SP <- (msk + 496)
     drop spanmask(msk, a, e)
+    drop walkinit((msk + 296))
     n = node
     while n != 0 do
       r = 3
@@ -1723,7 +1729,7 @@ section 10 do
         return best
       if (wr == 0) && ((load RUNMODE) != 0) do
         wr = load (n + 28)
-      n = load n
+      n = walknext(n, (msk + 296))
       if (n == 0) && (wr > 0) do
         if !inchain(node, wr) do
           n = wr
@@ -1805,25 +1811,104 @@ section 10 do
         return 0
       w = w >> 8
     return 1
-  function inchain locals 1 do
+  function compose locals 3 do
+    var base 0
+    var a 1
+    var e 2
+    var node 3
+    var frame 4
+    var caller 5
+    var depth 6
+    var v 7
+    var th 8
+    var l 9
+    v = run(base, a, e, node, frame, caller, (depth + 1), 0, 0)
+    if (load JUMPA) != 0 do
+      return 0
+    th = node
+    if (load READIN) != 0 do
+      th = load READIN
+    if v == 0 do
+      return th
+    if (v == th) || ((th == (load SCOPE)) || (((load (th + 4)) != 1313) || ((load (v + 4)) != 1313))) do
+      return v
+    if inchain(v, th) do
+      return v
+    when (load (th + 48)) == 0 do
+      (th + 48) <- v
+      else
+      l = newnode(load (th + 48))
+      (l + 48) <- v
+      (th + 48) <- l
+    return v
+  function walkinit locals 0 do
+    var st 0
+    st <-! 0
+    (st + 4) <-! 0
+    return 0
+  function walknext locals 2 do
+    var o 0
+    var st 1
+    var p 2
+    var d 3
+    if ((load RUNMODE) != 0) && ((((load (o + 4)) == 1313) && ((load (o + 48)) != 0)) && ((load st) < 48)) do
+      (st + (8 + ((load st) * 4))) <-! (load o)
+      st <-! ((load st) + 1)
+      return load (o + 48)
+    p = load o
+    if (p == (load SCOPE)) && ((load st) > 0) do
+      (st + 4) <-! p
+      p = 0
+    while (p == 0) && ((load st) > 0) do
+      st <-! ((load st) - 1)
+      p = load (st + (8 + ((load st) * 4)))
+      if (p == (load SCOPE)) && ((load st) > 0) do
+        (st + 4) <-! p
+        p = 0
+    if p == 0 do
+      p = load (st + 4)
+      (st + 4) <-! 0
+    return p
+  function inchain locals 4 do
     var node 0
     var x 1
     var n 2
+    var st 3
+    var sp 4
+    var c 5
+    sp = load SP
+    st = sp
+    SP <- (sp + 200)
+    drop walkinit(st)
+    c = 0
     n = node
-    while n != 0 do
+    while (n != 0) && (c < 4096) do
       if n == x do
+        SP <- sp
         return 1
-      n = load n
+      n = walknext(n, st)
+      c = c + 1
+    SP <- sp
     return 0
-  function chainsig locals 2 do
+  function chainsig locals 5 do
     var node 0
     var h 1
     var n 2
+    var st 3
+    var sp 4
+    var c 5
+    sp = load SP
+    st = sp
+    SP <- (sp + 200)
+    drop walkinit(st)
+    c = 0
     h = load NPAIRS
     n = node
-    while n != 0 do
+    while (n != 0) && (c < 4096) do
       h = (((h * 31) + (load (n + 20))) + n) + (load (n + 28))
-      n = load n
+      n = walknext(n, st)
+      c = c + 1
+    SP <- sp
     return h
   function slot locals 1 do
     var a 0
@@ -2120,7 +2205,7 @@ section 10 do
       j = load (f + 4)
       while j > 0 do
         j = j - 1
-        en = f + (24 + (j * 44))
+        en = f + (24 + (j * 48))
         if ((load (en + 4)) - (load en)) == (ne - na) do
           if same((load en), na, (ne - na)) do
             return en
@@ -2179,7 +2264,7 @@ section 10 do
     var parent 0
     var n 1
     var f 2
-    f = alloc(24 + (n * 44))
+    f = alloc(24 + (n * 48))
     f <- parent
     (f + 4) <- 0
     (f + 8) <- 0
@@ -2196,7 +2281,7 @@ section 10 do
     var cframe 5
     var cnode 6
     var b 7
-    b = f + (24 + ((load (f + 4)) * 44))
+    b = f + (24 + ((load (f + 4)) * 48))
     b <- na
     (b + 4) <- ne
     (b + 8) <- ca
@@ -2208,6 +2293,7 @@ section 10 do
     (b + 32) <- cnode
     (b + 36) <- (load READX0)
     (b + 40) <- (load READX1)
+    (b + 44) <- (load BINDNODE)
     (f + 4) <- ((load (f + 4)) + 1)
     return b
   function holenode locals 0 do
@@ -2484,6 +2570,10 @@ section 10 do
       k = own(n, a, e)
       if k >= 0 do
         return k
+      if ((load RUNMODE) != 0) && (((load (n + 4)) == 1313) && ((load (n + 48)) != 0)) do
+        k = ownup((load (n + 48)), a, e)
+        if k >= 0 do
+          return k
       n = load n
       d = d + 1
     return 0 - 1
@@ -2530,7 +2620,7 @@ section 10 do
     var en 4
     j = 0
     while j < (load (f + 4)) do
-      en = f + (24 + (j * 44))
+      en = f + (24 + (j * 48))
       if texteq((load en), ((load (en + 4)) - (load en)), na, (ne - na)) do
         return 1
       j = j + 1
@@ -2538,10 +2628,11 @@ section 10 do
   function newnode locals 1 do
     var parent 0
     var n 1
-    n = alloc(48)
+    n = alloc(56)
     n <- parent
     (n + 24) <- 0
     (n + 44) <- 0
+    (n + 48) <- 0
     (n + 4) <- 1313
     (n + 8) <- arrnew()
     (n + 12) <- 0
@@ -2595,7 +2686,7 @@ section 10 do
     VIS <-! vis
     SP <- sp
     return v
-  function statements locals 15 do
+  function statements locals 16 do
     var base 0
     var a 1
     var e 2
@@ -2620,6 +2711,7 @@ section 10 do
     var start 21
     var sp0 22
     var inl 23
+    var rin 24
     start = a
     value = caller
     sp0 = load SP
@@ -2688,7 +2780,10 @@ section 10 do
                 inl = ((load RUNMODE) != 0) ? takeof(plain) : plain
                 if (inl != plain) && ((load (inl + 20)) != 0) do
                   MADE <- (load (inl + 28))
+                rin = load READIN
+                READIN <-! (load (plain + 44))
                 v = ((inl != plain) && ((load (inl + 20)) != 0)) ? (load (inl + 24)) : run(base, (load (inl + 8)), (load (inl + 12)), holenode(inl, node), (load (inl + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (inl + 36)) : 0), (((load RUNMODE) != 0) ? (load (inl + 40)) : 0))
+                READIN <-! rin
                 if ((inl != plain) && ((load (inl + 20)) == 0)) && ((load JUMPA) == 0) do
                   drop jot((inl + 24), v)
                   drop jot((inl + 20), 1)
@@ -2770,7 +2865,7 @@ section 10 do
     r = apply_(k, cap, base, a, e, node, frame, caller, depth, tha, the)
     SP <- sp
     return r
-  function apply_ locals 26 do
+  function apply_ locals 27 do
     var k 0
     var cap 1
     var base 2
@@ -2808,6 +2903,7 @@ section 10 do
     var ov 34
     var rx0 35
     var rx1 36
+    var rin 37
     rn = load READNODE
     rx0 = load READX0
     rx1 = load READX1
@@ -2928,6 +3024,7 @@ section 10 do
     (f + 20) <- rn
     READX0 <-! rx0
     READX1 <-! rx1
+    BINDNODE <-! node
     j = 0
     while j < np do
       p = part(key, j)
@@ -2948,7 +3045,11 @@ section 10 do
     CURAPP <- a
     if ov != 0 do
       NEXTVIS <-! ov
+    BINDNODE <-! 0
+    rin = load READIN
+    READIN <-! 0
     q = run(base, (load (key + 12)), (load (key + 16)), node, f, caller, (depth + 1), k, (load (load KEYS)))
+    READIN <-! rin
     CURAPP <- was
     return q
   function givenop locals 2 do
@@ -2980,6 +3081,8 @@ section 10 do
     var f 11
     var sp 12
     if (load8 a) == 46 do
+      if ((load RUNMODE) != 0) && ((trima((a + 1), e)) < e) do
+        return compose(base, trima((a + 1), e), e, node, frame, caller, depth)
       n = newnode(node)
       if ((load RUNMODE) != 0) && (frame != 0) do
         when ((load (frame + 8)) != 0) && ((load (frame + 8)) != node) do
@@ -3101,7 +3204,7 @@ section 10 do
     drop jot((f + 16), v)
     j = 0
     while j < (load (f + 4)) do
-      en = f + (24 + (j * 44))
+      en = f + (24 + (j * 48))
       t = textv((load (en + 8)), (load (en + 12)))
       drop valued(v, (load en), (load (en + 4)), t)
       j = j + 1
@@ -3758,7 +3861,7 @@ section 10 do
               if f != 0 do
                 j = 0
                 while j < (load (f + 4)) do
-                  en = f + (24 + (j * 44))
+                  en = f + (24 + (j * 48))
                   drop jot((en + 20), 0)
                   drop jot((en + 28), 0)
                   j = j + 1
@@ -4222,7 +4325,8 @@ section 10 do
     var lt 18
     sp = load SP
     trial = sp
-    SP <- (sp + 4096)
+    SP <- (sp + 4296)
+    drop walkinit((sp + 4096))
     view = alloc(64)
     n = on
     while n != 0 do
@@ -4263,7 +4367,7 @@ section 10 do
         RCAP <- bcap
         SP <- sp
         return best
-      n = load n
+      n = walknext(n, (sp + 4096))
     SP <- sp
     return 0 - 1
   function onvalue locals 6 do

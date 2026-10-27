@@ -1,0 +1,29 @@
+// The Wasm level: what the language asks of the level it runs on, each request a rule, answered here by the engine (its
+// externals). Read after the language's header, before the language itself: only the header's own rule reads these.
+// (the language asks `level <request> …`; it holds no external of its own but `&`, goto, label and `.`)
+level style {shown_as} {styled} => external style shown_as styled
+level shown {shown_value} {shown_kind} => external shown shown_value shown_kind
+level rule {rule_head} => external rule rule_head
+level unset {unset_place} => external unset unset_place
+level unset_typed {unset_place} {unset_type} => external unset unset_place unset_type
+level names {names_list} {names_first} {names_last} => external names names_list names_first names_last
+level named_like {like_list} {like_from} => external named_like like_list like_from
+level admits {admits_value} {admits_type} => external admits admits_value admits_type
+level typed_name {typed_value} => external typed_name typed_value
+level named {named_value} => external named named_value
+level undefined {undefined_type} => external undefined undefined_type
+level callable {callable_value} => external callable callable_value
+level readable {readable_type} => external readable readable_type
+level origin_of {origin_code} => external origin_of origin_code
+level quoted {quoted_text} => external quoted quoted_text
+level defines_text {defining_text} => external defines_text defining_text
+level function_given {given_arguments} {given_parameters} => external function_given given_arguments given_parameters
+level mapped {mapped_place} {mapped_text} => external mapped mapped_place mapped_text
+level dynamic_in {dynamic_value} => external dynamic_in dynamic_value
+level dynamic_out => external dynamic_out
+level hoisted {hoisted_code} => external hoisted {hoisted_code}
+level static {static_statement} => external static {static_statement}
+level include {included_location} => external include {included_location}
+level read {read_location} => external read {read_location}
+level member {member_holder} {member_name} => external member member_holder member_name
+level give_member {given_holder} {given_name} {given_value} => external member given_holder given_name given_value

@@ -655,7 +655,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 166
+  external emit 167
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -679,150 +679,151 @@ section 3 do
   declare extent 22 takes 3
   declare match 23 takes 6
   declare holeloop 24 takes 7
-  declare near 25 takes 3
-  declare typedreads 26 takes 4
-  declare appliedhead 27 takes 4
-  declare pairend 28 takes 4
-  declare paired 29 takes 2
-  declare part 30 takes 2
-  declare keyat 31 takes 1
-  declare rank 32 takes 1
-  declare ranked 33 takes 1
-  declare typeless 34 takes 1
-  declare isthis 35 takes 1
-  declare thisled 36 takes 1
-  declare read 37 takes 6
-  declare readx 38 takes 6
-  declare readx_ 39 takes 6
-  declare latest 40 takes 8
-  declare mixed 41 takes 8
-  declare settle 42 takes 7
-  declare bucket 43 takes 3
-  declare indexed 44 takes 2
-  declare buildindex 45 takes 1
-  declare seedpick 46 takes 8
-  declare spanmask 47 takes 3
-  declare anchored 48 takes 10
-  declare inmask 49 takes 2
-  declare inchain 50 takes 2
-  declare chainsig 51 takes 1
-  declare slot 52 takes 5
-  declare cached 53 takes 5
-  declare keep 54 takes 6
-  declare firstfits 55 takes 3
-  declare numeralpart 56 takes 4
-  declare possible 57 takes 3
-  declare couldk 58 takes 3
-  declare copy 59 takes 3
-  declare quoted 60 takes 2
-  declare past 61 takes 2
-  declare define 62 takes 3
-  declare addkey 63 takes 2
-  declare lookup 64 takes 3
-  declare trima 65 takes 2
-  declare trime 66 takes 2
-  declare named 67 takes 3
-  declare bound 68 takes 3
-  declare newframe 69 takes 2
-  declare bind 70 takes 7
-  declare holenode 71 takes 2
-  declare headhole 72 takes 4
-  declare flagrule 73 takes 3
-  declare holeval 74 takes 6
-  declare holetext 75 takes 3
-  declare accelerated 76 takes 8
-  declare numbered 77 takes 1
-  declare numcount 78 takes 1
-  declare tookeach 79 takes 10
-  declare codeof 80 takes 2
-  declare codeend 81 takes 2
-  declare excluded 82 takes 3
-  declare ownup 83 takes 3
-  declare typedhead 84 takes 2
-  declare takeof 85 takes 1
-  declare hasbind 86 takes 3
-  declare newnode 87 takes 1
-  declare pend 88 takes 8
-  declare run 89 takes 9
-  declare statements 90 takes 9
-  declare apply 91 takes 11
-  declare apply_ 92 takes 11
-  declare givenop 93 takes 7
-  declare givenop_ 94 takes 7
-  declare amp 95 takes 1
-  declare valued 96 takes 4
-  declare textv 97 takes 2
-  declare splicehead 98 takes 3
-  declare membered 99 takes 1
-  declare groups 100 takes 3
-  declare wordv 101 takes 2
-  declare boolv 102 takes 1
-  declare istext 103 takes 1
-  declare natives 104 takes 7
-  declare nothing 105 takes 0
-  declare newcount 106 takes 1
-  declare newchar 107 takes 1
-  declare countof 108 takes 1
-  declare textof 109 takes 2
-  declare wordend 110 takes 2
-  declare mapnative 111 takes 7
-  declare linkcount 112 takes 1
-  declare keyvalue 113 takes 1
-  declare unescape 114 takes 1
-  declare numeralof 115 takes 2
-  declare own 116 takes 3
-  declare callsany 117 takes 1
-  declare functiontyped 118 takes 2
-  declare membertarget 119 takes 7
-  declare said 120 takes 1
-  declare jumped 121 takes 10
-  declare valuejump 122 takes 8
-  declare islabel 123 takes 5
-  declare tests 124 takes 0
-  declare region 125 takes 1
-  declare zero 126 takes 2
-  declare test 127 takes 1
-  declare styled 128 takes 7
-  declare wordish 129 takes 2
-  declare charkind 130 takes 1
-  declare skippair 131 takes 2
-  declare worded 132 takes 2
-  declare leftreads 133 takes 7
-  declare splitat 134 takes 7
-  declare opof 135 takes 4
-  declare prec 136 takes 1
-  declare numop 137 takes 7
-  declare onread 138 takes 3
-  declare merged 139 takes 3
-  declare readon 140 takes 5
-  declare onvalue 141 takes 7
-  declare member 142 takes 2
-  declare kw 143 takes 4
-  declare kwend 144 takes 4
-  declare number 145 takes 3
-  declare emitb 146 takes 1
-  declare emitleb 147 takes 1
-  declare emitsleb 148 takes 1
-  declare finish 149 takes 0
-  declare alloc 150 takes 1
-  declare could 151 takes 3
-  declare retry 152 takes 3
-  declare typenode 153 takes 2
-  declare reads 154 takes 3
-  declare reads_ 155 takes 3
-  declare append 156 takes 2
-  declare method 157 takes 8
-  declare method_ 158 takes 8
-  declare chain 159 takes 6
-  declare unread 160 takes 1
-  declare eachunread 161 takes 0
-  declare stock 162 takes 2
-  declare textpart 163 takes 4
-  declare holepart 164 takes 4
-  declare spacepart 165 takes 2
-  declare language 166 takes 0
-  declare levelread 167 takes 1
-  declare included 168 takes 1
+  declare skipto 25 takes 5
+  declare near 26 takes 3
+  declare typedreads 27 takes 4
+  declare appliedhead 28 takes 4
+  declare pairend 29 takes 4
+  declare paired 30 takes 2
+  declare part 31 takes 2
+  declare keyat 32 takes 1
+  declare rank 33 takes 1
+  declare ranked 34 takes 1
+  declare typeless 35 takes 1
+  declare isthis 36 takes 1
+  declare thisled 37 takes 1
+  declare read 38 takes 6
+  declare readx 39 takes 6
+  declare readx_ 40 takes 6
+  declare latest 41 takes 8
+  declare mixed 42 takes 8
+  declare settle 43 takes 7
+  declare bucket 44 takes 3
+  declare indexed 45 takes 2
+  declare buildindex 46 takes 1
+  declare seedpick 47 takes 8
+  declare spanmask 48 takes 3
+  declare anchored 49 takes 10
+  declare inmask 50 takes 2
+  declare inchain 51 takes 2
+  declare chainsig 52 takes 1
+  declare slot 53 takes 5
+  declare cached 54 takes 5
+  declare keep 55 takes 6
+  declare firstfits 56 takes 3
+  declare numeralpart 57 takes 4
+  declare possible 58 takes 3
+  declare couldk 59 takes 3
+  declare copy 60 takes 3
+  declare quoted 61 takes 2
+  declare past 62 takes 2
+  declare define 63 takes 3
+  declare addkey 64 takes 2
+  declare lookup 65 takes 3
+  declare trima 66 takes 2
+  declare trime 67 takes 2
+  declare named 68 takes 3
+  declare bound 69 takes 3
+  declare newframe 70 takes 2
+  declare bind 71 takes 7
+  declare holenode 72 takes 2
+  declare headhole 73 takes 4
+  declare flagrule 74 takes 3
+  declare holeval 75 takes 6
+  declare holetext 76 takes 3
+  declare accelerated 77 takes 8
+  declare numbered 78 takes 1
+  declare numcount 79 takes 1
+  declare tookeach 80 takes 10
+  declare codeof 81 takes 2
+  declare codeend 82 takes 2
+  declare excluded 83 takes 3
+  declare ownup 84 takes 3
+  declare typedhead 85 takes 2
+  declare takeof 86 takes 1
+  declare hasbind 87 takes 3
+  declare newnode 88 takes 1
+  declare pend 89 takes 8
+  declare run 90 takes 9
+  declare statements 91 takes 9
+  declare apply 92 takes 11
+  declare apply_ 93 takes 11
+  declare givenop 94 takes 7
+  declare givenop_ 95 takes 7
+  declare amp 96 takes 1
+  declare valued 97 takes 4
+  declare textv 98 takes 2
+  declare splicehead 99 takes 3
+  declare membered 100 takes 1
+  declare groups 101 takes 3
+  declare wordv 102 takes 2
+  declare boolv 103 takes 1
+  declare istext 104 takes 1
+  declare natives 105 takes 7
+  declare nothing 106 takes 0
+  declare newcount 107 takes 1
+  declare newchar 108 takes 1
+  declare countof 109 takes 1
+  declare textof 110 takes 2
+  declare wordend 111 takes 2
+  declare mapnative 112 takes 7
+  declare linkcount 113 takes 1
+  declare keyvalue 114 takes 1
+  declare unescape 115 takes 1
+  declare numeralof 116 takes 2
+  declare own 117 takes 3
+  declare callsany 118 takes 1
+  declare functiontyped 119 takes 2
+  declare membertarget 120 takes 7
+  declare said 121 takes 1
+  declare jumped 122 takes 10
+  declare valuejump 123 takes 8
+  declare islabel 124 takes 5
+  declare tests 125 takes 0
+  declare region 126 takes 1
+  declare zero 127 takes 2
+  declare test 128 takes 1
+  declare styled 129 takes 7
+  declare wordish 130 takes 2
+  declare charkind 131 takes 1
+  declare skippair 132 takes 2
+  declare worded 133 takes 2
+  declare leftreads 134 takes 7
+  declare splitat 135 takes 7
+  declare opof 136 takes 4
+  declare prec 137 takes 1
+  declare numop 138 takes 7
+  declare onread 139 takes 3
+  declare merged 140 takes 3
+  declare readon 141 takes 5
+  declare onvalue 142 takes 7
+  declare member 143 takes 2
+  declare kw 144 takes 4
+  declare kwend 145 takes 4
+  declare number 146 takes 3
+  declare emitb 147 takes 1
+  declare emitleb 148 takes 1
+  declare emitsleb 149 takes 1
+  declare finish 150 takes 0
+  declare alloc 151 takes 1
+  declare could 152 takes 3
+  declare retry 153 takes 3
+  declare typenode 154 takes 2
+  declare reads 155 takes 3
+  declare reads_ 156 takes 3
+  declare append 157 takes 2
+  declare method 158 takes 8
+  declare method_ 159 takes 8
+  declare chain 160 takes 6
+  declare unread 161 takes 1
+  declare eachunread 162 takes 0
+  declare stock 163 takes 2
+  declare textpart 164 takes 4
+  declare holepart 165 takes 4
+  declare spacepart 166 takes 2
+  declare language 167 takes 0
+  declare levelread 168 takes 1
+  declare included 169 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -833,7 +834,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 166
+  external emit 167
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1007,9 +1008,9 @@ section 10 do
       if ((a + (load (pr + 12))) <= e) && same(a, (load (pr + 8)), (load (pr + 12))) do
         if qu < (load (f + 8)) do
           cnt = f + (12 + (qu * 4))
-          cnt <- ((load cnt) - 1)
-        f <- ((load f) - 1)
-        (f + 4) <- (0 - 1)
+          cnt <-! ((load cnt) - 1)
+        f <-! ((load f) - 1)
+        (f + 4) <-! (0 - 1)
         return a + (load (pr + 12))
       return a + 1
     if !(load8 (STEPTAB + (load8 a))) do
@@ -1021,15 +1022,15 @@ section 10 do
       pr = PAIRS + (j * 16)
       cnt = f + (12 + (j * 4))
       if ((j < (load (f + 8))) && ((load cnt) > 0)) && (((a + (load (pr + 12))) <= e) && same(a, (load (pr + 8)), (load (pr + 12)))) do
-        cnt <- ((load cnt) - 1)
-        f <- ((load f) - 1)
+        cnt <-! ((load cnt) - 1)
+        f <-! ((load f) - 1)
         return a + (load (pr + 12))
       if ((a + (load (pr + 4))) <= e) && same(a, (load pr), (load (pr + 4))) do
         if j < (load (f + 8)) do
-          cnt <- ((load cnt) + 1)
-        f <- ((load f) + 1)
+          cnt <-! ((load cnt) + 1)
+        f <-! ((load f) + 1)
         if ((load (pr + 4)) == (load (pr + 12))) && same(a, (load (pr + 8)), (load (pr + 12))) do
-          (f + 4) <- j
+          (f + 4) <-! j
         return a + (load (pr + 4))
       j = j + 1
     return a + 1
@@ -1126,7 +1127,7 @@ section 10 do
     q = holeloop(key, i, a, e, cap, ind, typed)
     SP <- sp
     return q
-  function holeloop locals 10 do
+  function holeloop locals 11 do
     var key 0
     var i 1
     var a 2
@@ -1144,6 +1145,7 @@ section 10 do
     var sub 14
     var gv 15
     var nx 16
+    var nb 17
     p = part(key, i)
     pd = paired(key, i)
     gv = (load key) == 4
@@ -1183,15 +1185,18 @@ section 10 do
             r = r + 1
           if (r - (q + 1)) <= ind do
             return 0
-        q = (((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)
+        q = skipto(((((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)), e, f, 256, tight)
       if ((load f) == 0) && (gv || (e != a)) do
         (cap + (i * 8)) <- a
         (cap + ((i * 8) + 4)) <- e
         return 1
       return 0
     nx = 0
+    nb = 0 - 1
     if ((load p) == 2) && (typed == 0) do
       nx = part(key, (i + 1))
+      if (load nx) == 0 do
+        nb = load8 (load (nx + 4))
     while 1 do
       if ((load f) == 0) && ((!((!gv) && (q == a))) && ((!((q > a) && ((q < e) && (word(load8 (q - 1)) && word(load8 q))))) && near(nx, q, e))) do
         ok = 1
@@ -1220,8 +1225,29 @@ section 10 do
           r = r + 1
         if (r - (q + 1)) <= ind do
           return 0
-      q = (((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)
+      q = skipto(((((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)), e, f, nb, tight)
     return 0
+  function skipto locals 1 do
+    var q 0
+    var e 1
+    var f 2
+    var nb 3
+    var tight 4
+    var c 5
+    if (load (f + 4)) >= 0 do
+      return q
+    if (load f) != 0 do
+      while (q < e) && (!(load8 (STEPTAB + (load8 q)))) do
+        q = q + 1
+      return q
+    if nb < 0 do
+      return q
+    while q < e do
+      c = load8 q
+      if (c == nb) || ((load8 (STEPTAB + c)) || ((c == 10) || (tight && white(c)))) do
+        return q
+      q = q + 1
+    return q
   function near locals 0 do
     var nx 0
     var q 1

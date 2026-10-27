@@ -306,6 +306,20 @@ constant TSTABLE 204
 constant CACHE 208
 constant TYPEDUSED 212
 constant TESTBUDGET 216
+constant TEXTCLASS 220
+constant COUNTED 224
+constant CHARS 228
+constant NUMBERS 232
+constant NUMOPSA 236
+constant NUMOPSE 240
+constant TRUEV 244
+constant FALSEV 248
+constant NONEV 252
+constant NUMERALA 256
+constant NUMERALE 260
+constant NUMERAL2A 264
+constant NUMERAL2E 268
+constant MINTEST 272
 constant WORDTAB 24576
 constant STEPTAB 24832
 constant PAIRS 20480
@@ -388,6 +402,62 @@ constant WNEXT 23948
 constant NNEXT 4
 constant WWRITTEN_NAME 23953
 constant NWRITTEN_NAME 12
+constant WTEXT 23966
+constant NTEXT 4
+constant WFIRST 23971
+constant NFIRST 5
+constant WREST 23977
+constant NREST 4
+constant WSAME 23982
+constant NSAME 4
+constant WUNTIL 23987
+constant NUNTIL 5
+constant WPAST 23993
+constant NPAST 4
+constant WJOINED 23998
+constant NJOINED 6
+constant WUNESCAPED 24005
+constant NUNESCAPED 9
+constant WLINKED 24015
+constant NLINKED 6
+constant WCOUNT 24022
+constant NCOUNT 5
+constant WCHARACTER 24028
+constant NCHARACTER 9
+constant WNUMBER 24038
+constant NNUMBER 6
+constant WTRUTH 24045
+constant NTRUTH 5
+constant WNOTHING 24051
+constant NNOTHING 7
+constant WNUMERAL 24059
+constant NNUMERAL 7
+constant WGIVEN 24067
+constant NGIVEN 5
+constant WGLYPHS 24073
+constant NGLYPHS 6
+constant WTAKING 24080
+constant NTAKING 6
+constant WCUTS 24087
+constant NCUTS 4
+constant WARRAYED 24092
+constant NARRAYED 7
+constant WKEPT 24100
+constant NKEPT 4
+constant WDOTTED 24105
+constant NDOTTED 6
+constant WINT32 24112
+constant NINT32 5
+constant WSUCC 24118
+constant NSUCC 4
+constant WMAP 24123
+constant NMAP 3
+constant WSUPERPOSING 24127
+constant NSUPERPOSING 11
+constant WSUPERPOSED 24139
+constant NSUPERPOSED 10
+constant WEQEQ 24150
+constant NEQEQ 2
 log => external leb 0
 ev => external leb 1
 fetch => external leb 2
@@ -557,7 +627,8 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 121
+  external emit 142
+  external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
   declare word 5 takes 1
@@ -581,104 +652,125 @@ section 3 do
   declare match 23 takes 6
   declare holeloop 24 takes 7
   declare near 25 takes 3
-  declare paired 26 takes 2
-  declare part 27 takes 2
-  declare keyat 28 takes 1
-  declare rank 29 takes 1
-  declare ranked 30 takes 1
-  declare typeless 31 takes 1
-  declare isthis 32 takes 1
-  declare thisled 33 takes 1
-  declare read 34 takes 6
-  declare readx 35 takes 6
-  declare latest 36 takes 8
-  declare mixed 37 takes 8
-  declare settle 38 takes 7
-  declare bucket 39 takes 3
-  declare indexed 40 takes 2
-  declare buildindex 41 takes 1
-  declare seedpick 42 takes 8
-  declare chainsig 43 takes 1
-  declare slot 44 takes 5
-  declare cached 45 takes 5
-  declare keep 46 takes 6
-  declare firstfits 47 takes 3
-  declare possible 48 takes 3
-  declare copy 49 takes 3
-  declare quoted 50 takes 2
-  declare past 51 takes 2
-  declare define 52 takes 3
-  declare addkey 53 takes 2
-  declare lookup 54 takes 3
-  declare trima 55 takes 2
-  declare trime 56 takes 2
-  declare named 57 takes 3
-  declare bound 58 takes 3
-  declare newframe 59 takes 2
-  declare bind 60 takes 6
-  declare hasbind 61 takes 3
-  declare newnode 62 takes 1
-  declare pend 63 takes 8
-  declare run 64 takes 9
-  declare apply 65 takes 11
-  declare givenop 66 takes 7
-  declare amp 67 takes 1
-  declare valued 68 takes 4
-  declare textv 69 takes 2
-  declare splicehead 70 takes 3
-  declare membered 71 takes 1
-  declare groups 72 takes 3
-  declare wordv 73 takes 2
-  declare boolv 74 takes 1
-  declare istext 75 takes 1
-  declare natives 76 takes 7
-  declare own 77 takes 3
-  declare callsany 78 takes 1
-  declare functiontyped 79 takes 2
-  declare membertarget 80 takes 7
-  declare said 81 takes 1
-  declare jumped 82 takes 10
-  declare valuejump 83 takes 8
-  declare islabel 84 takes 5
-  declare tests 85 takes 0
-  declare region 86 takes 1
-  declare zero 87 takes 2
-  declare test 88 takes 1
-  declare styled 89 takes 7
-  declare wordish 90 takes 2
-  declare charkind 91 takes 1
-  declare skippair 92 takes 2
-  declare worded 93 takes 2
-  declare leftreads 94 takes 7
-  declare splitat 95 takes 7
-  declare onread 96 takes 3
-  declare merged 97 takes 3
-  declare readon 98 takes 3
-  declare onvalue 99 takes 6
-  declare member 100 takes 2
-  declare kw 101 takes 4
-  declare kwend 102 takes 4
-  declare number 103 takes 3
-  declare emitb 104 takes 1
-  declare emitleb 105 takes 1
-  declare emitsleb 106 takes 1
-  declare finish 107 takes 0
-  declare alloc 108 takes 1
-  declare could 109 takes 3
-  declare retry 110 takes 3
-  declare typenode 111 takes 2
-  declare reads 112 takes 3
-  declare append 113 takes 2
-  declare method 114 takes 8
-  declare chain 115 takes 6
-  declare unread 116 takes 1
-  declare eachunread 117 takes 0
-  declare stock 118 takes 2
-  declare textpart 119 takes 4
-  declare holepart 120 takes 4
-  declare spacepart 121 takes 2
-  declare language 122 takes 0
-  declare included 123 takes 0
+  declare pairend 26 takes 4
+  declare paired 27 takes 2
+  declare part 28 takes 2
+  declare keyat 29 takes 1
+  declare rank 30 takes 1
+  declare ranked 31 takes 1
+  declare typeless 32 takes 1
+  declare isthis 33 takes 1
+  declare thisled 34 takes 1
+  declare read 35 takes 6
+  declare readx 36 takes 6
+  declare readx_ 37 takes 6
+  declare latest 38 takes 8
+  declare mixed 39 takes 8
+  declare settle 40 takes 7
+  declare bucket 41 takes 3
+  declare indexed 42 takes 2
+  declare buildindex 43 takes 1
+  declare seedpick 44 takes 8
+  declare chainsig 45 takes 1
+  declare slot 46 takes 5
+  declare cached 47 takes 5
+  declare keep 48 takes 6
+  declare firstfits 49 takes 3
+  declare numeralpart 50 takes 4
+  declare possible 51 takes 3
+  declare copy 52 takes 3
+  declare quoted 53 takes 2
+  declare past 54 takes 2
+  declare define 55 takes 3
+  declare addkey 56 takes 2
+  declare lookup 57 takes 3
+  declare trima 58 takes 2
+  declare trime 59 takes 2
+  declare named 60 takes 3
+  declare bound 61 takes 3
+  declare newframe 62 takes 2
+  declare bind 63 takes 6
+  declare hasbind 64 takes 3
+  declare newnode 65 takes 1
+  declare pend 66 takes 8
+  declare run 67 takes 9
+  declare statements 68 takes 9
+  declare apply 69 takes 11
+  declare apply_ 70 takes 11
+  declare givenop 71 takes 7
+  declare givenop_ 72 takes 7
+  declare amp 73 takes 1
+  declare valued 74 takes 4
+  declare textv 75 takes 2
+  declare splicehead 76 takes 3
+  declare membered 77 takes 1
+  declare groups 78 takes 3
+  declare wordv 79 takes 2
+  declare boolv 80 takes 1
+  declare istext 81 takes 1
+  declare natives 82 takes 7
+  declare nothing 83 takes 0
+  declare newcount 84 takes 1
+  declare newchar 85 takes 1
+  declare countof 86 takes 1
+  declare textof 87 takes 2
+  declare wordend 88 takes 2
+  declare mapnative 89 takes 7
+  declare linkcount 90 takes 1
+  declare keyvalue 91 takes 1
+  declare unescape 92 takes 1
+  declare numeralof 93 takes 2
+  declare own 94 takes 3
+  declare callsany 95 takes 1
+  declare functiontyped 96 takes 2
+  declare membertarget 97 takes 7
+  declare said 98 takes 1
+  declare jumped 99 takes 10
+  declare valuejump 100 takes 8
+  declare islabel 101 takes 5
+  declare tests 102 takes 0
+  declare region 103 takes 1
+  declare zero 104 takes 2
+  declare test 105 takes 1
+  declare styled 106 takes 7
+  declare wordish 107 takes 2
+  declare charkind 108 takes 1
+  declare skippair 109 takes 2
+  declare worded 110 takes 2
+  declare leftreads 111 takes 7
+  declare splitat 112 takes 7
+  declare opof 113 takes 4
+  declare prec 114 takes 1
+  declare numop 115 takes 7
+  declare onread 116 takes 3
+  declare merged 117 takes 3
+  declare readon 118 takes 3
+  declare onvalue 119 takes 7
+  declare member 120 takes 2
+  declare kw 121 takes 4
+  declare kwend 122 takes 4
+  declare number 123 takes 3
+  declare emitb 124 takes 1
+  declare emitleb 125 takes 1
+  declare emitsleb 126 takes 1
+  declare finish 127 takes 0
+  declare alloc 128 takes 1
+  declare could 129 takes 3
+  declare retry 130 takes 3
+  declare typenode 131 takes 2
+  declare reads 132 takes 3
+  declare append 133 takes 2
+  declare method 134 takes 8
+  declare method_ 135 takes 8
+  declare chain 136 takes 6
+  declare unread 137 takes 1
+  declare eachunread 138 takes 0
+  declare stock 139 takes 2
+  declare textpart 140 takes 4
+  declare holepart 141 takes 4
+  declare spacepart 142 takes 2
+  declare language 143 takes 0
+  declare included 144 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -689,7 +781,8 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 121
+  external emit 142
+  external emit 1
   function main locals 1 do
     var scope 0
     HEAP <- 8388608
@@ -946,6 +1039,8 @@ section 10 do
     var typed 10
     if i == (load (key + 4)) do
       return a == e
+    if (i == 0) && ((load TRACE) > 3) do
+      drop event(101, rel(a), rel(e), key)
     p = part(key, i)
     kind = load p
     if kind == 0 do
@@ -1009,6 +1104,21 @@ section 10 do
     f = fnew()
     sub = fnew()
     q = a
+    if pd && ((load RUNMODE) != 0) do
+      q = pairend(key, i, a, e)
+      if q < a do
+        return 0
+      ok = 1
+      if (load p) == 3 do
+        ok = match((load (p + 12)), 0, a, q, sub, ind)
+      if ((load p) == 2) && (typed != 0) do
+        TYPEDUSED <- 1
+        ok = (typed > 0) ? reads(typed, a, q) : 0
+      if ok && match(key, (i + 1), q, e, cap, ind) do
+        (cap + (i * 8)) <- a
+        (cap + ((i * 8) + 4)) <- q
+        return 1
+      return 0
     if (((load p) == 2) && (typed == 0)) && ((i + 1) == (load (key + 4))) do
       while q < e do
         if ((load f) == 0) && (tight && white(load8 q)) do
@@ -1036,6 +1146,8 @@ section 10 do
         if ((load p) == 2) && (typed != 0) do
           TYPEDUSED <- 1
           ok = (typed > 0) ? reads(typed, a, q) : 0
+          if ok && ((load TRACE) > 2) do
+            drop event(95, rel(a), rel(q), typed)
         if ok do
           if match(key, (i + 1), q, e, cap, ind) do
             (cap + (i * 8)) <- a
@@ -1064,6 +1176,18 @@ section 10 do
     if (load nx) == 1 do
       return (q < e) && white(load8 q)
     return 1
+  function pairend locals 2 do
+    var key 0
+    var i 1
+    var a 2
+    var e 3
+    var o 4
+    var z 5
+    o = a - (load (part(key, (i - 1)) + 8))
+    z = skippair(o, e)
+    if z > e do
+      return 0 - 1
+    return z - (load (part(key, (i + 1)) + 8))
   function paired locals 4 do
     var key 0
     var i 1
@@ -1164,7 +1288,20 @@ section 10 do
       drop keep(a, e, node, x0, x1, k)
     TYPEDUSED <- ((load TYPEDUSED) | tu)
     return k
-  function readx locals 12 do
+  function readx locals 2 do
+    var base 0
+    var a 1
+    var e 2
+    var node 3
+    var x0 4
+    var x1 5
+    var sp 6
+    var r 7
+    sp = load SP
+    r = readx_(base, a, e, node, x0, x1)
+    SP <- sp
+    return r
+  function readx_ locals 12 do
     var base 0
     var a 1
     var e 2
@@ -1409,7 +1546,14 @@ section 10 do
           key = load ((load ((load KEYS) + 8)) + (k * 4))
           if ((load (key + 48)) == r) && ((!((k >= x0) && (k < x1))) && (((load (key + 44)) & 4) == 0)) do
             if ((r & 1) == 0) || ((load (key + 56)) > flit) do
-              if possible(key, a, e) do
+              if ((load (key + 44)) & 8) != 0 do
+                if numeralpart(key, a, e, trial) do
+                  found = k
+                  flit = load (key + 56)
+                  drop copy(bbuf, trial, ((load (key + 4)) * 8))
+                  if (r & 1) == 0 do
+                    j = 0
+              if (((load (key + 44)) & 8) == 0) && possible(key, a, e) do
                 if match(key, 0, a, e, trial, ind) do
                   found = k
                   flit = load (key + 56)
@@ -1508,6 +1652,28 @@ section 10 do
     if (load p) == 0 do
       if ((a + (load (p + 8))) > e) || ((load8 a) != (load8 (load (p + 4)))) do
         return 0
+    return 1
+  function numeralpart locals 3 do
+    var key 0
+    var a 1
+    var e 2
+    var cap 3
+    var p 4
+    var off 5
+    var j 6
+    p = part(key, 0)
+    off = 0
+    if (load p) == 0 do
+      if ((a + (load (p + 8))) > e) || (!same(a, (load (p + 4)), (load (p + 8)))) do
+        return 0
+      off = load (p + 8)
+    if numeralof((a + off), e) < 0 do
+      return 0
+    j = 0
+    while j < (load (key + 4)) do
+      (cap + (j * 8)) <- (a + off)
+      (cap + ((j * 8) + 4)) <- e
+      j = j + 1
     return 1
   function possible locals 1 do
     var key 0
@@ -1655,8 +1821,16 @@ section 10 do
     var key 0
     var node 1
     var k 2
+    if (node == 0) && ((load RUNMODE) != 0) do
+      node = ((load NONEV) != 0) ? (load NONEV) : (load SCOPE)
     k = load (load KEYS)
     drop ranked(key)
+    if (load NUMERALA) != 0 do
+      if texteq((load (key + 32)), ((load (key + 36)) - (load (key + 32))), (load NUMERALA), ((load NUMERALE) - (load NUMERALA))) do
+        (key + 44) <- ((load (key + 44)) | 8)
+      if (load NUMERAL2A) != 0 do
+        if texteq((load (key + 32)), ((load (key + 36)) - (load (key + 32))), (load NUMERAL2A), ((load NUMERAL2E) - (load NUMERAL2A))) do
+          (key + 44) <- ((load (key + 44)) | 8)
     drop arrpush((load KEYS), key)
     (key + 24) <- node
     drop arrpush((load (node + 8)), k)
@@ -1664,7 +1838,7 @@ section 10 do
       drop indexed(node, k)
     if ((load (node + 24)) == 0) && ((load (load (node + 8))) > 32) do
       drop buildindex(node)
-    STAMPS <- ((load STAMPS) + 1)
+    STAMPS <-! ((load STAMPS) + 1)
     drop jot((node + 20), (load STAMPS))
     if ((load (key + 44)) & 2) != 0 do
       drop jot((node + 16), 1)
@@ -1813,7 +1987,25 @@ section 10 do
     if (load TESTING) != 0 do
       drop said(a)
     return 0
-  function run locals 13 do
+  function run locals 2 do
+    var base 0
+    var a 1
+    var e 2
+    var node 3
+    var frame 4
+    var caller 5
+    var depth 6
+    var x0 7
+    var x1 8
+    var sp 9
+    var v 10
+    sp = load SP
+    if (node == 0) && ((load RUNMODE) != 0) do
+      node = ((load NONEV) != 0) ? (load NONEV) : (load SCOPE)
+    v = statements(base, a, e, node, frame, caller, depth, x0, x1)
+    SP <- sp
+    return v
+  function statements locals 14 do
     var base 0
     var a 1
     var e 2
@@ -1836,14 +2028,17 @@ section 10 do
     var made 19
     var on 20
     var start 21
+    var sp0 22
     start = a
     value = caller
+    sp0 = load SP
     if (depth > 60) && ((load RUNMODE) == 0) do
       return value
     if depth > 4000 do
       drop event(93, rel(a), depth, 0)
       return value
     while a < e do
+      SP <- sp0
       if ((depth == 0) && ((load TESTING) == 0)) && ((load RUNMODE) != 0) do
         drop event(90, rel(a), (load HEAP), (load STOP))
         STOP <- 0
@@ -1910,7 +2105,10 @@ section 10 do
               value = run(base, (load (ref + 8)), (load (ref + 12)), node, (load (ref + 16)), caller, (depth + 1), 0, 0)
             if ((plain == 0) && (ref == 0)) && (k >= 0) do
               ANODE <- 0
+              v = value
               value = apply(k, cap, base, a, end, node, frame, caller, depth, 0, 0)
+              if value == (0 - 3) do
+                value = v
               if (load ANODE) != 0 do
                 node = load ANODE
               ANODE <- 0
@@ -1921,14 +2119,14 @@ section 10 do
               when c >= 0 do
                 v = run(base, a, trime(a, c), node, frame, caller, (depth + 1), x0, x1)
                 if (load JUMPA) == 0 do
-                  value = onvalue(base, c, end, v, frame, depth)
+                  value = onvalue(base, c, end, v, frame, depth, node)
                 c = 0
                 else
                 c = 0
                 if !membered(a) do
                   drop pend(node, a, end, frame, caller, depth, x0, x1)
                 if (load RUNMODE) != 0 do
-                  value = wordv(WNONE, NNONE)
+                  value = textv(a, end)
             drop event(82, rel(a), rel(end), k)
             if (load TRACE) == 2 do
               drop event(87, rel(a), value, istext(value))
@@ -1942,7 +2140,27 @@ section 10 do
                   drop event(74, rel(end), rel(load JUMPA), rel(load JUMPE))
                 return value
     return value
-  function apply locals 22 do
+  function apply locals 2 do
+    var k 0
+    var cap 1
+    var base 2
+    var a 3
+    var e 4
+    var node 5
+    var frame 6
+    var caller 7
+    var depth 8
+    var tha 9
+    var the 10
+    var sp 11
+    var r 12
+    sp = load SP
+    if (node == 0) && ((load RUNMODE) != 0) do
+      node = ((load NONEV) != 0) ? (load NONEV) : (load SCOPE)
+    r = apply_(k, cap, base, a, e, node, frame, caller, depth, tha, the)
+    SP <- sp
+    return r
+  function apply_ locals 22 do
     var k 0
     var cap 1
     var base 2
@@ -1980,6 +2198,9 @@ section 10 do
     kind = load key
     np = load (key + 4)
     drop event(65, rel(a), rel(e), k)
+    if (load TRACE) > 1 do
+      drop event(99, rel(a), rel(e), depth)
+      drop event(100, node, frame, (load (key + 24)))
     if (load RUNMODE) != 0 do
       BUDGET <- ((load BUDGET) - 1)
       if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || ((((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728)) || (((load TESTING) == 0) && (((load HEAP) - (load BUDGETHEAP)) > 4194304)))) do
@@ -2054,6 +2275,15 @@ section 10 do
       return run(base, (load cap), (load (cap + 4)), node, frame, caller, (depth + 1), 0, 0)
     if (load (key + 12)) == 0 do
       return ((load (key + 40)) != 0) ? (load (key + 40)) : caller
+    if ((load RUNMODE) != 0) && ((((load (key + 44)) & 8) != 0) && ((load COUNTED) != 0)) do
+      q = numeralof(a, e)
+      if q < 0 do
+        q = numeralof(trima((a + 2), e), e)
+      if q >= 0 do
+        return newcount(q)
+    if (((load RUNMODE) != 0) && ((load NUMBERS) != 0)) && (((load (key + 24)) == (load NUMBERS)) && texteq((load (key + 32)), ((load (key + 36)) - (load (key + 32))), WSUCC, NSUCC)) do
+      if countof(node) >= 0 do
+        return newcount((countof(node)) + 1)
     f = newframe((load (key + 20)), (np + 1))
     (f + 8) <- node
     (f + 12) <- caller
@@ -2076,7 +2306,21 @@ section 10 do
     q = run(base, (load (key + 12)), (load (key + 16)), node, f, caller, (depth + 1), k, (load (load KEYS)))
     CURAPP <- was
     return q
-  function givenop locals 6 do
+  function givenop locals 2 do
+    var a 0
+    var e 1
+    var base 2
+    var node 3
+    var frame 4
+    var caller 5
+    var depth 6
+    var sp 7
+    var r 8
+    sp = load SP
+    r = givenop_(a, e, base, node, frame, caller, depth)
+    SP <- sp
+    return r
+  function givenop_ locals 6 do
     var a 0
     var e 1
     var base 2
@@ -2111,7 +2355,7 @@ section 10 do
           JUMPKIND <- 1
           JUMPA <- 1
           JUMPE <- 1
-          return caller
+          return 0 - 3
         if n != 0 do
           xa = trima((load (n + 8)), (load (n + 12)))
           xe = trime(xa, (load (n + 12)))
@@ -2120,9 +2364,9 @@ section 10 do
           else
           JUMPA <- xa
           JUMPE <- xe
-        return caller
+        return 0 - 3
       if kw(a, e, (KW + 72), 5) do
-        return caller
+        return 0 - 3
       n = natives(a, e, base, node, frame, caller, depth)
       if n != (0 - 2) do
         return n
@@ -2231,15 +2475,10 @@ section 10 do
     (key + 44) <- 1
     drop addkey(key, node)
     return key
-  function textv locals 1 do
+  function textv locals 0 do
     var a 0
     var e 1
-    var t 2
-    t = newnode(load SCOPE)
-    (t + 4) <- 2020
-    (t + 32) <- a
-    (t + 36) <- e
-    return t
+    return textof(a, e)
   function splicehead locals 10 do
     var a 0
     var e 1
@@ -2331,6 +2570,10 @@ section 10 do
     return v
   function boolv locals 0 do
     var b 0
+    if b && ((load TRUEV) != 0) do
+      return load TRUEV
+    if (!b) && ((load FALSEV) != 0) do
+      return load FALSEV
     return b ? wordv(WTRUE, NTRUE) : wordv(WFALSE, NFALSE)
   function istext locals 0 do
     var v 0
@@ -2356,6 +2599,9 @@ section 10 do
     var ok 17
     var keys 18
     g = alloc(32)
+    n = mapnative(a, e, base, node, frame, caller, depth)
+    if n != (0 - 2) do
+      return n
     if kw(a, e, WMEMBER, NMEMBER) do
       n = groups((a + NMEMBER), e, g)
       if n < 2 do
@@ -2410,6 +2656,274 @@ section 10 do
         return boolv(0)
       return boolv(1)
     return 0 - 2
+  function nothing locals 0 do
+    return ((load NONEV) != 0) ? (load NONEV) : wordv(WNONE, NNONE)
+  function newcount locals 1 do
+    var v 0
+    var n 1
+    n = newnode(((load COUNTED) != 0) ? (load COUNTED) : (load SCOPE))
+    (n + 4) <- 3030
+    (n + 32) <- v
+    return n
+  function newchar locals 1 do
+    var v 0
+    var n 1
+    n = newnode(((load CHARS) != 0) ? (load CHARS) : (load SCOPE))
+    (n + 4) <- 3031
+    (n + 32) <- v
+    return n
+  function countof locals 0 do
+    var x 0
+    if x == 0 do
+      return 0 - 1
+    if ((load (x + 4)) == 3030) || ((load (x + 4)) == 3031) do
+      return load (x + 32)
+    return 0 - 1
+  function textof locals 1 do
+    var a 0
+    var e 1
+    var t 2
+    t = newnode(((load TEXTCLASS) != 0) ? (load TEXTCLASS) : (load SCOPE))
+    (t + 4) <- 2020
+    (t + 32) <- a
+    (t + 36) <- e
+    return t
+  function wordend locals 0 do
+    var q 0
+    var e 1
+    while (q < e) && ((load8 q) > 32) do
+      q = q + 1
+    return q
+  function mapnative locals 12 do
+    var a 0
+    var e 1
+    var base 2
+    var node 3
+    var frame 4
+    var caller 5
+    var depth 6
+    var q 7
+    var r 8
+    var x 9
+    var y 10
+    var n 11
+    var c 12
+    var at 13
+    var j 14
+    var cp 15
+    var o 16
+    var z 17
+    var u 18
+    if kwend(a, e, WTEXT, NTEXT) do
+      TEXTCLASS <- node
+      return caller
+    if kwend(a, e, WCOUNT, NCOUNT) do
+      COUNTED <- node
+      return caller
+    if kwend(a, e, WCHARACTER, NCHARACTER) do
+      CHARS <- node
+      return caller
+    if kwend(a, e, WFIRST, NFIRST) || kwend(a, e, WREST, NREST) do
+      if !istext(node) do
+        return 0
+      x = load (node + 32)
+      z = load (node + 36)
+      if x >= z do
+        return nothing()
+      c = load8 x
+      n = (c < 128) ? 1 : ((c < 224) ? 2 : ((c < 240) ? 3 : 4))
+      at = ((x + n) < z) ? (x + n) : z
+      if kwend(a, e, WREST, NREST) do
+        return textof(at, z)
+      if (load CHARS) == 0 do
+        return textof(x, at)
+      cp = (c < 128) ? c : ((c < 224) ? (c & 31) : ((c < 240) ? (c & 15) : (c & 7)))
+      j = 1
+      while (j < n) && ((x + j) < z) do
+        cp = (cp << 6) | ((load8 (x + j)) & 63)
+        j = j + 1
+      return newchar(cp)
+    if kw(a, e, WSAME, NSAME) || (kw(a, e, WUNTIL, NUNTIL) || (kw(a, e, WPAST, NPAST) || kw(a, e, WJOINED, NJOINED))) do
+      q = trima((a + (wordend(a, e) - a)), e)
+      r = wordend(q, e)
+      x = run(base, q, r, node, frame, caller, (depth + 1), 0, 0)
+      y = run(base, trima(r, e), e, node, frame, caller, (depth + 1), 0, 0)
+      if (!istext(x)) || (!istext(y)) do
+        return kw(a, e, WJOINED, NJOINED) ? 0 : nothing()
+      n = (load (y + 36)) - (load (y + 32))
+      if kw(a, e, WSAME, NSAME) do
+        if (((load (x + 36)) - (load (x + 32))) == n) && same((load (x + 32)), (load (y + 32)), n) do
+          return x
+        return nothing()
+      if kw(a, e, WUNTIL, NUNTIL) do
+        if ((load (y + 32)) < (load (x + 32))) || ((load (y + 32)) > (load (x + 36))) do
+          return nothing()
+        return textof((load (x + 32)), (load (y + 32)))
+      if kw(a, e, WPAST, NPAST) do
+        if (((load (x + 36)) - (load (x + 32))) < n) || (!same((load (x + 32)), (load (y + 32)), n)) do
+          return nothing()
+        return textof(((load (x + 32)) + n), (load (x + 36)))
+      at = load TCUR
+      drop append((load (x + 32)), ((load (x + 36)) - (load (x + 32))))
+      drop append((load (y + 32)), n)
+      return textof(at, (load TCUR))
+    if kw(a, e, WUNESCAPED, NUNESCAPED) do
+      x = run(base, trima((a + NUNESCAPED), e), e, node, frame, caller, (depth + 1), 0, 0)
+      if !istext(x) do
+        return ((x != 0) ? x : nothing())
+      return unescape(x)
+    if kw(a, e, WLINKED, NLINKED) do
+      x = run(base, trima((a + NLINKED), e), e, node, frame, caller, (depth + 1), 0, 0)
+      return newcount(linkcount(x))
+    if kw(a, e, WNUMBER, NNUMBER) do
+      q = trima((a + NNUMBER), e)
+      r = wordend(q, e)
+      if ((r - q) == 4) && same(q, WNEXT, 4) do
+        x = run(base, trima(r, e), e, node, frame, caller, (depth + 1), 0, 0)
+        c = countof(x)
+        return (c > 0) ? newcount(c - 1) : nothing()
+      NUMBERS <- node
+      NUMOPSA <- q
+      NUMOPSE <- e
+      return caller
+    if kw(a, e, WTRUTH, NTRUTH) do
+      q = trima((a + NTRUTH), e)
+      r = wordend(q, e)
+      TRUEV <- run(base, q, r, node, frame, caller, (depth + 1), 0, 0)
+      FALSEV <- run(base, trima(r, e), e, node, frame, caller, (depth + 1), 0, 0)
+      return caller
+    if kw(a, e, WNOTHING, NNOTHING) do
+      NONEV <- run(base, trima((a + NNOTHING), e), e, node, frame, caller, (depth + 1), 0, 0)
+      return caller
+    if kw(a, e, WNUMERAL, NNUMERAL) do
+      q = trima((a + NNUMERAL), e)
+      r = trime(q, e)
+      if ((load8 q) == 96) && ((load8 (r - 1)) == 96) do
+        q = q + 1
+        r = r - 1
+      when (load NUMERALA) == 0 do
+        NUMERALA <- q
+        NUMERALE <- r
+        else
+        NUMERAL2A <- q
+        NUMERAL2E <- r
+      j = 0
+      while j < (load (load KEYS)) do
+        x = keyat(j)
+        if texteq((load (x + 32)), ((load (x + 36)) - (load (x + 32))), q, (r - q)) do
+          (x + 44) <- ((load (x + 44)) | 8)
+        j = j + 1
+      return caller
+    if kw(a, e, WADMITS, NADMITS) do
+      return nothing()
+    if (kw(a, e, WGIVEN, NGIVEN) || kw(a, e, WGLYPHS, NGLYPHS)) || ((kw(a, e, WTAKING, NTAKING) || kw(a, e, WCUTS, NCUTS)) || ((kw(a, e, WARRAYED, NARRAYED) || kwend(a, e, WKEPT, NKEPT)) || (kw(a, e, WSUPERPOSING, NSUPERPOSING) || kw(a, e, WINT32, NINT32)))) do
+      return caller
+    return 0 - 2
+  function linkcount locals 3 do
+    var x 0
+    var at 1
+    var n 2
+    var k 3
+    n = 0
+    if x == 0 do
+      return 0
+    k = own(x, WHEAD, (WHEAD + NHEAD))
+    if k < 0 do
+      return 0
+    at = keyvalue(k)
+    while (at != 0) && ((at != (load NONEV)) && (n < 100000000)) do
+      n = n + 1
+      k = own(at, WNEXT, (WNEXT + NNEXT))
+      at = (k < 0) ? 0 : keyvalue(k)
+    return n
+  function keyvalue locals 1 do
+    var k 0
+    var key 1
+    key = keyat(k)
+    if (load (key + 12)) == 0 do
+      return load (key + 40)
+    return 0
+  function unescape locals 7 do
+    var x 0
+    var p 1
+    var z 2
+    var at 3
+    var c 4
+    var d 5
+    var cp 6
+    var k 7
+    p = load (x + 32)
+    z = load (x + 36)
+    at = load TCUR
+    while p < z do
+      c = load8 p
+      cp = 0 - 1
+      if (c == 92) && ((p + 1) < z) do
+        d = load8 (p + 1)
+        if d == 110 do
+          cp = 10
+        if d == 116 do
+          cp = 9
+        if d == 114 do
+          cp = 13
+        if d == 48 do
+          cp = 0
+        if d == 101 do
+          cp = 27
+        if d == 115 do
+          cp = 32
+        if (d == 92) || ((d == 34) || ((d == 39) || ((d == 96) || ((d == 123) || (d == 125))))) do
+          cp = d
+      when cp >= 0 do
+        (load TCUR) <-8 cp
+        TCUR <- ((load TCUR) + 1)
+        p = p + 2
+        else
+        (load TCUR) <-8 c
+        TCUR <- ((load TCUR) + 1)
+        p = p + 1
+    return textof(at, (load TCUR))
+  function numeralof locals 4 do
+    var a 0
+    var z 1
+    var h 2
+    var i 3
+    var c 4
+    var d 5
+    a = trima(a, z)
+    z = trime(a, z)
+    if a >= z do
+      return 0 - 1
+    if ((z - a) >= 3) && (((load8 a) == 48) && (((load8 (a + 1)) == 120) || ((load8 (a + 1)) == 88))) do
+      if (z - a) > 10 do
+        return 0 - 1
+      h = 0
+      i = a + 2
+      while i < z do
+        c = load8 i
+        d = 0 - 1
+        if (c >= 48) && (c <= 57) do
+          d = c - 48
+        if (c >= 97) && (c <= 102) do
+          d = c - 87
+        if (c >= 65) && (c <= 70) do
+          d = c - 55
+        if d < 0 do
+          return 0 - 1
+        h = (h * 16) + d
+        i = i + 1
+      return h
+    if (z - a) > 9 do
+      return 0 - 1
+    h = 0
+    i = a
+    while i < z do
+      c = load8 i
+      if (c < 48) || (c > 57) do
+        return 0 - 1
+      h = (h * 10) + (c - 48)
+      i = i + 1
+    return h
   function own locals 7 do
     var x 0
     var a 1
@@ -2660,7 +3174,8 @@ section 10 do
     TSTABLE <- (load TCUR)
     j = 0
     while j < (load (load DEFER)) do
-      drop region(arrat((load DEFER), j))
+      if ((load MINTEST) == 0) || (((load (arrat((load DEFER), j) + 36)) >= (load MINTEST)) && ((load (arrat((load DEFER), j) + 36)) < (TEXT + (load TLEN)))) do
+        drop region(arrat((load DEFER), j))
       j = j + 1
     return 0
   function region locals 9 do
@@ -2846,6 +3361,9 @@ section 10 do
     e = trime(a, e)
     if a >= e do
       return 0 - 1
+    BUDGET <- ((load BUDGET) - 1)
+    if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || (((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728))) do
+      return 0 - 1
     if charkind(load8 a) != 2 do
       p = a + 1
       while p < e do
@@ -2875,6 +3393,101 @@ section 10 do
           return p
       p = skippair(p, e)
     return 0 - 1
+  function opof locals 3 do
+    var p 0
+    var q 1
+    var cx 2
+    var istx 3
+    var l 4
+    var r 5
+    var w 6
+    if texteq(p, (q - p), WEQEQ, NEQEQ) do
+      return 61
+    if (cx < 0) || ((load NUMOPSA) == 0) do
+      return 0
+    l = load NUMOPSA
+    while l < (load NUMOPSE) do
+      l = trima(l, (load NUMOPSE))
+      w = wordend(l, (load NUMOPSE))
+      if texteq(p, (q - p), l, (w - l)) && ((w - l) == 1) do
+        return load8 l
+      l = w
+    return 0
+  function prec locals 0 do
+    var op 0
+    if (op == 61) || (op == 60) do
+      return 1
+    if (op == 43) || (op == 45) do
+      return 2
+    if (op == 42) || ((op == 47) || (op == 37)) do
+      return 3
+    return 0
+  function numop locals 10 do
+    var base 0
+    var p 1
+    var e 2
+    var v 3
+    var frame 4
+    var depth 5
+    var home 6
+    var cx 7
+    var istx 8
+    var q 9
+    var op 10
+    var s 11
+    var oe 12
+    var o2 13
+    var y 14
+    var cy 15
+    var res 16
+    if (load NUMBERS) == 0 do
+      return 0 - 2
+    cx = countof(v)
+    istx = istext(v)
+    if (cx < 0) && (!istx) do
+      return 0 - 2
+    p = trima(p, e)
+    q = wordend(p, e)
+    op = opof(p, q, cx, istx)
+    if (op == 0) || (istx && (op != 61)) do
+      return 0 - 2
+    s = trima(q, e)
+    oe = s
+    while oe < e do
+      o2 = 0
+      if ((oe > s) && ((load8 (oe - 1)) <= 32)) && (charkind(load8 oe) == 2) do
+        o2 = opof(oe, wordend(oe, e), 0, 0)
+      if (o2 != 0) && (prec(o2) <= prec(op)) do
+        exit 2
+      oe = skippair(oe, e)
+    y = run(base, s, trime(s, oe), home, frame, 0, (depth + 1), 0, 0)
+    if (load JUMPA) != 0 do
+      return 0
+    cy = countof(y)
+    res = 0 - 2
+    if (op == 61) && istx do
+      if istext(y) do
+        res = boolv((((load (y + 36)) - (load (y + 32))) == ((load (v + 36)) - (load (v + 32)))) && same((load (v + 32)), (load (y + 32)), ((load (y + 36)) - (load (y + 32)))))
+    if (cx >= 0) && (cy >= 0) do
+      if op == 61 do
+        res = boolv(cx == cy)
+      if op == 60 do
+        res = boolv(cx < cy)
+      if op == 43 do
+        res = newcount(cx + cy)
+      if op == 45 do
+        res = newcount((cx > cy) ? (cx - cy) : 0)
+      if op == 42 do
+        res = newcount(cx * cy)
+      if op == 47 do
+        res = newcount(((cy == 0) || (cx < cy)) ? 0 : (cx / cy))
+      if op == 37 do
+        res = newcount(((cy == 0) || (cx < cy)) ? cx : (cx % cy))
+    if res == (0 - 2) do
+      return 0 - 2
+    if oe < e do
+      return onvalue(base, oe, e, res, frame, depth, home)
+    return res
   function onread locals 0 do
     var p 0
     var e 1
@@ -2986,9 +3599,13 @@ section 10 do
     var v 3
     var frame 4
     var depth 5
-    var on 6
-    var k 7
-    var r 8
+    var home 6
+    var on 7
+    var k 8
+    var r 9
+    r = numop(base, p, e, v, frame, depth, home)
+    if r != (0 - 2) do
+      return r
     on = v
     if on == 0 do
       on = wordv(WNONE, NNONE)
@@ -3001,7 +3618,7 @@ section 10 do
         v = run(base, p, trime(p, r), on, frame, on, (depth + 1), 0, 0)
         if (load JUMPA) != 0 do
           return 0
-        return onvalue(base, r, e, v, frame, depth)
+        return onvalue(base, r, e, v, frame, depth, home)
       drop said(p)
       return 0
     ANODE <- 0
@@ -3291,7 +3908,22 @@ section 10 do
     drop copy(at, src, n)
     TCUR <- (at + n)
     return at
-  function method locals 13 do
+  function method locals 2 do
+    var la 0
+    var le 1
+    var ra 2
+    var re 3
+    var node 4
+    var frame 5
+    var caller 6
+    var depth 7
+    var sp 8
+    var r 9
+    sp = load SP
+    r = method_(la, le, ra, re, node, frame, caller, depth)
+    SP <- sp
+    return r
+  function method_ locals 13 do
     var la 0
     var le 1
     var ra 2
@@ -3583,13 +4215,23 @@ section 10 do
     drop addkey(rc, scope)
     drop run(TEXT, (p + 2), (TEXT + (load TLEN)), scope, 0, 0, 0, 0, 0)
     if (load RUNMODE) != 0 do
-      drop included()
+      drop included(scope)
     return scope
   function included locals 4 do
-    var j 0
-    var m 1
-    var at 2
-    var n 3
+    var scope 0
+    var j 1
+    var m 2
+    var at 3
+    var n 4
+    m = (((load TCUR) + 3) / 4) * 4
+    m <- WMAP
+    (m + 4) <- (WMAP + NMAP)
+    at = m + 8
+    n = fetch(m, NMAP, at)
+    if n > 0 do
+      (at + n) <-8 10
+      TCUR <- ((at + n) + 1)
+      drop run(TEXT, at, (at + n), scope, 0, 0, 0, 0, 0)
     j = 0
     while j < (load (load INCLUDES)) do
       m = arrat((load INCLUDES), j)
@@ -3609,8 +4251,8 @@ section 11 do
   external emit 184
   external emit 1
   external emit 11
-  external emit 157
-  external emit 3
+  external emit 216
+  external emit 4
   external emit 101
   external emit 120
   external emit 116
@@ -4024,3 +4666,190 @@ section 11 do
   external emit 97
   external emit 109
   external emit 101
+  external emit 32
+  external emit 116
+  external emit 101
+  external emit 120
+  external emit 116
+  external emit 32
+  external emit 102
+  external emit 105
+  external emit 114
+  external emit 115
+  external emit 116
+  external emit 32
+  external emit 114
+  external emit 101
+  external emit 115
+  external emit 116
+  external emit 32
+  external emit 115
+  external emit 97
+  external emit 109
+  external emit 101
+  external emit 32
+  external emit 117
+  external emit 110
+  external emit 116
+  external emit 105
+  external emit 108
+  external emit 32
+  external emit 112
+  external emit 97
+  external emit 115
+  external emit 116
+  external emit 32
+  external emit 106
+  external emit 111
+  external emit 105
+  external emit 110
+  external emit 101
+  external emit 100
+  external emit 32
+  external emit 117
+  external emit 110
+  external emit 101
+  external emit 115
+  external emit 99
+  external emit 97
+  external emit 112
+  external emit 101
+  external emit 100
+  external emit 32
+  external emit 108
+  external emit 105
+  external emit 110
+  external emit 107
+  external emit 101
+  external emit 100
+  external emit 32
+  external emit 99
+  external emit 111
+  external emit 117
+  external emit 110
+  external emit 116
+  external emit 32
+  external emit 99
+  external emit 104
+  external emit 97
+  external emit 114
+  external emit 97
+  external emit 99
+  external emit 116
+  external emit 101
+  external emit 114
+  external emit 32
+  external emit 110
+  external emit 117
+  external emit 109
+  external emit 98
+  external emit 101
+  external emit 114
+  external emit 32
+  external emit 116
+  external emit 114
+  external emit 117
+  external emit 116
+  external emit 104
+  external emit 32
+  external emit 110
+  external emit 111
+  external emit 116
+  external emit 104
+  external emit 105
+  external emit 110
+  external emit 103
+  external emit 32
+  external emit 110
+  external emit 117
+  external emit 109
+  external emit 101
+  external emit 114
+  external emit 97
+  external emit 108
+  external emit 32
+  external emit 103
+  external emit 105
+  external emit 118
+  external emit 101
+  external emit 110
+  external emit 32
+  external emit 103
+  external emit 108
+  external emit 121
+  external emit 112
+  external emit 104
+  external emit 115
+  external emit 32
+  external emit 116
+  external emit 97
+  external emit 107
+  external emit 105
+  external emit 110
+  external emit 103
+  external emit 32
+  external emit 99
+  external emit 117
+  external emit 116
+  external emit 115
+  external emit 32
+  external emit 97
+  external emit 114
+  external emit 114
+  external emit 97
+  external emit 121
+  external emit 101
+  external emit 100
+  external emit 32
+  external emit 107
+  external emit 101
+  external emit 112
+  external emit 116
+  external emit 32
+  external emit 100
+  external emit 111
+  external emit 116
+  external emit 116
+  external emit 101
+  external emit 100
+  external emit 32
+  external emit 105
+  external emit 110
+  external emit 116
+  external emit 51
+  external emit 50
+  external emit 32
+  external emit 115
+  external emit 117
+  external emit 99
+  external emit 99
+  external emit 32
+  external emit 109
+  external emit 97
+  external emit 112
+  external emit 32
+  external emit 115
+  external emit 117
+  external emit 112
+  external emit 101
+  external emit 114
+  external emit 112
+  external emit 111
+  external emit 115
+  external emit 105
+  external emit 110
+  external emit 103
+  external emit 32
+  external emit 115
+  external emit 117
+  external emit 112
+  external emit 101
+  external emit 114
+  external emit 112
+  external emit 111
+  external emit 115
+  external emit 101
+  external emit 100
+  external emit 32
+  external emit 61
+  external emit 61

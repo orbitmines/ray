@@ -10,7 +10,7 @@ const TEXT = 1048576, OUT = 5242880, TLEN = 64, NKEYS = 12;
 export const read = async (engine, text) => {
   const memory = new WebAssembly.Memory({ initial: 1024 });
   const log = (at) => { const line = text.subarray(0, at - TEXT).toString().split('\n').length; throw new Error(`line ${line}: nothing reads ${JSON.stringify(Buffer.from(new Uint8Array(memory.buffer, at, 80)).toString())}`); };
-  const { instance } = await WebAssembly.instantiate(engine, { m: { memory, log, ev: () => 0 } });
+  const { instance } = await WebAssembly.instantiate(engine, { m: { memory, log, ev: () => 0, fetch: () => 0 } });
   const u8 = new Uint8Array(memory.buffer), i32 = new Int32Array(memory.buffer);
   u8.set(text, TEXT); i32[TLEN / 4] = text.length;
   const n = instance.exports.main();

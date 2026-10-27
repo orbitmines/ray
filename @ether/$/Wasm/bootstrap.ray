@@ -661,7 +661,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 178
+  external emit 180
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -790,57 +790,59 @@ section 3 do
   declare own 127 takes 3
   declare callsany 128 takes 1
   declare functiontyped 129 takes 2
-  declare membertarget 130 takes 7
-  declare said 131 takes 1
-  declare jumped 132 takes 10
-  declare valuejump 133 takes 8
-  declare islabel 134 takes 5
-  declare tests 135 takes 0
-  declare region 136 takes 1
-  declare zero 137 takes 2
-  declare test 138 takes 1
-  declare styled 139 takes 7
-  declare wordish 140 takes 2
-  declare charkind 141 takes 1
-  declare skippair 142 takes 2
-  declare worded 143 takes 2
-  declare leftreads 144 takes 7
-  declare splitat 145 takes 7
-  declare tightleft 146 takes 2
-  declare opof 147 takes 4
-  declare prec 148 takes 1
-  declare numop 149 takes 7
-  declare onread 150 takes 3
-  declare merged 151 takes 3
-  declare readon 152 takes 5
-  declare onvalue 153 takes 7
-  declare member 154 takes 2
-  declare kw 155 takes 4
-  declare kwend 156 takes 4
-  declare number 157 takes 3
-  declare emitb 158 takes 1
-  declare emitleb 159 takes 1
-  declare emitsleb 160 takes 1
-  declare finish 161 takes 0
-  declare alloc 162 takes 1
-  declare could 163 takes 3
-  declare retry 164 takes 3
-  declare typenode 165 takes 3
-  declare reads 166 takes 3
-  declare reads_ 167 takes 3
-  declare append 168 takes 2
-  declare method 169 takes 8
-  declare method_ 170 takes 8
-  declare chain 171 takes 6
-  declare unread 172 takes 1
-  declare eachunread 173 takes 0
-  declare stock 174 takes 2
-  declare textpart 175 takes 4
-  declare holepart 176 takes 4
-  declare spacepart 177 takes 2
-  declare language 178 takes 0
-  declare levelread 179 takes 1
-  declare included 180 takes 1
+  declare holed 130 takes 2
+  declare headprefix 131 takes 9
+  declare membertarget 132 takes 7
+  declare said 133 takes 1
+  declare jumped 134 takes 10
+  declare valuejump 135 takes 8
+  declare islabel 136 takes 5
+  declare tests 137 takes 0
+  declare region 138 takes 1
+  declare zero 139 takes 2
+  declare test 140 takes 1
+  declare styled 141 takes 7
+  declare wordish 142 takes 2
+  declare charkind 143 takes 1
+  declare skippair 144 takes 2
+  declare worded 145 takes 2
+  declare leftreads 146 takes 7
+  declare splitat 147 takes 7
+  declare tightleft 148 takes 2
+  declare opof 149 takes 4
+  declare prec 150 takes 1
+  declare numop 151 takes 7
+  declare onread 152 takes 3
+  declare merged 153 takes 3
+  declare readon 154 takes 5
+  declare onvalue 155 takes 7
+  declare member 156 takes 2
+  declare kw 157 takes 4
+  declare kwend 158 takes 4
+  declare number 159 takes 3
+  declare emitb 160 takes 1
+  declare emitleb 161 takes 1
+  declare emitsleb 162 takes 1
+  declare finish 163 takes 0
+  declare alloc 164 takes 1
+  declare could 165 takes 3
+  declare retry 166 takes 3
+  declare typenode 167 takes 3
+  declare reads 168 takes 3
+  declare reads_ 169 takes 3
+  declare append 170 takes 2
+  declare method 171 takes 8
+  declare method_ 172 takes 8
+  declare chain 173 takes 6
+  declare unread 174 takes 1
+  declare eachunread 175 takes 0
+  declare stock 176 takes 2
+  declare textpart 177 takes 4
+  declare holepart 178 takes 4
+  declare spacepart 179 takes 2
+  declare language 180 takes 0
+  declare levelread 181 takes 1
+  declare included 182 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -851,7 +853,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 178
+  external emit 180
   external emit 1
   function main locals 1 do
     var scope 0
@@ -3101,6 +3103,7 @@ section 10 do
         j = j + 1
       la = load (cap + (first * 8))
       le = load (cap + ((first * 8) + 4))
+      z = le
       ra = load (cap + (last * 8))
       re = load (cap + ((last * 8) + 4))
       lb = bound(la, le, frame)
@@ -3128,6 +3131,10 @@ section 10 do
           if (load8 la) == 40 do
             la = la + 1
           le = q
+      if (((load RUNMODE) != 0) && ((((first <= 0) && (lb == 0)) && (le < re)) || (((first > 0) || (lb != 0)) && (z < re)))) && (!holed(la, le)) do
+        q = headprefix(base, la, le, re, node, frame, caller, depth, (((first > 0) || (lb != 0)) ? z : 0))
+        if q != (0 - 2) do
+          return q
       if kind == 2 do
         if method(la, le, ra, re, node, frame, caller, depth) do
           return caller
@@ -3990,6 +3997,64 @@ section 10 do
           comma = 1
       i = i + 1
     return (colonparen && closes) && (!comma)
+  function holed locals 1 do
+    var a 0
+    var e 1
+    var q 2
+    q = a
+    while q < e do
+      if same(q, (load OPENA), (load OPENL)) do
+        return 1
+      q = q + 1
+    return 0
+  function headprefix locals 6 do
+    var base 0
+    var la 1
+    var le 2
+    var re 3
+    var node 4
+    var frame 5
+    var caller 6
+    var depth 7
+    var ole 8
+    var k 9
+    var key 10
+    var np 11
+    var hs 12
+    var cb 13
+    var rx 14
+    k = read(base, la, le, node, 0, 0)
+    if (k < 0) || ((load REND) < le) do
+      return 0 - 2
+    key = keyat(k)
+    np = load (key + 4)
+    if (np != 3) || (((load key) == 1) || ((load (key + 28)) != 0)) do
+      return 0 - 2
+    if !worded((load (part(key, 0) + 4)), ((load (part(key, 0) + 4)) + (load (part(key, 0) + 8)))) do
+      return 0 - 2
+    if ((load part(key, 0)) != 0) || ((load part(key, (np - 1))) != 2) do
+      return 0 - 2
+    if (np == 3) && ((load part(key, 1)) != 1) do
+      return 0 - 2
+    hs = trima((load ((load RCAP) + ((np - 1) * 8))), le)
+    if (hs >= le) || ((load8 hs) == 40) do
+      return 0 - 2
+    rx = re
+    if ole != 0 do
+      rx = load TCUR
+      drop append(hs, (le - hs))
+      drop append(ole, (re - ole))
+      hs = rx
+      rx = load TCUR
+    cb = alloc(32)
+    cb <- la
+    (cb + 4) <- hs
+    (cb + 8) <- hs
+    (cb + 12) <- hs
+    (cb + ((np - 1) * 8)) <- hs
+    ((cb + ((np - 1) * 8)) + 4) <- rx
+    READNODE <- (load VIS)
+    return apply(k, cb, base, la, rx, node, frame, caller, depth, 0, 0)
   function membertarget locals 6 do
     var a 0
     var e 1

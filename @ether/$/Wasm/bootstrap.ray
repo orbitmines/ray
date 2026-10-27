@@ -471,17 +471,19 @@ constant WSUCC 24118
 constant NSUCC 4
 constant WMAP 24123
 constant NMAP 3
-constant WSUPERPOSING 24127
+constant WLEVEL 24127
+constant NLEVEL 5
+constant WSUPERPOSING 24133
 constant NSUPERPOSING 11
-constant WSUPERPOSED 24139
+constant WSUPERPOSED 24145
 constant NSUPERPOSED 10
-constant WLISTING 24150
+constant WLISTING 24156
 constant NLISTING 7
-constant WPARENS2 24158
+constant WPARENS2 24164
 constant NPARENS2 2
-constant WPAREN1 24161
+constant WPAREN1 24167
 constant NPAREN1 1
-constant WEQEQ 24163
+constant WEQEQ 24169
 constant NEQEQ 2
 log => external leb 0
 ev => external leb 1
@@ -652,7 +654,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 160
+  external emit 161
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -813,7 +815,8 @@ section 3 do
   declare holepart 159 takes 4
   declare spacepart 160 takes 2
   declare language 161 takes 0
-  declare included 162 takes 1
+  declare levelread 162 takes 1
+  declare included 163 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -824,7 +827,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 160
+  external emit 161
   external emit 1
   function main locals 1 do
     var scope 0
@@ -3767,6 +3770,8 @@ section 10 do
     h = named(a, e, frame)
     ta = a
     te = e
+    if (h != 0) && ((load RUNMODE) != 0) do
+      h = takeof(h)
     if h != 0 do
       ta = trima((load (h + 8)), (load (h + 12)))
       te = trime(ta, (load (h + 12)))
@@ -4760,10 +4765,27 @@ section 10 do
     part(rc, o) <- 3
     (part(rc, o) + 12) <- d0
     drop addkey(rc, scope)
+    if (load RUNMODE) != 0 do
+      drop levelread(scope)
     drop run(TEXT, (p + 2), (TEXT + (load TLEN)), scope, 0, 0, 0, 0, 0)
     if (load RUNMODE) != 0 do
       drop included(scope)
     return scope
+  function levelread locals 3 do
+    var scope 0
+    var m 1
+    var at 2
+    var n 3
+    m = (((load TCUR) + 3) / 4) * 4
+    m <- WLEVEL
+    (m + 4) <- (WLEVEL + NLEVEL)
+    at = m + 8
+    n = fetch(m, NLEVEL, at)
+    if n > 0 do
+      (at + n) <-8 10
+      TCUR <- ((at + n) + 1)
+      drop run(TEXT, at, (at + n), scope, 0, 0, 0, 0, 0)
+    return 0
   function included locals 4 do
     var scope 0
     var j 1
@@ -4798,7 +4820,7 @@ section 11 do
   external emit 184
   external emit 1
   external emit 11
-  external emit 229
+  external emit 235
   external emit 4
   external emit 101
   external emit 120
@@ -5374,6 +5396,12 @@ section 11 do
   external emit 109
   external emit 97
   external emit 112
+  external emit 32
+  external emit 108
+  external emit 101
+  external emit 118
+  external emit 101
+  external emit 108
   external emit 32
   external emit 115
   external emit 117

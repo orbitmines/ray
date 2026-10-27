@@ -350,6 +350,8 @@ constant OUT 5242880
 constant COULDC 352
 constant BINDNODE 360
 constant READIN 364
+constant MEMBERA 368
+constant MEMBERE 372
 constant WMEMBER 23659
 constant NMEMBER 6
 constant WMEMBERS 23666
@@ -657,7 +659,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 170
+  external emit 171
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -683,7 +685,7 @@ section 3 do
   declare holeloop 24 takes 7
   declare skipto 25 takes 5
   declare near 26 takes 3
-  declare typedreads 27 takes 4
+  declare typedreads 27 takes 5
   declare appliedhead 28 takes 4
   declare pairend 29 takes 4
   declare paired 30 takes 2
@@ -795,40 +797,41 @@ section 3 do
   declare worded 136 takes 2
   declare leftreads 137 takes 7
   declare splitat 138 takes 7
-  declare opof 139 takes 4
-  declare prec 140 takes 1
-  declare numop 141 takes 7
-  declare onread 142 takes 3
-  declare merged 143 takes 3
-  declare readon 144 takes 5
-  declare onvalue 145 takes 7
-  declare member 146 takes 2
-  declare kw 147 takes 4
-  declare kwend 148 takes 4
-  declare number 149 takes 3
-  declare emitb 150 takes 1
-  declare emitleb 151 takes 1
-  declare emitsleb 152 takes 1
-  declare finish 153 takes 0
-  declare alloc 154 takes 1
-  declare could 155 takes 3
-  declare retry 156 takes 3
-  declare typenode 157 takes 2
-  declare reads 158 takes 3
-  declare reads_ 159 takes 3
-  declare append 160 takes 2
-  declare method 161 takes 8
-  declare method_ 162 takes 8
-  declare chain 163 takes 6
-  declare unread 164 takes 1
-  declare eachunread 165 takes 0
-  declare stock 166 takes 2
-  declare textpart 167 takes 4
-  declare holepart 168 takes 4
-  declare spacepart 169 takes 2
-  declare language 170 takes 0
-  declare levelread 171 takes 1
-  declare included 172 takes 1
+  declare tightleft 139 takes 2
+  declare opof 140 takes 4
+  declare prec 141 takes 1
+  declare numop 142 takes 7
+  declare onread 143 takes 3
+  declare merged 144 takes 3
+  declare readon 145 takes 5
+  declare onvalue 146 takes 7
+  declare member 147 takes 2
+  declare kw 148 takes 4
+  declare kwend 149 takes 4
+  declare number 150 takes 3
+  declare emitb 151 takes 1
+  declare emitleb 152 takes 1
+  declare emitsleb 153 takes 1
+  declare finish 154 takes 0
+  declare alloc 155 takes 1
+  declare could 156 takes 3
+  declare retry 157 takes 3
+  declare typenode 158 takes 3
+  declare reads 159 takes 3
+  declare reads_ 160 takes 3
+  declare append 161 takes 2
+  declare method 162 takes 8
+  declare method_ 163 takes 8
+  declare chain 164 takes 6
+  declare unread 165 takes 1
+  declare eachunread 166 takes 0
+  declare stock 167 takes 2
+  declare textpart 168 takes 4
+  declare holepart 169 takes 4
+  declare spacepart 170 takes 2
+  declare language 171 takes 0
+  declare levelread 172 takes 1
+  declare included 173 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -839,7 +842,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 170
+  external emit 171
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1127,7 +1130,7 @@ section 10 do
       when (load RUNMODE) != 0 do
         typed = 0 - 2
         else
-        typed = typenode((load (p + 16)), (load (p + 20)))
+        typed = typenode((load (p + 16)), (load (p + 20)), 0)
     sp = load SP
     q = holeloop(key, i, a, e, cap, ind, typed)
     SP <- sp
@@ -1174,7 +1177,7 @@ section 10 do
         ok = match((load (p + 12)), 0, a, q, sub, ind)
       if ok && match(key, (i + 1), q, e, cap, ind) do
         if ((load p) == 2) && (typed != 0) do
-          ok = typedreads(p, typed, a, q)
+          ok = typedreads(p, typed, a, q, (load (key + 24)))
         if ok do
           (cap + (i * 8)) <- a
           (cap + ((i * 8) + 4)) <- q
@@ -1215,7 +1218,7 @@ section 10 do
         if ok do
           if match(key, (i + 1), q, e, cap, ind) do
             if ((load p) == 2) && (typed == (0 - 2)) do
-              ok = typedreads(p, typed, a, q)
+              ok = typedreads(p, typed, a, q, (load (key + 24)))
             if ok do
               (cap + (i * 8)) <- a
               (cap + ((i * 8) + 4)) <- q
@@ -1269,9 +1272,10 @@ section 10 do
     var typed 1
     var a 2
     var q 3
+    var at 4
     TYPEDUSED <- 1
     if typed == (0 - 2) do
-      typed = typenode((load (p + 16)), (load (p + 20)))
+      typed = typenode((load (p + 16)), (load (p + 20)), at)
     if typed <= 0 do
       return 0
     return reads(typed, a, q)
@@ -2425,17 +2429,23 @@ section 10 do
       drop valued(node, wa, we, v)
       return caller
     return 0 - 2
-  function numbered locals 2 do
+  function numbered locals 3 do
     var x 0
     var n 1
     var d 2
+    var st 3
+    st = load SP
+    SP <- (st + 200)
+    drop walkinit(st)
     d = 0
     n = x
-    while (n != 0) && (d < 64) do
+    while (n != 0) && (d < 256) do
       if n == (load NUMBERS) do
+        SP <- st
         return 1
-      n = load n
+      n = walknext(n, st)
       d = d + 1
+    SP <- st
     return 0
   function numcount locals 3 do
     var x 0
@@ -2686,7 +2696,7 @@ section 10 do
     VIS <-! vis
     SP <- sp
     return v
-  function statements locals 16 do
+  function statements locals 17 do
     var base 0
     var a 1
     var e 2
@@ -2712,6 +2722,7 @@ section 10 do
     var sp0 22
     var inl 23
     var rin 24
+    var missing 25
     start = a
     value = caller
     sp0 = load SP
@@ -2825,13 +2836,16 @@ section 10 do
                 c = 0
                 else
                 c = 0
-                if !membered(a) do
+                missing = ((load RUNMODE) != 0) && (((load MEMBERA) != 0) && ((trima(a, end) == (load MEMBERA)) && (trime(trima(a, end), end) == (load MEMBERE))))
+                if (!membered(a)) && (!missing) do
                   when (load TESTING) == 0 do
                     drop pend(node, a, end, frame, caller, depth, x0, x1)
                     else
                     drop said(a)
                 if (load RUNMODE) != 0 do
-                  value = textv(a, end)
+                  value = missing ? nothing() : textv(a, end)
+                  if (!missing) && worded(a, end) do
+                    drop valued((((load READIN) != 0) ? (load READIN) : node), trima(a, end), trime(trima(a, end), end), value)
             drop event(82, rel(a), rel(end), k)
             if (load TRACE) == 2 do
               drop event(87, rel(a), value, istext(value))
@@ -2865,7 +2879,7 @@ section 10 do
     r = apply_(k, cap, base, a, e, node, frame, caller, depth, tha, the)
     SP <- sp
     return r
-  function apply_ locals 27 do
+  function apply_ locals 29 do
     var k 0
     var cap 1
     var base 2
@@ -2904,6 +2918,8 @@ section 10 do
     var rx0 35
     var rx1 36
     var rin 37
+    var ma 38
+    var me 39
     rn = load READNODE
     rx0 = load READX0
     rx1 = load READX1
@@ -3048,7 +3064,16 @@ section 10 do
     BINDNODE <-! 0
     rin = load READIN
     READIN <-! 0
+    ma = load MEMBERA
+    me = load MEMBERE
+    MEMBERA <-! 0
+    MEMBERE <-! 0
+    if ((load RUNMODE) != 0) && ((np == 2) && (((load part(key, 0)) == 0) && (((load (part(key, 0) + 8)) == 1) && (((load8 (load (part(key, 0) + 4))) == 46) && ((load part(key, 1)) == 2))))) do
+      MEMBERA <-! (load (cap + 8))
+      MEMBERE <-! (load (cap + 12))
     q = run(base, (load (key + 12)), (load (key + 16)), node, f, caller, (depth + 1), k, (load (load KEYS)))
+    MEMBERA <-! ma
+    MEMBERE <-! me
     READIN <-! rin
     CURAPP <- was
     return q
@@ -4145,7 +4170,7 @@ section 10 do
           q = p
           while (q < e) && (charkind(load8 q) == 2) do
             q = q + 1
-          if ((q < e) && ((load8 q) <= 32)) && (worded(a, p) || ((load8 (STEPTAB + (load8 a))) && (skippair(a, e) == trime(a, p)))) do
+          if ((q < e) && ((load8 q) <= 32)) && (worded(a, p) || (((load RUNMODE) != 0) && tightleft(a, trime(a, p)))) do
             if leftreads(base, a, p, node, frame, x0, x1) do
               return p
           p = e
@@ -4166,6 +4191,16 @@ section 10 do
           return p
       p = skippair(p, e)
     return 0 - 1
+  function tightleft locals 1 do
+    var a 0
+    var e 1
+    var q 2
+    q = a
+    while q < e do
+      if (load8 q) <= 32 do
+        return 0
+      q = skippair(q, e)
+    return 1
   function opof locals 3 do
     var p 0
     var q 1
@@ -4624,37 +4659,43 @@ section 10 do
   function typenode locals 10 do
     var na 0
     var ne 1
-    var arr 2
-    var j 3
-    var en 4
-    var n 5
-    var keys 6
-    var k 7
-    var key 8
-    var was 9
-    var v 10
-    var made 11
+    var at 2
+    var arr 3
+    var j 4
+    var en 5
+    var n 6
+    var keys 7
+    var k 8
+    var key 9
+    var was 10
+    var v 11
+    var made 12
     arr = load TYPES
+    en = 0
     j = 0
     while j < (load arr) do
       en = arrat(arr, j)
       if texteq((load en), ((load (en + 4)) - (load en)), na, (ne - na)) do
-        return load (en + 8)
+        if ((load RUNMODE) == 0) || (((load (en + 8)) != 0) || ((load (en + 12)) == (load STAMPS))) do
+          return load (en + 8)
+        j = load arr
       j = j + 1
-    en = alloc(12)
-    en <- na
-    (en + 4) <- ne
-    (en + 8) <- 0
-    drop arrpush(arr, en)
+    if (j == (load arr)) || (en == 0) do
+      en = alloc(16)
+      en <- na
+      (en + 4) <- ne
+      (en + 8) <- 0
+      drop arrpush(arr, en)
+    (en + 12) <- (load STAMPS)
     if ((load RUNMODE) != 0) && (!worded(na, ne)) do
       was = load MADE
       MADE <- 0
-      v = run(TEXT, na, ne, (load READING), 0, 0, 1, 0, 0)
+      v = run(TEXT, na, ne, ((at != 0) ? at : (load READING)), 0, 0, 1, 0, 0)
       made = (v != 0) ? v : (load MADE)
       MADE <- was
       (en + 8) <- made
       return made
-    n = load READING
+    n = (at != 0) ? at : (load READING)
     while n != 0 do
       keys = load (n + 8)
       j = 0

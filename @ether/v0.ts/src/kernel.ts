@@ -3322,7 +3322,9 @@ export function kernel(memory: ArrayBufferLike, thread = 0, debugging = 0, hosts
       if (w(t + T_WRITTEN_IN) >= start && w(t + T_WRITTEN_IN) < now) set(t + T_WRITTEN_IN, 0);
     } else {
       // (kept: what still holds what it made moved together where its memory began, the rest let go of) TODO(explicit)
-      if (ev0 && w(ev0) && !w(ev0 + 40) && lowest >= 0 && now - start > 1 << 18 && w(t + T_CHUNK_END) === cend && n < 6000) { if (ev_private(t)) v = evacuate(t, start, now, at, n, v, slot0, rules0); }
+      // (the outermost, a statement's, however little it made: below it, one kept by its parameters listed for the build or
+      // by a thread word stays kept up to here, each statement's few kilobytes never let go of)
+      if (ev0 && w(ev0) && !w(ev0 + 40) && lowest >= 0 && (now - start > 1 << 18 || !n) && w(t + T_CHUNK_END) === cend && n < 6000) { if (ev_private(t)) v = evacuate(t, start, now, at, n, v, slot0, rules0); }
       if (below && lowest < w(below + 4)) set(below + 4, lowest);
     }
     return v;

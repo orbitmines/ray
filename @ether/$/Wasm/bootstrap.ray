@@ -352,6 +352,8 @@ constant BINDNODE 360
 constant READIN 364
 constant MEMBERA 368
 constant MEMBERE 372
+constant TAKEAT 376
+constant TAKEVIS 380
 constant WMEMBER 23659
 constant NMEMBER 6
 constant WMEMBERS 23666
@@ -659,7 +661,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 172
+  external emit 173
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -748,91 +750,92 @@ section 3 do
   declare excluded 87 takes 3
   declare ownup 88 takes 3
   declare typedhead 89 takes 2
-  declare takeof 90 takes 1
-  declare hasbind 91 takes 3
-  declare newnode 92 takes 1
-  declare pend 93 takes 8
-  declare run 94 takes 9
-  declare statements 95 takes 9
-  declare apply 96 takes 11
-  declare apply_ 97 takes 11
-  declare givenop 98 takes 7
-  declare givenop_ 99 takes 7
-  declare amp 100 takes 1
-  declare valued 101 takes 4
-  declare textv 102 takes 2
-  declare splicehead 103 takes 3
-  declare membered 104 takes 1
-  declare groups 105 takes 3
-  declare wordv 106 takes 2
-  declare boolv 107 takes 1
-  declare istext 108 takes 1
-  declare natives 109 takes 7
-  declare nothing 110 takes 0
-  declare newcount 111 takes 1
-  declare newchar 112 takes 1
-  declare countof 113 takes 1
-  declare textof 114 takes 2
-  declare wordend 115 takes 2
-  declare mapnative 116 takes 7
-  declare linkcount 117 takes 1
-  declare keyvalue 118 takes 1
-  declare unescape 119 takes 1
-  declare numeralof 120 takes 2
-  declare own 121 takes 3
-  declare callsany 122 takes 1
-  declare functiontyped 123 takes 2
-  declare membertarget 124 takes 7
-  declare said 125 takes 1
-  declare jumped 126 takes 10
-  declare valuejump 127 takes 8
-  declare islabel 128 takes 5
-  declare tests 129 takes 0
-  declare region 130 takes 1
-  declare zero 131 takes 2
-  declare test 132 takes 1
-  declare styled 133 takes 7
-  declare wordish 134 takes 2
-  declare charkind 135 takes 1
-  declare skippair 136 takes 2
-  declare worded 137 takes 2
-  declare leftreads 138 takes 7
-  declare splitat 139 takes 7
-  declare tightleft 140 takes 2
-  declare opof 141 takes 4
-  declare prec 142 takes 1
-  declare numop 143 takes 7
-  declare onread 144 takes 3
-  declare merged 145 takes 3
-  declare readon 146 takes 5
-  declare onvalue 147 takes 7
-  declare member 148 takes 2
-  declare kw 149 takes 4
-  declare kwend 150 takes 4
-  declare number 151 takes 3
-  declare emitb 152 takes 1
-  declare emitleb 153 takes 1
-  declare emitsleb 154 takes 1
-  declare finish 155 takes 0
-  declare alloc 156 takes 1
-  declare could 157 takes 3
-  declare retry 158 takes 3
-  declare typenode 159 takes 3
-  declare reads 160 takes 3
-  declare reads_ 161 takes 3
-  declare append 162 takes 2
-  declare method 163 takes 8
-  declare method_ 164 takes 8
-  declare chain 165 takes 6
-  declare unread 166 takes 1
-  declare eachunread 167 takes 0
-  declare stock 168 takes 2
-  declare textpart 169 takes 4
-  declare holepart 170 takes 4
-  declare spacepart 171 takes 2
-  declare language 172 takes 0
-  declare levelread 173 takes 1
-  declare included 174 takes 1
+  declare doubled 90 takes 2
+  declare takeof 91 takes 1
+  declare hasbind 92 takes 3
+  declare newnode 93 takes 1
+  declare pend 94 takes 8
+  declare run 95 takes 9
+  declare statements 96 takes 9
+  declare apply 97 takes 11
+  declare apply_ 98 takes 11
+  declare givenop 99 takes 7
+  declare givenop_ 100 takes 7
+  declare amp 101 takes 1
+  declare valued 102 takes 4
+  declare textv 103 takes 2
+  declare splicehead 104 takes 3
+  declare membered 105 takes 1
+  declare groups 106 takes 3
+  declare wordv 107 takes 2
+  declare boolv 108 takes 1
+  declare istext 109 takes 1
+  declare natives 110 takes 7
+  declare nothing 111 takes 0
+  declare newcount 112 takes 1
+  declare newchar 113 takes 1
+  declare countof 114 takes 1
+  declare textof 115 takes 2
+  declare wordend 116 takes 2
+  declare mapnative 117 takes 7
+  declare linkcount 118 takes 1
+  declare keyvalue 119 takes 1
+  declare unescape 120 takes 1
+  declare numeralof 121 takes 2
+  declare own 122 takes 3
+  declare callsany 123 takes 1
+  declare functiontyped 124 takes 2
+  declare membertarget 125 takes 7
+  declare said 126 takes 1
+  declare jumped 127 takes 10
+  declare valuejump 128 takes 8
+  declare islabel 129 takes 5
+  declare tests 130 takes 0
+  declare region 131 takes 1
+  declare zero 132 takes 2
+  declare test 133 takes 1
+  declare styled 134 takes 7
+  declare wordish 135 takes 2
+  declare charkind 136 takes 1
+  declare skippair 137 takes 2
+  declare worded 138 takes 2
+  declare leftreads 139 takes 7
+  declare splitat 140 takes 7
+  declare tightleft 141 takes 2
+  declare opof 142 takes 4
+  declare prec 143 takes 1
+  declare numop 144 takes 7
+  declare onread 145 takes 3
+  declare merged 146 takes 3
+  declare readon 147 takes 5
+  declare onvalue 148 takes 7
+  declare member 149 takes 2
+  declare kw 150 takes 4
+  declare kwend 151 takes 4
+  declare number 152 takes 3
+  declare emitb 153 takes 1
+  declare emitleb 154 takes 1
+  declare emitsleb 155 takes 1
+  declare finish 156 takes 0
+  declare alloc 157 takes 1
+  declare could 158 takes 3
+  declare retry 159 takes 3
+  declare typenode 160 takes 3
+  declare reads 161 takes 3
+  declare reads_ 162 takes 3
+  declare append 163 takes 2
+  declare method 164 takes 8
+  declare method_ 165 takes 8
+  declare chain 166 takes 6
+  declare unread 167 takes 1
+  declare eachunread 168 takes 0
+  declare stock 169 takes 2
+  declare textpart 170 takes 4
+  declare holepart 171 takes 4
+  declare spacepart 172 takes 2
+  declare language 173 takes 0
+  declare levelread 174 takes 1
+  declare included 175 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -843,7 +846,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 172
+  external emit 173
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1658,7 +1661,7 @@ section 10 do
       drop indexed(node, arrat(arr, j))
       j = j + 1
     return 0
-  function seedpick locals 13 do
+  function seedpick locals 14 do
     var node 0
     var a 1
     var e 2
@@ -1680,10 +1683,12 @@ section 10 do
     var flit 18
     var wr 19
     var msk 20
+    var tw 21
     best = 0 - 1
     bscore = 0 - 1
     lo = 0
     wr = 0
+    tw = 0
     msk = load SP
     SP <- (msk + 496)
     drop spanmask(msk, a, e)
@@ -1735,6 +1740,11 @@ section 10 do
       if (wr == 0) && ((load RUNMODE) != 0) do
         wr = load (n + 28)
       n = walknext(n, (msk + 296))
+      if ((n == 0) && (tw == 0)) && ((wr <= 0) && ((load TAKEVIS) != 0)) do
+        tw = 1
+        if !inchain(node, (load TAKEVIS)) do
+          n = load TAKEVIS
+          wr = 0
       if (n == 0) && (wr > 0) do
         if !inchain(node, wr) do
           n = wr
@@ -2370,7 +2380,7 @@ section 10 do
         (x + 44) <- ((load (x + 44)) | bit)
       j = j + 1
     return 0
-  function holeval locals 1 do
+  function holeval locals 3 do
     var base 0
     var ca 1
     var ce 2
@@ -2378,12 +2388,18 @@ section 10 do
     var frame 4
     var depth 5
     var t 6
+    var tv 7
+    var v 8
     t = bound(ca, ce, frame)
     if t != 0 do
       t = takeof(t)
       if (load (t + 20)) != 0 do
         return load (t + 24)
-      return run(base, (load (t + 8)), (load (t + 12)), holenode(t, node), (load (t + 16)), 0, (depth + 1), 0, 0)
+      tv = load TAKEVIS
+      TAKEVIS <-! (((((load RUNMODE) != 0) && ((load TAKEAT) != 0)) && ((load TAKEAT) != holenode(t, node))) ? holenode(t, node) : 0)
+      v = run(base, (load (t + 8)), (load (t + 12)), ((((load RUNMODE) != 0) && ((load TAKEAT) != 0)) ? (load TAKEAT) : holenode(t, node)), (load (t + 16)), 0, (depth + 1), 0, 0)
+      TAKEVIS <-! tv
+      return v
     return run(base, ca, ce, node, frame, 0, (depth + 1), 0, 0)
   function holetext locals 1 do
     var ca 0
@@ -2624,23 +2640,43 @@ section 10 do
       m = m + 1
     if (m == a) || ((m + 2) >= le) do
       return 0
-    if ((load8 m) == 58) && (((load8 (m + 1)) == 32) && word(load8 (m + 2))) do
+    if ((load8 m) == 58) && (((load8 (m + 1)) == 32) && (word(load8 (m + 2)) || ((((load8 (m + 2)) == 46) && ((m + 3) < le)) && word(load8 (m + 3))))) do
       return m
     return 0
-  function takeof locals 3 do
+  function doubled locals 2 do
+    var a 0
+    var e 1
+    var ol 2
+    var cl 3
+    a = trima(a, e)
+    e = trime(a, e)
+    ol = load OPENL
+    cl = load CLOSEL
+    return ((e - a) >= ((ol + cl) * 2)) && ((same(a, (load OPENA), ol) && same((a + ol), (load OPENA), ol)) && (same((e - cl), (load CLOSEA), cl) && same((e - (cl * 2)), (load CLOSEA), cl)))
+  function takeof locals 5 do
     var t 0
     var n 1
     var b 2
     var ta 3
+    var sp 4
+    var fz 5
     n = 0
+    fz = 0
+    TAKEAT <-! (load (t + 32))
     while n < 64 do
       b = bound((load (t + 8)), (load (t + 12)), (load (t + 16)))
+      sp = b != 0
       if b == 0 do
+        sp = 0
         ta = trima((load (t + 8)), (load (t + 12)))
         if worded(ta, trime(ta, (load (t + 12)))) do
           b = lookup(ta, trime(ta, (load (t + 12))), (load (t + 16)))
       if (b == 0) || (b == t) do
         return t
+      if sp == 0 do
+        fz = 0
+      if (sp == 0) || ((load TAKEAT) == 0) do
+        TAKEAT <-! (load (b + 32))
       t = b
       n = n + 1
     return t
@@ -2719,7 +2755,7 @@ section 10 do
     VIS <-! vis
     SP <- sp
     return v
-  function statements locals 17 do
+  function statements locals 19 do
     var base 0
     var a 1
     var e 2
@@ -2746,6 +2782,8 @@ section 10 do
     var inl 23
     var rin 24
     var missing 25
+    var ta0 26
+    var tv 27
     start = a
     value = caller
     sp0 = load SP
@@ -2816,8 +2854,12 @@ section 10 do
                   MADE <- (load (inl + 28))
                 rin = load READIN
                 READIN <-! (load (plain + 44))
-                v = ((inl != plain) && ((load (inl + 20)) != 0)) ? (load (inl + 24)) : run(base, (load (inl + 8)), (load (inl + 12)), holenode(inl, node), (load (inl + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (inl + 36)) : 0), (((load RUNMODE) != 0) ? (load (inl + 40)) : 0))
+                ta0 = ((load RUNMODE) != 0) ? (load TAKEAT) : 0
+                tv = load TAKEVIS
+                TAKEVIS <-! (((ta0 != 0) && (ta0 != holenode(inl, node))) ? holenode(inl, node) : 0)
+                v = ((inl != plain) && ((load (inl + 20)) != 0)) ? (load (inl + 24)) : run(base, (load (inl + 8)), (load (inl + 12)), ((ta0 != 0) ? ta0 : holenode(inl, node)), (load (inl + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (inl + 36)) : 0), (((load RUNMODE) != 0) ? (load (inl + 40)) : 0))
                 READIN <-! rin
+                TAKEVIS <-! tv
                 if ((inl != plain) && ((load (inl + 20)) == 0)) && ((load JUMPA) == 0) do
                   drop jot((inl + 24), v)
                   drop jot((inl + 20), 1)
@@ -2902,7 +2944,7 @@ section 10 do
     r = apply_(k, cap, base, a, e, node, frame, caller, depth, tha, the)
     SP <- sp
     return r
-  function apply_ locals 29 do
+  function apply_ locals 30 do
     var k 0
     var cap 1
     var base 2
@@ -2943,6 +2985,7 @@ section 10 do
     var rin 37
     var ma 38
     var me 39
+    var tv 40
     rn = load READNODE
     rx0 = load READX0
     rx1 = load READX1
@@ -3090,6 +3133,8 @@ section 10 do
     READIN <-! 0
     ma = load MEMBERA
     me = load MEMBERE
+    tv = load TAKEVIS
+    TAKEVIS <-! 0
     MEMBERA <-! 0
     MEMBERE <-! 0
     if ((load RUNMODE) != 0) && ((np == 2) && (((load part(key, 0)) == 0) && (((load (part(key, 0) + 8)) == 1) && (((load8 (load (part(key, 0) + 4))) == 46) && ((load part(key, 1)) == 2))))) do
@@ -3098,6 +3143,7 @@ section 10 do
     q = run(base, (load (key + 12)), (load (key + 16)), node, f, caller, (depth + 1), k, (load (load KEYS)))
     MEMBERA <-! ma
     MEMBERE <-! me
+    TAKEVIS <-! tv
     READIN <-! rin
     CURAPP <- was
     return q
@@ -3258,7 +3304,10 @@ section 10 do
       t = textv((load (en + 8)), (load (en + 12)))
       drop valued(v, (load en), (load (en + 4)), t)
       j = j + 1
-    drop valued(v, (KW + 52), (KW + 56), (load (f + 8)))
+    t = load (f + 8)
+    if (((load RUNMODE) != 0) && (t != 0)) && (((load (t + 4)) == 1313) && ((load (t + 52)) != 0)) do
+      t = load t
+    drop valued(v, (KW + 52), (KW + 56), t)
     drop valued(v, (KW + 93), (KW + 99), (load (f + 12)))
     return v
   function valued locals 1 do
@@ -4465,6 +4514,12 @@ section 10 do
           return 0
         OX0 <-! ox0
         OX1 <-! ox1
+        if ((load RUNMODE) != 0) && (charkind(load8 trima(p, r)) == 2) do
+          hosted = load HOST
+          HOST <-! on
+          v = onvalue(base, r, e, v, frame, depth, on)
+          HOST <-! hosted
+          return v
         return onvalue(base, r, e, v, frame, depth, home)
       drop said(p)
       return 0

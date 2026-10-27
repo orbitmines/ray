@@ -1347,7 +1347,7 @@ section 10 do
         texts = texts + 1
         (key + 56) <- ((load (key + 56)) + (load (p + 8)))
       j = j + 1
-    (key + 52) <- (pure && ((texts > 0) && ((load (key + 4)) > 1)))
+    (key + 52) <- ((pure || ((load RUNMODE) != 0)) && ((texts > 0) && ((load (key + 4)) > 1)))
     (key + 44) <- ((((load (key + 44)) & 1) | (pure ? 0 : 2)) | (thisled(key) ? 4 : 0))
     return 0
   function typeless locals 2 do

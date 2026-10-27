@@ -661,7 +661,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 176
+  external emit 178
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -690,155 +690,157 @@ section 3 do
   declare typedreads 27 takes 5
   declare appliedhead 28 takes 4
   declare pairend 29 takes 4
-  declare pairat 30 takes 2
-  declare paired 31 takes 2
-  declare part 32 takes 2
-  declare keyat 33 takes 1
-  declare rank 34 takes 1
-  declare ranked 35 takes 1
-  declare typeless 36 takes 1
-  declare isthis 37 takes 1
-  declare thisled 38 takes 1
-  declare read 39 takes 6
-  declare readx 40 takes 6
-  declare readx_ 41 takes 6
-  declare latest 42 takes 8
-  declare mixed 43 takes 8
-  declare settle 44 takes 7
-  declare bucket 45 takes 3
-  declare indexed 46 takes 2
-  declare buildindex 47 takes 1
-  declare seedpick 48 takes 8
-  declare spanmask 49 takes 3
-  declare anchored 50 takes 10
-  declare inmask 51 takes 2
-  declare compose 52 takes 7
-  declare walkinit 53 takes 1
-  declare walknext 54 takes 2
-  declare inchain 55 takes 2
-  declare chainsig 56 takes 1
-  declare slot 57 takes 5
-  declare cached 58 takes 5
-  declare keep 59 takes 6
-  declare firstfits 60 takes 3
-  declare numeralpart 61 takes 4
-  declare possible 62 takes 3
-  declare couldk 63 takes 3
-  declare copy 64 takes 3
-  declare quoted 65 takes 2
-  declare past 66 takes 2
-  declare define 67 takes 3
-  declare addkey 68 takes 2
-  declare lookup 69 takes 3
-  declare trima 70 takes 2
-  declare trime 71 takes 2
-  declare named 72 takes 3
-  declare bound 73 takes 3
-  declare newframe 74 takes 2
-  declare bind 75 takes 7
-  declare endshole 76 takes 1
-  declare restline 77 takes 2
-  declare holenode 78 takes 2
-  declare headhole 79 takes 4
-  declare flagrule 80 takes 3
-  declare holeval 81 takes 6
-  declare holetext 82 takes 3
-  declare accelerated 83 takes 8
-  declare numbered 84 takes 1
-  declare numcount 85 takes 1
-  declare tookeach 86 takes 10
-  declare codeof 87 takes 2
-  declare codeend 88 takes 2
-  declare excluded 89 takes 3
-  declare ownup 90 takes 3
-  declare typedhead 91 takes 2
-  declare doubled 92 takes 2
-  declare takeof 93 takes 1
-  declare hasbind 94 takes 3
-  declare newnode 95 takes 1
-  declare pend 96 takes 8
-  declare run 97 takes 9
-  declare statements 98 takes 9
-  declare apply 99 takes 11
-  declare apply_ 100 takes 11
-  declare givenop 101 takes 7
-  declare givenop_ 102 takes 7
-  declare amp 103 takes 1
-  declare valued 104 takes 4
-  declare unsetv 105 takes 7
-  declare textv 106 takes 2
-  declare splicehead 107 takes 3
-  declare membered 108 takes 1
-  declare groups 109 takes 3
-  declare wordv 110 takes 2
-  declare boolv 111 takes 1
-  declare istext 112 takes 1
-  declare natives 113 takes 7
-  declare nothing 114 takes 0
-  declare newcount 115 takes 1
-  declare newchar 116 takes 1
-  declare countof 117 takes 1
-  declare textof 118 takes 2
-  declare wordend 119 takes 2
-  declare mapnative 120 takes 7
-  declare linkcount 121 takes 1
-  declare keyvalue 122 takes 1
-  declare unescape 123 takes 1
-  declare numeralof 124 takes 2
-  declare own 125 takes 3
-  declare callsany 126 takes 1
-  declare functiontyped 127 takes 2
-  declare membertarget 128 takes 7
-  declare said 129 takes 1
-  declare jumped 130 takes 10
-  declare valuejump 131 takes 8
-  declare islabel 132 takes 5
-  declare tests 133 takes 0
-  declare region 134 takes 1
-  declare zero 135 takes 2
-  declare test 136 takes 1
-  declare styled 137 takes 7
-  declare wordish 138 takes 2
-  declare charkind 139 takes 1
-  declare skippair 140 takes 2
-  declare worded 141 takes 2
-  declare leftreads 142 takes 7
-  declare splitat 143 takes 7
-  declare tightleft 144 takes 2
-  declare opof 145 takes 4
-  declare prec 146 takes 1
-  declare numop 147 takes 7
-  declare onread 148 takes 3
-  declare merged 149 takes 3
-  declare readon 150 takes 5
-  declare onvalue 151 takes 7
-  declare member 152 takes 2
-  declare kw 153 takes 4
-  declare kwend 154 takes 4
-  declare number 155 takes 3
-  declare emitb 156 takes 1
-  declare emitleb 157 takes 1
-  declare emitsleb 158 takes 1
-  declare finish 159 takes 0
-  declare alloc 160 takes 1
-  declare could 161 takes 3
-  declare retry 162 takes 3
-  declare typenode 163 takes 3
-  declare reads 164 takes 3
-  declare reads_ 165 takes 3
-  declare append 166 takes 2
-  declare method 167 takes 8
-  declare method_ 168 takes 8
-  declare chain 169 takes 6
-  declare unread 170 takes 1
-  declare eachunread 171 takes 0
-  declare stock 172 takes 2
-  declare textpart 173 takes 4
-  declare holepart 174 takes 4
-  declare spacepart 175 takes 2
-  declare language 176 takes 0
-  declare levelread 177 takes 1
-  declare included 178 takes 1
+  declare thisbound 30 takes 1
+  declare dotmember 31 takes 3
+  declare pairat 32 takes 2
+  declare paired 33 takes 2
+  declare part 34 takes 2
+  declare keyat 35 takes 1
+  declare rank 36 takes 1
+  declare ranked 37 takes 1
+  declare typeless 38 takes 1
+  declare isthis 39 takes 1
+  declare thisled 40 takes 1
+  declare read 41 takes 6
+  declare readx 42 takes 6
+  declare readx_ 43 takes 6
+  declare latest 44 takes 8
+  declare mixed 45 takes 8
+  declare settle 46 takes 7
+  declare bucket 47 takes 3
+  declare indexed 48 takes 2
+  declare buildindex 49 takes 1
+  declare seedpick 50 takes 8
+  declare spanmask 51 takes 3
+  declare anchored 52 takes 10
+  declare inmask 53 takes 2
+  declare compose 54 takes 7
+  declare walkinit 55 takes 1
+  declare walknext 56 takes 2
+  declare inchain 57 takes 2
+  declare chainsig 58 takes 1
+  declare slot 59 takes 5
+  declare cached 60 takes 5
+  declare keep 61 takes 6
+  declare firstfits 62 takes 3
+  declare numeralpart 63 takes 4
+  declare possible 64 takes 3
+  declare couldk 65 takes 3
+  declare copy 66 takes 3
+  declare quoted 67 takes 2
+  declare past 68 takes 2
+  declare define 69 takes 3
+  declare addkey 70 takes 2
+  declare lookup 71 takes 3
+  declare trima 72 takes 2
+  declare trime 73 takes 2
+  declare named 74 takes 3
+  declare bound 75 takes 3
+  declare newframe 76 takes 2
+  declare bind 77 takes 7
+  declare endshole 78 takes 1
+  declare restline 79 takes 2
+  declare holenode 80 takes 2
+  declare headhole 81 takes 4
+  declare flagrule 82 takes 3
+  declare holeval 83 takes 6
+  declare holetext 84 takes 3
+  declare accelerated 85 takes 8
+  declare numbered 86 takes 1
+  declare numcount 87 takes 1
+  declare tookeach 88 takes 10
+  declare codeof 89 takes 2
+  declare codeend 90 takes 2
+  declare excluded 91 takes 3
+  declare ownup 92 takes 3
+  declare typedhead 93 takes 2
+  declare doubled 94 takes 2
+  declare takeof 95 takes 1
+  declare hasbind 96 takes 3
+  declare newnode 97 takes 1
+  declare pend 98 takes 8
+  declare run 99 takes 9
+  declare statements 100 takes 9
+  declare apply 101 takes 11
+  declare apply_ 102 takes 11
+  declare givenop 103 takes 7
+  declare givenop_ 104 takes 7
+  declare amp 105 takes 1
+  declare valued 106 takes 4
+  declare unsetv 107 takes 7
+  declare textv 108 takes 2
+  declare splicehead 109 takes 3
+  declare membered 110 takes 1
+  declare groups 111 takes 3
+  declare wordv 112 takes 2
+  declare boolv 113 takes 1
+  declare istext 114 takes 1
+  declare natives 115 takes 7
+  declare nothing 116 takes 0
+  declare newcount 117 takes 1
+  declare newchar 118 takes 1
+  declare countof 119 takes 1
+  declare textof 120 takes 2
+  declare wordend 121 takes 2
+  declare mapnative 122 takes 7
+  declare linkcount 123 takes 1
+  declare keyvalue 124 takes 1
+  declare unescape 125 takes 1
+  declare numeralof 126 takes 2
+  declare own 127 takes 3
+  declare callsany 128 takes 1
+  declare functiontyped 129 takes 2
+  declare membertarget 130 takes 7
+  declare said 131 takes 1
+  declare jumped 132 takes 10
+  declare valuejump 133 takes 8
+  declare islabel 134 takes 5
+  declare tests 135 takes 0
+  declare region 136 takes 1
+  declare zero 137 takes 2
+  declare test 138 takes 1
+  declare styled 139 takes 7
+  declare wordish 140 takes 2
+  declare charkind 141 takes 1
+  declare skippair 142 takes 2
+  declare worded 143 takes 2
+  declare leftreads 144 takes 7
+  declare splitat 145 takes 7
+  declare tightleft 146 takes 2
+  declare opof 147 takes 4
+  declare prec 148 takes 1
+  declare numop 149 takes 7
+  declare onread 150 takes 3
+  declare merged 151 takes 3
+  declare readon 152 takes 5
+  declare onvalue 153 takes 7
+  declare member 154 takes 2
+  declare kw 155 takes 4
+  declare kwend 156 takes 4
+  declare number 157 takes 3
+  declare emitb 158 takes 1
+  declare emitleb 159 takes 1
+  declare emitsleb 160 takes 1
+  declare finish 161 takes 0
+  declare alloc 162 takes 1
+  declare could 163 takes 3
+  declare retry 164 takes 3
+  declare typenode 165 takes 3
+  declare reads 166 takes 3
+  declare reads_ 167 takes 3
+  declare append 168 takes 2
+  declare method 169 takes 8
+  declare method_ 170 takes 8
+  declare chain 171 takes 6
+  declare unread 172 takes 1
+  declare eachunread 173 takes 0
+  declare stock 174 takes 2
+  declare textpart 175 takes 4
+  declare holepart 176 takes 4
+  declare spacepart 177 takes 2
+  declare language 178 takes 0
+  declare levelread 179 takes 1
+  declare included 180 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -849,7 +851,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 176
+  external emit 178
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1349,6 +1351,35 @@ section 10 do
       if o != 0 do
         return z - (load (o + 12))
     return z - (load (part(key, (i + 1)) + 8))
+  function thisbound locals 2 do
+    var f 0
+    var j 1
+    var en 2
+    if f == 0 do
+      return 0
+    j = 0
+    while j < (load (f + 4)) do
+      en = f + (28 + (j * 48))
+      if (((load (en + 20)) == 1) && ((load (en + 24)) != 0)) && texteq((load en), ((load (en + 4)) - (load en)), (KW + 52), 4) do
+        return load (en + 24)
+      j = j + 1
+    return 0
+  function dotmember locals 1 do
+    var k 0
+    var a 1
+    var e 2
+    var key 3
+    if (load RUNMODE) == 0 do
+      return 0
+    key = keyat(k)
+    if ((load (key + 4)) != 2) || ((load part(key, 1)) != 2) do
+      return 0
+    if ((load part(key, 0)) != 0) || ((load (part(key, 0) + 8)) != 1) do
+      return 0
+    if (load8 (load (part(key, 0) + 4))) != 46 do
+      return 0
+    a = trima(a, e)
+    return (((load8 a) == 46) && word(load8 (a + 1))) && ((load8 (a - 1)) != 46)
   function pairat locals 4 do
     var key 0
     var i 1
@@ -2795,7 +2826,7 @@ section 10 do
     VIS <-! vis
     SP <- sp
     return v
-  function statements locals 19 do
+  function statements locals 20 do
     var base 0
     var a 1
     var e 2
@@ -2824,6 +2855,7 @@ section 10 do
     var missing 25
     var ta0 26
     var tv 27
+    var at0 28
     start = a
     value = caller
     sp0 = load SP
@@ -2915,6 +2947,14 @@ section 10 do
             if (plain == 0) && (ref != 0) do
               NEXTVIS <-! ((((load RUNMODE) != 0) && (!restline(ref, frame))) ? node : (load VIS))
               value = run(base, codeof((load (ref + 8)), (load (ref + 12))), codeend((load (ref + 8)), (load (ref + 12))), node, (load (ref + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (ref + 36)) : 0), (((load RUNMODE) != 0) ? (load (ref + 40)) : 0))
+            at0 = 0
+            if (((plain == 0) && (ref == 0)) && (k >= 0)) && dotmember(k, a, end) do
+              at0 = thisbound(frame)
+            if at0 != 0 do
+              OX0 <-! x0
+              OX1 <-! x1
+              value = onvalue(base, a, end, at0, frame, depth, node)
+              k = 0 - 4
             if ((plain == 0) && (ref == 0)) && (k >= 0) do
               ANODE <- 0
               v = value
@@ -2928,7 +2968,7 @@ section 10 do
                 VIS <-! (load ANODE)
                 node = load ANODE
               ANODE <- 0
-            if ((plain == 0) && (ref == 0)) && (k < 0) do
+            if ((plain == 0) && (ref == 0)) && ((k < 0) && (k != (0 - 4))) do
               c = 0 - 1
               if (load RUNMODE) != 0 do
                 c = splitat(base, a, end, node, frame, x0, x1)

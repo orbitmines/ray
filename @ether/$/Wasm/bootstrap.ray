@@ -661,7 +661,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 182
+  external emit 183
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -750,101 +750,102 @@ section 3 do
   declare accelerated 87 takes 8
   declare numbered 88 takes 1
   declare numcount 89 takes 1
-  declare tookeach 90 takes 10
-  declare codeof 91 takes 2
-  declare codeend 92 takes 2
-  declare excluded 93 takes 3
-  declare ownup 94 takes 3
-  declare typedhead 95 takes 2
-  declare doubled 96 takes 2
-  declare takeof 97 takes 1
-  declare hasbind 98 takes 3
-  declare newnode 99 takes 1
-  declare pend 100 takes 8
-  declare run 101 takes 9
-  declare statements 102 takes 9
-  declare apply 103 takes 11
-  declare apply_ 104 takes 11
-  declare givenop 105 takes 7
-  declare givenop_ 106 takes 7
-  declare amp 107 takes 1
-  declare valued 108 takes 4
-  declare unsetv 109 takes 7
-  declare textv 110 takes 2
-  declare splicehead 111 takes 3
-  declare membered 112 takes 1
-  declare groups 113 takes 3
-  declare wordv 114 takes 2
-  declare boolv 115 takes 1
-  declare istext 116 takes 1
-  declare natives 117 takes 7
-  declare nothing 118 takes 0
-  declare newcount 119 takes 1
-  declare newchar 120 takes 1
-  declare countof 121 takes 1
-  declare textof 122 takes 2
-  declare wordend 123 takes 2
-  declare mapnative 124 takes 7
-  declare linkcount 125 takes 1
-  declare keyvalue 126 takes 1
-  declare unescape 127 takes 1
-  declare numeralof 128 takes 2
-  declare own 129 takes 3
-  declare callsany 130 takes 1
-  declare functiontyped 131 takes 2
-  declare holed 132 takes 2
-  declare headprefix 133 takes 9
-  declare membertarget 134 takes 7
-  declare said 135 takes 1
-  declare jumped 136 takes 10
-  declare valuejump 137 takes 8
-  declare islabel 138 takes 5
-  declare tests 139 takes 0
-  declare region 140 takes 1
-  declare zero 141 takes 2
-  declare test 142 takes 1
-  declare styled 143 takes 7
-  declare wordish 144 takes 2
-  declare charkind 145 takes 1
-  declare skippair 146 takes 2
-  declare worded 147 takes 2
-  declare leftreads 148 takes 7
-  declare splitat 149 takes 7
-  declare tightleft 150 takes 2
-  declare opof 151 takes 4
-  declare prec 152 takes 1
-  declare numop 153 takes 7
-  declare onread 154 takes 3
-  declare merged 155 takes 3
-  declare readon 156 takes 5
-  declare onvalue 157 takes 7
-  declare member 158 takes 2
-  declare kw 159 takes 4
-  declare kwend 160 takes 4
-  declare number 161 takes 3
-  declare emitb 162 takes 1
-  declare emitleb 163 takes 1
-  declare emitsleb 164 takes 1
-  declare finish 165 takes 0
-  declare alloc 166 takes 1
-  declare could 167 takes 3
-  declare retry 168 takes 3
-  declare typenode 169 takes 3
-  declare reads 170 takes 3
-  declare reads_ 171 takes 3
-  declare append 172 takes 2
-  declare method 173 takes 8
-  declare method_ 174 takes 8
-  declare chain 175 takes 6
-  declare unread 176 takes 1
-  declare eachunread 177 takes 0
-  declare stock 178 takes 2
-  declare textpart 179 takes 4
-  declare holepart 180 takes 4
-  declare spacepart 181 takes 2
-  declare language 182 takes 0
-  declare levelread 183 takes 1
-  declare included 184 takes 1
+  declare paramend 90 takes 2
+  declare tookeach 91 takes 10
+  declare codeof 92 takes 2
+  declare codeend 93 takes 2
+  declare excluded 94 takes 3
+  declare ownup 95 takes 3
+  declare typedhead 96 takes 2
+  declare doubled 97 takes 2
+  declare takeof 98 takes 1
+  declare hasbind 99 takes 3
+  declare newnode 100 takes 1
+  declare pend 101 takes 8
+  declare run 102 takes 9
+  declare statements 103 takes 9
+  declare apply 104 takes 11
+  declare apply_ 105 takes 11
+  declare givenop 106 takes 7
+  declare givenop_ 107 takes 7
+  declare amp 108 takes 1
+  declare valued 109 takes 4
+  declare unsetv 110 takes 7
+  declare textv 111 takes 2
+  declare splicehead 112 takes 3
+  declare membered 113 takes 1
+  declare groups 114 takes 3
+  declare wordv 115 takes 2
+  declare boolv 116 takes 1
+  declare istext 117 takes 1
+  declare natives 118 takes 7
+  declare nothing 119 takes 0
+  declare newcount 120 takes 1
+  declare newchar 121 takes 1
+  declare countof 122 takes 1
+  declare textof 123 takes 2
+  declare wordend 124 takes 2
+  declare mapnative 125 takes 7
+  declare linkcount 126 takes 1
+  declare keyvalue 127 takes 1
+  declare unescape 128 takes 1
+  declare numeralof 129 takes 2
+  declare own 130 takes 3
+  declare callsany 131 takes 1
+  declare functiontyped 132 takes 2
+  declare holed 133 takes 2
+  declare headprefix 134 takes 9
+  declare membertarget 135 takes 7
+  declare said 136 takes 1
+  declare jumped 137 takes 10
+  declare valuejump 138 takes 8
+  declare islabel 139 takes 5
+  declare tests 140 takes 0
+  declare region 141 takes 1
+  declare zero 142 takes 2
+  declare test 143 takes 1
+  declare styled 144 takes 7
+  declare wordish 145 takes 2
+  declare charkind 146 takes 1
+  declare skippair 147 takes 2
+  declare worded 148 takes 2
+  declare leftreads 149 takes 7
+  declare splitat 150 takes 7
+  declare tightleft 151 takes 2
+  declare opof 152 takes 4
+  declare prec 153 takes 1
+  declare numop 154 takes 7
+  declare onread 155 takes 3
+  declare merged 156 takes 3
+  declare readon 157 takes 5
+  declare onvalue 158 takes 7
+  declare member 159 takes 2
+  declare kw 160 takes 4
+  declare kwend 161 takes 4
+  declare number 162 takes 3
+  declare emitb 163 takes 1
+  declare emitleb 164 takes 1
+  declare emitsleb 165 takes 1
+  declare finish 166 takes 0
+  declare alloc 167 takes 1
+  declare could 168 takes 3
+  declare retry 169 takes 3
+  declare typenode 170 takes 3
+  declare reads 171 takes 3
+  declare reads_ 172 takes 3
+  declare append 173 takes 2
+  declare method 174 takes 8
+  declare method_ 175 takes 8
+  declare chain 176 takes 6
+  declare unread 177 takes 1
+  declare eachunread 178 takes 0
+  declare stock 179 takes 2
+  declare textpart 180 takes 4
+  declare holepart 181 takes 4
+  declare spacepart 182 takes 2
+  declare language 183 takes 0
+  declare levelread 184 takes 1
+  declare included 185 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -855,7 +856,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 182
+  external emit 183
   external emit 1
   function main locals 1 do
     var scope 0
@@ -2623,6 +2624,18 @@ section 10 do
       c = c + 1
       n = n + 1
     return 0 - 1
+  function paramend locals 1 do
+    var a 0
+    var e 1
+    var q 2
+    if (load RUNMODE) == 0 do
+      return e
+    q = a
+    while (q < e) && word(load8 q) do
+      q = q + 1
+    if (q < e) && (((load8 q) == 58) && (((q + 1) >= e) || ((load8 (q + 1)) != 61))) do
+      return q
+    return e
   function tookeach locals 8 do
     var key 0
     var cap 1
@@ -2650,7 +2663,7 @@ section 10 do
         return 0 - 2
       if (q == we) || ((load8 q) == 44) do
         x = trima(from, q)
-        y = trime(x, q)
+        y = paramend(x, trime(x, q))
         if !worded(x, y) do
           return 0 - 2
         n = n + 1
@@ -2672,7 +2685,7 @@ section 10 do
     while q <= we do
       if (q == we) || ((load8 q) == 44) do
         x = trima(from, q)
-        y = trime(x, q)
+        y = paramend(x, trime(x, q))
         k = ownup(link, WVALUE, (WVALUE + NVALUE))
         if k < 0 do
           return 0 - 2
@@ -3017,11 +3030,13 @@ section 10 do
               if (load RUNMODE) != 0 do
                 c = splitat(base, a, end, node, frame, x0, x1)
               when c >= 0 do
+                if (load RUNMODE) != 0 do
+                  NEXTVIS <-! (load VIS)
                 v = run(base, a, trime(a, c), node, frame, caller, (depth + 1), x0, x1)
                 if (load JUMPA) == 0 do
                   OX0 <-! x0
                   OX1 <-! x1
-                  value = onvalue(base, c, end, v, frame, depth, node)
+                  value = onvalue(base, c, (((load RUNMODE) != 0) ? trime(c, end) : end), v, frame, depth, node)
                 c = 0
                 else
                 c = 0
@@ -4735,6 +4750,8 @@ section 10 do
     if k < 0 do
       r = splitat(base, p, e, on, frame, 0, 0)
       if r > p do
+        if (load RUNMODE) != 0 do
+          NEXTVIS <-! (load VIS)
         v = run(base, p, trime(p, r), on, frame, on, (depth + 1), 0, 0)
         if (load JUMPA) != 0 do
           return 0

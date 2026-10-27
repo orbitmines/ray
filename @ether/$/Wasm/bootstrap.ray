@@ -652,7 +652,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 159
+  external emit 160
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -730,89 +730,90 @@ section 3 do
   declare codeof 76 takes 2
   declare codeend 77 takes 2
   declare excluded 78 takes 3
-  declare takeof 79 takes 1
-  declare hasbind 80 takes 3
-  declare newnode 81 takes 1
-  declare pend 82 takes 8
-  declare run 83 takes 9
-  declare statements 84 takes 9
-  declare apply 85 takes 11
-  declare apply_ 86 takes 11
-  declare givenop 87 takes 7
-  declare givenop_ 88 takes 7
-  declare amp 89 takes 1
-  declare valued 90 takes 4
-  declare textv 91 takes 2
-  declare splicehead 92 takes 3
-  declare membered 93 takes 1
-  declare groups 94 takes 3
-  declare wordv 95 takes 2
-  declare boolv 96 takes 1
-  declare istext 97 takes 1
-  declare natives 98 takes 7
-  declare nothing 99 takes 0
-  declare newcount 100 takes 1
-  declare newchar 101 takes 1
-  declare countof 102 takes 1
-  declare textof 103 takes 2
-  declare wordend 104 takes 2
-  declare mapnative 105 takes 7
-  declare linkcount 106 takes 1
-  declare keyvalue 107 takes 1
-  declare unescape 108 takes 1
-  declare numeralof 109 takes 2
-  declare own 110 takes 3
-  declare callsany 111 takes 1
-  declare functiontyped 112 takes 2
-  declare membertarget 113 takes 7
-  declare said 114 takes 1
-  declare jumped 115 takes 10
-  declare valuejump 116 takes 8
-  declare islabel 117 takes 5
-  declare tests 118 takes 0
-  declare region 119 takes 1
-  declare zero 120 takes 2
-  declare test 121 takes 1
-  declare styled 122 takes 7
-  declare wordish 123 takes 2
-  declare charkind 124 takes 1
-  declare skippair 125 takes 2
-  declare worded 126 takes 2
-  declare leftreads 127 takes 7
-  declare splitat 128 takes 7
-  declare opof 129 takes 4
-  declare prec 130 takes 1
-  declare numop 131 takes 7
-  declare onread 132 takes 3
-  declare merged 133 takes 3
-  declare readon 134 takes 5
-  declare onvalue 135 takes 7
-  declare member 136 takes 2
-  declare kw 137 takes 4
-  declare kwend 138 takes 4
-  declare number 139 takes 3
-  declare emitb 140 takes 1
-  declare emitleb 141 takes 1
-  declare emitsleb 142 takes 1
-  declare finish 143 takes 0
-  declare alloc 144 takes 1
-  declare could 145 takes 3
-  declare retry 146 takes 3
-  declare typenode 147 takes 2
-  declare reads 148 takes 3
-  declare reads_ 149 takes 3
-  declare append 150 takes 2
-  declare method 151 takes 8
-  declare method_ 152 takes 8
-  declare chain 153 takes 6
-  declare unread 154 takes 1
-  declare eachunread 155 takes 0
-  declare stock 156 takes 2
-  declare textpart 157 takes 4
-  declare holepart 158 takes 4
-  declare spacepart 159 takes 2
-  declare language 160 takes 0
-  declare included 161 takes 1
+  declare ownup 79 takes 3
+  declare takeof 80 takes 1
+  declare hasbind 81 takes 3
+  declare newnode 82 takes 1
+  declare pend 83 takes 8
+  declare run 84 takes 9
+  declare statements 85 takes 9
+  declare apply 86 takes 11
+  declare apply_ 87 takes 11
+  declare givenop 88 takes 7
+  declare givenop_ 89 takes 7
+  declare amp 90 takes 1
+  declare valued 91 takes 4
+  declare textv 92 takes 2
+  declare splicehead 93 takes 3
+  declare membered 94 takes 1
+  declare groups 95 takes 3
+  declare wordv 96 takes 2
+  declare boolv 97 takes 1
+  declare istext 98 takes 1
+  declare natives 99 takes 7
+  declare nothing 100 takes 0
+  declare newcount 101 takes 1
+  declare newchar 102 takes 1
+  declare countof 103 takes 1
+  declare textof 104 takes 2
+  declare wordend 105 takes 2
+  declare mapnative 106 takes 7
+  declare linkcount 107 takes 1
+  declare keyvalue 108 takes 1
+  declare unescape 109 takes 1
+  declare numeralof 110 takes 2
+  declare own 111 takes 3
+  declare callsany 112 takes 1
+  declare functiontyped 113 takes 2
+  declare membertarget 114 takes 7
+  declare said 115 takes 1
+  declare jumped 116 takes 10
+  declare valuejump 117 takes 8
+  declare islabel 118 takes 5
+  declare tests 119 takes 0
+  declare region 120 takes 1
+  declare zero 121 takes 2
+  declare test 122 takes 1
+  declare styled 123 takes 7
+  declare wordish 124 takes 2
+  declare charkind 125 takes 1
+  declare skippair 126 takes 2
+  declare worded 127 takes 2
+  declare leftreads 128 takes 7
+  declare splitat 129 takes 7
+  declare opof 130 takes 4
+  declare prec 131 takes 1
+  declare numop 132 takes 7
+  declare onread 133 takes 3
+  declare merged 134 takes 3
+  declare readon 135 takes 5
+  declare onvalue 136 takes 7
+  declare member 137 takes 2
+  declare kw 138 takes 4
+  declare kwend 139 takes 4
+  declare number 140 takes 3
+  declare emitb 141 takes 1
+  declare emitleb 142 takes 1
+  declare emitsleb 143 takes 1
+  declare finish 144 takes 0
+  declare alloc 145 takes 1
+  declare could 146 takes 3
+  declare retry 147 takes 3
+  declare typenode 148 takes 2
+  declare reads 149 takes 3
+  declare reads_ 150 takes 3
+  declare append 151 takes 2
+  declare method 152 takes 8
+  declare method_ 153 takes 8
+  declare chain 154 takes 6
+  declare unread 155 takes 1
+  declare eachunread 156 takes 0
+  declare stock 157 takes 2
+  declare textpart 158 takes 4
+  declare holepart 159 takes 4
+  declare spacepart 160 takes 2
+  declare language 161 takes 0
+  declare included 162 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -823,7 +824,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 159
+  external emit 160
   external emit 1
   function main locals 1 do
     var scope 0
@@ -2249,7 +2250,7 @@ section 10 do
     q = wa
     from = wa
     while q <= we do
-      if (q < we) && (charkind(load8 q) == 3) do
+      if (q < we) && (((load8 q) != 44) && (charkind(load8 q) == 3)) do
         return 0 - 2
       if (q == we) || ((load8 q) == 44) do
         x = trima(from, q)
@@ -2264,11 +2265,11 @@ section 10 do
     v = holeval(base, (load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), rn, frame, depth)
     if (load JUMPA) != 0 do
       return 0
-    if (v == 0) || (own(v, WLISTING, (WLISTING + NLISTING)) < 0) do
+    if (v == 0) || (ownup(v, WLISTING, (WLISTING + NLISTING)) < 0) do
       return 0 - 2
     if linkcount(v) != n do
       return 0 - 2
-    k = own(v, WHEAD, (WHEAD + NHEAD))
+    k = ownup(v, WHEAD, (WHEAD + NHEAD))
     link = (k < 0) ? 0 : keyvalue(k)
     q = wa
     from = wa
@@ -2276,11 +2277,11 @@ section 10 do
       if (q == we) || ((load8 q) == 44) do
         x = trima(from, q)
         y = trime(x, q)
-        k = own(link, WVALUE, (WVALUE + NVALUE))
+        k = ownup(link, WVALUE, (WVALUE + NVALUE))
         if k < 0 do
           return 0 - 2
         drop valued(node, x, y, keyvalue(k))
-        k = own(link, WNEXT, (WNEXT + NNEXT))
+        k = ownup(link, WNEXT, (WNEXT + NNEXT))
         link = (k < 0) ? 0 : keyvalue(k)
         from = q + 1
       q = q + 1
@@ -2323,6 +2324,22 @@ section 10 do
     a = keyat(k)
     b = keyat(x0)
     return texteq((load (a + 32)), ((load (a + 36)) - (load (a + 32))), (load (b + 32)), ((load (b + 36)) - (load (b + 32))))
+  function ownup locals 3 do
+    var x 0
+    var a 1
+    var e 2
+    var k 3
+    var d 4
+    var n 5
+    n = x
+    d = 0
+    while (n != 0) && ((d < 4) && (n != (load SCOPE))) do
+      k = own(n, a, e)
+      if k >= 0 do
+        return k
+      n = load n
+      d = d + 1
+    return 0 - 1
   function takeof locals 3 do
     var t 0
     var n 1
@@ -3303,13 +3320,13 @@ section 10 do
     n = 0
     if x == 0 do
       return 0
-    k = own(x, WHEAD, (WHEAD + NHEAD))
+    k = ownup(x, WHEAD, (WHEAD + NHEAD))
     if k < 0 do
       return 0
     at = keyvalue(k)
     while (at != 0) && ((at != (load NONEV)) && (n < 100000000)) do
       n = n + 1
-      k = own(at, WNEXT, (WNEXT + NNEXT))
+      k = ownup(at, WNEXT, (WNEXT + NNEXT))
       at = (k < 0) ? 0 : keyvalue(k)
     return n
   function keyvalue locals 1 do

@@ -1843,6 +1843,11 @@ section 10 do
       if (wr == 0) && ((load RUNMODE) != 0) do
         wr = load (n + 28)
       n = walknext(n, (msk + 296))
+      if (((n == (load SCOPE)) && (tw == 0)) && ((load TAKEVIS) != 0)) && ((load TAKEVIS) != (load SCOPE)) do
+        tw = 1
+        if !inchain(node, (load TAKEVIS)) do
+          n = load TAKEVIS
+          drop walkinit((msk + 296))
       if ((n == 0) && (tw == 0)) && ((wr <= 0) && ((load TAKEVIS) != 0)) do
         tw = 1
         if !inchain(node, (load TAKEVIS)) do
@@ -2506,7 +2511,7 @@ section 10 do
       if (load (t + 20)) != 0 do
         return load (t + 24)
       tv = load TAKEVIS
-      TAKEVIS <-! (((((load RUNMODE) != 0) && ((load TAKEAT) != 0)) && ((load TAKEAT) != holenode(t, node))) ? holenode(t, node) : 0)
+      TAKEVIS <-! (((((load RUNMODE) != 0) && ((load TAKEAT) != 0)) && ((load TAKEAT) != holenode(t, node))) ? holenode(t, node) : tv)
       v = run(base, (load (t + 8)), (load (t + 12)), ((((load RUNMODE) != 0) && ((load TAKEAT) != 0)) ? (load TAKEAT) : holenode(t, node)), (load (t + 16)), 0, (depth + 1), 0, 0)
       TAKEVIS <-! tv
       return v
@@ -2967,7 +2972,7 @@ section 10 do
                 READIN <-! (load (plain + 44))
                 ta0 = ((load RUNMODE) != 0) ? (load TAKEAT) : 0
                 tv = load TAKEVIS
-                TAKEVIS <-! (((ta0 != 0) && (ta0 != holenode(inl, node))) ? holenode(inl, node) : 0)
+                TAKEVIS <-! (((ta0 != 0) && (ta0 != holenode(inl, node))) ? holenode(inl, node) : tv)
                 v = ((inl != plain) && ((load (inl + 20)) != 0)) ? (load (inl + 24)) : run(base, (load (inl + 8)), (load (inl + 12)), ((ta0 != 0) ? ta0 : holenode(inl, node)), (load (inl + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (inl + 36)) : 0), (((load RUNMODE) != 0) ? (load (inl + 40)) : 0))
                 READIN <-! rin
                 TAKEVIS <-! tv
@@ -3260,7 +3265,6 @@ section 10 do
     ma = load MEMBERA
     me = load MEMBERE
     tv = load TAKEVIS
-    TAKEVIS <-! 0
     MEMBERA <-! 0
     MEMBERE <-! 0
     if ((load RUNMODE) != 0) && ((np == 2) && (((load part(key, 0)) == 0) && (((load (part(key, 0) + 8)) == 1) && (((load8 (load (part(key, 0) + 4))) == 46) && ((load part(key, 1)) == 2))))) do

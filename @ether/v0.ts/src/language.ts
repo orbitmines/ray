@@ -2091,7 +2091,8 @@ export class Js extends Language<Ray> {
 //   a part   [kind, a, b, hole, type, node]   (literal: the text at a, b long; space: any amount; hole: its name, its index,
 //                                              its type (a span it takes is one the type's own rules read whole), its node)
 const ENTRYPOINT_END = 204, TMEMO = 208, TMEMO_MASK = 212, BEGINS = 200, HEAP = 0, OPEN = 4, OPEN_LENGTH = 8, CLOSE = 12, CLOSE_LENGTH = 16, BOOTED = 20, GLOBAL = 24, ENTRYPOINT_FILE = 28, ENTRYPOINT_START = 32, SEPARATOR = 36, SEPARATOR_LENGTH = 40, CLASSES = 44, PAIRS = 48, FRAMES = 52;
-const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 76, AFTER_TAIL = 80, AFTER_CAP = 84, FAIL_FAST = 120, GROWN_AT = 508, MEMO = 124, MEMO_MASK = 128, FILES = 132, FILES_N = 136, PEND = 140, PHASE = 144, READS = 164, READS_N = 168, READS_CAP = 172, LIST = 92, LIST_N = 96, LIST_CAP = 100, LIMIT = 104, TRASH = 112, BUDGET = 116, RULES = 256, RULES_N = 260, RULES_CAP = 264, OWN = 268, START = 512;
+const WORDS = 56, LOG = 60, LOG_N = 64, LOG_CAP = 68, AFTER = 72, AFTER_HEAD = 76, AFTER_TAIL = 80, AFTER_CAP = 84, FAIL_FAST = 120, GROWN_AT = 508, MEMO = 124, MEMO_MASK = 128, FILES = 132, FILES_N = 136, PEND = 140, PHASE = 144, READS = 164, READS_N = 168, READS_CAP = 172, LIST = 92, LIST_N = 96, LIST_CAP = 100, LIMIT = 104, TRASH = 112, BUDGET = 116, RULES = 256, RULES_N = 260, RULES_CAP = 264, OWN = 268, START = 528;
+const SIDE = 512, SIDE_MORE = 1 << 26;
 // (a task that is no file: the tests)
 const TESTS = 0x7FFFFFF0, SETTLE = 0x7FFFFFF1, NEXT = 148, DONE = 152, ANY = 156, INCL = 176, LAZY = 180, LAZY_CAP = 188, PASSED = 192;
 // (the words the host knows, in the kernel's order: `W_…`)
@@ -2345,8 +2346,9 @@ export class Ray extends Language<FileStore> {
     this.heap = heap; this.i32 = new Int32Array(heap.buffer); this.u8 = new Uint8Array(heap.buffer);
     const first = Atomics.compareExchange(this.i32, HEAP >> 2, 0, START) === 0;
     // (this thread's words; the kernel compiled for it) (what is moved together, only where no other thread reads this memory:
-    // a program's own worker with one thread asked, the threads of `--threads` none, is alone in it)
-    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (!(typeof process !== 'undefined' && process.env.RAY_NOEVAC)) { this.set(this.t + 592, 1); const ev = this.alloc(64), N = 1 << 18; this.set(ev + 4, this.alloc(4 * N)); this.set(ev + 12, N); this.set(ev + 16, this.alloc(4 * 6000)); this.set(ev + 20, this.alloc(4 * N)); this.set(ev + 24, N); this.set(ev + 28, this.alloc(4 * N)); this.set(ev + 32, N); this.set(ev + 36, this.alloc(4 * N)); this.set(ev + 44, env.worker && !(env.nodejs && env.worker_threads.workerData?.thread !== NAME && Number(kwargs.threads ?? env.threads) <= 1) ? 1 : 0); this.set(ev + 48, this.alloc(8 * N)); this.set(ev + 52, 2 * N - 1); this.set(ev, 1); this.set(this.t + 940, ev); } if (typeof process !== 'undefined' && process.env.RAY_PAINTS) this.set(this.t + 944, 1); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
+    // a program's own worker with one thread asked, the threads of `--threads` none, is alone in it; alone, room to move what
+    // a long application made)
+    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (!(typeof process !== 'undefined' && process.env.RAY_NOEVAC)) { this.set(this.t + 592, 1); const ev = this.alloc(64), shared = env.worker && !(env.nodejs && env.worker_threads.workerData?.thread !== NAME && Number(kwargs.threads ?? env.threads) <= 1) ? 1 : 0, N = shared ? 1 << 18 : 1 << 21; this.set(ev + 4, this.alloc(4 * N)); this.set(ev + 12, N); this.set(ev + 16, this.alloc(4 * 6000)); this.set(ev + 20, this.alloc(4 * N)); this.set(ev + 24, N); this.set(ev + 28, this.alloc(4 * N)); this.set(ev + 32, N); this.set(ev + 36, this.alloc(4 * N)); this.set(ev + 44, shared); this.set(ev + 48, this.alloc(8 * N)); this.set(ev + 52, 2 * N - 1); this.set(ev, 1); this.set(this.t + 940, ev); } if (typeof process !== 'undefined' && process.env.RAY_PAINTS) this.set(this.t + 944, 1); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
     this.hosts.debug = (kind, a, b, c) => this.debugged(kind, a, b, c);
     this.hosts.compiled = (fn, t, f, from) => this.compiled_[fn - 1](t, f, from);
     this.hosts.told = (at, kind, a, c) => { if (kind === L.STYLE_Q) return this.rule_styled(a) ? 1 : 0; this.tell(at, kind, a, c); return 0; };
@@ -2360,6 +2362,9 @@ export class Ray extends Language<FileStore> {
       const area = (at: number, capacity: number, cap: number, size: number) => { this.set(at, this.alloc(cap * size)); this.set(capacity, cap); };
       area(RULES, RULES_CAP, 1 << 18, 4); this.set(344, this.alloc(8 * (1 << 15))); this.set(OWN, this.alloc(4 * (this.u8.length >>> 16))); area(AFTER, AFTER_CAP, 1 << 16, 28); area(LIST, LIST_CAP, 1 << 21, 4); this.set(FILES, this.alloc(12 * 4096)); this.set(PEND, this.alloc(20 * 4096)); area(READS, READS_CAP, 4096, 16); this.set(INCL, this.alloc(8 * 4096)); area(LAZY, LAZY_CAP, 1 << 14, 24); this.set(BEGINS, this.alloc(44 * 4096)); this.set(288, this.alloc(16 * 4096)); this.set(216, this.alloc(4 * 64)); if (this.debugging) { this.set(240, this.alloc(8 * 4096)); this.set(244, this.alloc(8 * 4096)); this.set(248, this.alloc(8 * 4096)); } this.set(220, this.alloc(12 * 4096)); this.set(332, this.alloc(4 + 12 * (1 << 20)));
       if (!(typeof process !== 'undefined' && process.env.RAY_MEMO === '0')) { const table = (n: number, entry: number) => { const a = this.alloc(12 + entry * n); this.set(a, n - 1); return a + 12; }; this.set(MEMO, table(1 << 14, 60)); this.set(MEMO_MASK, (1 << 14) - 1); if (process.env.RAY_TMEMO !== '0') { this.set(TMEMO, table(1 << 16, 40)); this.set(TMEMO_MASK, (1 << 16) - 1); } }
+      // (memory set apart for what is kept for all (tables made larger, a rule's reads): below all a thread takes, more taken as
+      // it is used up)
+      { const sd = this.alloc(16), a = (this.alloc(SIDE_MORE + 16) + 15) & -16; this.set(sd, a); this.set(sd + 4, a + SIDE_MORE); this.set(SIDE, sd); }
       this.set(PAIRS, this.alloc(256));
       // (a character's kind: 0 a space, 1 of a word, 2 of an operator, 3 one on its own)
       const at = this.alloc(256); for (let c = 0; c < 256; c++) this.u8[at + c] = c <= 32 ? 0 : /[A-Za-z0-9_]/.test(String.fromCharCode(c)) || c >= 128 ? 1 : /[(){}\[\]"'`,;]/.test(String.fromCharCode(c)) ? 3 : 2;
@@ -2382,14 +2387,14 @@ export class Ray extends Language<FileStore> {
     } else while (!Atomics.load(this.i32, WORDS >> 2)) Atomics.wait(this.i32, WORDS >> 2, 0, 10);
   }
   file(bytes: Uint8Array, id: number | string, kind = 0, scope = 0): [number, number] {
-    const s = this.alloc(bytes.length + 2) + 1, e = s + bytes.length;
+    const s = this.side(bytes.length + 2) + 1, e = s + bytes.length;
     this.u8.set(bytes, s);
     // (where each file is, for every thread: [start, end, id]; one named by text, by its index here, negative)
     const k = Atomics.add(this.i32, FILES_N >> 2, 1), entry = this.w(FILES) + 12 * k;
     if (typeof id === 'string') this.named_.push(id);
     [s, e, typeof id === 'number' ? id : -this.named_.length].forEach((v, i) => this.set(entry + 4 * i, v));
     // (and where what opens in it closes, read once: as yet, nowhere)
-    const closes = this.w(220) + 12 * k; this.set(closes, s); this.set(closes + 4, e); this.set(closes + 8, this.alloc(4 * (bytes.length + 2)));
+    const closes = this.w(220) + 12 * k; this.set(closes, s); this.set(closes + 4, e); this.set(closes + 8, this.side(4 * (bytes.length + 2)));
     // (`RAY_EXPLAIN=file:line`: the statement there, each rule read at it said (the kernel tells it, `L.EXPLAIN`); `RAY_TRACE=file:line`:
     // every rule applied while it is read, nested, the text each reads and what it answers (`RAY_TRACE_DEPTH`, `RAY_TRACE_MAX`,
     // `RAY_TRACE_NONE`, `RAY_TRACE_HIDE`))
@@ -2646,7 +2651,10 @@ export class Ray extends Language<FileStore> {
     return this.style_text(this.member(node, 'style'));
   }
   style_text(v: number): string { if (!v) return ''; const a = this.w(v + N.A), b = this.w(v + N.B); if (b <= a || b - a > 64) return ''; const t = this.text(a, b).trim(); return /^[\w.-]{1,64}$/.test(t) ? t : ''; }
-  member(node: number, name: string): number { const [s, e] = this.string(name); return node ? this.x.member(this.t, node, s, e - s) : 0; }
+  member(node: number, name: string): number { const [s, e] = this.named(name); return node ? this.x.member(this.t, node, s, e - s) : 0; }
+  // (a name the host asks for again and again: written once, where what is kept for all is)
+  named_at = new Map<string, [number, number]>();
+  named(name: string): [number, number] { let r = this.named_at.get(name); if (!r) { const bytes = new TextEncoder().encode(name), at = this.side(bytes.length); this.u8.set(bytes, at); r = [at, at + bytes.length]; this.named_at.set(name, r); } return r; }
   // The language's theme: what `Theme.current` is (a name, and each style what it is shown as: another style, or a colour).
   theme(): { name: string, colors: Record<string, string> } | undefined {
     const [s, e] = this.string('Theme.current'), global = this.w(GLOBAL), top = this.x.frame(0, 0, global, s, e, 0, 0, global, global);
@@ -3172,6 +3180,17 @@ export class Ray extends Language<FileStore> {
     if (shown >= 40) { lines.push(`  …`); for (let k = Math.min(5, this.stack.length) - 1; k >= 0; k--) { const [kind, a, b, c] = this.stack[k]; lines.push(`  ${this.step(kind, a, b, c)}`); } }
     if (crash) this.stack.length = 0;
     return lines.join('\n');
+  }
+  // (what is kept for all, from the memory set apart for it (SIDE: where it is, where it ends, who takes from it); used up,
+  // more set apart; more than that at once, alloc)
+  side(n: number): number {
+    const sd = this.i32[SIDE >> 2]; n = (n + 15) & -16;
+    if (!sd || n > SIDE_MORE >> 4) return this.alloc(n);
+    while (Atomics.compareExchange(this.i32, (sd + 8) >> 2, 0, 1) !== 0);
+    try {
+      if (this.i32[sd >> 2] + n > this.i32[(sd + 4) >> 2]) { const a = (this.alloc(SIDE_MORE + 16) + 15) & -16; this.i32[sd >> 2] = a; this.i32[(sd + 4) >> 2] = a + SIDE_MORE; }
+      const at = this.i32[sd >> 2]; this.i32[sd >> 2] = at + n; return at;
+    } finally { Atomics.store(this.i32, (sd + 8) >> 2, 0); }
   }
   alloc(n: number): number {
     const at = Atomics.add(this.i32, HEAP >> 2, (n + 3) & ~3);

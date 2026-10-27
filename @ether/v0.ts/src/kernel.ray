@@ -27,6 +27,7 @@ global["kjs"] := {
   count := 0
   one := Int32.made_from(1)
   zero := Int32.made_from(0)
+  writing := None
 }
 kjs.minus_one = kjs.zero - kjs.one
 global["Kjs_const"] := class (const_value) => { }
@@ -95,15 +96,36 @@ kjs_put (x) => {
   }
   external output x
 }
+// (written to the module writer instead, `kjs.writing` (`module.ray`): an operand as its line shows it, a constant as it is)
+kjs_written (x) => {
+  if x.temp === true { return `$` + (external int32 text x.number) }
+  if x.arg === true { return (((x.called + `#`) + (external int32 text x.call)) + `#`) + (external int32 text x.index) }
+  if x.label === true { return (`#$` + (external int32 text x.number)) + x.suffix }
+  x
+}
+kjs_operand (x) => {
+  if x.bits !== None { return x }
+  kjs_written(x)
+}
 kjs_flush (marks) => {
   if marks !== None {
     kjs_flush(marks.below)
-    external output `: `
-    kjs_put(marks.value)
-    external output "\n"
+    if kjs.writing === true {
+      wj_label(kjs_written(marks.value))
+    } else {
+      external output `: `
+      kjs_put(marks.value)
+      external output "\n"
+    }
   }
 }
 kjs_line (target, condition, into, a, b) => {
+  if (kjs.mode == 3) && (kjs.writing === true) {
+    kjs_flush(kjs.marks)
+    kjs.marks = None
+    wj_statement(kjs_operand(target), kjs_operand(condition), kjs_operand(into), kjs_operand(a), kjs_operand(b))
+    return 0
+  }
   if kjs.mode == 3 {
     kjs_flush(kjs.marks)
     kjs.marks = None
@@ -131,7 +153,20 @@ kjs_fresh (unused) => {
 }
 kjs_here (k, suffix) => kjs_label(k.number, suffix)
 kjs_constant (x) => x.bits !== None
+kjs_counted (taken) => {
+  counted := 0
+  at := taken
+  while at !== None {
+    counted = counted + 1
+    at = at.cdr
+  }
+  counted
+}
 kjs_begin (called, params) => {
+  if kjs.writing === true {
+    wj_begin_linked(called, params)
+    return 0
+  }
   external output `& `
   external output called
   at := params
@@ -659,10 +694,13 @@ kjs &+= {
   }
   // (a function: its body read where its rule is, at the top of the rule's body (in a block of another's, or a closure, that
   // one's rules would be read first, or what this file's reading wrote not seen); in the first reading passed over, `mode`
-  // 4, its body not read (gone past); in the second its context begun, then its end written, but for one not among those
-  // written, 5, passed over as in the first)
+  // 4, its body not read (gone past), and when writing its context given (every one given before the second reading begins,
+  // `wj_announced`: each body written as it ends); in the second its context begun, then its end written, but for one not
+  // among those written, 5, passed over as in the first)
   opening (unused) => {
+    if (kjs.mode == 1) && (kjs.writing === true) { wj_context(kjs.called, kjs_counted(kjs.taken)) }
     if kjs.mode == 1 { kjs.mode = 4 }
+    if (kjs.mode == 2) && (kjs.writing === true) { wj_context(kjs.called, kjs_counted(kjs.taken)) }
     if kjs.mode == 2 {
       written := (kjs.count >= kjs.from) && ((kjs.until === None) || (kjs.count < kjs.until))
       kjs.count = kjs.count + 1
@@ -685,11 +723,13 @@ kjs &+= {
       kjs_unclaimed(0)
       kjs_jmp(`set`, `&.value`, kjs.zero, kjs.zero)
       kjs_jmp(`&.caller`, `-`, kjs.zero, kjs.zero)
+      if kjs.writing === true { wj_end(0) }
       kjs.mode = 2
     }
   }
   set_mode (m) => {
     kjs.mode = m
+    if (m == 2) && (kjs.writing === true) { wj_announced(0) }
   }
 }
 // (a line of the kernel's: its constants, each written of constants, its own value)

@@ -264,6 +264,11 @@ Int32 &+= {
     made_bits := external int32 of number
     Int32 &+ { bits := made_bits }
   }
+  // (how many bytes a text of bytes is, `byte`s joined)
+  static bytes_in (written) => {
+    counted_bits := external int32 bytes written
+    Int32 &+ { bits := counted_bits }
+  }
   // (a numeral as JavaScript reads one, `0x7FFFFFF0`, `1e6`: past 32 bits, wrapped)
   static numeral (written) => {
     numeral_bits := external int32 numeral written
@@ -322,6 +327,8 @@ Int32 &+= {
   int32 => this
   count => external int32 count .bits
   digits => external int32 text .bits
+  // (its last eight bits, a Byte: a text of that one byte, joined to others by `+`, written by `--write` as it is)
+  byte => external int32 byte .bits
   as (=== String) => external int32 text .bits
 }
 // (what the numeral rule answers, a count: the same value as the Decimal its digits write (`{digits: Decimal.String} =>

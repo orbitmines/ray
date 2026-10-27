@@ -1768,8 +1768,11 @@ const section = (id: number, body: number[]) => [id, ...uleb(body.length), ...bo
 const text = (s: string) => vec([...s].map(c => [c.charCodeAt(0)]));
 
 // A module of the program's contexts, each exported by name. Its memory is shared, so threads can run it together.
+// (`RAY_KERNEL_WASM=<file>`: the module in that file instead, as `wasm.ray` writes it (`scripts/kernel-ray.mts --wasm`): the
+// kernel Ray wrote, run)
 export function compile(p: Jmp, pages: number): WebAssembly.Module {
-  const t0 = performance.now(), bytes = module_bytes(p, pages), t1 = performance.now(), module = new WebAssembly.Module(bytes);
+  const given = typeof process !== 'undefined' ? process.env.RAY_KERNEL_WASM : undefined;
+  const t0 = performance.now(), bytes = given ? new Uint8Array(env.fs.readFileSync(given)) : module_bytes(p, pages), t1 = performance.now(), module = new WebAssembly.Module(bytes);
   if (typeof process !== 'undefined' && process.env.RAY_TIMES) console.error(`TIMES wasm bytes ${bytes.length}, made in ${(t1 - t0).toFixed(1)} ms, compiled by the engine in ${(performance.now() - t1).toFixed(1)} ms`);
   return module;
 }
@@ -2341,8 +2344,9 @@ export class Ray extends Language<FileStore> {
     if (this.x) return;
     this.heap = heap; this.i32 = new Int32Array(heap.buffer); this.u8 = new Uint8Array(heap.buffer);
     const first = Atomics.compareExchange(this.i32, HEAP >> 2, 0, START) === 0;
-    // (this thread's words; the kernel compiled for it)
-    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (!(typeof process !== 'undefined' && process.env.RAY_NOEVAC)) { this.set(this.t + 592, 1); const ev = this.alloc(64), N = 1 << 18; this.set(ev + 4, this.alloc(4 * N)); this.set(ev + 12, N); this.set(ev + 16, this.alloc(4 * 6000)); this.set(ev + 20, this.alloc(4 * N)); this.set(ev + 24, N); this.set(ev + 28, this.alloc(4 * N)); this.set(ev + 32, N); this.set(ev + 36, this.alloc(4 * N)); this.set(ev + 44, env.worker ? 1 : 0); this.set(ev + 48, this.alloc(8 * N)); this.set(ev + 52, 2 * N - 1); this.set(ev, 1); this.set(this.t + 940, ev); } if (typeof process !== 'undefined' && process.env.RAY_PAINTS) this.set(this.t + 944, 1); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
+    // (this thread's words; the kernel compiled for it) (what is moved together, only where no other thread reads this memory:
+    // a program's own worker with one thread asked, the threads of `--threads` none, is alone in it)
+    this.t = this.alloc(1024); if (typeof process !== 'undefined' && process.env.RAY_ALLOCS) this.set(this.t + 544, this.alloc(16 * 4096)); this.set(this.t + 560, this.alloc(24 * 6000)); this.set(this.t + 584, this.alloc(4 << 20)); if (!(typeof process !== 'undefined' && process.env.RAY_NOFREE)) this.set(this.t + 568, 2); if (!(typeof process !== 'undefined' && process.env.RAY_NOEVAC)) { this.set(this.t + 592, 1); const ev = this.alloc(64), N = 1 << 18; this.set(ev + 4, this.alloc(4 * N)); this.set(ev + 12, N); this.set(ev + 16, this.alloc(4 * 6000)); this.set(ev + 20, this.alloc(4 * N)); this.set(ev + 24, N); this.set(ev + 28, this.alloc(4 * N)); this.set(ev + 32, N); this.set(ev + 36, this.alloc(4 * N)); this.set(ev + 44, env.worker && !(env.nodejs && env.worker_threads.workerData?.thread !== NAME && Number(kwargs.threads ?? env.threads) <= 1) ? 1 : 0); this.set(ev + 48, this.alloc(8 * N)); this.set(ev + 52, 2 * N - 1); this.set(ev, 1); this.set(this.t + 940, ev); } if (typeof process !== 'undefined' && process.env.RAY_PAINTS) this.set(this.t + 944, 1); if (typeof process !== 'undefined' && process.env.RAY_TRACE) { this.set(this.t + 916, Number(process.env.RAY_TRACE_MAX ?? 3000)); this.set(this.t + 920, Number(process.env.RAY_TRACE_DEPTH ?? 24)); } this.set(this.t, this.alloc(2048 * SCRATCH)); this.set(this.t + 188, this.w(this.t) + 2048 * SCRATCH); this.set(this.t + 480, this.alloc(8 * 8192)); this.set(this.t + 488, this.alloc(16 * 16)); this.set(this.t + 500, this.alloc(4 * 64)); this.set(this.t + 516, this.alloc(4 * 32));
     this.hosts.debug = (kind, a, b, c) => this.debugged(kind, a, b, c);
     this.hosts.compiled = (fn, t, f, from) => this.compiled_[fn - 1](t, f, from);
     this.hosts.told = (at, kind, a, c) => { if (kind === L.STYLE_Q) return this.rule_styled(a) ? 1 : 0; this.tell(at, kind, a, c); return 0; };
@@ -2619,6 +2623,8 @@ export class Ray extends Language<FileStore> {
     const [s, e] = this.string(name), global = this.w(GLOBAL), top = this.x.frame(0, 0, global, s, e, 0, 0, global, global);
     const list = this.x.ev(this.t, this.x.reading(this.t, s, e, 0, 0, this.w(global), global, 0, 0, 0, 0), top, top, global, 1, global, global);
     const none = this.w(236), out: number[] = []; // (the kernel's nothing, `None`)
+    // (a text of bytes, `Int32.byte`s joined: its bytes as they are)
+    if (list && this.w(list + 8) === 1) return this.u8.slice(this.w(list + 12), this.w(list + 16));
     // (a count the kernel holds: how many it is, one less than its N_A; else its `next` counted down to None)
     const number = (n: number) => { if (n && this.w(n + 8) === 0 && this.w(n + 12) > 0) return this.w(n + 12) - 1; let k = 0; for (let m = this.member(n, 'next'); m && m !== none && k < 1 << 20; m = this.member(m, 'next')) k++; return k; };
     for (let at = list ? this.member(list, 'head') : 0, i = 0; at && at !== none && i < 1 << 24; at = this.member(at, 'next'), i++) out.push(number(this.member(at, 'value')) & 255);

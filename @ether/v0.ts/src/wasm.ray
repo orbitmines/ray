@@ -1,0 +1,869 @@
+// The module writer (Selfhosting.md §7, step 5, SH4): a program's JMP written as a WebAssembly module, byte for byte what
+// `module_bytes` writes for it; given by `scripts/kernel-wasm.mts --ray` (a call a line) or by `kernel.ray` reading
+// `kernel.ts`. Bytes are texts of bytes (`Int32.byte`), joined by `+`; how many, `Int32.bytes_in`. It is given the contexts
+// in order (`wj_context`, `wj_begin`), each one's labels and statements (`wj_label`, `wj_statement`: a cell by its name, a
+// constant `=n` or an Int32); then the bodies and the sections around them (`wj_module`, or `wj_bodies` and `wasm_head`,
+// `wasm_tail` written apart). (The format's own types, `$/Wasm.project.ray`, write these sections once a header writes a
+// module that large in the memory there is.)
+
+// (a node of named parts, each made by a function of them; a table, read and written by `external member`, each key with
+// `k_` before it: a key named as an operator or a word of the language's (`+`, `read`) would be read as one)
+global["Wasm_item"] := class { }
+global["Wasm_table"] := class { }
+wasm_table (unused) => Wasm_table &+ {
+  table := true
+}
+wasm_put (put_in, put_at, put_held) => {
+  put_key := `k_` + put_at
+  external member put_in put_key put_held
+}
+wasm_get (got_in, got_at) => {
+  got_key := `k_` + got_at
+  external member got_in got_key
+}
+wasm_index (made_index) => Wasm_item &+ {
+  index := made_index
+  here := true
+}
+wasm_found (table, key) => {
+  held := wasm_get(table, key)
+  if held === None { return false }
+  held.here === true
+}
+wasm_key (number_given) => number_given.int32.digits
+wasm_pair (a, b) => (wasm_key(a) + `:`) + wasm_key(b)
+wasm_slot (table, key) => (wasm_get(table, key)).index
+wasm_context_of (made_position, made_arity) => Wasm_item &+ {
+  position := made_position
+  arity := made_arity
+  here := true
+}
+wasm_statement_of (made_aim, made_condition, made_into, made_a, made_b) => Wasm_item &+ {
+  aim := made_aim
+  condition := made_condition
+  into := made_into
+  a := made_a
+  b := made_b
+  here := true
+}
+wasm_native_of (made_arity, made_instruction, made_answers) => Wasm_item &+ {
+  arity := made_arity
+  instruction := made_instruction
+  answers := made_answers
+  here := true
+}
+wasm_jump_of (made_test, made_ends) => Wasm_item &+ {
+  test := made_test
+  ends := made_ends
+  here := true
+}
+wasm_scope_of (made_ends, made_looped, made_aim) => Wasm_item &+ {
+  ends := made_ends
+  looped := made_looped
+  aim := made_aim
+  here := true
+}
+wasm_span_of (made_begins, made_ends) => Wasm_item &+ {
+  begins := made_begins
+  ends := made_ends
+  here := true
+}
+
+// What is being written: the contexts so far (by name, and their names in order), the bodies written (each its size, then it)
+// and how many; and of the context being written, its cells (by name, its parameters first, then `&.value`), its statements
+// (by where they are, 1 on) and its labels (each where the statement after it is).
+global["wasm"] := {
+  contexts := None
+  names := None
+  count := None
+  bodies := ""
+  given := None
+  given_n := None
+  module_written := None
+  constants := None
+  equals := None
+  minus := None
+  written := None
+  called := None
+  cells := None
+  cells_n := None
+  params := None
+  statements := None
+  statements_n := None
+  labels := None
+  slice_from := None
+  slice_to := None
+  announced := None
+  natives := None
+  hosts := None
+  minus_one := None
+  i32_type := None
+  void_type := None
+  if_op := None
+  end_op := None
+  br_op := None
+  br_if_op := None
+  return_op := None
+  call_op := None
+  drop_op := None
+  get_op := None
+  set_op := None
+  const_op := None
+  block_op := None
+  loop_op := None
+}
+wasm.contexts = wasm_table(0)
+wasm.names = wasm_table(0)
+wasm.count = 0.int32
+wasm.written = 0.int32
+wasm.given = wasm_table(0)
+wasm.given_n = 0.int32
+wasm.constants = wasm_table(0)
+wasm.equals = "="[0]
+wasm.minus = "-"[0]
+
+// Bytes: one, a number as LEB128 (unsigned, then signed), a text as its size then its bytes, a section as its id, its size,
+// then it.
+wasm_byte (number_given) => number_given.int32.byte
+wasm.minus_one = 0.int32 - 1
+wasm_uleb (number_given) => {
+  out := ""
+  at := number_given.int32
+  while at >= 128 {
+    piece := (at ~&& 127) ~|| 128
+    out = out + piece.byte
+    at = at >>> 7
+  }
+  out + at.byte
+}
+wasm_sleb (number_given) => {
+  out := ""
+  at := number_given.int32
+  low := at
+  going := true
+  while going {
+    low = at ~&& 127
+    at = at >> 7
+    signed := (low ~&& 64) != 0
+    done := false
+    if (at == 0) && !signed { done = true }
+    if (at == wasm.minus_one) && signed { done = true }
+    if done {
+      going = false
+      out = out + low.byte
+    } else {
+      piece := low ~|| 128
+      out = out + piece.byte
+    }
+  }
+  out
+}
+wasm_sized (bytes) => wasm_uleb(Int32.bytes_in(bytes)) + bytes
+wasm_section (id, body) => wasm_byte(id) + wasm_sized(body)
+wasm.i32_type = wasm_byte(127)
+wasm.void_type = wasm_byte(64)
+wasm.if_op = wasm_byte(4)
+wasm.end_op = wasm_byte(11)
+wasm.br_op = wasm_byte(12)
+wasm.br_if_op = wasm_byte(13)
+wasm.return_op = wasm_byte(15)
+wasm.call_op = wasm_byte(16)
+wasm.drop_op = wasm_byte(26)
+wasm.get_op = wasm_byte(32)
+wasm.set_op = wasm_byte(33)
+wasm.const_op = wasm_byte(65)
+wasm.block_op = wasm_byte(2)
+wasm.loop_op = wasm_byte(3)
+
+// What the JMP names that is not a context: the host's (each given 4, as `kernel-jmp.mts` makes the kernel's) and the natives
+// (each its arity and its instruction after its values; `false`, answering nothing), as `language.ts`'s `NATIVES`.
+wasm.hosts = wasm_table(0)
+wasm_put(wasm.hosts, `debug`, (wasm_context_of(0.int32, 4.int32)))
+wasm_put(wasm.hosts, `compiled`, (wasm_context_of(1.int32, 4.int32)))
+wasm_put(wasm.hosts, `told`, (wasm_context_of(2.int32, 4.int32)))
+wasm.natives = wasm_table(0)
+wasm_native (name, arity, instruction, answers) => {
+  wasm_put(wasm.natives, name, (wasm_native_of(arity.int32, instruction, answers)))
+}
+wasm_native(`==`, 2, wasm_byte(70), true)
+wasm_native(`!=`, 2, wasm_byte(71), true)
+wasm_native(`<`, 2, wasm_byte(72), true)
+wasm_native(`>`, 2, wasm_byte(74), true)
+wasm_native(`<=`, 2, wasm_byte(76), true)
+wasm_native(`>=`, 2, wasm_byte(78), true)
+wasm_native(`+`, 2, wasm_byte(106), true)
+wasm_native(`-`, 2, wasm_byte(107), true)
+wasm_native(`*`, 2, wasm_byte(108), true)
+wasm_native(`/`, 2, wasm_byte(109), true)
+wasm_native(`%`, 2, wasm_byte(111), true)
+wasm_native(`&`, 2, wasm_byte(113), true)
+wasm_native(`|`, 2, wasm_byte(114), true)
+wasm_native(`^`, 2, wasm_byte(115), true)
+wasm_native(`<<`, 2, wasm_byte(116), true)
+wasm_native(`>>`, 2, wasm_byte(117), true)
+wasm_native(`>>>`, 2, wasm_byte(118), true)
+wasm_native(`set`, 1, "", true)
+wasm_native(`not`, 1, wasm_byte(69), true)
+wasm_native(`clz`, 1, wasm_byte(103), true)
+wasm_native(`ctz`, 1, wasm_byte(104), true)
+wasm_native(`popcnt`, 1, wasm_byte(105), true)
+wasm_native(`u8`, 1, (wasm_byte(45) + wasm_byte(0)) + wasm_byte(0), true)
+wasm_native(`u16`, 1, (wasm_byte(47) + wasm_byte(1)) + wasm_byte(0), true)
+wasm_native(`i32`, 1, (wasm_byte(40) + wasm_byte(2)) + wasm_byte(0), true)
+wasm_native(`u8=`, 2, (wasm_byte(58) + wasm_byte(0)) + wasm_byte(0), false)
+wasm_native(`i32=`, 2, (wasm_byte(54) + wasm_byte(2)) + wasm_byte(0), false)
+wasm_native(`match16`, 2, wasm_byte(35), true)
+wasm_native(`differ16`, 2, wasm_byte(36), true)
+wasm_native(`aload`, 1, ((wasm_byte(254) + wasm_byte(16)) + wasm_byte(2)) + wasm_byte(0), true)
+wasm_native(`astore`, 2, ((wasm_byte(254) + wasm_byte(23)) + wasm_byte(2)) + wasm_byte(0), false)
+wasm_native(`xadd`, 2, ((wasm_byte(254) + wasm_byte(30)) + wasm_byte(2)) + wasm_byte(0), true)
+wasm_native(`fill`, 3, (wasm_byte(252) + wasm_byte(11)) + wasm_byte(0), false)
+wasm_native(`cas`, 3, ((wasm_byte(254) + wasm_byte(72)) + wasm_byte(2)) + wasm_byte(0), true)
+wasm_native(`thread`, 0, wasm_byte(35) + wasm_byte(0), true)
+// (the 16 bytes at a compared with b's, a bit for each: `v128.load`, `i8x16.splat`, the test, `i8x16.bitmask`)
+wasm_sixteen (a, b, test) => ((((((((((a + wasm_byte(253)) + wasm_byte(0)) + wasm_byte(0)) + wasm_byte(0)) + b) + wasm_byte(253)) + wasm_byte(15)) + wasm_byte(253)) + test) + wasm_byte(253)) + wasm_byte(100)
+
+// Given: the contexts in the order they are in the program (`wj_context`: a name, how many it takes; `wj_begin` gives one
+// too), and of those written, each begun, its labels and statements. Their bodies are written once all are given
+// (`wj_module`, `wj_bodies`): a call names a context by where it is, one given later too.
+wj_context (called, arity) => {
+  if !(wasm_found(wasm.contexts, called)) {
+    wasm_put(wasm.contexts, called, (wasm_context_of(wasm.count, arity.int32)))
+    wasm_put(wasm.names, (wasm_key(wasm.count)), called)
+    wasm.count = wasm.count + 1
+  }
+}
+// (a cell by its name, given its place the first time it is named)
+wasm_cell (name) => {
+  if !(wasm_found(wasm.cells, name)) {
+    wasm_put(wasm.cells, name, (wasm_index(wasm.cells_n)))
+    wasm.cells_n = wasm.cells_n + 1
+  }
+}
+// (the context being given, kept with what it was given when the next one begins)
+wasm_kept_of (made_called, made_cells, made_cells_n, made_params, made_statements, made_statements_n, made_labels) => Wasm_item &+ {
+  called := made_called
+  cells := made_cells
+  cells_n := made_cells_n
+  params := made_params
+  statements := made_statements
+  statements_n := made_statements_n
+  labels := made_labels
+  here := true
+}
+// (every context given before any is begun (`wj_announced`): each body written as its context ends, nothing of it kept)
+wj_announced (unused) => {
+  wasm.announced = true
+}
+// (a context ended where it was begun (`kernel.ray`): what it was given let go of with what reading it made)
+wj_end (unused) => wasm_close(0)
+wasm_close (unused) => {
+  if wasm.called !== None {
+    if wasm.announced === true {
+      wasm_end(0)
+      wasm.cells = None
+      wasm.statements = None
+      wasm.labels = None
+    } else {
+      wasm_put(wasm.given, (wasm_key(wasm.given_n)), (wasm_kept_of(wasm.called, wasm.cells, wasm.cells_n, wasm.params, wasm.statements, wasm.statements_n, wasm.labels)))
+      wasm.given_n = wasm.given_n + 1
+    }
+    wasm.called = None
+  }
+}
+wasm_open (called) => {
+  wasm_close(0)
+  wasm.called = called
+  wasm.cells = wasm_table(0)
+  wasm.cells_n = 0.int32
+  wasm.statements = wasm_table(0)
+  wasm.statements_n = 0.int32
+  wasm.labels = wasm_table(0)
+}
+// (its parameters a list: a cell each, then `&.value`)
+wj_begin (called, params) => {
+  wj_context(called, params.count)
+  wasm_open(called)
+  at := params.head
+  while at !== None {
+    wasm_cell(at.value)
+    at = at.next
+  }
+  wasm.params = wasm.cells_n
+  wasm_cell(`&.value`)
+}
+// (and as `kernel.ray` gives them: `car` and `cdr`)
+wj_begin_linked (called, params) => {
+  wasm_open(called)
+  at := params
+  while at !== None {
+    wasm_cell(at.car)
+    at = at.cdr
+  }
+  wasm.params = wasm.cells_n
+  wasm_cell(`&.value`)
+}
+// (a context written in slices, each a run of its own: its cells given first, in the order the JMP has them, and where the
+// slice this run writes begins and ends; the rest of the context given only as what its blocks and jumps need)
+wj_cell (name) => wasm_cell(name)
+wj_slice_begins (unused) => {
+  wasm.slice_from = wasm.statements_n
+}
+wj_slice_ends (unused) => {
+  wasm.slice_to = wasm.statements_n
+}
+wj_label (name) => {
+  wasm_put(wasm.labels, name, (wasm_index(wasm.statements_n + 1)))
+}
+// (an operand as a JMP line writes it, a cell by its name, `-` none, `=n` a constant: the constant an Int32)
+wasm_operand (x) => {
+  if x.bits !== None { return x }
+  if !(x.first == wasm.equals) { return x }
+  if wasm_found(wasm.constants, x) { return wasm_slot(wasm.constants, x) }
+  digits := x.rest
+  made := Int32.numeral(digits)
+  if digits.first == wasm.minus { made = 0.int32 - Int32.numeral(digits.rest) }
+  wasm_put(wasm.constants, x, (wasm_index(made)))
+  made
+}
+// (its cells named, as `Jmp.jmpIf` names them: its condition, what it answers into, then its two values)
+wasm_named (x) => {
+  if x.bits !== None { return false }
+  x != `-`
+}
+wj_statement (given_aim, given_condition, given_into, given_a, given_b) => {
+  condition := wasm_operand(given_condition)
+  into := wasm_operand(given_into)
+  a := wasm_operand(given_a)
+  b := wasm_operand(given_b)
+  if wasm_named(condition) { wasm_cell(condition) }
+  if wasm_named(into) { wasm_cell(into) }
+  if wasm_named(a) { wasm_cell(a) }
+  if wasm_named(b) { wasm_cell(b) }
+  wasm.statements_n = wasm.statements_n + 1
+  wasm_put(wasm.statements, (wasm_key(wasm.statements_n)), (wasm_statement_of(given_aim, condition, into, a, b)))
+}
+// (each context given, its body written, in the order given)
+wj_bodies (unused) => {
+  wasm_close(0)
+  k := 0.int32
+  while k < wasm.given_n {
+    kept := wasm_get(wasm.given, (wasm_key(k)))
+    wasm.called = kept.called
+    wasm.cells = kept.cells
+    wasm.cells_n = kept.cells_n
+    wasm.params = kept.params
+    wasm.statements = kept.statements
+    wasm.statements_n = kept.statements_n
+    wasm.labels = kept.labels
+    wasm_end(0)
+    k = k + 1
+  }
+  wasm.called = None
+  wasm.bodies
+}
+
+// A value given: a cell's (`local.get`), or a constant's (`i32.const`).
+wasm_cell_at (name) => wasm_slot(wasm.cells, name)
+wasm_got_cell (k) => wasm.get_op + wasm_uleb(k)
+wasm_got (x) => {
+  if x.bits !== None { return wasm.const_op + wasm_sleb(x) }
+  wasm_got_cell(wasm_cell_at(x))
+}
+// (the values of n cells, the first a's)
+wasm_values (a, values_n) => {
+  out := ""
+  if values_n > 0 {
+    first := wasm_cell_at(a)
+    k := 0.int32
+    while k < values_n {
+      out = out + wasm_got_cell(first + k)
+      k = k + 1
+    }
+  }
+  out
+}
+wasm_compares (t) => (t == `match16`) || (t == `differ16`)
+// A statement that is not a jump: its call, of a context, of the host's, or a native; what it answers kept in its cell or
+// dropped; inside an `if` when it holds only when its condition does.
+wasm_code (s, fixed) => {
+  out := ""
+  if !fixed {
+    out = (wasm_got(s.condition) + wasm.if_op) + wasm.void_type
+  }
+  t := s.aim
+  answers := true
+  if t == `&.caller` {
+    out = (out + wasm_got_cell(wasm.params)) + wasm.return_op
+    answers = false
+  }
+  if (t != `&.caller`) && wasm_found(wasm.contexts, t) {
+    callee := wasm_get(wasm.contexts, t)
+    out = ((out + wasm_values(s.a, callee.arity)) + wasm.call_op) + wasm_uleb(callee.position + 3)
+  }
+  if (t != `&.caller`) && !(wasm_found(wasm.contexts, t)) && wasm_found(wasm.hosts, t) {
+    host := wasm_get(wasm.hosts, t)
+    out = ((out + wasm_values(s.a, host.arity)) + wasm.call_op) + wasm_uleb(host.position)
+  }
+  if (t != `&.caller`) && !(wasm_found(wasm.contexts, t)) && !(wasm_found(wasm.hosts, t)) {
+    native := wasm_get(wasm.natives, t)
+    takes := native.arity
+    if takes == 3 {
+      out = (out + wasm_values(s.a, 3.int32)) + native.instruction
+    }
+    if (takes == 2) && wasm_compares(t) {
+      out = out + wasm_sixteen(wasm_got(s.a), wasm_got(s.b), native.instruction)
+    }
+    if (takes == 2) && !(wasm_compares(t)) {
+      out = ((out + wasm_got(s.a)) + wasm_got(s.b)) + native.instruction
+    }
+    if takes == 1 {
+      out = (out + wasm_got(s.a)) + native.instruction
+    }
+    if takes == 0 {
+      out = out + native.instruction
+    }
+    answers = native.answers
+  }
+  if answers && wasm_named(s.into) {
+    out = (out + wasm.set_op) + wasm_uleb(wasm_cell_at(s.into))
+  }
+  if answers && !(wasm_named(s.into)) {
+    out = out + wasm.drop_op
+  }
+  if !fixed {
+    out = out + wasm.end_op
+  }
+  out
+}
+
+// The context being written, ended: its blocks (each begins where a jump lands, and after a jump or a return), each its code
+// then the jumps that end it; its loops and blocks nested (`wasm_structure`); its body, its locals (its cells past its
+// parameters) then that code.
+wasm_end (unused) => {
+  last := wasm.statements_n
+  from_k := 0.int32
+  to_k := last
+  if wasm.slice_from !== None {
+    from_k = wasm.slice_from
+    to_k = wasm.slice_to
+  }
+  starts := wasm_table(0)
+  wasm_put(starts, `1`, (wasm_index(0.int32)))
+  k := 1.int32
+  while k <= last {
+    s := wasm_get(wasm.statements, (wasm_key(k)))
+    if wasm_found(wasm.labels, s.aim) {
+      wasm_put(starts, (wasm_key(wasm_slot(wasm.labels, s.aim))), (wasm_index(0.int32)))
+      wasm_put(starts, (wasm_key(k + 1)), (wasm_index(0.int32)))
+    }
+    if s.aim == `&.caller` {
+      wasm_put(starts, (wasm_key(k + 1)), (wasm_index(0.int32)))
+    }
+    k = k + 1
+  }
+  block_of := wasm_table(0)
+  blocks := 0.int32
+  k = 1.int32
+  while k <= last {
+    if wasm_found(starts, wasm_key(k)) {
+      wasm_put(block_of, (wasm_key(k)), (wasm_index(blocks)))
+      blocks = blocks + 1
+    }
+    k = k + 1
+  }
+  codes := wasm_table(0)
+  jumps := wasm_table(0)
+  jumps_n := wasm_table(0)
+  current := wasm.minus_one
+  code := ""
+  jumps_given := 0.int32
+  k = 1.int32
+  while k <= last {
+    if wasm_found(block_of, wasm_key(k)) {
+      if current >= 0 {
+        wasm_put(codes, (wasm_key(current)), code)
+        wasm_put(jumps_n, (wasm_key(current)), (wasm_index(jumps_given)))
+      }
+      current = current + 1
+      code = ""
+      jumps_given = 0.int32
+    }
+    s := wasm_get(wasm.statements, (wasm_key(k)))
+    fixed := s.condition.bits !== None
+    skipped := false
+    if fixed {
+      skipped = s.condition == 0
+    }
+    if !skipped && wasm_found(wasm.labels, s.aim) {
+      test := None
+      if !fixed && ((k > from_k) && (k <= to_k)) {
+        test = wasm_got(s.condition)
+      }
+      wasm_put(jumps, (wasm_pair(current, jumps_given)), (wasm_jump_of(test, wasm_slot(block_of, wasm_key(wasm_slot(wasm.labels, s.aim))))))
+      jumps_given = jumps_given + 1
+    }
+    if (!skipped && !(wasm_found(wasm.labels, s.aim))) && ((k > from_k) && (k <= to_k)) {
+      code = code + wasm_code(s, fixed)
+    }
+    k = k + 1
+  }
+  wasm_put(codes, (wasm_key(current)), code)
+  wasm_put(jumps_n, (wasm_key(current)), (wasm_index(jumps_given)))
+  block_from := 0.int32
+  block_to := blocks
+  if from_k > 0 {
+    block_from = wasm_slot(block_of, wasm_key(from_k + 1))
+  }
+  if to_k < last {
+    block_to = wasm_slot(block_of, wasm_key(to_k + 1))
+  }
+  body := wasm_structure(blocks, codes, jumps, jumps_n, block_from, block_to)
+  if from_k == 0 {
+    body = ((wasm_byte(1) + wasm_uleb(wasm.cells_n - wasm.params)) + wasm.i32_type) + body
+  }
+  if to_k == last {
+    body = (body + wasm_byte(0)) + wasm.end_op
+  }
+  if wasm.slice_from === None {
+    body = wasm_sized(body)
+  }
+  wasm.bodies = wasm.bodies + body
+  wasm.written = wasm.written + 1
+}
+
+// (what a table holds at a key: its slot, else none; a last one kept or bettered)
+wasm_held (table, key) => {
+  if wasm_found(table, key) { return wasm_slot(table, key) }
+  None
+}
+wasm_scope (scopes, ending, ending_n, begins, k, made_begins, made_ends, looped, aim) => {
+  wasm_put(scopes, (wasm_key(k)), (wasm_scope_of(made_ends, looped, aim)))
+  wasm_put(begins, (wasm_key(k)), (wasm_index(made_begins)))
+  en := 0.int32
+  if wasm_found(ending_n, wasm_key(made_ends)) {
+    en = wasm_slot(ending_n, wasm_key(made_ends))
+  }
+  wasm_put(ending, (wasm_pair(made_ends, en)), (wasm_index(k)))
+  wasm_put(ending_n, (wasm_key(made_ends)), (wasm_index(en + 1)))
+}
+wasm_scope_key (looped, aim) => {
+  if looped { return `loop:` + wasm_key(aim) }
+  `block:` + wasm_key(aim)
+}
+// (whether a, opened first, goes after b: it ends before b, or with it and is a block where b is a loop)
+wasm_after (a, b) => {
+  if a.ends < b.ends { return true }
+  if a.ends == b.ends { return b.looped && !(a.looped) }
+  false
+}
+
+// Loops and blocks that nest (`language.ts`'s `structure`): a loop from a block to the last jump back to it, a block from the
+// first jump forward to a block until it; a block that crosses another begins where the one it crosses begins. (Worked out by
+// where each ends, in order: one begins where the outermost of those ending before it that holds its beginning begins; the
+// same as moving beginnings until none crosses another, which compares each with each.)
+wasm_structure (blocks, codes, jumps, jumps_n, block_from, block_to) => {
+  back := wasm_table(0)
+  forward := wasm_table(0)
+  k := 0.int32
+  while k < blocks {
+    j := 0.int32
+    jn := wasm_slot(jumps_n, wasm_key(k))
+    while j < jn {
+      to := (wasm_get(jumps, (wasm_pair(k, j)))).ends
+      if k >= to {
+        was := wasm_held(back, wasm_key(to))
+        if was === None {
+          wasm_put(back, (wasm_key(to)), (wasm_index(k)))
+        } else {
+          if k > was {
+            wasm_put(back, (wasm_key(to)), (wasm_index(k)))
+          }
+        }
+      }
+      if k < (to - 1) {
+        was := wasm_held(forward, wasm_key(to))
+        if was === None {
+          wasm_put(forward, (wasm_key(to)), (wasm_index(k)))
+        } else {
+          if k < was {
+            wasm_put(forward, (wasm_key(to)), (wasm_index(k)))
+          }
+        }
+      }
+      j = j + 1
+    }
+    k = k + 1
+  }
+  scopes := wasm_table(0)
+  ending := wasm_table(0)
+  ending_n := wasm_table(0)
+  begins := wasm_table(0)
+  scopes_n := 0.int32
+  aim := 0.int32
+  while aim < blocks {
+    if wasm_found(back, wasm_key(aim)) {
+      wasm_scope(scopes, ending, ending_n, begins, scopes_n, aim, wasm_slot(back, wasm_key(aim)) + 1, true, aim)
+      scopes_n = scopes_n + 1
+    }
+    if wasm_found(forward, wasm_key(aim)) {
+      wasm_scope(scopes, ending, ending_n, begins, scopes_n, wasm_slot(forward, wasm_key(aim)), aim, false, aim)
+      scopes_n = scopes_n + 1
+    }
+    aim = aim + 1
+  }
+  // (where each begins: the outermost of those ending before it (a stack of them, by where they begin) that holds where it
+  // begins, else its own)
+  stack := wasm_table(0)
+  stack_n := 0.int32
+  t := 0.int32
+  while t <= blocks {
+    if wasm_found(ending_n, wasm_key(t)) {
+      group := wasm_table(0)
+      least := None
+      en := wasm_slot(ending_n, wasm_key(t))
+      e := 0.int32
+      while e < en {
+        v := wasm_slot(begins, wasm_key(wasm_slot(ending, wasm_pair(t, e))))
+        at := stack_n - 1
+        searching := at >= 0
+        while searching {
+          if (wasm_get(stack, (wasm_key(at)))).begins >= v {
+            at = at - 1
+            searching = at >= 0
+          } else {
+            searching = false
+          }
+        }
+        if at >= 0 {
+          holder := wasm_get(stack, (wasm_key(at)))
+          if (holder.begins < v) && (v < holder.ends) {
+            v = holder.begins
+          }
+        }
+        wasm_put(group, (wasm_key(e)), (wasm_index(v)))
+        if least === None {
+          least = v
+        } else {
+          if v < least {
+            least = v
+          }
+        }
+        e = e + 1
+      }
+      e = 0.int32
+      while e < en {
+        wasm_put(begins, (wasm_key(wasm_slot(ending, wasm_pair(t, e)))), (wasm_index(wasm_slot(group, wasm_key(e)))))
+        e = e + 1
+      }
+      popping := stack_n > 0
+      while popping {
+        if (wasm_get(stack, (wasm_key(stack_n - 1)))).begins >= least {
+          stack_n = stack_n - 1
+          popping = stack_n > 0
+        } else {
+          popping = false
+        }
+      }
+      wasm_put(stack, (wasm_key(stack_n)), (wasm_span_of(least, t)))
+      stack_n = stack_n + 1
+    }
+    t = t + 1
+  }
+  // (each block's scopes opened before it, the one ending last first (a loop before a block ending with it), and closed after
+  // the last block in it; a jump to the next block falls through, the rest `br` (or `br_if`) out to the scope of their target)
+  opening := wasm_table(0)
+  opening_n := wasm_table(0)
+  s := 0.int32
+  while s < scopes_n {
+    f := wasm_slot(begins, wasm_key(s))
+    on := 0.int32
+    if wasm_found(opening_n, wasm_key(f)) {
+      on = wasm_slot(opening_n, wasm_key(f))
+    }
+    place := on
+    moving := place > 0
+    while moving {
+      before := wasm_get(opening, (wasm_pair(f, place - 1)))
+      if wasm_after(wasm_get(scopes, wasm_key(before.index)), wasm_get(scopes, wasm_key(s))) {
+        wasm_put(opening, (wasm_pair(f, place)), before)
+        place = place - 1
+        moving = place > 0
+      } else {
+        moving = false
+      }
+    }
+    wasm_put(opening, (wasm_pair(f, place)), (wasm_index(s)))
+    wasm_put(opening_n, (wasm_key(f)), (wasm_index(on + 1)))
+    s = s + 1
+  }
+  out := ""
+  open := wasm_table(0)
+  open_n := 0.int32
+  depth_of := wasm_table(0)
+  k = 0.int32
+  while k < blocks {
+    shown := (k >= block_from) && (k < block_to)
+    piece := ""
+    if wasm_found(opening_n, wasm_key(k)) {
+      on := wasm_slot(opening_n, wasm_key(k))
+      o := 0.int32
+      while o < on {
+        scope := wasm_get(scopes, (wasm_key(wasm_slot(opening, wasm_pair(k, o)))))
+        if scope.looped {
+          piece = (piece + wasm.loop_op) + wasm.void_type
+        } else {
+          piece = (piece + wasm.block_op) + wasm.void_type
+        }
+        wasm_put(open, (wasm_key(open_n)), scope)
+        wasm_put(depth_of, (wasm_scope_key(scope.looped, scope.aim)), (wasm_index(open_n)))
+        open_n = open_n + 1
+        o = o + 1
+      }
+    }
+    piece = piece + (wasm_get(codes, (wasm_key(k))))
+    j := 0.int32
+    jn := 0.int32
+    if shown {
+      jn = wasm_slot(jumps_n, wasm_key(k))
+    }
+    while j < jn {
+      jump := wasm_get(jumps, (wasm_pair(k, j)))
+      if jump.ends != (k + 1) {
+        at := wasm.minus_one
+        key := wasm_scope_key(jump.ends <= k, jump.ends)
+        if wasm_found(depth_of, key) {
+          at = wasm_slot(depth_of, key)
+        }
+        if jump.test === None {
+          piece = piece + wasm.br_op
+        } else {
+          piece = (piece + jump.test) + wasm.br_if_op
+        }
+        piece = piece + wasm_uleb((open_n - 1) - at)
+      }
+      j = j + 1
+    }
+    closing := open_n > 0
+    while closing {
+      top := wasm_get(open, (wasm_key(open_n - 1)))
+      if top.ends == (k + 1) {
+        open_n = open_n - 1
+        wasm_put(depth_of, (wasm_scope_key(top.looped, top.aim)), (wasm_index(wasm.minus_one)))
+        piece = piece + wasm.end_op
+        closing = open_n > 0
+      } else {
+        closing = false
+      }
+    }
+    if shown {
+      out = out + piece
+    }
+    k = k + 1
+  }
+  out
+}
+
+// The module's sections around its bodies: its types (each arity, in the order the contexts then the host's first name it),
+// what it imports (the host's, its memory of `pages`, the thread's word), each context's type, each exported by its name; the
+// code section's beginning (its size, of the `bytes` of bodies, and how many); after them its names (the host's, then each
+// context's).
+wasm_host_names (unused) => {
+  out := wasm_table(0)
+  wasm_put(out, `0`, `debug`)
+  wasm_put(out, `1`, `compiled`)
+  wasm_put(out, `2`, `told`)
+  out
+}
+wasm_types (unused) => {
+  types := wasm_table(0)
+  types_n := 0.int32
+  k := 0.int32
+  while k < (wasm.count + 3) {
+    arity := 4.int32
+    if k < wasm.count {
+      arity = (wasm_get(wasm.contexts, wasm_get(wasm.names, wasm_key(k)))).arity
+    }
+    if !(wasm_found(types, wasm_key(arity))) {
+      wasm_put(types, (wasm_key(arity)), (wasm_index(types_n)))
+      wasm_put(types, (`#` + wasm_key(types_n)), (wasm_index(arity)))
+      types_n = types_n + 1
+    }
+    k = k + 1
+  }
+  wasm_put(types, `n`, (wasm_index(types_n)))
+  types
+}
+wasm_type_of (types, arity) => wasm_slot(types, wasm_key(arity))
+wasm_head (pages, bytes) => {
+  types := wasm_types(0)
+  types_n := wasm_slot(types, `n`)
+  type_section := wasm_uleb(types_n)
+  k := 0.int32
+  while k < types_n {
+    arity := wasm_slot(types, `#` + wasm_key(k))
+    param_types := wasm_uleb(arity)
+    i := 0.int32
+    while i < arity {
+      param_types = param_types + wasm.i32_type
+      i = i + 1
+    }
+    type_section = (((type_section + wasm_byte(96)) + param_types) + wasm_byte(1)) + wasm.i32_type
+    k = k + 1
+  }
+  host_names := wasm_host_names(0)
+  imports := wasm_uleb(5)
+  k = 0.int32
+  while k < 3 {
+    imports = (((imports + wasm_sized(`h`)) + wasm_sized(wasm_get(host_names, (wasm_key(k))))) + wasm_byte(0)) + wasm_uleb(wasm_type_of(types, 4.int32))
+    k = k + 1
+  }
+  imports = (((((imports + wasm_sized(`m`)) + wasm_sized(`memory`)) + wasm_byte(2)) + wasm_byte(3)) + wasm_uleb(pages)) + wasm_uleb(pages)
+  imports = ((((imports + wasm_sized(`m`)) + wasm_sized(`thread`)) + wasm_byte(3)) + wasm.i32_type) + wasm_byte(0)
+  functions := wasm_uleb(wasm.count)
+  exports := wasm_uleb(wasm.count)
+  k = 0.int32
+  while k < wasm.count {
+    name := wasm_get(wasm.names, (wasm_key(k)))
+    context_arity := (wasm_get(wasm.contexts, name)).arity
+    functions = functions + wasm_uleb(wasm_type_of(types, context_arity))
+    exports = ((exports + wasm_sized(name)) + wasm_byte(0)) + wasm_uleb(k + 3)
+    k = k + 1
+  }
+  magic := ((((((wasm_byte(0) + wasm_byte(97)) + wasm_byte(115)) + wasm_byte(109)) + wasm_byte(1)) + wasm_byte(0)) + wasm_byte(0)) + wasm_byte(0)
+  counted := wasm_uleb(wasm.count)
+  code := (wasm_byte(10) + wasm_uleb(Int32.bytes_in(counted) + bytes)) + counted
+  ((((magic + wasm_section(1, type_section)) + wasm_section(2, imports)) + wasm_section(3, functions)) + wasm_section(7, exports)) + code
+}
+wasm_tail (unused) => {
+  host_names := wasm_host_names(0)
+  listed := wasm_uleb(wasm.count + 3)
+  k := 0.int32
+  while k < 3 {
+    listed = (listed + wasm_uleb(k)) + wasm_sized(wasm_get(host_names, (wasm_key(k))))
+    k = k + 1
+  }
+  k = 0.int32
+  while k < wasm.count {
+    listed = (listed + wasm_uleb(k + 3)) + wasm_sized(wasm_get(wasm.names, (wasm_key(k))))
+    k = k + 1
+  }
+  wasm_section(0, (wasm_sized(`name`) + wasm_byte(1)) + wasm_sized(listed))
+}
+// (the whole module, its bodies written here, kept for `--write --value=wasm.module_written`)
+wj_module (pages) => {
+  all_bodies := wj_bodies(0)
+  wasm.module_written = (wasm_head(pages, Int32.bytes_in(all_bodies)) + all_bodies) + wasm_tail(0)
+}
+
+// (what `--write --value=...` writes, read after all of it: the whole module; its sections around bodies written apart)
+wasm &+= {
+  module (pages) => {
+    wj_module(pages)
+    wasm.module_written
+  }
+  before_bodies (pages, bytes) => wasm_head(pages, bytes)
+  after_bodies (unused) => wasm_tail(0)
+  written_bodies (unused) => wj_bodies(0)
+  sized_as (bytes_n) => wasm_uleb(bytes_n)
+}

@@ -655,7 +655,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 163
+  external emit 166
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -701,125 +701,128 @@ section 3 do
   declare indexed 44 takes 2
   declare buildindex 45 takes 1
   declare seedpick 46 takes 8
-  declare inchain 47 takes 2
-  declare chainsig 48 takes 1
-  declare slot 49 takes 5
-  declare cached 50 takes 5
-  declare keep 51 takes 6
-  declare firstfits 52 takes 3
-  declare numeralpart 53 takes 4
-  declare possible 54 takes 3
-  declare couldk 55 takes 3
-  declare copy 56 takes 3
-  declare quoted 57 takes 2
-  declare past 58 takes 2
-  declare define 59 takes 3
-  declare addkey 60 takes 2
-  declare lookup 61 takes 3
-  declare trima 62 takes 2
-  declare trime 63 takes 2
-  declare named 64 takes 3
-  declare bound 65 takes 3
-  declare newframe 66 takes 2
-  declare bind 67 takes 7
-  declare holenode 68 takes 2
-  declare headhole 69 takes 4
-  declare flagrule 70 takes 3
-  declare holeval 71 takes 6
-  declare holetext 72 takes 3
-  declare accelerated 73 takes 8
-  declare numbered 74 takes 1
-  declare numcount 75 takes 1
-  declare tookeach 76 takes 10
-  declare codeof 77 takes 2
-  declare codeend 78 takes 2
-  declare excluded 79 takes 3
-  declare ownup 80 takes 3
-  declare typedhead 81 takes 2
-  declare takeof 82 takes 1
-  declare hasbind 83 takes 3
-  declare newnode 84 takes 1
-  declare pend 85 takes 8
-  declare run 86 takes 9
-  declare statements 87 takes 9
-  declare apply 88 takes 11
-  declare apply_ 89 takes 11
-  declare givenop 90 takes 7
-  declare givenop_ 91 takes 7
-  declare amp 92 takes 1
-  declare valued 93 takes 4
-  declare textv 94 takes 2
-  declare splicehead 95 takes 3
-  declare membered 96 takes 1
-  declare groups 97 takes 3
-  declare wordv 98 takes 2
-  declare boolv 99 takes 1
-  declare istext 100 takes 1
-  declare natives 101 takes 7
-  declare nothing 102 takes 0
-  declare newcount 103 takes 1
-  declare newchar 104 takes 1
-  declare countof 105 takes 1
-  declare textof 106 takes 2
-  declare wordend 107 takes 2
-  declare mapnative 108 takes 7
-  declare linkcount 109 takes 1
-  declare keyvalue 110 takes 1
-  declare unescape 111 takes 1
-  declare numeralof 112 takes 2
-  declare own 113 takes 3
-  declare callsany 114 takes 1
-  declare functiontyped 115 takes 2
-  declare membertarget 116 takes 7
-  declare said 117 takes 1
-  declare jumped 118 takes 10
-  declare valuejump 119 takes 8
-  declare islabel 120 takes 5
-  declare tests 121 takes 0
-  declare region 122 takes 1
-  declare zero 123 takes 2
-  declare test 124 takes 1
-  declare styled 125 takes 7
-  declare wordish 126 takes 2
-  declare charkind 127 takes 1
-  declare skippair 128 takes 2
-  declare worded 129 takes 2
-  declare leftreads 130 takes 7
-  declare splitat 131 takes 7
-  declare opof 132 takes 4
-  declare prec 133 takes 1
-  declare numop 134 takes 7
-  declare onread 135 takes 3
-  declare merged 136 takes 3
-  declare readon 137 takes 5
-  declare onvalue 138 takes 7
-  declare member 139 takes 2
-  declare kw 140 takes 4
-  declare kwend 141 takes 4
-  declare number 142 takes 3
-  declare emitb 143 takes 1
-  declare emitleb 144 takes 1
-  declare emitsleb 145 takes 1
-  declare finish 146 takes 0
-  declare alloc 147 takes 1
-  declare could 148 takes 3
-  declare retry 149 takes 3
-  declare typenode 150 takes 2
-  declare reads 151 takes 3
-  declare reads_ 152 takes 3
-  declare append 153 takes 2
-  declare method 154 takes 8
-  declare method_ 155 takes 8
-  declare chain 156 takes 6
-  declare unread 157 takes 1
-  declare eachunread 158 takes 0
-  declare stock 159 takes 2
-  declare textpart 160 takes 4
-  declare holepart 161 takes 4
-  declare spacepart 162 takes 2
-  declare language 163 takes 0
-  declare levelread 164 takes 1
-  declare included 165 takes 1
+  declare spanmask 47 takes 3
+  declare anchored 48 takes 10
+  declare inmask 49 takes 2
+  declare inchain 50 takes 2
+  declare chainsig 51 takes 1
+  declare slot 52 takes 5
+  declare cached 53 takes 5
+  declare keep 54 takes 6
+  declare firstfits 55 takes 3
+  declare numeralpart 56 takes 4
+  declare possible 57 takes 3
+  declare couldk 58 takes 3
+  declare copy 59 takes 3
+  declare quoted 60 takes 2
+  declare past 61 takes 2
+  declare define 62 takes 3
+  declare addkey 63 takes 2
+  declare lookup 64 takes 3
+  declare trima 65 takes 2
+  declare trime 66 takes 2
+  declare named 67 takes 3
+  declare bound 68 takes 3
+  declare newframe 69 takes 2
+  declare bind 70 takes 7
+  declare holenode 71 takes 2
+  declare headhole 72 takes 4
+  declare flagrule 73 takes 3
+  declare holeval 74 takes 6
+  declare holetext 75 takes 3
+  declare accelerated 76 takes 8
+  declare numbered 77 takes 1
+  declare numcount 78 takes 1
+  declare tookeach 79 takes 10
+  declare codeof 80 takes 2
+  declare codeend 81 takes 2
+  declare excluded 82 takes 3
+  declare ownup 83 takes 3
+  declare typedhead 84 takes 2
+  declare takeof 85 takes 1
+  declare hasbind 86 takes 3
+  declare newnode 87 takes 1
+  declare pend 88 takes 8
+  declare run 89 takes 9
+  declare statements 90 takes 9
+  declare apply 91 takes 11
+  declare apply_ 92 takes 11
+  declare givenop 93 takes 7
+  declare givenop_ 94 takes 7
+  declare amp 95 takes 1
+  declare valued 96 takes 4
+  declare textv 97 takes 2
+  declare splicehead 98 takes 3
+  declare membered 99 takes 1
+  declare groups 100 takes 3
+  declare wordv 101 takes 2
+  declare boolv 102 takes 1
+  declare istext 103 takes 1
+  declare natives 104 takes 7
+  declare nothing 105 takes 0
+  declare newcount 106 takes 1
+  declare newchar 107 takes 1
+  declare countof 108 takes 1
+  declare textof 109 takes 2
+  declare wordend 110 takes 2
+  declare mapnative 111 takes 7
+  declare linkcount 112 takes 1
+  declare keyvalue 113 takes 1
+  declare unescape 114 takes 1
+  declare numeralof 115 takes 2
+  declare own 116 takes 3
+  declare callsany 117 takes 1
+  declare functiontyped 118 takes 2
+  declare membertarget 119 takes 7
+  declare said 120 takes 1
+  declare jumped 121 takes 10
+  declare valuejump 122 takes 8
+  declare islabel 123 takes 5
+  declare tests 124 takes 0
+  declare region 125 takes 1
+  declare zero 126 takes 2
+  declare test 127 takes 1
+  declare styled 128 takes 7
+  declare wordish 129 takes 2
+  declare charkind 130 takes 1
+  declare skippair 131 takes 2
+  declare worded 132 takes 2
+  declare leftreads 133 takes 7
+  declare splitat 134 takes 7
+  declare opof 135 takes 4
+  declare prec 136 takes 1
+  declare numop 137 takes 7
+  declare onread 138 takes 3
+  declare merged 139 takes 3
+  declare readon 140 takes 5
+  declare onvalue 141 takes 7
+  declare member 142 takes 2
+  declare kw 143 takes 4
+  declare kwend 144 takes 4
+  declare number 145 takes 3
+  declare emitb 146 takes 1
+  declare emitleb 147 takes 1
+  declare emitsleb 148 takes 1
+  declare finish 149 takes 0
+  declare alloc 150 takes 1
+  declare could 151 takes 3
+  declare retry 152 takes 3
+  declare typenode 153 takes 2
+  declare reads 154 takes 3
+  declare reads_ 155 takes 3
+  declare append 156 takes 2
+  declare method 157 takes 8
+  declare method_ 158 takes 8
+  declare chain 159 takes 6
+  declare unread 160 takes 1
+  declare eachunread 161 takes 0
+  declare stock 162 takes 2
+  declare textpart 163 takes 4
+  declare holepart 164 takes 4
+  declare spacepart 165 takes 2
+  declare language 166 takes 0
+  declare levelread 167 takes 1
+  declare included 168 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -830,7 +833,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 163
+  external emit 166
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1035,12 +1038,12 @@ section 10 do
     var j 1
     f = load SP
     SP <- (f + (12 + ((load NPAIRS) * 4)))
-    f <- 0
-    (f + 4) <- (0 - 1)
-    (f + 8) <- (load NPAIRS)
+    f <-! 0
+    (f + 4) <-! (0 - 1)
+    (f + 8) <-! (load NPAIRS)
     j = 0
     while j < (load NPAIRS) do
-      (f + (12 + (j * 4))) <- 0
+      (f + (12 + (j * 4))) <-! 0
       j = j + 1
     return f
   function indent locals 1 do
@@ -1334,6 +1337,7 @@ section 10 do
     var texts 4
     (key + 48) <- ((((load key) == 1) || (((load key) == 2) || ((load (key + 28)) != 0))) ? 2 : 0) + (((load part(key, 0)) == 0) ? 1 : 0)
     pure = 1
+    (key + 60) <- 0
     texts = 0
     j = 0
     while j < (load (key + 4)) do
@@ -1346,6 +1350,8 @@ section 10 do
       if (load p) == 0 do
         texts = texts + 1
         (key + 56) <- ((load (key + 56)) + (load (p + 8)))
+        if texts <= 4 do
+          (key + 60) <- ((load (key + 60)) | ((load8 (load (p + 4))) << ((texts - 1) * 8)))
       j = j + 1
     (key + 52) <- ((pure || ((load RUNMODE) != 0)) && ((texts > 0) && ((load (key + 4)) > 1)))
     (key + 44) <- ((((load (key + 44)) & 1) | (pure ? 0 : 2)) | (thisled(key) ? 4 : 0))
@@ -1586,7 +1592,7 @@ section 10 do
     var c 2
     var at 3
     when (r & 1) == 0 do
-      at = (load (node + 24)) + ((r >> 1) * 4)
+      at = (load (node + 24)) + (2064 + ((((r >> 1) * 256) + c) * 4))
       else
       at = (load (node + 24)) + (8 + (((((r >> 1) * 256) + c)) * 4))
     if (load at) == 0 do
@@ -1599,7 +1605,7 @@ section 10 do
     var p 3
     key = keyat(k)
     p = part(key, 0)
-    drop arrpush(bucket(node, (load (key + 48)), (((load p) == 0) ? (load8 (load (p + 4))) : 0)), k)
+    drop arrpush(bucket(node, (load (key + 48)), ((((load (key + 48)) & 1) != 0) ? (load8 (load (p + 4))) : ((load (key + 60)) & 255))), k)
     if ((load (key + 44)) & 4) != 0 do
       if (load ((load (node + 24)) + 2056)) == 0 do
         drop jot(((load (node + 24)) + 2056), arrnew())
@@ -1609,14 +1615,14 @@ section 10 do
     var node 0
     var arr 1
     var j 2
-    drop jot((node + 24), alloc(2064))
+    drop jot((node + 24), alloc(4112))
     arr = load (node + 8)
     j = 0
     while j < (load arr) do
       drop indexed(node, arrat(arr, j))
       j = j + 1
     return 0
-  function seedpick locals 12 do
+  function seedpick locals 13 do
     var node 0
     var a 1
     var e 2
@@ -1637,20 +1643,29 @@ section 10 do
     var found 17
     var flit 18
     var wr 19
+    var msk 20
     best = 0 - 1
     bscore = 0 - 1
     lo = 0
     wr = 0
+    msk = load SP
+    SP <- (msk + 296)
+    drop spanmask(msk, a, e)
     n = node
     while n != 0 do
       r = 3
       while r >= lo do
         arr = load (n + 8)
-        if (load (n + 24)) != 0 do
+        if ((load (n + 24)) != 0) && ((r & 1) != 0) do
           arr = bucket(n, r, (load8 a))
         found = 0 - 1
         flit = 0 - 1
         j = (load arr) - 1
+        if (((load (n + 44)) >> r) & 1) == 0 do
+          j = 0 - 1
+        if ((j >= 0) && ((r & 1) == 0)) && ((load (n + 24)) != 0) do
+          found = anchored(n, r, a, e, x0, x1, trial, bbuf, ind, msk)
+          j = 0 - 1
         while j >= 0 do
           k = load ((load (arr + 8)) + (j * 4))
           key = load ((load ((load KEYS) + 8)) + (k * 4))
@@ -1663,7 +1678,7 @@ section 10 do
                   drop copy(bbuf, trial, ((load (key + 4)) * 8))
                   if (r & 1) == 0 do
                     j = 0
-              if (((load (key + 44)) & 8) == 0) && possible(key, a, e) do
+              if (((load (key + 44)) & 8) == 0) && ((((load (key + 52)) == 0) || inmask(msk, key)) && possible(key, a, e)) do
                 if match(key, 0, a, e, trial, ind) do
                   found = k
                   flit = load (key + 56)
@@ -1678,6 +1693,7 @@ section 10 do
         r = r - 1
       lo = bscore + 1
       if lo > 3 do
+        SP <- msk
         return best
       if (wr == 0) && ((load RUNMODE) != 0) do
         wr = load (n + 28)
@@ -1686,7 +1702,83 @@ section 10 do
         if !inchain(node, wr) do
           n = wr
         wr = 0 - 1
+    SP <- msk
     return best
+  function spanmask locals 1 do
+    var m 0
+    var a 1
+    var e 2
+    var q 3
+    q = 0
+    while q < 32 do
+      (m + q) <-! 0
+      q = q + 4
+    (m + 32) <-! 1
+    (m + 36) <-8 0
+    q = a
+    while q < e do
+      if ((load (m + (((load8 q) >> 5) * 4))) & (1 << ((load8 q) & 31))) == 0 do
+        (m + (((load8 q) >> 5) * 4)) <-! ((load (m + (((load8 q) >> 5) * 4))) | (1 << ((load8 q) & 31)))
+        (m + (36 + (load (m + 32)))) <-8 (load8 q)
+        (m + 32) <-! ((load (m + 32)) + 1)
+      q = q + 1
+    return 0
+  function anchored locals 7 do
+    var n 0
+    var r 1
+    var a 2
+    var e 3
+    var x0 4
+    var x1 5
+    var trial 6
+    var bbuf 7
+    var ind 8
+    var msk 9
+    var i 10
+    var arr 11
+    var j 12
+    var k 13
+    var key 14
+    var found 15
+    var hit 16
+    found = 0 - 1
+    i = 0
+    while i < (load (msk + 32)) do
+      arr = load ((load (n + 24)) + (2064 + ((((r >> 1) * 256) + (load8 (msk + (36 + i)))) * 4)))
+      if arr != 0 do
+        j = (load arr) - 1
+        while j >= 0 do
+          k = load ((load (arr + 8)) + (j * 4))
+          when k <= found do
+            j = 0
+            else
+            key = load ((load ((load KEYS) + 8)) + (k * 4))
+            if (!excluded(k, x0, x1)) && (((load (key + 44)) & 4) == 0) do
+              hit = 0
+              when ((load (key + 44)) & 8) != 0 do
+                hit = numeralpart(key, a, e, trial)
+                else
+                if (((load (key + 52)) == 0) || inmask(msk, key)) && possible(key, a, e) do
+                  hit = match(key, 0, a, e, trial, ind)
+              if hit do
+                found = k
+                drop copy(bbuf, trial, ((load (key + 4)) * 8))
+                j = 0
+          j = j - 1
+      i = i + 1
+    return found
+  function inmask locals 2 do
+    var m 0
+    var key 1
+    var w 2
+    var b 3
+    w = load (key + 60)
+    while w != 0 do
+      b = w & 255
+      if ((load (m + ((b >> 5) * 4))) & (1 << (b & 31))) == 0 do
+        return 0
+      w = w >> 8
+    return 1
   function inchain locals 1 do
     var node 0
     var x 1
@@ -1979,6 +2071,7 @@ section 10 do
     drop arrpush((load KEYS), key)
     (key + 24) <- node
     drop arrpush((load (node + 8)), k)
+    (node + 44) <- ((load (node + 44)) | (1 << (load (key + 48))))
     if (load (node + 24)) != 0 do
       drop indexed(node, k)
     if ((load (node + 24)) == 0) && ((load (load (node + 8))) > 32) do
@@ -2417,9 +2510,10 @@ section 10 do
   function newnode locals 1 do
     var parent 0
     var n 1
-    n = alloc(40)
+    n = alloc(48)
     n <- parent
     (n + 24) <- 0
+    (n + 44) <- 0
     (n + 4) <- 1313
     (n + 8) <- arrnew()
     (n + 12) <- 0

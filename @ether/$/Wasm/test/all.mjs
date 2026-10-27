@@ -1,4 +1,4 @@
-// node test/all.mjs [FUZZ]: the native engine (its latest revision) against the reading model, event by event: the assembler, the
+// [ENGINE=x.wasm] node test/all.mjs [FUZZ]: the native engine (its latest revision, or ENGINE) against the reading model, event by event: the assembler, the
 // small languages, .entrypoint.ray3, .entrypoint.ray3 followed by each library file and project, then FUZZ random setups
 import { readFileSync, readdirSync, writeFileSync, mkdtempSync } from 'node:fs'; import { tmpdir } from 'node:os'; import { join } from 'node:path';
 import { fileURLToPath } from 'node:url'; import { execFileSync } from 'node:child_process';
@@ -18,7 +18,8 @@ for (const f of library) { const n = join(dir, 'with-' + f.split('/').pop()); wr
 let failed = false;
 const run = (script, args) => { try { process.stdout.write(execFileSync(process.execPath, ['--max-old-space-size=6000', here(script), ...args], { env: { ...process.env, EVCAP: '200000' }, maxBuffer: 1 << 26 }).toString().split('\n').filter((l) => l && !l.startsWith('SAME')).map((l) => l + '\n').join('')); } catch (e) { failed = true; process.stdout.write(String(e.stdout ?? e)); } };
 const { engine } = await import('../../../ray/bootstrap/.entrypoint.mjs');
-run('parity.mjs', [engine(), ...files]);
+const eng = process.env.ENGINE ?? engine();
+run('parity.mjs', [eng, ...files]);
 console.log(`${files.length} files read`);
-run('fuzz.mjs', [engine(), process.argv[2] ?? '500', '1']);
+run('fuzz.mjs', [eng, process.argv[2] ?? '500', '1']);
 process.exit(failed ? 1 : 0);

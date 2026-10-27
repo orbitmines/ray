@@ -2269,6 +2269,8 @@ section 10 do
     t = bound(ca, ce, frame)
     if t != 0 do
       t = takeof(t)
+      if (load (t + 20)) != 0 do
+        return load (t + 24)
       return run(base, (load (t + 8)), (load (t + 12)), holenode(t, node), (load (t + 16)), 0, (depth + 1), 0, 0)
     return run(base, ca, ce, node, frame, 0, (depth + 1), 0, 0)
   function holetext locals 1 do
@@ -2684,7 +2686,9 @@ section 10 do
                 was = load MADE
                 MADE <- 0
                 inl = ((load RUNMODE) != 0) ? takeof(plain) : plain
-                v = run(base, (load (inl + 8)), (load (inl + 12)), holenode(inl, node), (load (inl + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (inl + 36)) : 0), (((load RUNMODE) != 0) ? (load (inl + 40)) : 0))
+                if (inl != plain) && ((load (inl + 20)) != 0) do
+                  MADE <- (load (inl + 28))
+                v = ((inl != plain) && ((load (inl + 20)) != 0)) ? (load (inl + 24)) : run(base, (load (inl + 8)), (load (inl + 12)), holenode(inl, node), (load (inl + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (inl + 36)) : 0), (((load RUNMODE) != 0) ? (load (inl + 40)) : 0))
                 if ((inl != plain) && ((load (inl + 20)) == 0)) && ((load JUMPA) == 0) do
                   drop jot((inl + 24), v)
                   drop jot((inl + 20), 1)

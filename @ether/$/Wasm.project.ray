@@ -67,6 +67,9 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
       Wasm.Signed(more: enc_more, last: enc_last)
     }
   }
+  // (and written plainly, as numbers: what a module writer takes, its groups and then the last, no instance made)
+  static leb (v) => (v < 128) ? [v] : [v % 128 + 128].joined(Wasm.leb(v / 128))
+  static sleb (v) => (v < 64) ? [v] : [v % 128 + 128].joined(Wasm.sleb(v / 128))
   static U32 := lazily LEB{value < 2 ^ 32}
   static S32 := lazily Signed{-(2 ^ 31) <= value < 2 ^ 31}
   // (each at most ceil(N / 7) bytes; a byte's bits past N 0, or the sign's)
@@ -83,7 +86,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   static Vec := class (elements: Node) => {
     bytes => {
       vec_elements := .elements
-      Wasm.LEB.encoded(vec_elements.count).bytes.joined(Wasm.bytes_all(vec_elements))
+      Wasm.leb(vec_elements.count).joined(Wasm.bytes_all(vec_elements))
     }
   }
   // (what anything is written as: a number a byte; a list each of it, in turn; an op its code; anything else, its own bytes)
@@ -91,7 +94,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   static bytes_of (x) => (x is Number) ? [x] : (((x).listing === true) ? Wasm.bytes_all(x) : (((x).code !== None) ? Wasm.bytes_of((x).code) : x.bytes))
   static bytes_all (xs) => xs.map((x) => Wasm.bytes_of(x)).flatten
   // (bytes after how many they are)
-  static sized (held) => Wasm.LEB.encoded(held.count).bytes.joined(held)
+  static sized (sized_bytes) => Wasm.leb(sized_bytes.count).joined(sized_bytes)
   // (was, before 2026-10-22: `static Name := lazily (size: U32 = text.bytes.count, text: Unicode.UTF-8{bytes.count == size})`;
   // the way back once a text written `as Byte[]` is its UTF-8 bytes and a header writes itself; then `codes` and `bytes` go
   // and WA3 goes back to its form noted at the end of the file)
@@ -204,7 +207,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
     Wasm.Written_section(1, Wasm.Vec(elements: [[0x60, Wasm.Vec(elements: [0x7F]), Wasm.Vec(elements: [0x7F])]])),
     Wasm.Written_section(2, Wasm.memory_import(pages)),
     Wasm.Written_section(3, Wasm.Vec(Wasm.zeros(bodies.count))),
-    Wasm.Written_section(6, Wasm.global_of(Wasm.Signed.encoded(free).bytes)),
+    Wasm.Written_section(6, Wasm.global_of(Wasm.sleb(free))),
     Wasm.Written_section(7, Wasm.Vec(elements: [[Wasm.Name(text: "main"), 0x00, 0]])),
     Wasm.Written_section(10, Wasm.Vec(Wasm.codes_of(bodies)))
   ])
@@ -260,13 +263,13 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
     0x41, 0x7F, 0x21, 3, 0x41, 0, 0x21, 4, 0x41, 0, 0x21, 2,
     0x02, 0x40, 0x03, 0x40,
     0x20, 2, 0x41
-  ].joined(Wasm.Signed.encoded(count).bytes).joined([
+  ].joined(Wasm.sleb(count)).joined([
     0x4F, 0x0D, 1,
     0x20, 2, 0x41, 8, 0x6C, 0x22, 6, 0x28, 2
-  ]).joined(Wasm.LEB.encoded(at + 4).bytes).joined([
+  ]).joined(Wasm.leb(at + 4)).joined([
     0x21, 5,
     0x20, 6, 0x28, 2
-  ]).joined(Wasm.LEB.encoded(at).bytes).joined([
+  ]).joined(Wasm.leb(at)).joined([
     0x21, 6,
     0x02, 0x40,
     0x20, 5, 0x20, 1, 0x4B, 0x0D, 0,
@@ -292,7 +295,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
     Wasm.Written_section(3, Wasm.Vec(elements: [0])),
     Wasm.Written_section(7, Wasm.Vec(elements: [[Wasm.Name(text: "reading"), 0x00, 0]])),
     Wasm.Written_section(10, Wasm.reading_code(Wasm.longest_ops(count: texts.count, at: at))),
-    Wasm.Written_section(11, Wasm.data_of(start: Wasm.Signed.encoded(at).bytes, spans: Wasm.Vec(Wasm.spans_of(texts: texts, at: at))))
+    Wasm.Written_section(11, Wasm.data_of(start: Wasm.sleb(at), spans: Wasm.Vec(Wasm.spans_of(texts: texts, at: at))))
   ])
   static reading_code (ops) => Wasm.Vec(Array.new.append(Wasm.Written_code([Wasm.Vec(elements: [[6, 0x7F]]), ops])))
   static data_of (start, spans) => Wasm.Vec(Array.new.append([0x00, 0x41].joined(start).joined([0x0B, spans])))
@@ -558,6 +561,8 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
 // (its integers, read and written, outside the class: its own asserts ask of a module)
 assert Wasm.LEB.encoded(624485).bytes == [0xE5, 0x8E, 0x26] && Wasm.LEB(more: [0xE5, 0x8E], last: 0x26).value == 624485  // WA1 LEB128's example is not e5 8e 26
 assert Wasm.Signed.encoded(100).bytes == [0xE4, 0x00]  // WA2 a hundred is not two groups when signed (its sign bit would be set)
+assert Wasm.leb(624485) == [0xE5, 0x8E, 0x26]  // WA14 LEB128's example written plainly is not e5 8e 26
+assert Wasm.sleb(100) == [0xE4, 0x00]  // WA15 a hundred written plainly as signed is not two groups
 assert Wasm.Signed.below_zero(123456).bytes == [0xC0, 0xBB, 0x78]  // WA2b minus 123456 is not its signed LEB128
 assert Wasm.Name(text: "add").bytes == [3, 97, 100, 100]  // WA3 a name is not its length and its UTF-8 bytes
 assert Wasm.module_bytes([]) == [0, 97, 115, 109, 1, 0, 0, 0]  // WA7 the empty module is not its header alone

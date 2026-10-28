@@ -1132,10 +1132,15 @@ section 10 do
       if e <= a do
         return 0
       q = a
-      while q < e do
-        if !word(load8 q) do
-          return 0
+      while (q < e) && word(load8 q) do
         q = q + 1
+      if q < e do
+        if (load (p + 16)) == 0 do
+          return 0
+        sp = load SP
+        q = holeloop(key, i, a, e, cap, ind, (0 - 2))
+        SP <- sp
+        return q
       (cap + (i * 8)) <- a
       (cap + ((i * 8) + 4)) <- e
       return 1
@@ -4746,6 +4751,9 @@ section 10 do
       on = wordv(WNONE, NNONE)
     if on == 0 do
       on = load SCOPE
+    if ((load RUNMODE) != 0) && ((frame != 0) && ((!inchain(on, (load (frame + 8)))) && (!inchain((load (frame + 8)), on)))) do
+      ox0 = 0
+      ox1 = 0
     k = readon(on, p, e, ox0, ox1)
     if k < 0 do
       r = splitat(base, p, e, on, frame, 0, 0)

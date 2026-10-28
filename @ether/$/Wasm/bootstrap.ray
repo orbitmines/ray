@@ -360,6 +360,7 @@ constant FRAMESLOT 400
 constant FREEF 1536
 constant CAPCUR 404
 constant CAPBASE 408
+constant INLINEF 412
 constant WMEMBER 23659
 constant NMEMBER 6
 constant WMEMBERS 23666
@@ -691,7 +692,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 205
+  external emit 209
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -888,16 +889,20 @@ section 3 do
   declare heldown 195 takes 3
   declare codespan 196 takes 3
   declare holename 197 takes 4
-  declare valid 198 takes 1
-  declare istrue 199 takes 1
-  declare some 200 takes 1
-  declare classv 201 takes 1
-  declare spanchar 202 takes 2
-  declare admitsv 203 takes 2
-  declare admitt 204 takes 4
-  declare admstep 205 takes 7
-  declare admsteps 206 takes 5
-  declare readablet 207 takes 2
+  declare splicef 198 takes 2
+  declare dotled 199 takes 1
+  declare onechar 200 takes 1
+  declare framewins 201 takes 4
+  declare valid 202 takes 1
+  declare istrue 203 takes 1
+  declare some 204 takes 1
+  declare classv 205 takes 1
+  declare spanchar 206 takes 2
+  declare admitsv 207 takes 2
+  declare admitt 208 takes 4
+  declare admstep 209 takes 7
+  declare admsteps 210 takes 5
+  declare readablet 211 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -908,7 +913,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 205
+  external emit 209
   external emit 1
   function main locals 1 do
     var scope 0
@@ -2321,6 +2326,12 @@ section 10 do
       (p + 16) <-! 0
       (p + 20) <-! 0
       isopen = ((q + ol) <= e) && same(q, (load OPENA), ol)
+      if (isopen && ((load RUNMODE) != 0)) && (((q + (ol * 2)) <= e) && same((q + ol), (load OPENA), ol)) do
+        isopen = 0
+        p <- 0
+        (p + 4) <- q
+        (p + 8) <- ol
+        q = q + ol
       if isopen do
         r = q + ol
         while ((r + cl) <= e) && (!same(r, (load CLOSEA), cl)) do
@@ -2355,11 +2366,11 @@ section 10 do
                 if (s > t) && (trima(s, r) == r) do
                   (p + 16) <- t
                   (p + 20) <- s
-      if (!isopen) && white(load8 q) do
+      if ((!isopen) && white(load8 q)) && ((load (p + 4)) == 0) do
         while (q < e) && white(load8 q) do
           q = q + 1
         p <- 1
-      if (!isopen) && ((load p) != 1) do
+      if ((!isopen) && ((load p) != 1)) && ((load (p + 4)) == 0) do
         s = q
         while (q < e) && ((!white(load8 q)) && (!(((q + ol) <= e) && same(q, (load OPENA), ol)))) do
           q = q + 1
@@ -2454,7 +2465,7 @@ section 10 do
     ta = trima(a, e)
     te = trime(ta, e)
     return lookup(ta, te, frame)
-  function bound locals 6 do
+  function bound locals 7 do
     var a 0
     var e 1
     var frame 2
@@ -2464,20 +2475,24 @@ section 10 do
     var cl 6
     var b 7
     var r 8
+    var inl 9
     ta = trima(a, e)
     te = trime(ta, e)
     ol = load OPENL
     cl = load CLOSEL
     INLINE <-! 0
+    inl = 0
     if (load RUNMODE) != 0 do
       if ((te - ta) >= ((ol + cl) * 2)) && ((same(ta, (load OPENA), ol) && same((ta + ol), (load OPENA), ol)) && (same((te - cl), (load CLOSEA), cl) && same((te - (cl * 2)), (load CLOSEA), cl))) do
         ta = ta + ol
         te = te - cl
-        INLINE <-! 1
+        inl = 1
     if ((te - ta) >= (ol + cl)) && (same(ta, (load OPENA), ol) && same((te - cl), (load CLOSEA), cl)) do
-      b = lookup((ta + ol), (te - cl), frame)
+      b = lookup(trima((ta + ol), (te - cl)), trime(trima((ta + ol), (te - cl)), (te - cl)), frame)
       if b != 0 do
         r = bound((load (b + 8)), (load (b + 12)), (load (b + 16)))
+        INLINE <-! inl
+        INLINEF <-! frame
         if r != 0 do
           return r
         return b
@@ -3114,7 +3129,7 @@ section 10 do
             else
             plain = 0
             ref = 0
-            if ((k < 0) || ((load keyat(k)) == 3)) && (!membered(a)) do
+            if ((k < 0) || (((load keyat(k)) == 3) || framewins(k, a, end, frame))) && (!membered(a)) do
               plain = named(a, end, frame)
               if plain == 0 do
                 ref = bound(a, end, frame)
@@ -3148,7 +3163,7 @@ section 10 do
               value = load (plain + 24)
             if (plain == 0) && (ref != 0) do
               NEXTVIS <-! ((((load RUNMODE) != 0) && (!restline(ref, frame))) ? node : (load VIS))
-              value = run(base, codeof((load (ref + 8)), (load (ref + 12))), codeend((load (ref + 8)), (load (ref + 12))), node, (load (ref + 16)), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (ref + 36)) : 0), (((load RUNMODE) != 0) ? (load (ref + 40)) : 0))
+              value = run(base, codeof((load (ref + 8)), (load (ref + 12))), codeend((load (ref + 8)), (load (ref + 12))), node, ((((load RUNMODE) != 0) && (inl != 0)) ? splicef((load INLINEF), (load (ref + 16))) : (load (ref + 16))), caller, (depth + 1), (((load RUNMODE) != 0) ? (load (ref + 36)) : 0), (((load RUNMODE) != 0) ? (load (ref + 40)) : 0))
             at0 = 0
             if (((plain == 0) && (ref == 0)) && (k >= 0)) && dotmember(k, a, end) do
               at0 = thisbound(frame)
@@ -3701,6 +3716,27 @@ section 10 do
       if !hole do
         drop append(q, 1)
         q = q + 1
+      if hole && ((((q + (ol * 3)) <= e) && same((q + ol), (load OPENA), ol)) && same((q + (ol * 2)), (load OPENA), ol)) do
+        drop append(q, ol)
+        q = q + ol
+        hole = 0
+      if hole && (((q + (ol * 2)) <= e) && same((q + ol), (load OPENA), ol)) do
+        r = q + (ol * 2)
+        while ((r + cl) <= e) && (!same(r, (load CLOSEA), cl)) do
+          r = r + 1
+        b = 0
+        if (((r + (cl * 2)) <= e) && same((r + cl), (load CLOSEA), cl)) && worded((q + (ol * 2)), r) do
+          b = named((q + (ol * 2)), r, hf)
+        when b != 0 do
+          ba = trima((load (b + 8)), (load (b + 12)))
+          be = trime(ba, (load (b + 12)))
+          drop append(ba, (be - ba))
+          any = 1
+          q = r + (cl * 2)
+          else
+          drop append(q, ol)
+          q = q + ol
+        hole = 0
       if hole do
         r = q + ol
         while ((r + cl) <= e) && (!same(r, (load CLOSEA), cl)) do
@@ -3963,10 +3999,11 @@ section 10 do
       CHARS <- node
       return caller
     if kwend(a, e, WFIRST, NFIRST) || kwend(a, e, WREST, NREST) do
-      if !istext(node) do
+      y = node
+      if !istext(y) do
         return 0
-      x = load (node + 32)
-      z = load (node + 36)
+      x = load (y + 32)
+      z = load (y + 36)
       if x >= z do
         return nothing()
       c = load8 x
@@ -4850,6 +4887,12 @@ section 10 do
     if (op == 61) && istx do
       if istext(y) do
         res = boolv((((load (y + 36)) - (load (y + 32))) == ((load (v + 36)) - (load (v + 32)))) && same((load (v + 32)), (load (y + 32)), ((load (y + 36)) - (load (y + 32)))))
+    if (op == 61) && istext(y) do
+      if (!istx) && ((load (v + 4)) == 3031) do
+        res = boolv(onechar(y) == cx)
+    if (op == 61) && istx do
+      if (y != 0) && ((load (y + 4)) == 3031) do
+        res = boolv(onechar(v) == cy)
     if (cx >= 0) && (cy >= 0) do
       if op == 61 do
         res = boolv(cx == cy)
@@ -4912,7 +4955,7 @@ section 10 do
       if y == 3 do
         m = m + 1
     return out
-  function readon locals 14 do
+  function readon locals 15 do
     var on 0
     var p 1
     var e 2
@@ -4932,6 +4975,7 @@ section 10 do
     var la 16
     var lb 17
     var lt 18
+    var bl 19
     sp = load SP
     trial = sp
     SP <- (sp + 4296)
@@ -4940,6 +4984,7 @@ section 10 do
     n = on
     while n != 0 do
       best = 0 - 1
+      bl = 0
       keys = load (n + 8)
       la = 0
       lb = 0
@@ -4962,8 +5007,9 @@ section 10 do
           (view + 4) <- 0
         if ((load (view + 4)) > 0) && (((load part(view, 0)) == 0) || lead) do
           if ((lead && (((load RUNMODE) != 0) && ((load (view + 4)) == 1))) || possible(view, p, e)) && match(view, 0, p, e, (trial + 8), 0) do
-            if (best < 0) || (rank(k) >= rank(best)) do
+            if (best < 0) || ((lead && (!bl)) || ((lead == bl) && (rank(k) >= rank(best)))) do
               best = k
+              bl = lead
               bcap = ringalloc(((load (key + 4)) * 8) + 8)
               when lead do
                 bcap <- (0 - 1)
@@ -5049,8 +5095,11 @@ section 10 do
         if (load part(keyat(k), 0)) == 0 do
           HOST <-! on
         else
-        if isthis(keyat(k)) && ((home == hosted) && (hosted != 0)) do
-          THISV <-! home
+        when isthis(keyat(k)) && ((((load (keyat(k) + 4)) > 1) && ((load part(keyat(k), 1)) == 0)) && ((load8 (load (part(keyat(k), 1) + 4))) == 46)) do
+          THISV <-! on
+          else
+          if isthis(keyat(k)) && ((home == hosted) && (hosted != 0)) do
+            THISV <-! home
     READX0 <-! ox0
     READX1 <-! ox1
     tv = load TAKEVIS
@@ -5905,6 +5954,76 @@ section 10 do
         return 0
       q = q + 1
     return textof(ca, w)
+  function splicef locals 4 do
+    var frame 0
+    var def 1
+    var f 2
+    var n 3
+    var j 4
+    var e 5
+    if (frame == 0) || (frame == def) do
+      return def
+    n = load (frame + 4)
+    if n == 0 do
+      return def
+    f = newframe(def, n)
+    j = 0
+    while j < n do
+      e = frame + (28 + (j * 48))
+      if dotled(load (frame + 24)) || (!texteq((load e), ((load (e + 4)) - (load e)), (KW + 52), 4)) do
+        drop copy((f + (28 + ((load (f + 4)) * 48))), e, 48)
+        (f + 4) <- ((load (f + 4)) + 1)
+      j = j + 1
+    if def != 0 do
+      j = 8
+      while j < 28 do
+        (f + j) <- (load (def + j))
+        j = j + 4
+    if dotled(load (frame + 24)) do
+      (f + 8) <- (load (frame + 8))
+    return f
+  function dotled locals 0 do
+    var key 0
+    if (key == 0) || (!isthis(key)) do
+      return 0
+    if (load (key + 4)) < 2 do
+      return 0
+    return ((load part(key, 1)) == 0) && ((load8 (load (part(key, 1) + 4))) == 46)
+  function onechar locals 5 do
+    var t 0
+    var x 1
+    var z 2
+    var c 3
+    var n 4
+    var cp 5
+    x = load (t + 32)
+    z = load (t + 36)
+    if x >= z do
+      return 0 - 1
+    c = load8 x
+    n = (c < 128) ? 1 : ((c < 224) ? 2 : ((c < 240) ? 3 : 4))
+    if (x + n) != z do
+      return 0 - 1
+    cp = (c < 128) ? c : ((c < 224) ? (c & 31) : ((c < 240) ? (c & 15) : (c & 7)))
+    x = x + 1
+    while x < z do
+      cp = (cp << 6) | ((load8 x) & 63)
+      x = x + 1
+    return cp
+  function framewins locals 0 do
+    var k 0
+    var a 1
+    var e 2
+    var frame 3
+    if ((load RUNMODE) == 0) || (frame == 0) do
+      return 0
+    if (load (keyat(k) + 24)) != (load SCOPE) do
+      return 0
+    if (load (keyat(k) + 4)) != 1 do
+      return 0
+    if !worded(trima(a, e), trime(trima(a, e), e)) do
+      return 0
+    return named(a, e, frame) != 0
   function valid locals 0 do
     var v 0
     return ((v > 4096) && (v < (load LIMIT))) && ((v & 3) == 0)

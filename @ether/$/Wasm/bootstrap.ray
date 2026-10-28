@@ -1939,14 +1939,9 @@ section 10 do
       if (wr == 0) && ((load RUNMODE) != 0) do
         wr = load (n + 28)
       n = walknext(n, (msk + 296))
-      if (((n == (load SCOPE)) && (tw == 0)) && ((load TAKEVIS) != 0)) && ((load TAKEVIS) != (load SCOPE)) do
-        tw = 1
-        if (!inchain(node, (load TAKEVIS))) && ((load (node + 4)) == 1313) do
-          n = load TAKEVIS
-          drop walkinit((msk + 296))
       if ((n == 0) && (tw == 0)) && ((wr <= 0) && ((load TAKEVIS) != 0)) do
         tw = 1
-        if (!inchain(node, (load TAKEVIS))) && ((load (node + 4)) == 1313) do
+        if !inchain(node, (load TAKEVIS)) do
           n = load TAKEVIS
           wr = 0
       if (n == 0) && (wr > 0) do
@@ -3416,8 +3411,8 @@ section 10 do
       if q >= 0 do
         return newcount(q)
     if (((load RUNMODE) != 0) && ((load NUMBERS) != 0)) && (((load (key + 24)) == (load NUMBERS)) && texteq((load (key + 32)), ((load (key + 36)) - (load (key + 32))), WSUCC, NSUCC)) do
-      if countof(node) >= 0 do
-        return newcount((countof(node)) + 1)
+      if countof(throughrun(node)) >= 0 do
+        return newcount((countof(throughrun(node))) + 1)
     if ((load RUNMODE) != 0) && (((load (key + 44)) & 704) != 0) do
       q = accelerated(key, cap, base, node, frame, depth, rn, caller)
       if q != (0 - 2) do
@@ -4011,7 +4006,7 @@ section 10 do
       CHARS <- node
       return caller
     if kwend(a, e, WFIRST, NFIRST) || kwend(a, e, WREST, NREST) do
-      y = node
+      y = throughrun(node)
       if !istext(y) do
         return 0
       x = load (y + 32)

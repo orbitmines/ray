@@ -692,7 +692,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 216
+  external emit 222
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -805,111 +805,117 @@ section 3 do
   declare amp 111 takes 1
   declare valued 112 takes 4
   declare unsetv 113 takes 7
-  declare textv 114 takes 2
-  declare splicehead 115 takes 3
-  declare membered 116 takes 1
-  declare groups 117 takes 3
-  declare wordv 118 takes 2
-  declare boolv 119 takes 1
-  declare istext 120 takes 1
-  declare natives 121 takes 7
-  declare nothing 122 takes 0
-  declare newcount 123 takes 1
-  declare newchar 124 takes 1
-  declare countof 125 takes 1
-  declare textof 126 takes 2
-  declare wordend 127 takes 2
-  declare mapnative 128 takes 7
-  declare callablev 129 takes 1
-  declare linkcount 130 takes 1
-  declare keyvalue 131 takes 1
-  declare unescape 132 takes 1
-  declare numeralof 133 takes 2
-  declare own 134 takes 3
-  declare callsany 135 takes 1
-  declare functiontyped 136 takes 2
-  declare holed 137 takes 2
-  declare headprefix 138 takes 9
-  declare membertarget 139 takes 7
-  declare said 140 takes 1
-  declare jumped 141 takes 10
-  declare valuejump 142 takes 8
-  declare islabel 143 takes 5
-  declare tests 144 takes 0
-  declare region 145 takes 1
-  declare zero 146 takes 2
-  declare test 147 takes 1
-  declare styled 148 takes 7
-  declare wordish 149 takes 2
-  declare endsep 150 takes 1
-  declare charkind 151 takes 1
-  declare skippair 152 takes 2
-  declare worded 153 takes 2
-  declare leftreads 154 takes 7
-  declare splitat 155 takes 7
-  declare tightleft 156 takes 2
-  declare opof 157 takes 4
-  declare prec 158 takes 1
-  declare numop 159 takes 7
-  declare onread 160 takes 3
-  declare merged 161 takes 3
-  declare readon 162 takes 5
-  declare membercode 163 takes 1
-  declare onvalue 164 takes 7
-  declare member 165 takes 2
-  declare kw 166 takes 4
-  declare kwend 167 takes 4
-  declare number 168 takes 3
-  declare emitb 169 takes 1
-  declare emitleb 170 takes 1
-  declare emitsleb 171 takes 1
-  declare finish 172 takes 0
-  declare alloc 173 takes 1
-  declare could 174 takes 3
-  declare retry 175 takes 3
-  declare typenode 176 takes 3
-  declare reads 177 takes 3
-  declare reads_ 178 takes 3
-  declare append 179 takes 2
-  declare method 180 takes 8
-  declare method_ 181 takes 8
-  declare chain 182 takes 6
-  declare unread 183 takes 1
-  declare eachunread 184 takes 0
-  declare stock 185 takes 2
-  declare textpart 186 takes 4
-  declare holepart 187 takes 4
-  declare spacepart 188 takes 2
-  declare language 189 takes 0
-  declare levelread 190 takes 1
-  declare included 191 takes 1
-  declare heldm 192 takes 3
-  declare evalv 193 takes 7
-  declare ownname 194 takes 3
-  declare heldown 195 takes 3
-  declare codespan 196 takes 3
-  declare holename 197 takes 4
-  declare splicef 198 takes 2
-  declare dotled 199 takes 1
-  declare onechar 200 takes 1
-  declare superposed 201 takes 1
-  declare eqv 202 takes 2
-  declare eqany 203 takes 3
-  declare throughrun 204 takes 1
-  declare oneline 205 takes 2
-  declare opname 206 takes 2
-  declare better 207 takes 3
-  declare framewins 208 takes 4
-  declare valid 209 takes 1
-  declare istrue 210 takes 1
-  declare some 211 takes 1
-  declare classv 212 takes 1
-  declare spanchar 213 takes 2
-  declare admitsv 214 takes 2
-  declare admitt 215 takes 4
-  declare admstep 216 takes 7
-  declare admsteps 217 takes 5
-  declare readablet 218 takes 2
+  declare lazied 114 takes 4
+  declare force 115 takes 3
+  declare textv 116 takes 2
+  declare splicehead 117 takes 3
+  declare membered 118 takes 1
+  declare groups 119 takes 3
+  declare wordv 120 takes 2
+  declare boolv 121 takes 1
+  declare istext 122 takes 1
+  declare natives 123 takes 7
+  declare nothing 124 takes 0
+  declare newcount 125 takes 1
+  declare newchar 126 takes 1
+  declare countof 127 takes 1
+  declare textof 128 takes 2
+  declare wordend 129 takes 2
+  declare mapnative 130 takes 7
+  declare callablev 131 takes 1
+  declare linkcount 132 takes 1
+  declare keyvalue 133 takes 1
+  declare unescape 134 takes 1
+  declare numeralof 135 takes 2
+  declare own 136 takes 3
+  declare callsany 137 takes 1
+  declare functiontyped 138 takes 2
+  declare holed 139 takes 2
+  declare headprefix 140 takes 9
+  declare membertarget 141 takes 7
+  declare said 142 takes 1
+  declare jumped 143 takes 10
+  declare valuejump 144 takes 8
+  declare islabel 145 takes 5
+  declare tests 146 takes 0
+  declare region 147 takes 1
+  declare zero 148 takes 2
+  declare test 149 takes 1
+  declare styled 150 takes 7
+  declare wordish 151 takes 2
+  declare endsep 152 takes 1
+  declare charkind 153 takes 1
+  declare skippair 154 takes 2
+  declare worded 155 takes 2
+  declare leftreads 156 takes 7
+  declare splitat 157 takes 7
+  declare tightleft 158 takes 2
+  declare opof 159 takes 4
+  declare prec 160 takes 1
+  declare numop 161 takes 7
+  declare onread 162 takes 3
+  declare merged 163 takes 3
+  declare readon 164 takes 5
+  declare membercode 165 takes 1
+  declare onvalue 166 takes 7
+  declare member 167 takes 2
+  declare kw 168 takes 4
+  declare kwend 169 takes 4
+  declare number 170 takes 3
+  declare emitb 171 takes 1
+  declare emitleb 172 takes 1
+  declare emitsleb 173 takes 1
+  declare finish 174 takes 0
+  declare alloc 175 takes 1
+  declare could 176 takes 3
+  declare retry 177 takes 3
+  declare typenode 178 takes 3
+  declare reads 179 takes 3
+  declare reads_ 180 takes 3
+  declare append 181 takes 2
+  declare method 182 takes 8
+  declare method_ 183 takes 8
+  declare chain 184 takes 6
+  declare unread 185 takes 1
+  declare eachunread 186 takes 0
+  declare stock 187 takes 2
+  declare textpart 188 takes 4
+  declare holepart 189 takes 4
+  declare spacepart 190 takes 2
+  declare language 191 takes 0
+  declare levelread 192 takes 1
+  declare included 193 takes 1
+  declare heldm 194 takes 3
+  declare evalv 195 takes 7
+  declare ownname 196 takes 3
+  declare heldown 197 takes 3
+  declare codespan 198 takes 3
+  declare holename 199 takes 4
+  declare splicef 200 takes 2
+  declare dotled 201 takes 1
+  declare onechar 202 takes 1
+  declare superposed 203 takes 1
+  declare eqv 204 takes 2
+  declare eqany 205 takes 3
+  declare throughrun 206 takes 1
+  declare oneline 207 takes 2
+  declare opname 208 takes 2
+  declare better 209 takes 3
+  declare typedplace 210 takes 1
+  declare rawarg 211 takes 3
+  declare namedarg 212 takes 3
+  declare forceplace 213 takes 4
+  declare framewins 214 takes 4
+  declare valid 215 takes 1
+  declare istrue 216 takes 1
+  declare some 217 takes 1
+  declare classv 218 takes 1
+  declare spanchar 219 takes 2
+  declare admitsv 220 takes 2
+  declare admitt 221 takes 4
+  declare admstep 222 takes 7
+  declare admsteps 223 takes 5
+  declare readablet 224 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -920,7 +926,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 216
+  external emit 222
   external emit 1
   function main locals 1 do
     var scope 0
@@ -2730,17 +2736,21 @@ section 10 do
       t = holetext((load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), frame)
       q = load TA
       e1 = load TE
+      t = q
       while q < e1 do
         c = load8 q
         if (c == 40) || ((c == 91) || ((c == 123) || ((c == 34) || (c == 96)))) do
           q = skippair(q, e1)
           q = q - 1
-        if (c == 44) || (c == 58) do
+        if c == 44 do
           return 0 - 2
         q = q + 1
       v = holeval(base, (load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), rn, frame, depth)
       if (load JUMPA) != 0 do
         return 0
+      if typedplace(v) && namedarg((load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), frame) do
+        drop forceplace(v, base, depth, node)
+        return caller
       if (v == 0) || istext(v) do
         return 0 - 2
       drop valued(node, wa, we, v)
@@ -2799,7 +2809,7 @@ section 10 do
     if (q < e) && (((load8 q) == 58) && (((q + 1) >= e) || ((load8 (q + 1)) != 61))) do
       return q
     return e
-  function tookeach locals 8 do
+  function tookeach locals 11 do
     var key 0
     var cap 1
     var base 2
@@ -2818,6 +2828,9 @@ section 10 do
     var from 15
     var x 16
     var y 17
+    var ta 18
+    var te 19
+    var tq 20
     n = 0
     q = wa
     from = wa
@@ -2837,6 +2850,11 @@ section 10 do
     v = holeval(base, (load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), rn, frame, depth)
     if (load JUMPA) != 0 do
       return 0
+    ta = rawarg((load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), frame)
+    te = load TE
+    if typedplace(v) && (paramend(ta, te) < te) do
+      drop forceplace(v, base, depth, node)
+      return caller
     if (v == 0) || (ownup(v, WLISTING, (WLISTING + NLISTING)) < 0) do
       return 0 - 2
     if linkcount(v) != n do
@@ -2852,7 +2870,14 @@ section 10 do
         k = ownup(link, WVALUE, (WVALUE + NVALUE))
         if k < 0 do
           return 0 - 2
-        drop valued(node, x, y, keyvalue(k))
+        tq = ta
+        while (tq < te) && ((load8 tq) != 44) do
+          tq = ((charkind(load8 tq) == 3) && pairbyte(load8 tq)) ? skippair(tq, te) : (tq + 1)
+        when typedplace(keyvalue(k)) && (paramend(trima(ta, tq), tq) < tq) do
+          drop forceplace(keyvalue(k), base, depth, node)
+          else
+          drop valued(node, x, y, keyvalue(k))
+        ta = (tq < te) ? (tq + 1) : te
         k = ownup(link, WNEXT, (WNEXT + NNEXT))
         link = (k < 0) ? 0 : keyvalue(k)
         from = q + 1
@@ -3405,6 +3430,9 @@ section 10 do
       return givenop((load (cap + 24)), (load (cap + 28)), base, node, frame, caller, depth)
     if kind == 5 do
       return run(base, (load cap), (load (cap + 4)), node, frame, caller, (depth + 1), 0, 0)
+    if ((load RUNMODE) != 0) && (((load (key + 44)) & 4096) != 0) do
+      q = force((load (key + 40)), base, depth)
+      return (q != 0) ? q : caller
     if (load (key + 12)) == 0 do
       return ((load (key + 40)) != 0) ? (load (key + 40)) : caller
     if ((load RUNMODE) != 0) && ((((load (key + 44)) & 8) != 0) && ((load COUNTED) != 0)) do
@@ -3652,7 +3680,7 @@ section 10 do
     (key + 44) <- 1
     drop addkey(key, node)
     return key
-  function unsetv locals 5 do
+  function unsetv locals 7 do
     var base 0
     var a 1
     var e 2
@@ -3665,6 +3693,8 @@ section 10 do
     var b 9
     var ta 10
     var te 11
+    var bt 12
+    var p 13
     q = a
     while (q < e) && ((load8 q) > 32) do
       q = q + 1
@@ -3680,11 +3710,57 @@ section 10 do
       b = takeof(b)
       ta = trima((load (b + 8)), (load (b + 12)))
       te = trime(ta, (load (b + 12)))
+    bt = named(trima(q, e), trime(trima(q, e), e), frame)
+    if ((bt != 0) && (ta < te)) && worded(ta, te) do
+      bt = takeof(bt)
+      q = alloc(32)
+      q <- (load (bt + 8))
+      (q + 4) <- (load (bt + 12))
+      (q + 8) <- (load (bt + 16))
+      (q + 12) <- node
+      (q + 16) <- (load (bt + 32))
+      (q + 20) <- 0
+      drop lazied(node, ta, te, q)
+      p = textv(ta, te)
+      (p + 40) <- 1
+      drop lazied(p, WTYPE, (WTYPE + NTYPE), q)
+      return p
     v = run(base, trima(q, e), e, node, frame, caller, (depth + 1), 0, 0)
     if (load JUMPA) != 0 do
       return 0
     if ((v != 0) && (ta < te)) && worded(ta, te) do
       drop valued(node, ta, te, v)
+    return v
+  function lazied locals 1 do
+    var node 0
+    var na 1
+    var ne 2
+    var t 3
+    var key 4
+    key = valued(node, na, ne, 0)
+    (key + 12) <- (load t)
+    (key + 16) <- (load (t + 4))
+    (key + 20) <- (load (t + 8))
+    (key + 40) <- t
+    (key + 44) <- 4096
+    return key
+  function force locals 2 do
+    var t 0
+    var base 1
+    var depth 2
+    var v 3
+    var tv 4
+    if (load (t + 20)) != 0 do
+      return load (t + 24)
+    tv = load TAKEVIS
+    TAKEVIS <-! (load (t + 16))
+    v = run(base, (load t), (load (t + 4)), (load (t + 12)), (load (t + 8)), 0, (depth + 1), 0, 0)
+    TAKEVIS <-! tv
+    if (load JUMPA) != 0 do
+      return 0
+    if v != 0 do
+      drop jot((t + 24), v)
+      drop jot((t + 20), 1)
     return v
   function textv locals 0 do
     var a 0
@@ -4174,6 +4250,8 @@ section 10 do
     var k 0
     var key 1
     key = keyat(k)
+    if ((load RUNMODE) != 0) && (((load (key + 44)) & 4096) != 0) do
+      return force((load (key + 40)), TEXT, 1)
     if (load (key + 12)) == 0 do
       return load (key + 40)
     if (load RUNMODE) == 0 do
@@ -6139,6 +6217,52 @@ section 10 do
       if tk != tb do
         return tk
     return rank(k) >= rank(best)
+  function typedplace locals 0 do
+    var v 0
+    if (!istext(v)) || ((load (v + 40)) != 1) do
+      return 0
+    return ownname(v, WTYPE, NTYPE) >= 0
+  function rawarg locals 2 do
+    var a 0
+    var e 1
+    var frame 2
+    var b 3
+    var n 4
+    a = trima(a, e)
+    e = trime(a, e)
+    n = 0
+    b = bound(a, e, frame)
+    while (b != 0) && (n < 16) do
+      a = trima((load (b + 8)), (load (b + 12)))
+      e = trime(a, (load (b + 12)))
+      when ((((e - a) >= ((load OPENL) + (load CLOSEL))) && same(a, (load OPENA), (load OPENL))) && same((e - (load CLOSEL)), (load CLOSEA), (load CLOSEL))) do
+        b = bound(a, e, (load (b + 16)))
+        else
+        b = 0
+      n = n + 1
+    TE <-! e
+    return a
+  function namedarg locals 0 do
+    var a 0
+    var e 1
+    var frame 2
+    a = rawarg(a, e, frame)
+    e = load TE
+    return paramend(a, e) < e
+  function forceplace locals 2 do
+    var p 0
+    var base 1
+    var depth 2
+    var node 3
+    var k 4
+    var v 5
+    k = ownname(p, WTYPE, NTYPE)
+    if k < 0 do
+      return 0
+    v = force((load (keyat(k) + 40)), base, depth)
+    if (v != 0) && (node != 0) do
+      drop valued(node, (load (p + 32)), (load (p + 36)), v)
+    return v
   function framewins locals 0 do
     var k 0
     var a 1

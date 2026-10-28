@@ -141,6 +141,12 @@ Compiler := class {
     return {value}\n{unreached} => return value
   }
 
+  // A program as functions, what a back end writes: Expression's reading of it, its global node's statements the first, then
+  // each of its rules' bodies, in order (a rule's body none until it is applied)
+  called := {
+    {read: Expression} => Array.new.append(read.global.statements).joined(read.global.rules.keyed.map((entry) => ((entry).kept.body.statements) ?? Array.new))
+  }
+
   // The level the language is read with: each of these
   default := folding + logic + fused + lowered + pruned
   assert Compiler.default !== None  // CO20 there is no default level

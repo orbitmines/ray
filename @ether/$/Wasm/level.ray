@@ -28,3 +28,11 @@ level read {read_location} => external read {read_location}
 level member {member_holder} {member_name} => external member member_holder member_name
 level give_member {given_holder} {given_name} {given_value} => external member given_holder given_name given_value
 level write {written_byte} => external write (((written_byte) === 0) ? 0x00 : written_byte)
+// (a program read the way this level reads, answered as Expression reads one: one of Expression, its `global` node's
+// statements, each `statement` the entry of the rule that read it (the one that makes rules first, then the given things',
+// then each rule the program defines, its body's statements kept once applied), and those rules keyed)
+level reading {reading_text} => external reading reading_text
+// (and the rules that reading defined: five numbers each, the key, where its head starts and ends, where its body starts and ends)
+level read_keys => external read_keys
+// (the text between two of those places)
+level span {span_from} {span_to} => external span span_from span_to

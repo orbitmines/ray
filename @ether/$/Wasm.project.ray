@@ -508,9 +508,9 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   // where it is (1) and its value so far (2), its statements cases of a `br_table` in a loop, the innermost first, each
   // statement where its block ends. Only Expression's four given things are left, so every program is written this way, a
   // text read at run time too (read by Expression, itself written so).
-  static none := lazily {
+  static none := {
     // (an Expression as it reads a program: its global node's statements and rules, a module (one page, nodes made from 64))
-    {read: Expression} => Wasm.expressed(read_node: read.global, pages: 1, free: 64)
+    {read: Node.Expression} => Wasm.module_of(pages: 1, free: 64, bodies: Wasm.bodies_of(held_rules: read.global.rules.keyed, statement_lists: Compiler.reduced(read, Compiler.called)))
     {program: Program} => Wasm(sections: [
       (id: 1, data: [(parameters: [i32], results: [i32])]),
       (id: 2, data: [(module: "m", name: "memory", memory: (flags: 0x03, min: program.pages, max: program.pages))]),

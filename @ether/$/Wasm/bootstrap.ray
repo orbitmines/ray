@@ -486,11 +486,13 @@ constant WSUPERPOSED 24145
 constant NSUPERPOSED 10
 constant WLISTING 24156
 constant NLISTING 7
-constant WPARENS2 24164
+constant WWRITE 24164
+constant NWRITE 5
+constant WPARENS2 24170
 constant NPARENS2 2
-constant WPAREN1 24167
+constant WPAREN1 24173
 constant NPAREN1 1
-constant WEQEQ 24169
+constant WEQEQ 24175
 constant NEQEQ 2
 log => external leb 0
 ev => external leb 1
@@ -661,7 +663,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 183
+  external emit 184
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -806,46 +808,47 @@ section 3 do
   declare test 143 takes 1
   declare styled 144 takes 7
   declare wordish 145 takes 2
-  declare charkind 146 takes 1
-  declare skippair 147 takes 2
-  declare worded 148 takes 2
-  declare leftreads 149 takes 7
-  declare splitat 150 takes 7
-  declare tightleft 151 takes 2
-  declare opof 152 takes 4
-  declare prec 153 takes 1
-  declare numop 154 takes 7
-  declare onread 155 takes 3
-  declare merged 156 takes 3
-  declare readon 157 takes 5
-  declare onvalue 158 takes 7
-  declare member 159 takes 2
-  declare kw 160 takes 4
-  declare kwend 161 takes 4
-  declare number 162 takes 3
-  declare emitb 163 takes 1
-  declare emitleb 164 takes 1
-  declare emitsleb 165 takes 1
-  declare finish 166 takes 0
-  declare alloc 167 takes 1
-  declare could 168 takes 3
-  declare retry 169 takes 3
-  declare typenode 170 takes 3
-  declare reads 171 takes 3
-  declare reads_ 172 takes 3
-  declare append 173 takes 2
-  declare method 174 takes 8
-  declare method_ 175 takes 8
-  declare chain 176 takes 6
-  declare unread 177 takes 1
-  declare eachunread 178 takes 0
-  declare stock 179 takes 2
-  declare textpart 180 takes 4
-  declare holepart 181 takes 4
-  declare spacepart 182 takes 2
-  declare language 183 takes 0
-  declare levelread 184 takes 1
-  declare included 185 takes 1
+  declare endsep 146 takes 1
+  declare charkind 147 takes 1
+  declare skippair 148 takes 2
+  declare worded 149 takes 2
+  declare leftreads 150 takes 7
+  declare splitat 151 takes 7
+  declare tightleft 152 takes 2
+  declare opof 153 takes 4
+  declare prec 154 takes 1
+  declare numop 155 takes 7
+  declare onread 156 takes 3
+  declare merged 157 takes 3
+  declare readon 158 takes 5
+  declare onvalue 159 takes 7
+  declare member 160 takes 2
+  declare kw 161 takes 4
+  declare kwend 162 takes 4
+  declare number 163 takes 3
+  declare emitb 164 takes 1
+  declare emitleb 165 takes 1
+  declare emitsleb 166 takes 1
+  declare finish 167 takes 0
+  declare alloc 168 takes 1
+  declare could 169 takes 3
+  declare retry 170 takes 3
+  declare typenode 171 takes 3
+  declare reads 172 takes 3
+  declare reads_ 173 takes 3
+  declare append 174 takes 2
+  declare method 175 takes 8
+  declare method_ 176 takes 8
+  declare chain 177 takes 6
+  declare unread 178 takes 1
+  declare eachunread 179 takes 0
+  declare stock 180 takes 2
+  declare textpart 181 takes 4
+  declare holepart 182 takes 4
+  declare spacepart 183 takes 2
+  declare language 184 takes 0
+  declare levelread 185 takes 1
+  declare included 186 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -856,7 +859,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 183
+  external emit 184
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1095,7 +1098,7 @@ section 10 do
         r = q + 1
         while (r < e) && ((load8 r) == 32) do
           r = r + 1
-        if (r >= e) || (((load8 r) == 10) || ((r - (q + 1)) <= ind)) do
+        if (r >= e) || (((load8 r) == 10) || (((r - (q + 1)) <= ind) && (!endsep(q)))) do
           SP <- sp
           return q
       q = (((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)
@@ -1212,7 +1215,7 @@ section 10 do
           r = q + 1
           while (r < e) && ((load8 r) == 32) do
             r = r + 1
-          if (r - (q + 1)) <= ind do
+          if ((r - (q + 1)) <= ind) && (!endsep(q)) do
             return 0
         q = skipto(((((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)), e, f, 256, tight)
       if ((load f) == 0) && (gv || (e != a)) do
@@ -1252,7 +1255,7 @@ section 10 do
         r = q + 1
         while (r < e) && ((load8 r) == 32) do
           r = r + 1
-        if (r - (q + 1)) <= ind do
+        if ((r - (q + 1)) <= ind) && (!endsep(q)) do
           return 0
       q = skipto(((((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)), e, f, nb, tight)
     return 0
@@ -3666,6 +3669,19 @@ section 10 do
       return run(base, (load g), (load (g + 4)), node, frame, caller, (depth + 1), 0, 0)
     if kw(a, e, WTYPED_NAME, NTYPED_NAME) do
       return nothing()
+    if kw(a, e, WWRITE, NWRITE) do
+      v = run(base, trima((a + NWRITE), e), e, node, frame, caller, (depth + 1), 0, 0)
+      n = countof(v)
+      if n >= 0 do
+        ((load LIMIT) + (load OUTLEN)) <-8 n
+        OUTLEN <- ((load OUTLEN) + 1)
+      if istext(v) do
+        j = load (v + 32)
+        while j < (load (v + 36)) do
+          ((load LIMIT) + (load OUTLEN)) <-8 (load8 j)
+          OUTLEN <- ((load OUTLEN) + 1)
+          j = j + 1
+      return v
     if kw(a, e, WUNSET, NUNSET) do
       return unsetv(base, trima((a + NUNSET), e), e, node, frame, caller, depth)
     if kw(a, e, WSTATIC, NSTATIC) do
@@ -4408,6 +4424,24 @@ section 10 do
         return 0
       a = a + 1
     return 1
+  function endsep locals 3 do
+    var q 0
+    var ls 1
+    var j 2
+    var last 3
+    ls = q
+    while (ls > TEXT) && ((load8 (ls - 1)) != 10) do
+      ls = ls - 1
+    last = 0
+    j = ls
+    while j < q do
+      when ((load8 j) == 47) && (((load8 (j + 1)) == 47) && ((j == ls) || ((load8 (j - 1)) == 32))) do
+        j = q
+        else
+        if (load8 j) > 32 do
+          last = load8 j
+        j = j + 1
+    return (last != 0) && ((charkind(last) == 3) && (!pairbyte(last)))
   function charkind locals 0 do
     var c 0
     if c <= 32 do
@@ -5468,7 +5502,7 @@ section 11 do
   external emit 184
   external emit 1
   external emit 11
-  external emit 235
+  external emit 241
   external emit 4
   external emit 101
   external emit 120
@@ -6081,6 +6115,12 @@ section 11 do
   external emit 105
   external emit 110
   external emit 103
+  external emit 32
+  external emit 119
+  external emit 114
+  external emit 105
+  external emit 116
+  external emit 101
   external emit 32
   external emit 40
   external emit 40

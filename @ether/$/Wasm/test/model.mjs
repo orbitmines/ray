@@ -15,12 +15,16 @@ export class Engine {
       if (a + o.length <= e && this.same(a, o)) { open[j]++; open.total++; if (o.length === c.length && this.same(a, c)) open.quote = j; return a + o.length; } }
     return a + 1;
   }
+  // (a line ending, before any comment, with a separator that is no pair's: the statement goes on past its newline)
+  endsep(q) { let ls = q; while (ls > 0 && this.t[ls - 1] !== 10) ls--; let last = 0;
+    for (let j = ls; j < q; j++) { if (this.t[j] === 47 && this.t[j + 1] === 47 && (j === ls || this.t[j - 1] === 32)) break; if (this.t[j] > 32) last = this.t[j]; }
+    return last !== 0 && [40, 41, 123, 125, 91, 93, 34, 39, 96, 44, 59].includes(last) && !this.pairs.some(([o, c]) => (o.length === 1 && o[0] === last) || (c.length === 1 && c[0] === last)); }
   frame() { const f = new Array(this.pairs.length).fill(0); f.total = 0; f.quote = -1; return f; }
   indent(base, a) { let q = a; while (q > base && this.t[q - 1] === 32) q--; return a - q; }
   extent(base, a, e) {
     const ind = this.indent(base, a), f = this.frame(); let q = a;
     while (q < e) {
-      if (f.total === 0 && this.t[q] === 10) { let r = q + 1; while (r < e && this.t[r] === 32) r++; if (r >= e || this.t[r] === 10 || r - q - 1 <= ind) break; }
+      if (f.total === 0 && this.t[q] === 10) { let r = q + 1; while (r < e && this.t[r] === 32) r++; if (r >= e || this.t[r] === 10 || (r - q - 1 <= ind && !this.endsep(q))) break; }
       q = this.step(q, f, e);
     }
     return q;
@@ -48,7 +52,7 @@ export class Engine {
       }
       if (q >= e) return false;
       if (f.total === 0 && tight && white(this.t[q])) return false;
-      if (!paired && f.total === 0 && this.t[q] === 10) { let r = q + 1; while (r < e && this.t[r] === 32) r++; if (r - q - 1 <= ind) return false; }
+      if (!paired && f.total === 0 && this.t[q] === 10) { let r = q + 1; while (r < e && this.t[r] === 32) r++; if (r - q - 1 <= ind && !this.endsep(q)) return false; }
       q = this.step(q, f, e);
     }
   }

@@ -692,7 +692,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 222
+  external emit 224
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -905,17 +905,19 @@ section 3 do
   declare rawarg 211 takes 3
   declare namedarg 212 takes 3
   declare forceplace 213 takes 4
-  declare framewins 214 takes 4
-  declare valid 215 takes 1
-  declare istrue 216 takes 1
-  declare some 217 takes 1
-  declare classv 218 takes 1
-  declare spanchar 219 takes 2
-  declare admitsv 220 takes 2
-  declare admitt 221 takes 4
-  declare admstep 222 takes 7
-  declare admsteps 223 takes 5
-  declare readablet 224 takes 2
+  declare rawbind 214 takes 3
+  declare eachpart 215 takes 11
+  declare framewins 216 takes 4
+  declare valid 217 takes 1
+  declare istrue 218 takes 1
+  declare some 219 takes 1
+  declare classv 220 takes 1
+  declare spanchar 221 takes 2
+  declare admitsv 222 takes 2
+  declare admitt 223 takes 4
+  declare admstep 224 takes 7
+  declare admsteps 225 takes 5
+  declare readablet 226 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -926,7 +928,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 222
+  external emit 224
   external emit 1
   function main locals 1 do
     var scope 0
@@ -2847,6 +2849,9 @@ section 10 do
       q = q + 1
     if n < 2 do
       return 0 - 2
+    v = eachpart(base, key, cap, node, frame, depth, rn, caller, wa, we, n)
+    if v != (0 - 2) do
+      return v
     v = holeval(base, (load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), rn, frame, depth)
     if (load JUMPA) != 0 do
       return 0
@@ -6263,6 +6268,95 @@ section 10 do
     if (v != 0) && (node != 0) do
       drop valued(node, (load (p + 32)), (load (p + 36)), v)
     return v
+  function rawbind locals 3 do
+    var a 0
+    var e 1
+    var frame 2
+    var b 3
+    var c 4
+    var n 5
+    a = trima(a, e)
+    e = trime(a, e)
+    c = 0
+    n = 0
+    b = bound(a, e, frame)
+    while (b != 0) && (n < 16) do
+      c = b
+      a = trima((load (b + 8)), (load (b + 12)))
+      e = trime(a, (load (b + 12)))
+      when ((((e - a) >= ((load OPENL) + (load CLOSEL))) && same(a, (load OPENA), (load OPENL))) && same((e - (load CLOSEL)), (load CLOSEA), (load CLOSEL))) do
+        b = bound(a, e, (load (b + 16)))
+        else
+        b = 0
+      n = n + 1
+    TA <-! a
+    TE <-! e
+    return c
+  function eachpart locals 12 do
+    var base 0
+    var key 1
+    var cap 2
+    var node 3
+    var frame 4
+    var depth 5
+    var rn 6
+    var caller 7
+    var wa 8
+    var we 9
+    var n 10
+    var b 11
+    var ta 12
+    var te 13
+    var m 14
+    var q 15
+    var ef 16
+    var en 17
+    var from 18
+    var x 19
+    var y 20
+    var pa 21
+    var v 22
+    b = rawbind((load (cap + ((load (key + 4)) - 1) * 8)), (load (cap + ((((load (key + 4)) - 1) * 8) + 4))), frame)
+    ta = load TA
+    te = load TE
+    if ta >= te do
+      return 0 - 2
+    m = 1
+    q = ta
+    while q < te do
+      when (charkind(load8 q) == 3) && pairbyte(load8 q) do
+        q = skippair(q, te)
+        else
+        if (load8 q) == 44 do
+          m = m + 1
+        if (load8 q) == 10 do
+          return 0 - 2
+        q = q + 1
+    if m != n do
+      return 0 - 2
+    ef = (b != 0) ? (load (b + 16)) : frame
+    en = (b != 0) ? holenode(b, rn) : rn
+    q = wa
+    from = wa
+    pa = ta
+    while q <= we do
+      if (q == we) || ((load8 q) == 44) do
+        x = trima(from, q)
+        y = paramend(x, trime(x, q))
+        m = pa
+        while (m < te) && ((load8 m) != 44) do
+          m = ((charkind(load8 m) == 3) && pairbyte(load8 m)) ? skippair(m, te) : (m + 1)
+        v = run(base, trima(pa, m), trime(trima(pa, m), m), en, ef, caller, (depth + 1), 0, 0)
+        if (load JUMPA) != 0 do
+          return 0
+        when typedplace(v) && (paramend(trima(pa, m), m) < m) do
+          drop forceplace(v, base, depth, node)
+          else
+          drop valued(node, x, y, ((v != 0) ? v : nothing()))
+        pa = (m < te) ? (m + 1) : te
+        from = q + 1
+      q = q + 1
+    return caller
   function framewins locals 0 do
     var k 0
     var a 1

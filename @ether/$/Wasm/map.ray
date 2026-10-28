@@ -232,6 +232,9 @@ external nothing None
 // (accelerated: what a definition answers given its value, its head when it defined one name (`x := v`); the language's
 // rule for a list of places)
 external given `{given} given {value}`
+// (accelerated: a name given a value, `x := v`, defined where it is read, as `{name} => value` defines it (how it is shown
+// and styled is the language's, for those who read it; running, the name and its value))
+external assigns `{name ^variable} := {value}`
 // (accelerated: a list of characters as a type, `Decimal.String` (`"0" | … | "9"`, each one character): what reads as one,
 // the kernel reads (each character one of them), the same as its rules)
 external glyphs `{element}[]`

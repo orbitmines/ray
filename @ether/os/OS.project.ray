@@ -26,6 +26,8 @@ OS.Ether &+= {
   clipboard => (@me/device as Storage)["clipboard"]
   // a notification: kept for whoever plays the device; its display shows the latest
   shown (notification) => ((@me/device as Storage)["notifications"] = notification) -- notification
+  // a byte a program hands out (the level's `write`, what a build writes): kept in order in the storage for whoever ran it
+  output (byte: Byte) => ((@me/device as Storage)["instance/output"] = byte) -- byte
   // a file executed: read as the Ray program it is, run with the arguments
   executed (location: Location, args) => (location as String as Program)(args)
   // sockets: TCP, UDP and TLS in Ray over the network device's frames (Ethernet, IP; RFC 9293, RFC 768, RFC 8446)

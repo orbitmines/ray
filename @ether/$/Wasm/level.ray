@@ -27,3 +27,4 @@ level include {included_location} => external include {included_location}
 level read {read_location} => external read {read_location}
 level member {member_holder} {member_name} => external member member_holder member_name
 level give_member {given_holder} {given_name} {given_value} => external member given_holder given_name given_value
+level write {written_byte} => external write (((written_byte) === 0) ? 0x00 : written_byte)

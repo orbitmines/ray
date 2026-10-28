@@ -100,7 +100,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   // and WA3 goes back to its form noted at the end of the file)
   static Name := class (size: U32 = text.count, text: String) => {
     // (the codes of its characters, in order) TODO(explicit): above 127, their UTF-8 bytes
-    static codes (t) => t.empty ? [] : [t[0]].joined(Wasm.Name.codes(t.rest))
+    static codes (t) => t.empty ? [] : [t.first].joined(Wasm.Name.codes(t.rest))
     bytes => {
       name_text := .text
       Wasm.sized(Wasm.Name.codes(name_text))

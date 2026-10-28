@@ -663,7 +663,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 184
+  external emit 185
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -788,67 +788,68 @@ section 3 do
   declare textof 123 takes 2
   declare wordend 124 takes 2
   declare mapnative 125 takes 7
-  declare linkcount 126 takes 1
-  declare keyvalue 127 takes 1
-  declare unescape 128 takes 1
-  declare numeralof 129 takes 2
-  declare own 130 takes 3
-  declare callsany 131 takes 1
-  declare functiontyped 132 takes 2
-  declare holed 133 takes 2
-  declare headprefix 134 takes 9
-  declare membertarget 135 takes 7
-  declare said 136 takes 1
-  declare jumped 137 takes 10
-  declare valuejump 138 takes 8
-  declare islabel 139 takes 5
-  declare tests 140 takes 0
-  declare region 141 takes 1
-  declare zero 142 takes 2
-  declare test 143 takes 1
-  declare styled 144 takes 7
-  declare wordish 145 takes 2
-  declare endsep 146 takes 1
-  declare charkind 147 takes 1
-  declare skippair 148 takes 2
-  declare worded 149 takes 2
-  declare leftreads 150 takes 7
-  declare splitat 151 takes 7
-  declare tightleft 152 takes 2
-  declare opof 153 takes 4
-  declare prec 154 takes 1
-  declare numop 155 takes 7
-  declare onread 156 takes 3
-  declare merged 157 takes 3
-  declare readon 158 takes 5
-  declare onvalue 159 takes 7
-  declare member 160 takes 2
-  declare kw 161 takes 4
-  declare kwend 162 takes 4
-  declare number 163 takes 3
-  declare emitb 164 takes 1
-  declare emitleb 165 takes 1
-  declare emitsleb 166 takes 1
-  declare finish 167 takes 0
-  declare alloc 168 takes 1
-  declare could 169 takes 3
-  declare retry 170 takes 3
-  declare typenode 171 takes 3
-  declare reads 172 takes 3
-  declare reads_ 173 takes 3
-  declare append 174 takes 2
-  declare method 175 takes 8
-  declare method_ 176 takes 8
-  declare chain 177 takes 6
-  declare unread 178 takes 1
-  declare eachunread 179 takes 0
-  declare stock 180 takes 2
-  declare textpart 181 takes 4
-  declare holepart 182 takes 4
-  declare spacepart 183 takes 2
-  declare language 184 takes 0
-  declare levelread 185 takes 1
-  declare included 186 takes 1
+  declare callablev 126 takes 1
+  declare linkcount 127 takes 1
+  declare keyvalue 128 takes 1
+  declare unescape 129 takes 1
+  declare numeralof 130 takes 2
+  declare own 131 takes 3
+  declare callsany 132 takes 1
+  declare functiontyped 133 takes 2
+  declare holed 134 takes 2
+  declare headprefix 135 takes 9
+  declare membertarget 136 takes 7
+  declare said 137 takes 1
+  declare jumped 138 takes 10
+  declare valuejump 139 takes 8
+  declare islabel 140 takes 5
+  declare tests 141 takes 0
+  declare region 142 takes 1
+  declare zero 143 takes 2
+  declare test 144 takes 1
+  declare styled 145 takes 7
+  declare wordish 146 takes 2
+  declare endsep 147 takes 1
+  declare charkind 148 takes 1
+  declare skippair 149 takes 2
+  declare worded 150 takes 2
+  declare leftreads 151 takes 7
+  declare splitat 152 takes 7
+  declare tightleft 153 takes 2
+  declare opof 154 takes 4
+  declare prec 155 takes 1
+  declare numop 156 takes 7
+  declare onread 157 takes 3
+  declare merged 158 takes 3
+  declare readon 159 takes 5
+  declare onvalue 160 takes 7
+  declare member 161 takes 2
+  declare kw 162 takes 4
+  declare kwend 163 takes 4
+  declare number 164 takes 3
+  declare emitb 165 takes 1
+  declare emitleb 166 takes 1
+  declare emitsleb 167 takes 1
+  declare finish 168 takes 0
+  declare alloc 169 takes 1
+  declare could 170 takes 3
+  declare retry 171 takes 3
+  declare typenode 172 takes 3
+  declare reads 173 takes 3
+  declare reads_ 174 takes 3
+  declare append 175 takes 2
+  declare method 176 takes 8
+  declare method_ 177 takes 8
+  declare chain 178 takes 6
+  declare unread 179 takes 1
+  declare eachunread 180 takes 0
+  declare stock 181 takes 2
+  declare textpart 182 takes 4
+  declare holepart 183 takes 4
+  declare spacepart 184 takes 2
+  declare language 185 takes 0
+  declare levelread 186 takes 1
+  declare included 187 takes 1
 section 7 do
   external emit 1
   external emit 4
@@ -859,7 +860,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 184
+  external emit 185
   external emit 1
   function main locals 1 do
     var scope 0
@@ -3880,6 +3881,11 @@ section 10 do
       return caller
     if kw(a, e, WADMITS, NADMITS) do
       return nothing()
+    if kw(a, e, WREADABLE, NREADABLE) do
+      return nothing()
+    if kw(a, e, WCALLABLE, NCALLABLE) do
+      v = run(base, trima((a + NCALLABLE), e), e, node, frame, caller, (depth + 1), 0, 0)
+      return boolv(callablev(v))
     if kw(a, e, WGIVEN, NGIVEN) do
       drop flagrule((a + NGIVEN), e, 64)
       return caller
@@ -3889,6 +3895,26 @@ section 10 do
     if (kw(a, e, WGIVEN, NGIVEN) || kw(a, e, WGLYPHS, NGLYPHS)) || ((kw(a, e, WTAKING, NTAKING) || kw(a, e, WCUTS, NCUTS)) || ((kw(a, e, WARRAYED, NARRAYED) || kwend(a, e, WKEPT, NKEPT)) || (kw(a, e, WSUPERPOSING, NSUPERPOSING) || kw(a, e, WINT32, NINT32)))) do
       return caller
     return 0 - 2
+  function callablev locals 4 do
+    var v 0
+    var keys 1
+    var j 2
+    var key 3
+    var p 4
+    if v == 0 do
+      return 0
+    keys = load (v + 8)
+    if keys == 0 do
+      return 0
+    j = 0
+    while j < (load keys) do
+      key = keyat(arrat(keys, j))
+      if thisled(key) && ((load (key + 4)) > 1) do
+        p = part(key, 1)
+        if ((load p) == 0) && ((load8 (load (p + 4))) == 40) do
+          return 1
+      j = j + 1
+    return 0
   function linkcount locals 3 do
     var x 0
     var at 1

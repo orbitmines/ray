@@ -358,6 +358,8 @@ constant STRINGV 384
 constant ESC 396
 constant FRAMESLOT 400
 constant FREEF 1536
+constant CAPCUR 404
+constant CAPBASE 408
 constant WMEMBER 23659
 constant NMEMBER 6
 constant WMEMBERS 23666
@@ -689,7 +691,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 204
+  external emit 205
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -768,133 +770,134 @@ section 3 do
   declare named 77 takes 3
   declare bound 78 takes 3
   declare freeframe 79 takes 2
-  declare newframe 80 takes 2
-  declare bind 81 takes 7
-  declare endshole 82 takes 1
-  declare restline 83 takes 2
-  declare holenode 84 takes 2
-  declare headhole 85 takes 4
-  declare flagrule 86 takes 3
-  declare holeval 87 takes 6
-  declare holetext 88 takes 3
-  declare accelerated 89 takes 8
-  declare numbered 90 takes 1
-  declare numcount 91 takes 1
-  declare paramend 92 takes 2
-  declare tookeach 93 takes 10
-  declare codeof 94 takes 2
-  declare codeend 95 takes 2
-  declare excluded 96 takes 3
-  declare ownup 97 takes 3
-  declare typedhead 98 takes 2
-  declare doubled 99 takes 2
-  declare takeof 100 takes 1
-  declare hasbind 101 takes 3
-  declare newnode 102 takes 1
-  declare pend 103 takes 8
-  declare run 104 takes 9
-  declare statements 105 takes 9
-  declare apply 106 takes 11
-  declare apply_ 107 takes 11
-  declare givenop 108 takes 7
-  declare givenop_ 109 takes 7
-  declare amp 110 takes 1
-  declare valued 111 takes 4
-  declare unsetv 112 takes 7
-  declare textv 113 takes 2
-  declare splicehead 114 takes 3
-  declare membered 115 takes 1
-  declare groups 116 takes 3
-  declare wordv 117 takes 2
-  declare boolv 118 takes 1
-  declare istext 119 takes 1
-  declare natives 120 takes 7
-  declare nothing 121 takes 0
-  declare newcount 122 takes 1
-  declare newchar 123 takes 1
-  declare countof 124 takes 1
-  declare textof 125 takes 2
-  declare wordend 126 takes 2
-  declare mapnative 127 takes 7
-  declare callablev 128 takes 1
-  declare linkcount 129 takes 1
-  declare keyvalue 130 takes 1
-  declare unescape 131 takes 1
-  declare numeralof 132 takes 2
-  declare own 133 takes 3
-  declare callsany 134 takes 1
-  declare functiontyped 135 takes 2
-  declare holed 136 takes 2
-  declare headprefix 137 takes 9
-  declare membertarget 138 takes 7
-  declare said 139 takes 1
-  declare jumped 140 takes 10
-  declare valuejump 141 takes 8
-  declare islabel 142 takes 5
-  declare tests 143 takes 0
-  declare region 144 takes 1
-  declare zero 145 takes 2
-  declare test 146 takes 1
-  declare styled 147 takes 7
-  declare wordish 148 takes 2
-  declare endsep 149 takes 1
-  declare charkind 150 takes 1
-  declare skippair 151 takes 2
-  declare worded 152 takes 2
-  declare leftreads 153 takes 7
-  declare splitat 154 takes 7
-  declare tightleft 155 takes 2
-  declare opof 156 takes 4
-  declare prec 157 takes 1
-  declare numop 158 takes 7
-  declare onread 159 takes 3
-  declare merged 160 takes 3
-  declare readon 161 takes 5
-  declare membercode 162 takes 1
-  declare onvalue 163 takes 7
-  declare member 164 takes 2
-  declare kw 165 takes 4
-  declare kwend 166 takes 4
-  declare number 167 takes 3
-  declare emitb 168 takes 1
-  declare emitleb 169 takes 1
-  declare emitsleb 170 takes 1
-  declare finish 171 takes 0
-  declare alloc 172 takes 1
-  declare could 173 takes 3
-  declare retry 174 takes 3
-  declare typenode 175 takes 3
-  declare reads 176 takes 3
-  declare reads_ 177 takes 3
-  declare append 178 takes 2
-  declare method 179 takes 8
-  declare method_ 180 takes 8
-  declare chain 181 takes 6
-  declare unread 182 takes 1
-  declare eachunread 183 takes 0
-  declare stock 184 takes 2
-  declare textpart 185 takes 4
-  declare holepart 186 takes 4
-  declare spacepart 187 takes 2
-  declare language 188 takes 0
-  declare levelread 189 takes 1
-  declare included 190 takes 1
-  declare heldm 191 takes 3
-  declare evalv 192 takes 7
-  declare ownname 193 takes 3
-  declare heldown 194 takes 3
-  declare codespan 195 takes 3
-  declare holename 196 takes 4
-  declare valid 197 takes 1
-  declare istrue 198 takes 1
-  declare some 199 takes 1
-  declare classv 200 takes 1
-  declare spanchar 201 takes 2
-  declare admitsv 202 takes 2
-  declare admitt 203 takes 4
-  declare admstep 204 takes 7
-  declare admsteps 205 takes 5
-  declare readablet 206 takes 2
+  declare ringalloc 80 takes 1
+  declare newframe 81 takes 2
+  declare bind 82 takes 7
+  declare endshole 83 takes 1
+  declare restline 84 takes 2
+  declare holenode 85 takes 2
+  declare headhole 86 takes 4
+  declare flagrule 87 takes 3
+  declare holeval 88 takes 6
+  declare holetext 89 takes 3
+  declare accelerated 90 takes 8
+  declare numbered 91 takes 1
+  declare numcount 92 takes 1
+  declare paramend 93 takes 2
+  declare tookeach 94 takes 10
+  declare codeof 95 takes 2
+  declare codeend 96 takes 2
+  declare excluded 97 takes 3
+  declare ownup 98 takes 3
+  declare typedhead 99 takes 2
+  declare doubled 100 takes 2
+  declare takeof 101 takes 1
+  declare hasbind 102 takes 3
+  declare newnode 103 takes 1
+  declare pend 104 takes 8
+  declare run 105 takes 9
+  declare statements 106 takes 9
+  declare apply 107 takes 11
+  declare apply_ 108 takes 11
+  declare givenop 109 takes 7
+  declare givenop_ 110 takes 7
+  declare amp 111 takes 1
+  declare valued 112 takes 4
+  declare unsetv 113 takes 7
+  declare textv 114 takes 2
+  declare splicehead 115 takes 3
+  declare membered 116 takes 1
+  declare groups 117 takes 3
+  declare wordv 118 takes 2
+  declare boolv 119 takes 1
+  declare istext 120 takes 1
+  declare natives 121 takes 7
+  declare nothing 122 takes 0
+  declare newcount 123 takes 1
+  declare newchar 124 takes 1
+  declare countof 125 takes 1
+  declare textof 126 takes 2
+  declare wordend 127 takes 2
+  declare mapnative 128 takes 7
+  declare callablev 129 takes 1
+  declare linkcount 130 takes 1
+  declare keyvalue 131 takes 1
+  declare unescape 132 takes 1
+  declare numeralof 133 takes 2
+  declare own 134 takes 3
+  declare callsany 135 takes 1
+  declare functiontyped 136 takes 2
+  declare holed 137 takes 2
+  declare headprefix 138 takes 9
+  declare membertarget 139 takes 7
+  declare said 140 takes 1
+  declare jumped 141 takes 10
+  declare valuejump 142 takes 8
+  declare islabel 143 takes 5
+  declare tests 144 takes 0
+  declare region 145 takes 1
+  declare zero 146 takes 2
+  declare test 147 takes 1
+  declare styled 148 takes 7
+  declare wordish 149 takes 2
+  declare endsep 150 takes 1
+  declare charkind 151 takes 1
+  declare skippair 152 takes 2
+  declare worded 153 takes 2
+  declare leftreads 154 takes 7
+  declare splitat 155 takes 7
+  declare tightleft 156 takes 2
+  declare opof 157 takes 4
+  declare prec 158 takes 1
+  declare numop 159 takes 7
+  declare onread 160 takes 3
+  declare merged 161 takes 3
+  declare readon 162 takes 5
+  declare membercode 163 takes 1
+  declare onvalue 164 takes 7
+  declare member 165 takes 2
+  declare kw 166 takes 4
+  declare kwend 167 takes 4
+  declare number 168 takes 3
+  declare emitb 169 takes 1
+  declare emitleb 170 takes 1
+  declare emitsleb 171 takes 1
+  declare finish 172 takes 0
+  declare alloc 173 takes 1
+  declare could 174 takes 3
+  declare retry 175 takes 3
+  declare typenode 176 takes 3
+  declare reads 177 takes 3
+  declare reads_ 178 takes 3
+  declare append 179 takes 2
+  declare method 180 takes 8
+  declare method_ 181 takes 8
+  declare chain 182 takes 6
+  declare unread 183 takes 1
+  declare eachunread 184 takes 0
+  declare stock 185 takes 2
+  declare textpart 186 takes 4
+  declare holepart 187 takes 4
+  declare spacepart 188 takes 2
+  declare language 189 takes 0
+  declare levelread 190 takes 1
+  declare included 191 takes 1
+  declare heldm 192 takes 3
+  declare evalv 193 takes 7
+  declare ownname 194 takes 3
+  declare heldown 195 takes 3
+  declare codespan 196 takes 3
+  declare holename 197 takes 4
+  declare valid 198 takes 1
+  declare istrue 199 takes 1
+  declare some 200 takes 1
+  declare classv 201 takes 1
+  declare spanchar 202 takes 2
+  declare admitsv 203 takes 2
+  declare admitt 204 takes 4
+  declare admstep 205 takes 7
+  declare admsteps 206 takes 5
+  declare readablet 207 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -905,7 +908,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 204
+  external emit 205
   external emit 1
   function main locals 1 do
     var scope 0
@@ -926,6 +929,8 @@ section 10 do
     STAMPS <- 0
     TSTABLE <- 2147483647
     if (load RUNMODE) != 0 do
+      CAPBASE <-! alloc(16777216)
+      CAPCUR <-! (load CAPBASE)
       CACHE <- alloc(65536 * 176)
       COULDC <- alloc(262144 * 16)
     INCLUDES <- arrnew()
@@ -1670,7 +1675,7 @@ section 10 do
         best = seedpick(node, a, end, x0, x1, trial, bbuf, ind)
         if best >= 0 do
           key = keyat(best)
-          bcap = alloc(((load (key + 4)) * 8) + 8)
+          bcap = ringalloc(((load (key + 4)) * 8) + 8)
           drop copy(bcap, bbuf, ((load (key + 4)) * 8))
           REND <- end
           RCAP <- bcap
@@ -1695,7 +1700,7 @@ section 10 do
           j = j + 1
         if best >= 0 do
           key = keyat(best)
-          bcap = alloc(((load (key + 4)) * 8) + 8)
+          bcap = ringalloc(((load (key + 4)) * 8) + 8)
           drop copy(bcap, bbuf, ((load (key + 4)) * 8))
           REND <- end
           RCAP <- bcap
@@ -2143,7 +2148,7 @@ section 10 do
       return 0 - 2
     REND <- (load (c + 28))
     if (load (c + 24)) >= 0 do
-      RCAP <- alloc(128)
+      RCAP <- ringalloc(128)
       drop copy((load RCAP), (c + 48), 128)
     return load (c + 24)
   function keep locals 2 do
@@ -2493,6 +2498,16 @@ section 10 do
     f <-! (load (FREEF + (n * 4)))
     (FREEF + (n * 4)) <-! f
     return 0
+  function ringalloc locals 1 do
+    var n 0
+    var r 1
+    if (load CAPBASE) == 0 do
+      return alloc(n)
+    r = load CAPCUR
+    if ((r + n) + 8) > ((load CAPBASE) + 16777216) do
+      r = load CAPBASE
+    CAPCUR <-! (r + ((n + 7) & (0 - 8)))
+    return r
   function newframe locals 1 do
     var parent 0
     var n 1
@@ -3056,7 +3071,7 @@ section 10 do
       if ((depth == 0) && ((load TESTING) == 0)) && ((load RUNMODE) != 0) do
         drop event(90, rel(a), (load HEAP), (load STOP))
         STOP <- 0
-        BUDGET <- 4000000
+        BUDGET <- 1000000000
         BUDGETHEAP <- (load HEAP)
       if (load STOP) != 0 do
         return value
@@ -3278,7 +3293,7 @@ section 10 do
       drop event(100, node, frame, (load (key + 24)))
     if (load RUNMODE) != 0 do
       BUDGET <- ((load BUDGET) - 1)
-      if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || ((((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728)) || (((load TESTING) == 0) && (((load HEAP) - (load BUDGETHEAP)) > 503316480)))) do
+      if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || ((((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728)) || (((load TESTING) == 0) && (((load HEAP) - (load BUDGETHEAP)) > 1610612736)))) do
         if (load STOP) == 0 do
           drop said(a)
         STOP <- 1
@@ -4949,7 +4964,7 @@ section 10 do
           if ((lead && (((load RUNMODE) != 0) && ((load (view + 4)) == 1))) || possible(view, p, e)) && match(view, 0, p, e, (trial + 8), 0) do
             if (best < 0) || (rank(k) >= rank(best)) do
               best = k
-              bcap = alloc(((load (key + 4)) * 8) + 8)
+              bcap = ringalloc(((load (key + 4)) * 8) + 8)
               when lead do
                 bcap <- (0 - 1)
                 (bcap + 4) <- (0 - 1)
@@ -5526,7 +5541,7 @@ section 10 do
               if match(view, 0, q, e, (trial + 8), 0) do
                 if (best < 0) || (rank(k) >= rank(best)) do
                   best = k
-                  bcap = alloc(((load (key + 4)) * 8) + 8)
+                  bcap = ringalloc(((load (key + 4)) * 8) + 8)
                   when lead do
                     bcap <- (0 - 1)
                     (bcap + 4) <- (0 - 1)

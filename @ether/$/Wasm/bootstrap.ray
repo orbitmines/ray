@@ -507,11 +507,13 @@ constant WSTRING 24234
 constant NSTRING 6
 constant WNODE 24241
 constant NNODE 4
-constant WPARENS2 24246
+constant WTAIL 24246
+constant NTAIL 4
+constant WPARENS2 24251
 constant NPARENS2 2
-constant WPAREN1 24249
+constant WPAREN1 24254
 constant NPAREN1 1
-constant WEQEQ 24251
+constant WEQEQ 24256
 constant NEQEQ 2
 log => external leb 0
 ev => external leb 1
@@ -682,7 +684,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 197
+  external emit 201
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -871,16 +873,20 @@ section 3 do
   declare included 187 takes 1
   declare heldm 188 takes 3
   declare evalv 189 takes 7
-  declare valid 190 takes 1
-  declare istrue 191 takes 1
-  declare some 192 takes 1
-  declare classv 193 takes 1
-  declare spanchar 194 takes 2
-  declare admitsv 195 takes 2
-  declare admitt 196 takes 4
-  declare admstep 197 takes 7
-  declare admsteps 198 takes 5
-  declare readablet 199 takes 2
+  declare ownname 190 takes 3
+  declare heldown 191 takes 3
+  declare codespan 192 takes 3
+  declare holename 193 takes 4
+  declare valid 194 takes 1
+  declare istrue 195 takes 1
+  declare some 196 takes 1
+  declare classv 197 takes 1
+  declare spanchar 198 takes 2
+  declare admitsv 199 takes 2
+  declare admitt 200 takes 4
+  declare admstep 201 takes 7
+  declare admsteps 202 takes 5
+  declare readablet 203 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -891,7 +897,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 197
+  external emit 201
   external emit 1
   function main locals 1 do
     var scope 0
@@ -3698,9 +3704,29 @@ section 10 do
       n = groups((a + (kw(a, e, WNAMES, NNAMES) ? NNAMES : NNAMED_LIKE)), e, g)
       if n < 1 do
         return nothing()
-      return run(base, (load g), (load (g + 4)), node, frame, caller, (depth + 1), 0, 0)
+      v = evalv(base, (load g), (load (g + 4)), node, frame, caller, (depth + 1))
+      if (!valid(v)) || (n < 2) do
+        return v
+      when kw(a, e, WNAMED_LIKE, NNAMED_LIKE) do
+        x = evalv(base, (load (g + 8)), (load (g + 12)), node, frame, caller, (depth + 1))
+        t = heldm(x, WWRITTEN_NAME, NWRITTEN_NAME)
+        j = heldm(v, WTAIL, NTAIL)
+        if some(t) && valid(j) do
+          drop valued(j, WWRITTEN_NAME, (WWRITTEN_NAME + NWRITTEN_NAME), t)
+        else
+        t = holename((load (g + 8)), (load (g + 12)), frame, 0)
+        j = heldm(v, WHEAD, NHEAD)
+        if (t != 0) && valid(j) do
+          drop valued(j, WWRITTEN_NAME, (WWRITTEN_NAME + NWRITTEN_NAME), t)
+        if n >= 3 do
+          t = holename((load (g + 16)), (load (g + 20)), frame, 0)
+          j = heldm(v, WTAIL, NTAIL)
+          if (t != 0) && valid(j) do
+            drop valued(j, WWRITTEN_NAME, (WWRITTEN_NAME + NWRITTEN_NAME), t)
+      return v
     if kw(a, e, WTYPED_NAME, NTYPED_NAME) do
-      return nothing()
+      t = holename(trima((a + NTYPED_NAME), e), e, frame, 1)
+      return (t != 0) ? t : nothing()
     if kw(a, e, WWRITE, NWRITE) do
       v = run(base, trima((a + NWRITE), e), e, node, frame, caller, (depth + 1), 0, 0)
       n = countof(v)
@@ -3724,11 +3750,16 @@ section 10 do
       return caller
     if kw(a, e, WQUOTED, NQUOTED) || kw(a, e, WDEFINES_TEXT, NDEFINES_TEXT) do
       d = kw(a, e, WDEFINES_TEXT, NDEFINES_TEXT)
-      t = run(base, trima((a + (d ? NDEFINES_TEXT : NQUOTED)), e), e, node, frame, caller, (depth + 1), 0, 0)
-      if !istext(t) do
-        return boolv(0)
-      j = load (t + 32)
-      while j < (load (t + 36)) do
+      when codespan(trima((a + (d ? NDEFINES_TEXT : NQUOTED)), e), e, frame) do
+        j = load TA
+        r = load TE
+        else
+        t = run(base, trima((a + (d ? NDEFINES_TEXT : NQUOTED)), e), e, node, frame, caller, (depth + 1), 0, 0)
+        if !istext(t) do
+          return boolv(0)
+        j = load (t + 32)
+        r = load (t + 36)
+      while j < r do
         c = load8 j
         if (!d) && ((c == 34) || ((c == 96) || (c == 92))) do
           return boolv(1)
@@ -5583,7 +5614,9 @@ section 10 do
     n = x
     d = 0
     while ((n != 0) && (n != (load SCOPE))) && ((d < 4) && (k < 0)) do
-      k = own(n, wa, (wa + wn))
+      k = ownname(n, wa, wn)
+      if (k < 0) && (((load (n + 4)) == 1313) && valid(load (n + 48))) do
+        k = heldown((load (n + 48)), wa, wn)
       n = load n
       d = d + 1
     if k < 0 do
@@ -5606,6 +5639,152 @@ section 10 do
     m = load MADE
     MADE <- was
     return (v != 0) ? v : m
+  function ownname locals 6 do
+    var x 0
+    var wa 1
+    var wn 2
+    var keys 3
+    var j 4
+    var k 5
+    var key 6
+    var best 7
+    var p 8
+    keys = load (x + 8)
+    best = 0 - 1
+    if keys == 0 do
+      return best
+    j = 0
+    while j < (load keys) do
+      k = arrat(keys, j)
+      key = keyat(k)
+      if (load (key + 4)) == 1 do
+        p = part(key, 0)
+        if (((load p) == 0) && ((load (p + 8)) == wn)) && same((load (p + 4)), wa, wn) do
+          if (best < 0) || (rank(k) >= rank(best)) do
+            best = k
+      j = j + 1
+    return best
+  function heldown locals 3 do
+    var x 0
+    var wa 1
+    var wn 2
+    var k 3
+    var n 4
+    var d 5
+    k = 0 - 1
+    n = x
+    d = 0
+    while ((n != 0) && (n != (load SCOPE))) && ((d < 4) && (k < 0)) do
+      k = ownname(n, wa, wn)
+      n = load n
+      d = d + 1
+    return k
+  function codespan locals 10 do
+    var a 0
+    var e 1
+    var frame 2
+    var b 3
+    var ca 4
+    var ce 5
+    var j 6
+    var nb 7
+    var ol 8
+    var cl 9
+    var fr 10
+    var ia 11
+    var ie 12
+    b = named(a, e, frame)
+    if b == 0 do
+      return 0
+    ca = trima((load (b + 8)), (load (b + 12)))
+    ce = trime(ca, (load (b + 12)))
+    fr = load (b + 16)
+    ol = load OPENL
+    cl = load CLOSEL
+    j = 0
+    while j < 16 do
+      nb = 0
+      if worded(ca, ce) && (fr != 0) do
+        nb = named(ca, ce, fr)
+      if ((nb == 0) && (fr != 0)) && (((ce - ca) > ((ol + cl) + 2)) && (((load8 ca) == 96) && ((load8 (ce - 1)) == 96))) do
+        ia = ca + 1
+        ie = ce - 1
+        if same(ia, (load OPENA), ol) && same((ie - cl), (load CLOSEA), cl) do
+          ia = trima((ia + ol), (ie - cl))
+          ie = trime(ia, (ie - cl))
+          if worded(ia, ie) do
+            nb = named(ia, ie, fr)
+      if ((nb == 0) && (fr != 0)) && (((ce - ca) > (ol + cl)) && (same(ca, (load OPENA), ol) && same((ce - cl), (load CLOSEA), cl))) do
+        ia = trima((ca + ol), (ce - cl))
+        ie = trime(ia, (ce - cl))
+        if worded(ia, ie) do
+          nb = named(ia, ie, fr)
+      when nb != 0 do
+        b = nb
+        ca = trima((load (b + 8)), (load (b + 12)))
+        ce = trime(ca, (load (b + 12)))
+        fr = load (b + 16)
+        j = j + 1
+        else
+        j = 16
+    TA <-! ca
+    TE <-! ce
+    return 1
+  function holename locals 9 do
+    var a 0
+    var e 1
+    var frame 2
+    var typed 3
+    var b 4
+    var ca 5
+    var ce 6
+    var j 7
+    var w 8
+    var q 9
+    var nb 10
+    var d 11
+    var c 12
+    b = named(a, e, frame)
+    if b == 0 do
+      return 0
+    ca = trima((load (b + 8)), (load (b + 12)))
+    ce = trime(ca, (load (b + 12)))
+    j = 0
+    while j < 16 do
+      nb = 0
+      if worded(ca, ce) && ((load (b + 16)) != 0) do
+        nb = named(ca, ce, (load (b + 16)))
+      when nb != 0 do
+        b = nb
+        ca = trima((load (b + 8)), (load (b + 12)))
+        ce = trime(ca, (load (b + 12)))
+        j = j + 1
+        else
+        j = 16
+    w = ca
+    while (w < ce) && word(load8 w) do
+      w = w + 1
+    if (w == ca) || ((((load8 ca) >= 48) && ((load8 ca) <= 57)) || ((w == (ca + 1)) && ((load8 ca) == 95))) do
+      return 0
+    q = w
+    while (q < ce) && ((load8 q) == 32) do
+      q = q + 1
+    c = (q < ce) ? (load8 q) : 0
+    if (q < ce) && (!((c == 58) && (((load8 (q + 1)) != 58) && ((load8 (q + 1)) != 61)))) && (!((c == 61) && (((load8 (q + 1)) != 61) && ((load8 (q + 1)) != 62)))) do
+      return 0
+    if typed && (c != 58) do
+      return 0
+    d = 0
+    while q < ce do
+      c = load8 q
+      if (c == 40) || ((c == 91) || (c == 123)) do
+        d = d + 1
+      if (c == 41) || ((c == 93) || (c == 125)) do
+        d = d - 1
+      if (c == 44) && (d == 0) do
+        return 0
+      q = q + 1
+    return textof(ca, w)
   function valid locals 0 do
     var v 0
     return ((v > 4096) && (v < (load LIMIT))) && ((v & 3) == 0)
@@ -5894,7 +6073,7 @@ section 11 do
   external emit 184
   external emit 1
   external emit 11
-  external emit 189
+  external emit 194
   external emit 5
   external emit 101
   external emit 120
@@ -6589,6 +6768,11 @@ section 11 do
   external emit 111
   external emit 100
   external emit 101
+  external emit 32
+  external emit 116
+  external emit 97
+  external emit 105
+  external emit 108
   external emit 32
   external emit 40
   external emit 40

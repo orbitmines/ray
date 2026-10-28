@@ -6101,7 +6101,9 @@ section 10 do
     var p 1
     if !valid(v) do
       return v
-    if ((load (v + 4)) != 1313) || ((load (v + 52)) == 0) do
+    if (load (v + 4)) != 1313 do
+      return v
+    if ((load (v + 52)) == 0) && ((load RUNMODE) == 0) do
       return v
     p = load v
     if !valid(p) do

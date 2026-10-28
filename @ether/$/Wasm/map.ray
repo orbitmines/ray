@@ -213,6 +213,8 @@ Node &+= {
     base := .
     base{!(.empty)} &+ {
       nonempty_of := base
+      // (not itself a repeat: what it is one or more of is (`T[]+`), not what a node made in a method sees of the value)
+      repeats := false
     }
   }
   // (the language's `is`: the kernel's answer first)

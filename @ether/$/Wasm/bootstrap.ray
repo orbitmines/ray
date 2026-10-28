@@ -692,7 +692,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 224
+  external emit 225
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -907,17 +907,18 @@ section 3 do
   declare forceplace 213 takes 4
   declare rawbind 214 takes 3
   declare eachpart 215 takes 11
-  declare framewins 216 takes 4
-  declare valid 217 takes 1
-  declare istrue 218 takes 1
-  declare some 219 takes 1
-  declare classv 220 takes 1
-  declare spanchar 221 takes 2
-  declare admitsv 222 takes 2
-  declare admitt 223 takes 4
-  declare admstep 224 takes 7
-  declare admsteps 225 takes 5
-  declare readablet 226 takes 2
+  declare endsepfrom 216 takes 2
+  declare framewins 217 takes 4
+  declare valid 218 takes 1
+  declare istrue 219 takes 1
+  declare some 220 takes 1
+  declare classv 221 takes 1
+  declare spanchar 222 takes 2
+  declare admitsv 223 takes 2
+  declare admitt 224 takes 4
+  declare admstep 225 takes 7
+  declare admsteps 226 takes 5
+  declare readablet 227 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -928,7 +929,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 224
+  external emit 225
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1311,7 +1312,7 @@ section 10 do
           r = q + 1
           while (r < e) && ((load8 r) == 32) do
             r = r + 1
-          if ((r - (q + 1)) <= ind) && (!endsep(q)) do
+          if ((r - (q + 1)) <= ind) && (!endsepfrom(q, a)) do
             return 0
         q = skipto(((((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)), e, f, 256, tight)
       if ((load f) == 0) && (gv || (e != a)) do
@@ -1353,7 +1354,7 @@ section 10 do
         r = q + 1
         while (r < e) && ((load8 r) == 32) do
           r = r + 1
-        if ((r - (q + 1)) <= ind) && (!endsep(q)) do
+        if ((r - (q + 1)) <= ind) && (!endsepfrom(q, a)) do
           return 0
       q = skipto(((((load (f + 4)) < 0) && (!(load8 (STEPTAB + (load8 q))))) ? (q + 1) : step(q, f, e)), e, f, nb, tight)
     return 0
@@ -4863,7 +4864,7 @@ section 10 do
     BUDGET <- ((load BUDGET) - 1)
     if ((load BUDGET) < 0) || (((load HEAP) > (load LIMIT)) || (((load TESTING) != 0) && (((load HEAP) - (load REGION)) > 134217728))) do
       return 0 - 1
-    if (charkind(load8 a) != 2) || (load8 (STEPTAB + (load8 a))) do
+    if ((charkind(load8 a) != 2) || (load8 (STEPTAB + (load8 a)))) || ((((load RUNMODE) != 0) && ((load8 a) == 46)) && word(load8 (a + 1))) do
       p = skippair(a, e)
       while p < e do
         c = load8 p
@@ -6357,6 +6358,25 @@ section 10 do
         from = q + 1
       q = q + 1
     return caller
+  function endsepfrom locals 3 do
+    var q 0
+    var a 1
+    var ls 2
+    var j 3
+    var last 4
+    ls = q
+    while (ls > TEXT) && ((load8 (ls - 1)) != 10) do
+      ls = ls - 1
+    last = 0
+    j = ls
+    while j < q do
+      when (((load8 j) == 47) && (((load8 (j + 1)) == 47) && ((j == ls) || ((load8 (j - 1)) == 32)))) && ((j >= a) || ((load RUNMODE) == 0)) do
+        j = q
+        else
+        if (load8 j) > 32 do
+          last = load8 j
+        j = j + 1
+    return (last != 0) && ((charkind(last) == 3) && (!pairbyte(last)))
   function framewins locals 0 do
     var k 0
     var a 1

@@ -692,7 +692,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 215
+  external emit 216
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -898,17 +898,18 @@ section 3 do
   declare throughrun 204 takes 1
   declare oneline 205 takes 2
   declare opname 206 takes 2
-  declare framewins 207 takes 4
-  declare valid 208 takes 1
-  declare istrue 209 takes 1
-  declare some 210 takes 1
-  declare classv 211 takes 1
-  declare spanchar 212 takes 2
-  declare admitsv 213 takes 2
-  declare admitt 214 takes 4
-  declare admstep 215 takes 7
-  declare admsteps 216 takes 5
-  declare readablet 217 takes 2
+  declare better 207 takes 3
+  declare framewins 208 takes 4
+  declare valid 209 takes 1
+  declare istrue 210 takes 1
+  declare some 211 takes 1
+  declare classv 212 takes 1
+  declare spanchar 213 takes 2
+  declare admitsv 214 takes 2
+  declare admitt 215 takes 4
+  declare admstep 216 takes 7
+  declare admsteps 217 takes 5
+  declare readablet 218 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -919,7 +920,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 215
+  external emit 216
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1325,6 +1326,8 @@ section 10 do
           TYPEDUSED <- 1
           ok = reads(typed, a, q)
         if ((load p) == 2) && (typed == (0 - 1)) do
+          ok = 0
+        if (((load RUNMODE) != 0) && ((load p) == 2)) && (((q - a) >= 2) && (((load8 (q - 1)) == 46) && word(load8 (q - 2)))) do
           ok = 0
         if ok do
           if match(key, (i + 1), q, e, cap, ind) do
@@ -2953,7 +2956,7 @@ section 10 do
     TAKEAT <-! (load (t + 32))
     while n < 64 do
       b = bound((load (t + 8)), (load (t + 12)), (load (t + 16)))
-      sp = b != 0
+      sp = (b != 0) && ((load INLINE) != 0)
       if b == 0 do
         sp = 0
         ta = trima((load (t + 8)), (load (t + 12)))
@@ -3843,7 +3846,7 @@ section 10 do
         v = run(base, (load (g + 16)), (load (g + 20)), node, frame, caller, (depth + 1), 0, 0)
         drop valued(x, (load (t + 32)), (load (t + 36)), v)
         return v
-      k = own(x, (load (t + 32)), (load (t + 36)))
+      k = ownname(x, (load (t + 32)), ((load (t + 36)) - (load (t + 32))))
       if k < 0 do
         return wordv(WNONE, NNONE)
       READNODE <- node
@@ -4560,8 +4563,7 @@ section 10 do
     xe = trime(xa, se)
     b = bound(xa, xe, frame)
     if b != 0 do
-      xa = trima((load (b + 8)), (load (b + 12)))
-      xe = trime(xa, (load (b + 12)))
+      return 0
     return texteq(xa, (xe - xa), na, (ne - na))
   function tests locals 1 do
     var j 0
@@ -5024,7 +5026,7 @@ section 10 do
           (view + 4) <- 0
         if ((load (view + 4)) > 0) && (((load part(view, 0)) == 0) || lead) do
           if ((lead && (((load RUNMODE) != 0) && ((load (view + 4)) == 1))) || possible(view, p, e)) && match(view, 0, p, e, (trial + 8), 0) do
-            if (best < 0) || ((lead && (!bl)) || ((lead == bl) && (rank(k) >= rank(best)))) do
+            if (best < 0) || ((lead && (!bl)) || ((lead == bl) && better(k, best, lead))) do
               best = k
               bl = lead
               bcap = ringalloc(((load (key + 4)) * 8) + 8)
@@ -5092,7 +5094,11 @@ section 10 do
             v = run(base, p, r, on, frame, on, (depth + 1), 0, 0)
             if (load JUMPA) != 0 do
               return 0
-            return onvalue(base, r, e, v, frame, depth, home)
+            hosted = load HOST
+            HOST <-! on
+            v = onvalue(base, r, e, v, frame, depth, on)
+            HOST <-! hosted
+            return v
     k = readon(on, p, e, ox0, ox1)
     if k < 0 do
       r = splitat(base, p, e, on, frame, 0, 0)
@@ -6119,6 +6125,18 @@ section 10 do
     while (q < e) && (charkind(load8 q) == 2) do
       q = q + 1
     return q
+  function better locals 2 do
+    var k 0
+    var best 1
+    var lead 2
+    var tk 3
+    var tb 4
+    if (!lead) && ((load RUNMODE) != 0) do
+      tk = (load part(keyat(k), 0)) == 0
+      tb = (load part(keyat(best), 0)) == 0
+      if tk != tb do
+        return tk
+    return rank(k) >= rank(best)
   function framewins locals 0 do
     var k 0
     var a 1

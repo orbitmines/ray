@@ -91,7 +91,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
   }
   // (what anything is written as: a number a byte; a list each of it, in turn; an op its code; anything else, its own bytes)
   // (an op, its code: one byte, or a prefix and a number)
-  static bytes_of (x) => (x is Number) ? [x] : (((x).listing === true) ? Wasm.bytes_all(x) : (((x).code !== None) ? Wasm.bytes_of((x).code) : x.bytes))
+  static bytes_of (x) => ((x).listing === true) ? Wasm.bytes_all(x) : ((x is Number) ? [x] : (((x).code !== None) ? Wasm.bytes_of((x).code) : x.bytes))
   static bytes_all (xs) => xs.map((x) => Wasm.bytes_of(x)).flatten
   // (bytes after how many they are)
   static sized (sized_bytes) => Wasm.leb(sized_bytes.count).joined(sized_bytes)

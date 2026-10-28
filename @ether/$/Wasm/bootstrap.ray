@@ -354,6 +354,7 @@ constant MEMBERA 368
 constant MEMBERE 372
 constant TAKEAT 376
 constant TAKEVIS 380
+constant STRINGV 384
 constant WMEMBER 23659
 constant NMEMBER 6
 constant WMEMBERS 23666
@@ -488,11 +489,29 @@ constant WLISTING 24156
 constant NLISTING 7
 constant WWRITE 24164
 constant NWRITE 5
-constant WPARENS2 24170
+constant WREAD_AS 24170
+constant NREAD_AS 7
+constant WNONEMPTY_OF 24178
+constant NNONEMPTY_OF 11
+constant WEACH 24190
+constant NEACH 4
+constant WREPEATS 24195
+constant NREPEATS 7
+constant WIS_RANGE 24203
+constant NIS_RANGE 8
+constant WSUPERPOSES 24212
+constant NSUPERPOSES 10
+constant WCOMPONENTS 24223
+constant NCOMPONENTS 10
+constant WSTRING 24234
+constant NSTRING 6
+constant WNODE 24241
+constant NNODE 4
+constant WPARENS2 24246
 constant NPARENS2 2
-constant WPAREN1 24173
+constant WPAREN1 24249
 constant NPAREN1 1
-constant WEQEQ 24175
+constant WEQEQ 24251
 constant NEQEQ 2
 log => external leb 0
 ev => external leb 1
@@ -663,7 +682,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 185
+  external emit 197
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -850,6 +869,18 @@ section 3 do
   declare language 185 takes 0
   declare levelread 186 takes 1
   declare included 187 takes 1
+  declare heldm 188 takes 3
+  declare evalv 189 takes 7
+  declare valid 190 takes 1
+  declare istrue 191 takes 1
+  declare some 192 takes 1
+  declare classv 193 takes 1
+  declare spanchar 194 takes 2
+  declare admitsv 195 takes 2
+  declare admitt 196 takes 4
+  declare admstep 197 takes 7
+  declare admsteps 198 takes 5
+  declare readablet 199 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -860,7 +891,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 185
+  external emit 197
   external emit 1
   function main locals 1 do
     var scope 0
@@ -3759,7 +3790,7 @@ section 10 do
     while (q < e) && ((load8 q) > 32) do
       q = q + 1
     return q
-  function mapnative locals 12 do
+  function mapnative locals 17 do
     var a 0
     var e 1
     var base 2
@@ -3779,6 +3810,11 @@ section 10 do
     var o 16
     var z 17
     var u 18
+    var g 19
+    var t 20
+    var v 21
+    var ka 22
+    var ke 23
     if kwend(a, e, WTEXT, NTEXT) do
       TEXTCLASS <- node
       return caller
@@ -3880,9 +3916,23 @@ section 10 do
         j = j + 1
       return caller
     if kw(a, e, WADMITS, NADMITS) do
-      return nothing()
+      g = alloc(32)
+      n = groups((a + NADMITS), e, g)
+      if n < 2 do
+        return nothing()
+      ka = load (g + 8)
+      ke = load (g + 12)
+      x = evalv(base, (load g), (load (g + 4)), node, frame, caller, (depth + 1))
+      if !valid(x) do
+        return nothing()
+      t = evalv(base, ka, ke, node, frame, caller, (depth + 1))
+      r = admitsv(x, t)
+      if r < 0 do
+        return nothing()
+      return boolv(r)
     if kw(a, e, WREADABLE, NREADABLE) do
-      return nothing()
+      t = evalv(base, trima((a + NREADABLE), e), e, node, frame, caller, (depth + 1))
+      return boolv(readablet(t, 0))
     if kw(a, e, WCALLABLE, NCALLABLE) do
       v = run(base, trima((a + NCALLABLE), e), e, node, frame, caller, (depth + 1), 0, 0)
       return boolv(callablev(v))
@@ -5520,6 +5570,322 @@ section 10 do
         drop run(TEXT, at, (at + n), (load (m + 8)), 0, 0, 0, 0, 0)
       j = j + 1
     return 0
+  function heldm locals 3 do
+    var x 0
+    var wa 1
+    var wn 2
+    var k 3
+    var n 4
+    var d 5
+    if !valid(x) do
+      return 0
+    k = 0 - 1
+    n = x
+    d = 0
+    while ((n != 0) && (n != (load SCOPE))) && ((d < 4) && (k < 0)) do
+      k = own(n, wa, (wa + wn))
+      n = load n
+      d = d + 1
+    if k < 0 do
+      return 0
+    return keyvalue(k)
+  function evalv locals 3 do
+    var base 0
+    var a 1
+    var e 2
+    var node 3
+    var frame 4
+    var caller 5
+    var depth 6
+    var was 7
+    var v 8
+    var m 9
+    was = load MADE
+    MADE <- 0
+    v = run(base, a, e, node, frame, caller, depth, 0, 0)
+    m = load MADE
+    MADE <- was
+    return (v != 0) ? v : m
+  function valid locals 0 do
+    var v 0
+    return ((v > 4096) && (v < (load LIMIT))) && ((v & 3) == 0)
+  function istrue locals 0 do
+    var v 0
+    return (v != 0) && (v == boolv(1))
+  function some locals 0 do
+    var v 0
+    return (v != 0) && (v != (load NONEV))
+  function classv locals 1 do
+    var which 0
+    var c 1
+    c = STRINGV + (which * 4)
+    if (load c) == 0 do
+      c <-! ((which == 0) ? wordv(WSTRING, NSTRING) : wordv(WNODE, NNODE))
+    return load c
+  function spanchar locals 4 do
+    var s 0
+    var e 1
+    var b 2
+    var c 3
+    var n 4
+    var j 5
+    if e <= s do
+      return 0 - 1
+    b = load8 s
+    c = b
+    n = 1
+    if b >= 240 do
+      n = 4
+      c = b & 7
+    if (b >= 224) && (b < 240) do
+      n = 3
+      c = b & 15
+    if (b >= 192) && (b < 224) do
+      n = 2
+      c = b & 31
+    if (e - s) != n do
+      return 0 - 1
+    j = 1
+    while j < n do
+      c = (c << 6) | ((load8 (s + j)) & 63)
+      j = j + 1
+    return c
+  function admitsv locals 0 do
+    var v 0
+    var ty 1
+    if (!valid(v)) || (!valid(ty)) do
+      return 0 - 1
+    if v == ty do
+      return 1
+    if ty == classv(1) do
+      return 1
+    if !istext(v) do
+      return 0 - 1
+    return admitt((load (v + 32)), (load (v + 36)), ty, 0)
+  function admitt locals 7 do
+    var s 0
+    var e 1
+    var ty 2
+    var depth 3
+    var r 4
+    var n 5
+    var at 6
+    var cv 7
+    var unknown 8
+    var x 9
+    var m 10
+    if (depth > 12) || (!valid(ty)) do
+      return 0 - 1
+    if istext(ty) do
+      r = heldm(ty, WREAD_AS, NREAD_AS)
+      if some(r) && (r != ty) do
+        return admitt(s, e, r, (depth + 1))
+      n = (load (ty + 36)) - (load (ty + 32))
+      return ((e - s) == n) && same(s, (load (ty + 32)), n)
+    if (load (ty + 4)) == 3031 do
+      return spanchar(s, e) == (load (ty + 32))
+    if (load (ty + 4)) == 3030 do
+      return 0 - 1
+    if (ty == classv(0)) || (ty == classv(1)) do
+      return 1
+    if !istrue(heldm(ty, WSUPERPOSES, NSUPERPOSES)) do
+      x = heldm(ty, WNONEMPTY_OF, NNONEMPTY_OF)
+      if some(x) do
+        if e == s do
+          return 0
+        return admitt(s, e, x, (depth + 1))
+      if istrue(heldm(ty, WREPEATS, NREPEATS)) do
+        x = heldm(ty, WEACH, NEACH)
+        if some(x) do
+          if e == s do
+            return 1
+          return admsteps(s, e, x, 0, depth)
+      if istrue(heldm(ty, WIS_RANGE, NIS_RANGE)) do
+        if !istrue(heldm(ty, WLISTING, NLISTING)) do
+          return 0 - 1
+        r = 0
+        at = heldm(ty, WHEAD, NHEAD)
+        n = 0
+        while some(at) && (n < 1024) do
+          cv = heldm(at, WVALUE, NVALUE)
+          if !istext(cv) do
+            return 0 - 1
+          m = (load (cv + 36)) - (load (cv + 32))
+          if (m == (e - s)) && same(s, (load (cv + 32)), m) do
+            r = 1
+          at = heldm(at, WNEXT, NNEXT)
+          n = n + 1
+        return r
+      if istrue(heldm(ty, WLISTING, NLISTING)) do
+        return admsteps(s, e, 0, heldm(ty, WHEAD, NHEAD), depth)
+    x = heldm(ty, WCOMPONENTS, NCOMPONENTS)
+    if some(x) do
+      unknown = 0
+      at = heldm(x, WHEAD, NHEAD)
+      n = 0
+      while some(at) && (n < 256) do
+        cv = heldm(at, WVALUE, NVALUE)
+        if (cv == (load NONEV)) && (e == s) do
+          return 1
+        if some(cv) do
+          r = admitt(s, e, cv, (depth + 1))
+          if r == 1 do
+            return 1
+          if r < 0 do
+            unknown = 1
+        at = heldm(at, WNEXT, NNEXT)
+        n = n + 1
+      return (unknown != 0) ? (0 - 1) : 0
+    return 0 - 1
+  function admstep locals 6 do
+    var s 0
+    var n 1
+    var reach 2
+    var nxt 3
+    var ty 4
+    var each 5
+    var depth 6
+    var i 7
+    var j 8
+    var m 9
+    var r 10
+    var any 11
+    var unknown 12
+    any = 0
+    unknown = 0
+    i = 0
+    while i <= n do
+      if ((load8 (reach + i)) != 0) && ((each == 0) && istext(ty)) do
+        m = (load (ty + 36)) - (load (ty + 32))
+        if ((i + m) <= n) && same((s + i), (load (ty + 32)), m) do
+          (nxt + (i + m)) <-8 1
+          any = 1
+      if ((load8 (reach + i)) != 0) && (!((each == 0) && istext(ty))) do
+        j = (each != 0) ? (i + 1) : i
+        while j <= n do
+          r = admitt((s + i), (s + j), ty, (depth + 1))
+          if r == 1 do
+            (nxt + j) <-8 1
+            any = 1
+          if r < 0 do
+            unknown = 1
+          j = j + 1
+      i = i + 1
+    return any + (unknown * 2)
+  function admsteps locals 11 do
+    var s 0
+    var e 1
+    var each 2
+    var link 3
+    var depth 4
+    var n 5
+    var sp 6
+    var reach 7
+    var nxt 8
+    var i 9
+    var ty 10
+    var st 11
+    var unknown 12
+    var grew 13
+    var step 14
+    var going 15
+    n = e - s
+    if n > 4096 do
+      return 0 - 1
+    sp = load SP
+    reach = sp
+    nxt = sp + (n + 8)
+    SP <- (sp + ((n * 2) + 32))
+    i = 0
+    while i <= n do
+      (reach + i) <-8 ((i == 0) ? 1 : 0)
+      i = i + 1
+    unknown = 0
+    step = 0
+    going = 1
+    while going && (step < 4096) do
+      ty = each
+      if (each == 0) && (!some(link)) do
+        going = 0
+      if going && (each == 0) do
+        ty = heldm(link, WVALUE, NVALUE)
+      if going && (ty == 0) do
+        SP <- sp
+        return 0 - 1
+      if going && ((each == 0) && (ty == (load NONEV))) do
+        link = heldm(link, WNEXT, NNEXT)
+        ty = 0
+      if going && (ty != 0) do
+        i = 0
+        while i <= n do
+          (nxt + i) <-8 0
+          i = i + 1
+        st = admstep(s, n, reach, nxt, ty, each, depth)
+        if st >= 2 do
+          unknown = 1
+        if (each != 0) && ((load8 (nxt + n)) != 0) do
+          SP <- sp
+          return 1
+        grew = 0
+        i = 0
+        while i <= n do
+          if (each != 0) && (((load8 (nxt + i)) != 0) && ((load8 (reach + i)) == 0)) do
+            (reach + i) <-8 1
+            grew = 1
+          if each == 0 do
+            (reach + i) <-8 (load8 (nxt + i))
+          i = i + 1
+        if (each == 0) && some(link) do
+          link = heldm(link, WNEXT, NNEXT)
+        if ((st & 1) == 0) || ((each != 0) && (grew == 0)) do
+          SP <- sp
+          return (unknown != 0) ? (0 - 1) : 0
+      step = step + 1
+    i = load8 (reach + n)
+    SP <- sp
+    if i != 0 do
+      return 1
+    return (unknown != 0) ? (0 - 1) : 0
+  function readablet locals 3 do
+    var ty 0
+    var depth 1
+    var x 2
+    var at 3
+    var n 4
+    if (!valid(ty)) || (depth > 12) do
+      return 0
+    if istext(ty) do
+      return 1
+    if (load (ty + 4)) == 3031 do
+      return 1
+    if (ty == classv(0)) || (ty == classv(1)) do
+      return 1
+    x = heldm(ty, WNONEMPTY_OF, NNONEMPTY_OF)
+    if some(x) do
+      return readablet(x, (depth + 1))
+    if istrue(heldm(ty, WLISTING, NLISTING)) && (!istrue(heldm(ty, WSUPERPOSES, NSUPERPOSES))) do
+      at = heldm(ty, WHEAD, NHEAD)
+      n = 0
+      while some(at) && (n < 256) do
+        if !readablet(heldm(at, WVALUE, NVALUE), (depth + 1)) do
+          return 0
+        at = heldm(at, WNEXT, NNEXT)
+        n = n + 1
+      return 1
+    if istrue(heldm(ty, WREPEATS, NREPEATS)) do
+      return readablet(heldm(ty, WEACH, NEACH), (depth + 1))
+    x = heldm(ty, WCOMPONENTS, NCOMPONENTS)
+    if some(x) do
+      at = heldm(x, WHEAD, NHEAD)
+      n = 0
+      while some(at) && (n < 256) do
+        x = heldm(at, WVALUE, NVALUE)
+        if some(x) && (!readablet(x, (depth + 1))) do
+          return 0
+        at = heldm(at, WNEXT, NNEXT)
+        n = n + 1
+      return 1
+    return 0
 section 11 do
   external emit 1
   external emit 0
@@ -5528,8 +5894,8 @@ section 11 do
   external emit 184
   external emit 1
   external emit 11
-  external emit 241
-  external emit 4
+  external emit 189
+  external emit 5
   external emit 101
   external emit 120
   external emit 116
@@ -6146,6 +6512,82 @@ section 11 do
   external emit 114
   external emit 105
   external emit 116
+  external emit 101
+  external emit 32
+  external emit 114
+  external emit 101
+  external emit 97
+  external emit 100
+  external emit 95
+  external emit 97
+  external emit 115
+  external emit 32
+  external emit 110
+  external emit 111
+  external emit 110
+  external emit 101
+  external emit 109
+  external emit 112
+  external emit 116
+  external emit 121
+  external emit 95
+  external emit 111
+  external emit 102
+  external emit 32
+  external emit 101
+  external emit 97
+  external emit 99
+  external emit 104
+  external emit 32
+  external emit 114
+  external emit 101
+  external emit 112
+  external emit 101
+  external emit 97
+  external emit 116
+  external emit 115
+  external emit 32
+  external emit 105
+  external emit 115
+  external emit 95
+  external emit 114
+  external emit 97
+  external emit 110
+  external emit 103
+  external emit 101
+  external emit 32
+  external emit 115
+  external emit 117
+  external emit 112
+  external emit 101
+  external emit 114
+  external emit 112
+  external emit 111
+  external emit 115
+  external emit 101
+  external emit 115
+  external emit 32
+  external emit 99
+  external emit 111
+  external emit 109
+  external emit 112
+  external emit 111
+  external emit 110
+  external emit 101
+  external emit 110
+  external emit 116
+  external emit 115
+  external emit 32
+  external emit 83
+  external emit 116
+  external emit 114
+  external emit 105
+  external emit 110
+  external emit 103
+  external emit 32
+  external emit 78
+  external emit 111
+  external emit 100
   external emit 101
   external emit 32
   external emit 40

@@ -692,7 +692,7 @@ section 2 do
   external emit 128
   external emit 8
 section 3 do
-  external emit 209
+  external emit 215
   external emit 1
   declare main 3 takes 0
   declare white 4 takes 1
@@ -892,17 +892,23 @@ section 3 do
   declare splicef 198 takes 2
   declare dotled 199 takes 1
   declare onechar 200 takes 1
-  declare framewins 201 takes 4
-  declare valid 202 takes 1
-  declare istrue 203 takes 1
-  declare some 204 takes 1
-  declare classv 205 takes 1
-  declare spanchar 206 takes 2
-  declare admitsv 207 takes 2
-  declare admitt 208 takes 4
-  declare admstep 209 takes 7
-  declare admsteps 210 takes 5
-  declare readablet 211 takes 2
+  declare superposed 201 takes 1
+  declare eqv 202 takes 2
+  declare eqany 203 takes 3
+  declare throughrun 204 takes 1
+  declare oneline 205 takes 2
+  declare opname 206 takes 2
+  declare framewins 207 takes 4
+  declare valid 208 takes 1
+  declare istrue 209 takes 1
+  declare some 210 takes 1
+  declare classv 211 takes 1
+  declare spanchar 212 takes 2
+  declare admitsv 213 takes 2
+  declare admitt 214 takes 4
+  declare admstep 215 takes 7
+  declare admsteps 216 takes 5
+  declare readablet 217 takes 2
 section 7 do
   external emit 1
   external emit 4
@@ -913,7 +919,7 @@ section 7 do
   external emit 0
   external emit 3
 section 10 do
-  external emit 209
+  external emit 215
   external emit 1
   function main locals 1 do
     var scope 0
@@ -1935,12 +1941,12 @@ section 10 do
       n = walknext(n, (msk + 296))
       if (((n == (load SCOPE)) && (tw == 0)) && ((load TAKEVIS) != 0)) && ((load TAKEVIS) != (load SCOPE)) do
         tw = 1
-        if !inchain(node, (load TAKEVIS)) do
+        if (!inchain(node, (load TAKEVIS))) && ((load (node + 4)) == 1313) do
           n = load TAKEVIS
           drop walkinit((msk + 296))
       if ((n == 0) && (tw == 0)) && ((wr <= 0) && ((load TAKEVIS) != 0)) do
         tw = 1
-        if !inchain(node, (load TAKEVIS)) do
+        if (!inchain(node, (load TAKEVIS))) && ((load (node + 4)) == 1313) do
           n = load TAKEVIS
           wr = 0
       if (n == 0) && (wr > 0) do
@@ -3043,7 +3049,7 @@ section 10 do
     VIS <-! vis
     SP <- sp
     return v
-  function statements locals 20 do
+  function statements locals 21 do
     var base 0
     var a 1
     var e 2
@@ -3073,6 +3079,7 @@ section 10 do
     var ta0 26
     var tv 27
     var at0 28
+    var sect 29
     start = a
     value = caller
     sp0 = load SP
@@ -3097,6 +3104,11 @@ section 10 do
           while (a < e) && ((load8 a) != 10) do
             a = a + 1
           else
+          if ((load RUNMODE) != 0) && ((charkind(load8 a) == 2) && (valid(node) && ((countof(node) >= 0) || istext(node)))) do
+            if oneline(a, e) do
+              sect = numop(base, a, e, node, frame, depth, node)
+              if sect != (0 - 2) do
+                return sect
           before = load (load KEYS)
           k = read(base, a, e, node, x0, x1)
           if (k < 0) && (x1 > x0) do
@@ -4859,6 +4871,7 @@ section 10 do
     var res 16
     if (load NUMBERS) == 0 do
       return 0 - 2
+    v = throughrun(v)
     cx = numcount(v)
     istx = istext(v)
     if (cx < 0) && (!istx) do
@@ -4882,6 +4895,15 @@ section 10 do
     y = run(base, s, trime(s, oe), home, frame, 0, (depth + 1), 0, 0)
     if (load JUMPA) != 0 do
       return 0
+    y = throughrun(y)
+    if (op == 61) && superposed(y) do
+      o2 = eqany(v, y, 0)
+      if o2 < 0 do
+        return 0 - 2
+      res = boolv(o2)
+      if oe < e do
+        return onvalue(base, oe, e, res, frame, depth, home)
+      return res
     cy = numcount(y)
     res = 0 - 2
     if (op == 61) && istx do
@@ -5066,6 +5088,16 @@ section 10 do
     if ((load RUNMODE) != 0) && ((frame != 0) && ((!inchain(on, (load (frame + 8)))) && (!inchain((load (frame + 8)), on)))) do
       ox0 = 0
       ox1 = 0
+    if (load RUNMODE) != 0 do
+      r = opname(p, e)
+      if (r > (p + 1)) && ((r < e) && (!white(load8 r))) do
+        k = readon(on, p, r, ox0, ox1)
+        if k >= 0 do
+          if ((load (keyat(k) + 44)) & 256) != 0 do
+            v = run(base, p, r, on, frame, on, (depth + 1), 0, 0)
+            if (load JUMPA) != 0 do
+              return 0
+            return onvalue(base, r, e, v, frame, depth, home)
     k = readon(on, p, e, ox0, ox1)
     if k < 0 do
       r = splitat(base, p, e, on, frame, 0, 0)
@@ -6010,6 +6042,88 @@ section 10 do
       cp = (cp << 6) | ((load8 x) & 63)
       x = x + 1
     return cp
+  function superposed locals 1 do
+    var x 0
+    var v 1
+    v = heldm(x, WSUPERPOSES, NSUPERPOSES)
+    return ((v != 0) && (v != (load NONEV))) && (v != (load FALSEV))
+  function eqv locals 0 do
+    var v 0
+    var c 1
+    if v == c do
+      return 1
+    if (countof(v) >= 0) && (countof(c) >= 0) do
+      return countof(v) == countof(c)
+    if istext(v) && istext(c) do
+      return (((load (v + 36)) - (load (v + 32))) == ((load (c + 36)) - (load (c + 32)))) && same((load (v + 32)), (load (c + 32)), ((load (c + 36)) - (load (c + 32))))
+    if istext(c) && ((countof(v) >= 0) && ((load (v + 4)) == 3031)) do
+      return onechar(c) == countof(v)
+    if istext(v) && ((countof(c) >= 0) && ((load (c + 4)) == 3031)) do
+      return onechar(v) == countof(c)
+    if (countof(v) >= 0) || istext(v) do
+      if (countof(c) >= 0) || istext(c) do
+        return 0
+    return 0 - 1
+  function eqany locals 5 do
+    var v 0
+    var y 1
+    var depth 2
+    var x 3
+    var at 4
+    var n 5
+    var r 6
+    var unknown 7
+    if depth > 8 do
+      return 0 - 1
+    when superposed(y) do
+      x = heldm(y, WCOMPONENTS, NCOMPONENTS)
+      else
+      if !istrue(heldm(y, WIS_RANGE, NIS_RANGE)) do
+        return eqv(v, y)
+      x = y
+    if !some(x) do
+      return 0 - 1
+    unknown = 0
+    at = heldm(x, WHEAD, NHEAD)
+    n = 0
+    while some(at) && (n < 4096) do
+      r = eqany(v, heldm(at, WVALUE, NVALUE), (depth + 1))
+      if r == 1 do
+        return 1
+      if r < 0 do
+        unknown = 1
+      at = heldm(at, WNEXT, NNEXT)
+      n = n + 1
+    return (unknown != 0) ? (0 - 1) : 0
+  function throughrun locals 1 do
+    var v 0
+    var p 1
+    if !valid(v) do
+      return v
+    if ((load (v + 4)) != 1313) || ((load (v + 52)) == 0) do
+      return v
+    p = load v
+    if !valid(p) do
+      return v
+    if istext(p) || (countof(p) >= 0) do
+      return p
+    return v
+  function oneline locals 0 do
+    var a 0
+    var e 1
+    while a < e do
+      if (load8 a) == 10 do
+        return 0
+      a = a + 1
+    return 1
+  function opname locals 1 do
+    var p 0
+    var e 1
+    var q 2
+    q = p
+    while (q < e) && (charkind(load8 q) == 2) do
+      q = q + 1
+    return q
   function framewins locals 0 do
     var k 0
     var a 1

@@ -322,6 +322,7 @@ function cw_symbol_of(t) {
   var x
   if syms == 0 {
     syms = list()
+    kept()
   }
   i = 0
   while i < (load (syms + 4)) {
@@ -339,6 +340,7 @@ function cw_symbol_of(t) {
 function outbyte(b) {
   if outb == 0 {
     outb = alloc(16777216)
+    kept()
   }
   (outb + outn) <-8 b
   outn = outn + 1
@@ -405,6 +407,7 @@ function cw_datum(t) {
   var j
   if datab == 0 {
     datab = alloc(4194304)
+    kept()
   }
   at = datan
   j = load (t + 4)
@@ -440,6 +443,7 @@ function cw_aside_from(x) {
   var j
   if asideb == 0 {
     asideb = alloc(4194304)
+    kept()
   }
   m = untag(x)
   j = m
@@ -467,6 +471,7 @@ function cw_taken() {
     c = alloc(outn + 8)
     copy(c, outb, outn)
     takent = text(c, c + outn)
+    kept()
     outn = 0
   }
   takent
@@ -539,6 +544,7 @@ function moved_keys(g, p) {
 }
 function set_parser(f) {
   parserhook = f
+  kept()
   0
 }
 function curried_value(c) {
@@ -691,8 +697,17 @@ function own(n, sym) {
 }
 function define(n, sym, v) {
   var e
-  touched(n)
   e = own(n, sym)
+  if e != 0 {
+    if (load (e + 8)) == v {
+      return v
+    }
+    if pointer(v) {
+      touched(n)
+    }
+  } else {
+    touched(n)
+  }
   if e == 0 {
     e = alloc(12)
     e <- load (n + 8)
@@ -1217,10 +1232,14 @@ function headpattern(t) {
 function seeded(t) {
   if csyms == 0 {
     csyms = list()
+    kept()
     memo = alloc(65536 * 20)
+    kept()
     epoch = 1
     actives = alloc(1048576)
+    kept()
     bounds = alloc(16777216)
+    kept()
   }
   append(csyms, t)
   0
@@ -1486,9 +1505,53 @@ function texteq(a, b, n) {
   }
   1
 }
+function kept() {
+  var s
+  effects = effects + 1
+  s = isodepth
+  while s > 0 {
+    (isostack + (((s - 1) * 12) + 8)) <- 1
+    s = s - 1
+  }
+  0
+}
+function isolated_open() {
+  var s
+  if isostack == 0 {
+    isostack = alloc(65536)
+  }
+  s = isostack + (isodepth * 12)
+  s <- free
+  (s + 4) <- markf
+  (s + 8) <- 0
+  isodepth = isodepth + 1
+  markf = free
+  0
+}
+function isolated_close(o, v) {
+  var s
+  isodepth = isodepth - 1
+  s = isostack + (isodepth * 12)
+  markf = load (s + 4)
+  if ((load (s + 8)) == 0) and (noreclaim == 0) {
+    free = load s
+    epoch = epoch + 1
+  }
+  0
+}
 function touched(x) {
+  var s
   if x < markf {
     effects = effects + 1
+    s = isodepth
+    while s > 0 {
+      if x < (load (isostack + ((s - 1) * 12))) {
+        (isostack + (((s - 1) * 12) + 8)) <- 1
+        s = s - 1
+      } else {
+        s = 0
+      }
+    }
   }
   0
 }

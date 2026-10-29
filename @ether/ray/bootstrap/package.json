@@ -1,0 +1,39 @@
+{
+  "name": "@orbitmines/ether.ray",
+  "description": "Ether.ray: the Ray programming language & Ether (`ether`, `ray`, `orbitmines`)",
+  "version": "0.1.5-E2027.0A.5",
+  "private": false,
+  "license": "MIT",
+  "repository": "https://github.com/orbitmines/ray",
+  "type": "module",
+  "main": "./.entrypoint.mjs",
+  "bin": {
+    "ether": "./bin/ether.js",
+    "ray": "./bin/ray.js",
+    "orbitmines": "./bin/orbitmines.js"
+  },
+  "exports": {
+    ".": "./.entrypoint.mjs",
+    "./lsp": "./.entrypoint.lsp.mjs",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "bin",
+    ".entrypoint.mjs",
+    ".entrypoint.lsp.mjs",
+    "@ether",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=26"
+  },
+  "dependencies": {
+    "vscode-languageserver": "^9.0.1",
+    "vscode-languageserver-textdocument": "^1.0.12"
+  },
+  "scripts": {
+    "prepack": "node scripts/bundle.mjs",
+    "postpack": "node scripts/bundle.mjs --clean"
+  }
+}

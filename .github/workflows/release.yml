@@ -1,7 +1,7 @@
 name: Release
 
 # Every push to main builds Ether for every platform, installs it on each with install.sh and install.ps1, packs the npm
-# package (@orbitmines/ether.ray) and installs that on each with npm; when the version in src/language.ts has no
+# package (@orbitmines/ether.ray) and installs that on each with npm; when the version in ray/bootstrap/.entrypoint.mjs has no
 # release yet, it publishes one (v<version>, the latest: the archives, their SHA256SUMS, both installers) and the npm
 # package (with NPM_TOKEN, or as a trusted publisher when the NPM_TRUSTED_PUBLISHING variable is true), and the VS Code
 # extension (Ether.ray, orbitmines.ether-ray, with the language bundled: its server, kernel and library under server/) to the Visual Studio Marketplace (VSCE_PAT, or Microsoft Entra ID when the
@@ -120,8 +120,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - name: pack @orbitmines/ether.ray (its prepack, scripts/bundle.mjs, bundles src/language.ts and the .ray files)
-        working-directory: "@ether/v0.ts"
+      - name: pack @orbitmines/ether.ray (its prepack, scripts/bundle.mjs, puts the library and the latest revision under @ether)
+        working-directory: "@ether/ray/bootstrap"
         run: |
           npm ci
           npm version --no-git-tag-version --allow-same-version "${{ needs.build.outputs.version }}"
@@ -213,8 +213,8 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - name: install @orbitmines/ether.ray, which the extension bundles
-        working-directory: "@ether/v0.ts"
+      - name: install the language's host (@orbitmines/ether.ray), whose language server the extension bundles
+        working-directory: "@ether/ray/bootstrap"
         run: npm ci
       - name: package the extension (the Marketplace takes major.minor.patch only, so v0.1.3-E2027.0A.3 is 0.1.3)
         working-directory: "@ether/ide/vscode"
@@ -223,7 +223,7 @@ jobs:
           npm version --no-git-tag-version --allow-same-version "${VERSION%%-*}"
           mkdir -p "$GITHUB_WORKSPACE/vsix"
           npx --yes @vscode/vsce package --no-dependencies --baseContentUrl https://github.com/orbitmines/ray/blob/main --baseImagesUrl https://raw.githubusercontent.com/orbitmines/ray/main --out "$GITHUB_WORKSPACE/vsix/ether-ray-${VERSION}.vsix"
-      - name: the bundled language answers on its own through its own daemon (server/language.mjs --lsp with server/@ether, outside the repository)
+      - name: the bundled language server answers on its own (server/.entrypoint.mjs --lsp with server/@ether, outside the repository) and reads a document
         run: |
           probe="$RUNNER_TEMP/probe" && mkdir -p "$probe"
           cp -r "@ether/ide/vscode/server" "$probe/"

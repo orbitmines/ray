@@ -16,9 +16,9 @@ ETHER_HOME="${ETHER_HOME:-$HOME/.ether}"
 NAME="ether"
 ALIASES="ray orbitmines"
 TARGETS="x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu x86_64-apple-darwin aarch64-apple-darwin x86_64-pc-windows-msvc"
-ENTRY='@ether/v0.ts/src/language.ts'
-CONFIG='@ether/v0.ts/deno.npm.json'
-INCLUDES=('LICENSE' '@ether/.project.ray' '@ether/Ether.ray' '@ether/World.ray' '@ether/Messaging.ray' '@ether/.entrypoint.server.ray' '@ether/.entrypoint.npc.ray' '@ether/.entrypoint.player.ray' '@ether/ray' '@ether/$' '@ether/optional' '@ether/game' '@ether/os' '@ether/library' '@ether/v0.ts/javascript.o.ray')
+ENTRY='@ether/ray/bootstrap/.entrypoint.mjs'
+CONFIG='@ether/ray/bootstrap/deno.json'
+INCLUDES=('LICENSE' '@ether/.project.ray' '@ether/Ether.ray' '@ether/World.ray' '@ether/Messaging.ray' '@ether/.entrypoint.server.ray' '@ether/.entrypoint.npc.ray' '@ether/.entrypoint.player.ray' '@ether/ray' '@ether/$' '@ether/optional' '@ether/game' '@ether/os' '@ether/library')
 MARKER="# Added by the Ether installer"
 
 usage() {
@@ -133,6 +133,8 @@ compile() { # compile <target> <dir>: the executable for <target> in <dir>
   root="$(checkout)"
   need_deno
   for i in "${INCLUDES[@]}"; do includes+=(--include "$i"); done
+  # (its reading goes deep: room for it within a main thread's 8 MB, where the platform gives that)
+  case "$1" in *windows*) ;; *) includes+=(--v8-flags=--stack-size=7000) ;; esac
   say "Compiling $NAME for $1 ..."
   (cd "$root" && deno compile -A --no-check --config "$CONFIG" --quiet "${includes[@]}" --target "$1" --output "$2/$(executable "$1" "$NAME")" "$ENTRY") \
     || fail "compiling for $1 failed"

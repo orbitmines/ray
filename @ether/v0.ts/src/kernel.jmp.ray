@@ -1,5 +1,0 @@
-// The kernel's JMP, read from its own source by Ray: `ray ../ray/bootstrap/.entrypoint.ray3 src/kernel.jmp.ray` writes its
-// lines; `scripts/kernel-jmp.mts --check` holds them against `jmp_of`'s. (Two files: what a file includes is read after it, so
-// `Kernel_js` is there only for the second.)
-include @./kernel.ray
-include @./kernel.read.ray

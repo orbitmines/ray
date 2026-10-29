@@ -1120,7 +1120,7 @@ function led_keys(l) {
     return load (s + 12)
   }
   m = load (l + 4)
-  if ((load pcache) + (8 + (m * 8))) > 8388608 {
+  if ((load pcache) + (8 + (m * 8))) > (8388608 - (2048 * 48)) {
     zeroed(pcache + 16, 16384)
     pcache <- 16400
   }
@@ -2149,12 +2149,52 @@ function typed(t, v) {
   }
   v
 }
+function bytes_in(a, e) {
+  var s
+  var q
+  var c
+  if pcache == 0 {
+    pcache = alloc(8388608)
+    kept()
+    pcache <- 16400
+  }
+  s = pcache + (8388608 - (2048 * 48))
+  s = s + ((((((a * 31) + (e * 7)) / 4) and 2047)) * 48)
+  if (((load s) == a) and ((load (s + 4)) == e)) and ((load (s + 8)) == epoch) {
+    return s + 16
+  }
+  zeroed(s + 16, 32)
+  q = a
+  while q < e {
+    c = load8 q
+    (s + (16 + (c / 8))) <-8 ((load8 (s + (16 + (c / 8)))) or (1 << (c % 8)))
+    q = q + 1
+  }
+  s <- a
+  (s + 4) <- e
+  (s + 8) <- epoch
+  s + 16
+}
 function occurs(l, a, e) {
   var n
   var f
   var q
+  var b
+  var i
   n = (load (l + 8)) - (load (l + 4))
   if n == 0 {
+    return 1
+  }
+  b = bytes_in(a, e)
+  i = 0
+  while i < n {
+    f = load8 ((load (l + 4)) + i)
+    if ((load8 (b + (f / 8))) and (1 << (f % 8))) == 0 {
+      return 0
+    }
+    i = i + 1
+  }
+  if n == 1 {
     return 1
   }
   f = load8 (load (l + 4))

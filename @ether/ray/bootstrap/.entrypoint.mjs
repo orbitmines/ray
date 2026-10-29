@@ -134,7 +134,7 @@ export async function main(argv = process.argv.slice(2)) {
   const flag = (...names) => argv.some((a) => names.includes(a));
   if (flag('-h', '--help')) return console.log(help());
   if (flag('--version')) return console.log(env.version.toSemver({ scheme: true }));
-  if (flag('--lsp')) return (await import('./.entrypoint.lsp.mjs')).serve();
+  if (flag('--lsp')) return (await import('./.entrypoint.lsp.mjs')).serve({ env, STACK_MB });
   if (flag('--build', 'build')) return build();
   const file = argv.find((a) => !a.startsWith('-'));
   if (!file) return console.log(help());
@@ -152,4 +152,4 @@ export async function start(argv = process.argv.slice(2)) {
     .on('error', (e) => { console.error(e); process.exitCode = 1; }).on('exit', (code) => { if (code) process.exitCode = code; done(); }));
 }
 if (!isMainThread && workerData?.ether) await main(workerData.ether);
-else if (import.meta.main || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)) await start();
+else if (isMainThread && (import.meta.main || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href))) await start();

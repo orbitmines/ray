@@ -2646,6 +2646,11 @@ function equal(a, b) {
   if a == b {
     return 12
   }
+  if (tag(a) == 12) and (tag(b) == 12) {
+    if (load (a + 4)) == (load (b + 4)) {
+      return 12
+    }
+  }
   if tag(b) == 6 {
     if tag(a) == 4 {
       if reads(b, a) == (load (a + 8)) {

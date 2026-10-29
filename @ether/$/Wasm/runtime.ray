@@ -2992,3 +2992,219 @@ function arrays() {
   define(n, 56, getter(array_new, 0))
   n
 }
+function m4(q, c0, c1, c2, c3) {
+  if (load8 q) != c0 {
+    return 0
+  }
+  if c1 == 0 {
+    return 1
+  }
+  if (load8 (q + 1)) != c1 {
+    return 0
+  }
+  if c2 == 0 {
+    return 1
+  }
+  if (load8 (q + 2)) != c2 {
+    return 0
+  }
+  if c3 == 0 {
+    return 1
+  }
+  (load8 (q + 3)) == c3
+}
+function put4(o, c0, c1, c2, c3) {
+  o <-8 c0
+  if c1 == 0 {
+    return o + 1
+  }
+  (o + 1) <-8 c1
+  if c2 == 0 {
+    return o + 2
+  }
+  (o + 2) <-8 c2
+  if c3 == 0 {
+    return o + 3
+  }
+  (o + 3) <-8 c3
+  o + 4
+}
+function digits_at(q, e) {
+  var d
+  d = q
+  while d < e {
+    if (load8 d) < 48 {
+      return d
+    }
+    if (load8 d) > 57 {
+      return d
+    }
+    d = d + 1
+  }
+  d
+}
+function put_span(o, a, e) {
+  copy(o, a, e - a)
+  o + (e - a)
+}
+function param_of(ps, n, a, e) {
+  var i
+  i = 0
+  while i < n {
+    if ((load (ps + ((i * 8) + 4))) - (load (ps + (i * 8)))) == (e - a) {
+      if texteq(load (ps + (i * 8)), a, e - a) {
+        return 1
+      }
+    }
+    i = i + 1
+  }
+  0
+}
+function with_locals(f) {
+  var a
+  var e
+  var q
+  var h
+  var ps
+  var n
+  var d
+  var k
+  var o
+  var b
+  var r
+  var s
+  var g
+  var m
+  var x
+  if tag(f) != 4 {
+    return f
+  }
+  a = load (f + 4)
+  e = load (f + 8)
+  h = a
+  while (load8 h) != 10 {
+    h = h + 1
+    if h >= e {
+      return f
+    }
+  }
+  q = h + 1
+  if (q + 40) > e {
+    return f
+  }
+  if ((((((((m4(q, 32, 32, 118, 97) and m4((q) + 4, 114, 32, 115, 99)) and m4((q) + 8, 111, 112, 101, 10)) and m4((q) + 12, 32, 32, 115, 99)) and m4((q) + 16, 111, 112, 101, 32)) and m4((q) + 20, 61, 32, 110, 111)) and m4((q) + 24, 100, 101, 40, 101)) and m4((q) + 28, 110, 118, 41, 10))) == 0 {
+    return f
+  }
+  q = q + 32
+  ps = alloc(256)
+  n = 0
+  while (n < 16) and ((((m4(q, 32, 32, 100, 101) and m4((q) + 4, 102, 105, 110, 101)) and m4((q) + 8, 40, 115, 99, 111)) and m4((q) + 12, 112, 101, 44, 32))) {
+    k = q + 16
+    d = digits_at(k, e)
+    if (((((m4(d, 44, 32, 97, 114) and m4((d) + 4, 103, 110, 40, 97)) and m4((d) + 8, 114, 103, 115, 44)) and m4((d) + 12, 32, 110, 97, 109)) and m4((d) + 16, 101, 100, 44, 32))) == 0 {
+      return f
+    }
+    r = digits_at(d + 20, e)
+    if r == (d + 20) {
+      return f
+    }
+    if (m4(r, 44, 32, 0, 0)) == 0 {
+      return f
+    }
+    s = digits_at(r + 2, e)
+    if (m4(s, 41, 41, 10, 0)) == 0 {
+      return f
+    }
+    if (s - (r + 2)) != (d - k) {
+      return f
+    }
+    if texteq(r + 2, k, d - k) == 0 {
+      return f
+    }
+    (ps + (n * 8)) <- k
+    (ps + ((n * 8) + 4)) <- d
+    n = n + 1
+    q = s + 3
+  }
+  if n == 0 {
+    return f
+  }
+  m = q
+  x = q
+  while (x + 5) <= e {
+    if (m4(x, 115, 99, 111, 112) and m4((x) + 4, 101, 0, 0, 0)) {
+      if (((m4(x - 4, 103, 101, 116, 40) and m4((x - 4) + 4, 115, 99, 111, 112)) and m4((x - 4) + 8, 101, 44, 32, 0))) == 0 {
+        return f
+      }
+    }
+    x = x + 1
+  }
+  g = free
+  s = markf
+  if (load 3840) == 0 {
+    3840 <- (arena_base() + 4194304)
+  }
+  free = load 3840
+  markf = free
+  o = alloc((((e - a) * 2) + (n * 64)) + 64)
+  b = o
+  o = put_span(o, a, h + 1)
+  o = put4(o, 32, 32, 118, 97)
+  o = put4(o, 114, 32, 115, 99)
+  o = put4(o, 111, 112, 101, 10)
+  k = 0
+  while k < n {
+    o = put4(o, 32, 32, 118, 97)
+    o = put4(o, 114, 32, 112, 0)
+    o = put_span(o, load (ps + (k * 8)), load (ps + ((k * 8) + 4)))
+    o <-8 10
+    o = o + 1
+    k = k + 1
+  }
+  o = put4(o, 32, 32, 115, 99)
+  o = put4(o, 111, 112, 101, 32)
+  o = put4(o, 61, 32, 101, 110)
+  o = put4(o, 118, 10, 0, 0)
+  k = 0
+  while k < n {
+    o = put4(o, 32, 32, 112, 0)
+    o = put_span(o, load (ps + (k * 8)), load (ps + ((k * 8) + 4)))
+    o = put4(o, 32, 61, 32, 97)
+    o = put4(o, 114, 103, 110, 40)
+    o = put4(o, 97, 114, 103, 115)
+    o = put4(o, 44, 32, 110, 97)
+    o = put4(o, 109, 101, 100, 44)
+    o = put4(o, 32, 0, 0, 0)
+    d = digits_at((load (ps + ((k * 8) + 4))) + 20, e)
+    o = put_span(o, (load (ps + ((k * 8) + 4))) + 20, d)
+    o = put4(o, 44, 32, 0, 0)
+    o = put_span(o, load (ps + (k * 8)), load (ps + ((k * 8) + 4)))
+    o = put4(o, 41, 10, 0, 0)
+    k = k + 1
+  }
+  x = m
+  r = m
+  while x < e {
+    if ((m4(x, 103, 101, 116, 40) and m4((x) + 4, 115, 99, 111, 112)) and m4((x) + 8, 101, 44, 32, 0)) {
+      d = digits_at(x + 11, e)
+      if ((load8 d) == 41) and param_of(ps, n, x + 11, d) {
+        o = put_span(o, r, x)
+        o <-8 112
+        o = o + 1
+        o = put_span(o, x + 11, d)
+        x = d + 1
+        r = x
+      } else {
+        x = x + 1
+      }
+    } else {
+      x = x + 1
+    }
+  }
+  o = put_span(o, r, e)
+  r = text(b, o)
+  3840 <- free
+  free = g
+  markf = s
+  r
+}

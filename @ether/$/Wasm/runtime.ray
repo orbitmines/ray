@@ -677,22 +677,93 @@ function untag(v) {
 }
 function node(parent) {
   var n
-  n = alloc(16)
+  n = alloc(20)
   n <- 1
   (n + 4) <- parent
   (n + 8) <- 0
   (n + 12) <- 0
+  (n + 16) <- 0
   n
 }
 function own(n, sym) {
   var e
+  var x
+  var k
+  var c
+  if (load n) == 1 {
+    x = load (n + 16)
+    if x != 0 {
+      c = (load x) - 1
+      k = (sym * 40503) and c
+      while (load (x + (8 + (k * 8)))) != 0 {
+        if (load (x + (8 + (k * 8)))) == sym {
+          return load (x + (12 + (k * 8)))
+        }
+        k = (k + 1) and c
+      }
+      return 0
+    }
+  }
+  k = 0
   e = load (n + 8)
   while e != 0 {
     if (load (e + 4)) == sym {
+      if (k > 8) and ((load n) == 1) {
+        indexed(n)
+      }
       return e
     }
+    k = k + 1
     e = load e
   }
+  if (k > 8) and ((load n) == 1) {
+    indexed(n)
+  }
+  0
+}
+function indexed(n) {
+  var e
+  var k
+  var c
+  var x
+  k = 0
+  e = load (n + 8)
+  while e != 0 {
+    k = k + 1
+    e = load e
+  }
+  c = 16
+  while c < (k * 4) {
+    c = c * 2
+  }
+  x = alloc(8 + (c * 8))
+  zeroed(x, 8 + (c * 8))
+  x <- c
+  e = load (n + 8)
+  while e != 0 {
+    index_in(x, e)
+    e = load e
+  }
+  touched(n)
+  (n + 16) <- x
+  0
+}
+function index_in(x, e) {
+  var c
+  var k
+  var s
+  s = load (e + 4)
+  c = (load x) - 1
+  k = (s * 40503) and c
+  while (load (x + (8 + (k * 8)))) != 0 {
+    if (load (x + (8 + (k * 8)))) == s {
+      return 0
+    }
+    k = (k + 1) and c
+  }
+  (x + (8 + (k * 8))) <- s
+  (x + (12 + (k * 8))) <- e
+  (x + 4) <- ((load (x + 4)) + 1)
   0
 }
 function define(n, sym, v) {
@@ -713,6 +784,15 @@ function define(n, sym, v) {
     e <- load (n + 8)
     (e + 4) <- sym
     (n + 8) <- e
+    if (load n) == 1 {
+      if (load (n + 16)) != 0 {
+        if ((load ((load (n + 16)) + 4)) * 2) >= (load (load (n + 16))) {
+          indexed(n)
+        } else {
+          index_in(load (n + 16), e)
+        }
+      }
+    }
   }
   (e + 8) <- v
   v

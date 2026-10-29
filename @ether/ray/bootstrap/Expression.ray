@@ -6,12 +6,16 @@
 // things are given: `external .` (a node), `external &` (what applies), `external goto` and `external label` (where control
 // goes). Read under a level, `Program{O: …}`, what it reads is a Program (statements as vertices, gotos as edges), and a
 // back end is one more level: `Wasm` writes that Program as WebAssembly.
-// (the target, as first written: what this file grows into, each part made to run in turn below)
+NodeX := None
+ProgramX := None
+StatementsX := None
+globalX := None
 Expression := class (
   BOOTSTRAPPER: (
     HEADER: `!language`,
     \s[]+,
-    CAPTURE: (String+, \s, String+),                    // a hole's brackets, a space where its name goes
+    // (a hole's brackets, a space where its name goes)
+    CAPTURE: (String+, \s, String+),
     \s[]+,
     CAPTURES: (LHS: CAPTURE.map{== \s}(`LHS`) | RHS: CAPTURE.map{== \s}(`RHS`) | String)[],
     \n\n
@@ -19,7 +23,11 @@ Expression := class (
   (
     // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
     // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
-    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{is \s}((space) => \s[]) ~~ .(LHS | RHS) = String
+    Code := (BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Code) | String)[]
+    Head := (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (inside: Code)) | String)[]
+    GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{is \s}((space) => \s[])
+    GRAMMAR_RULE_DEF.RHS = Code
+    GRAMMAR_RULE_DEF.LHS = Code
     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
     
     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
@@ -32,41 +40,102 @@ Expression := class (
           [rule: GRAMMAR_RULE.LHS] := (caller) => {
             // (the node its body is read in, kept with it: what it reads there, its statements, is its body)
             body := Node(in: node)
-            rules[[rule.LHS]] := (caller) => (rhs: Statements(body) = rule.RHS)(Program(caller: caller))
-            rules[[rule.LHS]].body = body
+            head := (rule.LHS as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
+            rules[[head]] := (caller) => {
+              at := Node(in: body)
+              holes.for((hole) => {
+                at.rules[[hole.key]] := (c) => caller.in.named_by(hole.value, caller)
+                at.rules[[BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => caller.in.named_by(hole.value, caller)
+              })
+              me := applied
+              me.caller = caller
+              me.in = at
+              me.this = caller.this
+              r := (rhs: Statements(at) = rule.RHS)
+              r(me)
+            }
+            rules[[head]].body = body
+          }
+          [{value: concurrently node.prefix(.)}: node.keys, rest: String] := (caller) => {
+            v := value(caller)
+            on := Node(in: caller.in)
+            members(v).for((m) => on.rules[[m.key]] := (c) => m.value)
+            r := (rs: Statements(on) = rest)
+            me := applied
+            me.caller = caller
+            me.in = on
+            me.this = v
+            r(me)
           }
         }
-        reading (text) => rules.keys{text ~= .}#.sort(.length).last ?? in?.reading(text)
+        named (text) => named_by(text, Program(in: node))
+        named_by (text, by) => {
+          v := (vs: Statements(node) = text)
+          (v === None) ? Place(text, node) : v(by)
+        }
+        split_key := rules.keys.last
+        maker_key := rules.keys.first
+        whole (tx) => (((rules.keys.first === maker_key) ? (tx ~= maker_key) : false) ? maker_key : rules.keys{(. === split_key) ? false : (tx ~= .)}#.sort(.length).last) ?? in?.whole(tx)
+        prefix (tx) => rules.keys{(. === split_key) ? false : (tx ~= .)}#.sort(.length).last ?? in?.prefix(tx)
+        longer (lw, ls) => (lw === None) ? ls : ((ls === None) ? lw : ((ls.length > lw.length) ? ls : lw))
+        reading (tx) => {
+          w := whole(tx)
+          (w === maker_key) ? w : longer(w, (split_key === None) ? None : ((tx ~= split_key) ? split_key : None))
+        }
         keys => (in === None) ? rules.keys : ((rules.keys === None) ? in.keys : (rules.keys | in.keys))
       }
       // A program running: what applied it, where it is.
-      Program := class (caller?: Program, at?: Statement) => { }
+      Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node) => { }
+      Argument := class (\s+, word: String) => { }
       global := Node({
-        rules[`external`, \s+, rule: String, args?: Node[]] := (caller) => {
+        rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => {
           `.` => Node(in: caller.at.node)
           `&` => caller
           `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
           `label` (label: Node) => label
-        }[rule](args)
+          `style` (style_args) => style_args.last
+          `shown` (shown_args) => shown_args.first
+        }[rule](args.map((argument) => caller.in.named(argument.word)))
       })
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
       // order, each given what applies them.
       Statement := class (
-        leading_whitespace: (\s | \n)[],
+        leading_whitespace?: (\s | \n)[]+,
         {statement: concurrently context.reading(.)}: context.keys
       ) => {}
       // (the statements as read kept on the node they are read in, `statements`: what each read, its rule and what that took)
       Statements (context: Node) => dynamically Statement[] & (caller: Program) => (
         context.statements = .
-        .statement#.for .(caller)
+        .statement#.map((s) => s(caller)).last
       )
 
-      Statements(global)(Program())
-    )
+      NodeX = Node
+      ProgramX = Program
+      StatementsX = Statements
+      globalX = global
+      Statements(global)(Program(in: global))
+    ),
+    (\s | \n)[]
   )
 ) => {
 
 }
+ex := (level input_part 0) as Expression
+parse_node_of (grammar_text) => {
+  g := NodeX(in: globalX)
+  (gs: StatementsX(g) = grammar_text)(ProgramX(in: g))
+  p := NodeX()
+  level moved_keys (g) (p)
+  leaf := NodeX(in: globalX)
+  (ls: StatementsX(leaf) = "{name_word} => external &")(ProgramX(in: leaf))
+  p.split_key = leaf.rules.keys.last
+  p
+}
+parser (grammar, program_text) => {
+  grammar.parse_node = grammar.parse_node ?? parse_node_of(grammar.text)
+  level curried_value (ps: StatementsX(grammar.parse_node) = program_text)
+}
+level set_parser (parser)
 assert "!language   { }   {LHS} => {RHS}\n\n" as Expression -- .(
   .BOOTSTRAPPER.CAPTURE == `{ }`
   & .BOOTSTRAPPER.CAPTURES.LHS == `{LHS}`

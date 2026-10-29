@@ -26,9 +26,9 @@ Set-StrictMode -Version 2.0
 $Repository = if ($env:ETHER_REPOSITORY) { $env:ETHER_REPOSITORY } else { 'orbitmines/ray' }
 $Name = 'ether'
 $Aliases = @('ray', 'orbitmines')
-$Entry = '@ether/v0.ts/src/language.ts'
-$Config = '@ether/v0.ts/deno.npm.json'
-$Includes = @('LICENSE', '@ether/.project.ray', '@ether/Ether.ray', '@ether/World.ray', '@ether/Device.ray', '@ether/Messaging.ray', '@ether/entrypoint.server.ray', '@ether/entrypoint.npc.ray', '@ether/entrypoint.player.ray', '@ether/ray', '@ether/$', '@ether/ui', '@ether/geometry', '@ether/security', '@ether/network', '@ether/version-control', '@ether/filesystem', '@ether/fonts', '@ether/timezone', '@ether/game', '@ether/os', '@ether/library', '@ether/v0.ts/javascript.o.ray')
+$Entry = '@ether/ray/bootstrap/.entrypoint.mjs'
+$Config = '@ether/ray/bootstrap/deno.json'
+$Includes = @('LICENSE', '@ether/.project.ray', '@ether/Ether.ray', '@ether/World.ray', '@ether/Messaging.ray', '@ether/.entrypoint.server.ray', '@ether/.entrypoint.npc.ray', '@ether/.entrypoint.player.ray', '@ether/ray', '@ether/$', '@ether/optional', '@ether/game', '@ether/os', '@ether/library')
 $Marker = '# Added by the Ether installer'
 
 if ($Help) {
@@ -95,7 +95,9 @@ function Invoke-Compile([string] $target) {
   if (-not $root -or -not (Test-Path -LiteralPath (Join-Path $root $Entry))) { throw "-Compile needs a checkout of $Repository (run .\install.ps1 from inside it)" }
   if (-not (Get-Command deno -ErrorAction SilentlyContinue)) { throw "-Compile needs Deno (https://deno.com): irm https://deno.land/install.ps1 | iex" }
   $work = New-TemporaryDirectory
-  $arguments = @('compile', '-A', '--no-check', '--config', $Config, '--quiet') + ($Includes | ForEach-Object { '--include', $_ }) + @('--target', $target, '--output', (Join-Path $work (Get-Executable $target $Name)), $Entry)
+  # (its reading goes deep: room for it within a main thread's 8 MB, where the platform gives that)
+  $deep = if ($target -like '*windows*') { @() } else { @('--v8-flags=--stack-size=7000') }
+  $arguments = @('compile', '-A', '--no-check', '--config', $Config, '--quiet') + ($Includes | ForEach-Object { '--include', $_ }) + $deep + @('--target', $target, '--output', (Join-Path $work (Get-Executable $target $Name)), $Entry)
   Write-Host "Compiling $Name for $target ..."
   Push-Location $root
   try { & deno @arguments; if ($LASTEXITCODE -ne 0) { throw "Compiling for $target failed" } } finally { Pop-Location }

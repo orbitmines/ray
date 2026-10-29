@@ -8,7 +8,7 @@
 /**/.vite
 /**/.ether
 /**/.*.ts
-/@ether/v0.ts/src/language.*.ts
-/@ether/v0.ts/src/kernel.*/
-/@ether/v0.ts/dist/
-/@ether/v0.ts/@ether/
+/@ether/ray/bootstrap/@ether/
+/@ether/ray/bootstrap/node_modules/
+/@ether/ray/bootstrap/README.md
+/@ether/ray/bootstrap/LICENSE

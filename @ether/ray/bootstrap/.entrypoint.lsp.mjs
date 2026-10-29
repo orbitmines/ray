@@ -11,8 +11,6 @@ const blanked = (text) => text.split('\n').map((l) => (l.trimStart().startsWith(
 
 // The reading thread: the latest revision's reader, asked one text at a time.
 if (!isMainThread && workerData?.lsp === 'reader') {
-  // (this thread runs no `ether` of its own: what it was started with is the server's)
-  process.argv = process.argv.slice(0, 1);
   const { statements } = await import('./.entrypoint.mjs');
   const parse = await statements();
   parentPort.on('message', ({ id, text }) => {

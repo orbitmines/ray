@@ -2149,12 +2149,64 @@ function typed(t, v) {
   }
   v
 }
+function occurs(l, a, e) {
+  var n
+  var f
+  var q
+  n = (load (l + 8)) - (load (l + 4))
+  if n == 0 {
+    return 1
+  }
+  f = load8 (load (l + 4))
+  q = a
+  while (q + n) <= e {
+    if (load8 q) == f {
+      if texteq(q, load (l + 4), n) {
+        return 1
+      }
+    }
+    q = q + 1
+  }
+  0
+}
+function literals_in(p, a, e) {
+  var l
+  var i
+  var c
+  if tag(p) != 6 {
+    return 1
+  }
+  if (load (p + 4)) == 1 {
+    return occurs(load (p + 8), a, e)
+  }
+  if (load (p + 4)) != 3 {
+    return 1
+  }
+  l = load (p + 8)
+  i = 0
+  while i < (load (l + 4)) {
+    c = at(l, i)
+    if tag(c) == 6 {
+      if (load (c + 4)) == 1 {
+        if occurs(load (c + 8), a, e) == 0 {
+          return 0
+        }
+      }
+    }
+    i = i + 1
+  }
+  1
+}
 function reads(p, t) {
   var r
   var te
   var bn
   if tag(t) == 1 {
     t = member(t, 32)
+  }
+  if literals_in(p, load (t + 4), load (t + 8)) == 0 {
+    wholly = 8
+    return 0
   }
   te = textend
   bn = boundn

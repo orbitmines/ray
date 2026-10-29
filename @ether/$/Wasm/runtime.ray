@@ -1262,7 +1262,7 @@ function led_keys(l) {
     return load (s + 12)
   }
   m = load (l + 4)
-  if ((load pcache) + (8 + (m * 8))) > (8388608 - (2048 * 48)) {
+  if ((load pcache) + (8 + (m * 8))) > (8388608 - (2048 * 560)) {
     zeroed(pcache + 16, 16384)
     pcache <- 16400
   }
@@ -2310,21 +2310,27 @@ function bytes_in(a, e) {
   var s
   var q
   var c
+  var h
   if pcache == 0 {
     pcache = alloc(8388608)
     kept()
     pcache <- 16400
   }
-  s = pcache + (8388608 - (2048 * 48))
-  s = s + ((((((a * 31) + (e * 7)) / 4) and 2047)) * 48)
-  if (((load s) == a) and ((load (s + 4)) == e)) and ((load (s + 8)) == epoch) {
-    return s + 16
+  s = pcache + (8388608 - (2048 * 560))
+  s = s + ((((((a * 31) + (e * 7)) / 4) and 2047)) * 560)
+  if ((load s) == a) and ((load (s + 4)) == e) {
+    if lasting_span(a, e) or ((load (s + 8)) == epoch) {
+      return s + 16
+    }
   }
-  zeroed(s + 16, 32)
+  zeroed(s + 16, 544)
+  c = 0
   q = a
   while q < e {
+    h = ((c * 31) + (load8 q)) and 4095
     c = load8 q
     (s + (16 + (c / 8))) <-8 ((load8 (s + (16 + (c / 8)))) or (1 << (c % 8)))
+    (s + (48 + (h / 8))) <-8 ((load8 (s + (48 + (h / 8)))) or (1 << (h % 8)))
     q = q + 1
   }
   s <- a
@@ -2353,6 +2359,14 @@ function occurs(l, a, e) {
   }
   if n == 1 {
     return 1
+  }
+  i = 1
+  while i < n {
+    f = (((load8 ((load (l + 4)) + (i - 1))) * 31) + (load8 ((load (l + 4)) + i))) and 4095
+    if ((load8 (b + (32 + (f / 8)))) and (1 << (f % 8))) == 0 {
+      return 0
+    }
+    i = i + 1
   }
   f = load8 (load (l + 4))
   q = a

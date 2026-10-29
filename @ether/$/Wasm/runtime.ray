@@ -338,7 +338,7 @@ function cw_symbol_of(t) {
 }
 function outbyte(b) {
   if outb == 0 {
-    outb = alloc(67108864)
+    outb = alloc(16777216)
   }
   (outb + outn) <-8 b
   outn = outn + 1
@@ -439,7 +439,7 @@ function cw_aside_from(x) {
   var m
   var j
   if asideb == 0 {
-    asideb = alloc(16777216)
+    asideb = alloc(4194304)
   }
   m = untag(x)
   j = m
@@ -1069,23 +1069,50 @@ function text_led_reading(ctx, n) {
   (memo + 1048576 + ((h - memo) / 4)) <- r
   r
 }
+function lead_byte(p) {
+  var l
+  if (load (p + 4)) == 1 {
+    l = load (p + 8)
+    if (load (l + 8)) == (load (l + 4)) {
+      return 0 - 1
+    }
+    return load8 (load (l + 4))
+  }
+  if (load (p + 4)) == 3 {
+    l = load (p + 8)
+    if (load (l + 4)) == 0 {
+      return 0 - 1
+    }
+    return lead_byte(at(l, 0))
+  }
+  0 - 1
+}
 function text_led_read(ctx, n) {
   var l
   var i
   var p
   var r
   var m
+  var b
+  var c
   m = boundn
+  c = 0 - 2
+  if n < textend {
+    c = load8 n
+  }
   while tag(ctx) == 1 {
     l = load ((member(ctx, 37)) + 12)
     i = 0
     while (l != 0) and (i < (load (l + 4))) {
       p = topattern(member(at(l, i), 17))
       if led_by_text(p) {
-        r = matched(p, n, 0)
-        boundn = m
-        if r > n {
-          return r
+        b = lead_byte(p)
+        if (b < 0) or (b == c) {
+          r = matched(p, n, 0)
+          boundn = m
+          if r > n {
+            return r
+          }
         }
       }
       i = i + 1

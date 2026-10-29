@@ -1,0 +1,615 @@
+// High: Ray code written as the low level's (what the runtime is written in), then written as WebAssembly by `Low`. A
+// value is one i32 (a number twice itself and one; None 0, false 8, true 12; a node, a list, a text, a closure, a class
+// where it is made); a name is read in the scope it is written in (`get(scope, its number)`); each function the
+// runtime's `(env, args, named)`, its scope a node in what it was made in (a class's, the instance). (What a function
+// written inside another writes is set aside, written after.)
+High := {
+  static closing (cz) => High.w(")")
+  static w (wt) => level write wt
+  static number (wn) => level cw_write_number wn
+  static symbol (sn) => High.number(High.symbol_number(Compiled.trimmed(sn)))
+  static symbol_number (sy) => (sy === None) ? None : level cw_symbol_of (sy)
+  static unescaped (ue) => (ue === None) ? None : level cw_unescaped (ue)
+  static chopped (cp) => (cp === None) ? None : level cw_chopped (cp)
+  static span_of (sa, sb) => ((sa === None) || (sb === None)) ? None : level cw_span_of (sa) (sb)
+  static parsed_one (pt) => Compiled.parsed(Compiled.trimmed(pt)).first
+  static parts (pt) => High.rejoined(Compiled.parts(pt))
+  static rejoined (rl) => (rl.count < 2) ? rl : High.rejoin(rl.rest, rl.first, High.quotes_of(rl.first), Array.new)
+  static rejoin (rr, rc, rq, ro) => rr.empty ? ro.append(rc) : (((rq % 2) == 1) ? High.rejoin(rr.rest, level cw_span_of (rc) (rr.first), rq + High.quotes_of(rr.first), ro) : High.rejoin(rr.rest, rr.first, High.quotes_of(rr.first), ro.append(rc)))
+  static quotes_of (qo) => High.quotes_in(qo, 0, Compiled.bytes(qo))
+  static quotes_in (ot, oa, oe) => ((oe - oa) > 32) ? (High.quotes_in(ot, oa, (oa + oe) / 2) + High.quotes_in(ot, (oa + oe) / 2, oe)) : High.quotes_from(ot, oa, oe, 0)
+  static quotes_from (ft, fi, fe, fn) => (fi >= fe) ? fn : (High.operator_led(High.char_at(ft, fi), "\\") ? High.quotes_from(ft, fi + 2, fe, fn) : ((High.char_at(ft, fi) == "\"") ? High.quotes_from(ft, fi + 1, fe, fn + 1) : High.quotes_from(ft, fi + 1, fe, fn)))
+  static char_at (ct, ci) => (ci == 0) ? ct.first : level cw_slice (ct) (ci) (ci + 1)
+  static kind (kt) => Compiled.kind_of(High.parsed_one(kt))
+  static program (pr_text, pr_runtime, pr_pages) => {
+    Compiled.parts(`this, key, value, length, count, first, last, keys, sort, for, body, statements, statement, rest, empty, reading, text, caller, at, node, in, rules, map, \s, \n, String, ⊣, None, true, false, \n\n, input, holes, Place, noted, applied, members, whole, joined, append, new, Array`).for((s) => level cw_symbol_of (s))
+    High.w(pr_runtime)
+    High.w("\nfunction main() {\n  var scope\n  free = 8388608 + (((load 4088) + 7) / 8) * 8\n  names = list()\n  symtab()\n  scope = node(0)\n  define(scope, 57, arrays())\n")
+    Compiled.statements_of(pr_text).for((st) => High.statement_isolated(st))
+    High.w("\n}\n")
+    High.w("function symtab() {\n  seeded(")
+    High.text(`this`)
+    High.w(")\n")
+    High.symbols_from(1, level cw_symbol_count)
+    High.w("  0\n}\n")
+    level cw_aside_out
+    level cw_taken
+    Low.module_of(level cw_taken, pr_pages)
+  }
+  static statements (ss) => ss.for((st) => High.statement(st))
+  static statements_isolated (ss) => ss.for((st) => High.statement_isolated(st))
+  static symbols_from (sf_at, sf_count) => (sf_at < sf_count) ? High.symbol_seeded(sf_at, sf_count) : 0
+  static symbol_seeded (ss_at, ss_count) => {
+    High.w("  seeded(")
+    High.text(level cw_symbol_text (ss_at))
+    High.w(")\n")
+    High.symbols_from(ss_at + 1, ss_count)
+  }
+  static statement_isolated (si) => {
+    level cw_isolated {
+      High.statement(si)
+    }
+  }
+  static statement (st) => {
+    High.w("  ")
+    High.expression(st)
+    High.w("\n")
+  }
+  static expression (ex) => High.shaped(Compiled.trimmed(ex), High.parsed_one(ex))
+  static shaped (sx, sp) => High.by_kind(sx, Compiled.kind_of(sp), sp)
+  static by_kind (bx, bk, bp) => (bk == `seq_left`) ? High.pattern_of(High.parts(bx)) : ((bk == `leaf`) ? (Compiled.braced(bx) ? High.block(Compiled.inner_of(bx)) : (Compiled.bracketed(bx) ? High.grouped(Compiled.statements_of(Compiled.inner_of(bx))) : (High.indexing(bx) ? High.listed(High.parts(Compiled.inner_of(bx))) : High.leaf(bx)))) : High.shape(bp, bk))
+  static leaf (lf) => High.quoted(lf, "`") ? High.text(Compiled.inner_of(lf)) : (High.quoted(lf, "\"") ? High.text(High.unescaped(Compiled.inner_of(lf))) : High.leaf_of(lf))
+  static quoted (qt, qc) => (qt.count >= 2) && (qt.first == qc) && (Compiled.last_of(qt) == qc)
+  static leaf_of (lf) => ((level cw_numeral_value (lf)) === None) ? High.word(lf) : High.number((level cw_numeral_value (lf)) * 2 + 1)
+  static word (wd) => High.word_numbered(wd, level cw_symbol_of (wd))
+  static word_numbered (wd, wn) => (wn == 39) ? High.w("chars(1)") : ((wn == 40) ? High.w("chars(2)") : ((wn == 41) ? High.w("anything()") : ((wn == 42) ? High.w("ending()") : ((wn == 43) ? High.w("0") : ((wn == 44) ? High.w("12") : ((wn == 45) ? High.w("8") : ((wn == 46) ? High.w("sequence(append(append(list(), chars(2)), chars(2)))") : ((wn == 47) ? High.w("input()") : ((wn == 48) ? High.w("holes_of(scope)") : ((wn == 49) ? High.w("bound(50, 0)") : ((wn == 50) ? High.w("bound(51, 0)") : ((wn == 51) ? High.w("applied_of(scope)") : ((wn == 52) ? High.w("bound(52, 0)") : ((wd.count == 1) && (wd.first == ".") ? High.name("this") : High.name(wd)))))))))))))))
+  static grouped (gs) => (gs.count == 1) ? High.expression(gs.first) : High.in_turn(gs)
+  static in_turn (it) => {
+    High.w("last(")
+    High.listed_all(it)
+    High.w(")")
+  }
+  static listed_all (la) => {
+    la.for((part) => High.w("append("))
+    High.w("list()")
+    la.for((part) => High.appended_statement(part))
+  }
+  static appended_statement (as) => {
+    High.w(", ")
+    High.expression(as)
+    High.closing(0)
+  }
+  static read_as (rv, rt) => {
+    High.w("readtext(astype(")
+    High.expression(rt)
+    High.w(", scope), ")
+    High.expression(rv)
+    High.w(")")
+  }
+  static with_code (wa) => {
+    High.w("with_code(")
+    High.expression(wa)
+    High.w(", 0)")
+  }
+  static name (nm) => {
+    High.w("get(scope, ")
+    High.symbol(nm)
+    High.w(")")
+  }
+  static shape (sh, sk) => (sk == `level_request`) ? High.level_requested(sh.level_request) : ((sk == `list_code`) ? High.listed(High.parts(sh.list_code)) : ((sk == `static_of`) ? High.expression(sh.static_of) : ((sk == `ext_of`) ? High.extended_by(sh.ext_of, sh.ext_with) : ((sk == `member_of`) ? High.grammar_of(sh.member_of, sh.member_code) : High.shape_ops(sh, sk)))))
+  static shape_ops (sh, sk) => (sk == `sub_left`) ? High.folded(() => High.expression(sh.sub_left), "minus", sh.sub_right) : ((sk == `mul_left`) ? High.folded(() => High.expression(sh.mul_left), "times", sh.mul_right) : ((sk == `div_left`) ? High.folded(() => High.expression(sh.div_left), "quotient", sh.div_right) : ((sk == `rem_left`) ? High.folded(() => High.expression(sh.rem_left), "remainder", sh.rem_right) : ((sk == `add_left`) ? High.folded(() => High.expression(sh.add_left), "plus", sh.add_right) : ((sk == `shl_left`) ? High.call2("shifted_left", sh.shl_left, sh.shl_right) : ((sk == `shr_left`) ? High.call2("shifted_right", sh.shr_left, sh.shr_right) : High.shape_compared(sh, sk)))))))
+}
+High &+= {
+  static folded (fl, fo, fr) => High.folded_kind(fl, fo, fr, High.kind(fr), High.parsed_one(fr))
+  static folded_kind (fl, fo, fr, fk, fp) => (High.additive(fo) && (fk == `add_left`)) ? High.folded(() => High.op_written(fo, fl, () => High.expression(fp.add_left)), "plus", fp.add_right) : ((High.additive(fo) && (fk == `sub_left`)) ? High.folded(() => High.op_written(fo, fl, () => High.expression(fp.sub_left)), "minus", fp.sub_right) : High.folded_times(fl, fo, fr, fk, fp))
+  static folded_times (fl, fo, fr, fk, fp) => (High.multiplicative(fo) && (fk == `mul_left`)) ? High.folded(() => High.op_written(fo, fl, () => High.expression(fp.mul_left)), "times", fp.mul_right) : ((High.multiplicative(fo) && (fk == `div_left`)) ? High.folded(() => High.op_written(fo, fl, () => High.expression(fp.div_left)), "quotient", fp.div_right) : ((High.multiplicative(fo) && (fk == `rem_left`)) ? High.folded(() => High.op_written(fo, fl, () => High.expression(fp.rem_left)), "remainder", fp.rem_right) : High.op_written(fo, fl, () => High.expression(fr))))
+  static additive (ao) => (ao == "plus") || (ao == "minus")
+  static multiplicative (mo) => (mo == "times") || (mo == "quotient") || (mo == "remainder")
+  static op_written (ow_name, ow_left, ow_right) => {
+    High.w(ow_name)
+    High.w("(")
+    ow_left()
+    High.w(", ")
+    ow_right()
+    High.w(")")
+  }
+  static grammar_of (go, gc) => {
+    High.w("with(")
+    High.expression(go)
+    High.w(", 32, ")
+    High.text(gc)
+    High.w(")")
+  }
+  static shape_compared (sh, sk) => (sk == `lt_left`) ? High.call2("less", sh.lt_left, sh.lt_right) : ((sk == `gt_left`) ? High.call2("greater", sh.gt_left, sh.gt_right) : ((sk == `le_left`) ? High.call2("less_equal", sh.le_left, sh.le_right) : ((sk == `ge_left`) ? High.call2("greater_equal", sh.ge_left, sh.ge_right) : ((sk == `ne_left`) ? High.call2("unequal", sh.ne_left, sh.ne_right) : High.shape_logical(sh, sk)))))
+  static shape_logical (sh, sk) => (sk == `land_left`) ? High.choice(sh.land_left, sh.land_right, `false`) : ((sk == `lor_left`) ? High.choice(sh.lor_left, `true`, sh.lor_right) : ((sk == `andl_left`) ? High.choice(sh.andl_left, sh.andl_right, `false`) : ((sk == `orl_left`) ? High.choice(sh.orl_left, `true`, sh.orl_right) : High.shape1(sh, sk))))
+  static level_requested (lr) => High.level_of(High.chain(lr))
+  static chain (ct) => (High.kind(ct) == `juxtaposed`) ? Array.new.append(Compiled.trimmed(High.parsed_one(ct).juxtaposed)).joined(High.chain(High.parsed_one(ct).juxtaposed_arg)) : Array.new.append(Compiled.trimmed(ct))
+  static level_of (le) => High.level_named(le.first, le.rest)
+  static level_named (ln, la) => (ln == `write`) ? High.level_call("cw_write_value", la) : ((ln == `cw_isolated`) ? High.level_block(la.first) : ((ln == `cw_sized`) ? High.level_after("sized_after", la.first) : ((ln == `cw_aside`) ? High.level_after("aside_after", la.first) : ((ln == `cw_cached`) ? High.w("8") : ((ln == `cw_forced`) ? High.expression(la.first) : High.level_call(ln, la))))))
+  static level_call (lc_name, lc_args) => {
+    High.w(lc_name)
+    High.w("(")
+    High.level_arguments(lc_args)
+    High.w(")")
+  }
+  static level_arguments (la) => la.empty ? None : High.level_argument(la.first, la.rest)
+  static level_argument (lf, lr) => {
+    High.expression(lf)
+    High.w(", ") if !lr.empty
+    High.level_arguments(lr)
+  }
+  static level_block (lb) => High.grouped(Compiled.statements_of(High.block_text(lb)))
+  static level_after (la_name, la_block) => {
+    High.w(la_name)
+    High.w("(cw_written_at(), ")
+    High.level_block(la_block)
+    High.w(")")
+  }
+  static block_text (bt) => Compiled.braced(Compiled.trimmed(bt)) ? Compiled.inner_of(Compiled.trimmed(bt)) : bt
+  static extended_by (eo, ew) => {
+    High.w("extended(")
+    High.expression(eo)
+    High.w(", ")
+    High.made("closure", level cw_counted, "", High.block_text(ew), `extension`)
+    High.w(")")
+  }
+  static shape1 (sh, sk) => (sk == `group_code`) ? High.expression(sh.group_code) : ((sk == `add_left`) ? High.call2("plus", sh.add_left, sh.add_right) : ((sk == `equal_left`) ? High.call2("same", sh.equal_left, sh.equal_right) : ((sk == `choice_if`) ? High.choice(sh.choice_if, sh.choice_yes, sh.choice_no) : High.shape2(sh, sk))))
+  static shape2 (sh, sk) => (sk == `def_name`) ? High.defined(sh.def_name, sh.def_value) : ((sk == `rule_head`) ? High.rule(sh.rule_head, sh.rule_body) : ((sk == `call_of`) ? High.called(sh.call_of, sh.call_arguments) : ((sk == `called_of`) ? High.called(sh.called_of, "") : High.shape3(sh, sk))))
+  static shape3 (sh, sk) => (sk == `quoted_text`) ? High.text(sh.quoted_text) : ((sk == `string_text`) ? High.text(level cw_unescaped (sh.string_text)) : ((sk == `seq_left`) ? High.pattern_of(High.parts(sh.seq_left)) : High.shape4(sh, sk)))
+  static shape4 (sh, sk) => (sk == `alt_left`) ? High.alternatives(sh) : ((sk == `any_of`) ? High.repeated(sh.any_of, 0) : ((sk == `some_of`) ? High.repeated(sh.some_of, 1) : ((sk == `repeated_of`) ? High.greedy(sh.repeated_of, 1) : ((sk == `field_name`) ? High.field(sh.field_name, sh.field_type) : ((sk == `reads_left`) ? High.reads(sh.reads_left, sh.reads_right) : High.shape5(sh, sk))))))
+  static shape5 (sh, sk) => (sk == `selected_of`) ? High.selected(() => High.expression(sh.selected_of), sh.selection) : ((sk == `counted_of`) ? High.expression(sh.counted_of) : ((sk == `or_left`) ? High.orelse(sh.or_left, sh.or_right) : ((sk == `member_on`) ? High.on_maybe(() => High.expression(sh.member_on), sh.member_maybe) : High.shape6(sh, sk))))
+  static shape6 (sh, sk) => (sk == `member_from`) ? (High.maybe_led(Compiled.trimmed(sh.member_from)) ? High.on_maybe(() => High.expression(High.chopped(Compiled.trimmed(sh.member_from))), sh.member_name) : High.on(() => High.expression(sh.member_from), sh.member_name)) : ((sk == `this_member`) ? High.on(() => High.name("this"), sh.this_member) : High.shape7(sh, sk))
+  static shape7 (sh, sk) => (sk == `dynamic_of`) ? High.expression(sh.dynamic_of) : ((sk == `concurrent_of`) ? High.expression(sh.concurrent_of) : ((sk == `and_left`) ? High.conjoined(sh.and_left, sh.and_right) : ((sk == `typed_name`) ? High.typed_value(sh.typed_name, sh.typed_type, sh.typed_value) : ((sk == `set_place`) ? High.set(sh.set_place, sh.set_value) : ((sk == `if_value`) ? High.choice(sh.if_condition, sh.if_value, `None`) : ((sk == `indexed_of`) ? High.indexed(sh.indexed_of, sh.index_at) : ((sk == `same_left`) ? High.call2("equal", sh.same_left, sh.same_right) : ((sk == `as_value`) ? High.read_as(sh.as_value, sh.as_type) : ((sk == `is_left`) ? High.call2("equal", sh.is_left, sh.is_type) : ((sk == `with_left`) ? High.with_code(sh.with_left) : ((sk == `juxtaposed`) ? High.called_with(() => High.expression(sh.juxtaposed), sh.juxtaposed_arg) : ((sk == `in_this_code`) ? High.called_with(() => High.name("this"), sh.in_this_code) : ((sk == `not_of`) ? High.call1("negated", sh.not_of) : High.unknown(sk))))))))))))))
+}
+High &+= {
+  static text (tx) => High.text_at(level cw_datum (tx), Compiled.bytes(tx))
+  static text_at (ta, tn) => {
+    High.w("text(")
+    High.number(4096 + ta)
+    High.w(", ")
+    High.number(4096 + ta + tn)
+    High.w(")")
+  }
+  static made_of (mf, mp) => {
+    High.w(mf)
+    High.w("(")
+    High.listed(mp)
+    High.w(")")
+  }
+  static pattern_of (pp) => {
+    High.w("sequence(")
+    High.header_fields(pp)
+    High.w(")")
+  }
+  static alternatives (av) => {
+    High.w("either(append(append(list(), ")
+    High.as_type(av.alt_left)
+    High.w("), ")
+    High.as_type(av.alt_right)
+    High.w("))")
+  }
+  static as_type (at) => {
+    High.w("astype(")
+    High.expression(at)
+    High.w(", scope)")
+  }
+  static greedy (gv, gl) => {
+    High.w("greedy(")
+    High.as_type(gv)
+    High.w(", ")
+    High.number(gl)
+    High.w(")")
+  }
+  static repeated (rv, rl) => {
+    High.w("repeated(")
+    High.as_type(rv)
+    High.w(", ")
+    High.number(rl)
+    High.w(")")
+  }
+  static field (fn, ft) => {
+    High.w("field(")
+    High.symbol(fn)
+    High.w(", staged(")
+    High.made("closure", level cw_counted, "", ft, `type`)
+    High.w("))")
+  }
+  static conjoined (ca, cb) => {
+    High.w("conj(")
+    High.as_type(ca)
+    High.w(", ")
+    High.expression(cb)
+    High.w(")")
+  }
+  static typed_value (tn, tt, tv) => {
+    High.w("define(scope, ")
+    High.symbol(tn)
+    High.w(", typed(")
+    High.as_type(tt)
+    High.w(", ")
+    High.expression(tv)
+    High.w("))")
+  }
+  static set (sp, sv) => (High.kind(sp) == `with_left`) ? High.with_code(High.parsed_one(sp).with_left) : High.set_of(sp, sv)
+  static set_of (sp, sv) => (High.kind(sp) == `member_from`) ? High.set_member(() => High.expression(High.parsed_one(sp).member_from), High.parsed_one(sp).member_name, sv) : ((High.kind(sp) == `this_member`) ? High.set_member(() => High.name("this"), High.parsed_one(sp).this_member, sv) : High.assigned(sp, sv))
+  static set_member (sv_on, sm, sv) => {
+    High.w("setmember(")
+    sv_on()
+    High.w(", ")
+    High.symbol(sm)
+    High.w(", ")
+    High.expression(sv)
+    High.w(")")
+  }
+  static assigned (an, av) => {
+    High.w("assign(scope, ")
+    High.symbol(an)
+    High.w(", ")
+    High.expression(av)
+    High.w(")")
+  }
+  static indexed (io, ik) => {
+    High.w("index(")
+    High.expression(io)
+    High.w(", ")
+    High.expression(Compiled.trimmed(ik))
+    High.w(")")
+  }
+  static reads (rt, rp) => {
+    High.w("readsv(")
+    High.expression(rp)
+    High.w(", ")
+    High.expression(rt)
+    High.w(")")
+  }
+  static selected (sv, sp) => {
+    High.w("select(")
+    sv()
+    High.w(", ")
+    High.section(sp)
+    High.w(")")
+  }
+  static section (st) => High.sectioned_text(Compiled.trimmed(st))
+  static sectioned_text (sx) => High.operator_led(sx, "==") ? High.made("closure", level cw_counted, "this", sx, `equals`) : (High.operator_led(sx, "is") ? High.made("closure", level cw_counted, "this", sx, `is`) : High.made("closure", level cw_counted, "this", sx, `function`))
+  static operator_led (ot, oo) => (level cw_starts (ot) (oo)) === true
+  static on_maybe (mv, mt) => High.on_kind_maybe(mv, Compiled.trimmed(mt), High.kind(mt), High.parsed_one(mt))
+  static on_kind_maybe (ov, ot, ok, op) => (ok == `leaf`) ? High.maybe(ov, ot) : ((ok == `call_of`) ? High.called_on(() => High.maybe(ov, op.call_of), op.call_arguments) : ((ok == `member_from`) ? High.on(() => High.maybe(ov, op.member_from), op.member_name) : High.unknown(ok)))
+  static maybe_led (ml) => (ml.count > 1) && (Compiled.last_of(ml) == "?")
+  static maybe (mv, mn) => {
+    High.w("maybe(")
+    mv()
+    High.w(", ")
+    High.symbol(mn)
+    High.w(")")
+  }
+  static unknown (uk) => {
+    High.w("0 /* ")
+    High.w(uk)
+    High.w(" */")
+  }
+  static call1 (cf, ca) => {
+    High.w(cf)
+    High.w("(")
+    High.expression(ca)
+    High.w(")")
+  }
+  static call2 (cf, ca, cb) => {
+    High.w(cf)
+    High.w("(")
+    High.expression(ca)
+    High.w(", ")
+    High.expression(cb)
+    High.w(")")
+  }
+  static orelse (oa, ob) => {
+    High.w("if truthy(same(define(scope, ")
+    High.symbol(`??`)
+    High.w(", ")
+    High.expression(oa)
+    High.w("), 0)) {\n")
+    High.expression(ob)
+    High.w("\n} else {\nget(scope, ")
+    High.symbol(`??`)
+    High.w(")\n}")
+  }
+  static choice (ci, cy, cn) => {
+    High.w("if truthy(")
+    High.expression(ci)
+    High.w(") {\n")
+    High.expression(cy)
+    High.w("\n} else {\n")
+    High.expression(cn)
+    High.w("\n}")
+  }
+  static defined (dn, dv) => High.defined_as(dn, () => High.expression(dv))
+  static defined_as (dn, dw) => High.statically(dn) ? High.defined_as(High.static_part(dn), dw) : High.defined_keyed(dn, dw)
+  static defined_keyed (dn, dw) => (High.kind(dn) == `indexed_of`) ? High.keyed(() => High.expression(High.parsed_one(dn).indexed_of), High.parsed_one(dn).index_at, dw) : (High.indexing(Compiled.trimmed(dn)) ? High.keyed(() => High.w("scope"), Compiled.trimmed(dn), dw) : High.defined_name(dn, dw))
+  static indexing (it) => (it.first == "[") && ((level cw_enclosed (it)) === true)
+  static keyed (kv, kk, kd) => {
+    High.w("keyed(")
+    kv()
+    High.w(", ")
+    High.key(Compiled.trimmed(kk))
+    High.w(", ")
+    kd()
+    High.w(")")
+  }
+  static key (kt) => High.indexing(kt) ? High.key_of(Compiled.inner_of(kt)) : High.expression(kt)
+  static key_of (ko) => (High.kind(ko) == `field_name`) ? High.field(High.parsed_one(ko).field_name, High.parsed_one(ko).field_type) : ((High.parts(ko).count > 1) ? High.pattern_of(High.parts(ko)) : High.head(ko))
+  static head (ht) => {
+    High.w("headpattern(")
+    High.expression(ht)
+    High.w(")")
+  }
+  static defined_name (dn, dw) => {
+    High.w("define(scope, ")
+    High.symbol(dn)
+    High.w(", ")
+    dw()
+    High.w(")")
+  }
+  static on (on_value, on_text) => High.on_parsed(on_value, Compiled.trimmed(on_text), High.parsed_one(on_text))
+  static on_parsed (ov, ot, op) => High.on_kind(ov, ot, Compiled.kind_of(op), op)
+  static on_kind (ov, ot, ok, op) => (ok == `leaf`) ? High.member(ov, ot) : ((ok == `member_from`) ? High.on(() => High.on(ov, op.member_from), op.member_name) : ((ok == `call_of`) ? ((High.kind(op.call_of) == `selected_of`) ? High.sel_called(ov, High.parsed_one(op.call_of), op.call_arguments) : High.called_on(() => High.on(ov, op.call_of), op.call_arguments)) : ((ok == `called_of`) ? High.called_on(() => High.on(ov, op.called_of), "") : ((ok == `selected_of`) ? High.selected(() => High.on(ov, op.selected_of), op.selection) : ((ok == `counted_of`) ? High.on(ov, op.counted_of) : High.unknown(ok))))))
+}
+High &+= {
+  static sel_called (sv, sq, sa) => {
+    High.w("selmethod(")
+    sv()
+    High.w(", ")
+    High.symbol(sq.selected_of)
+    High.w(", ")
+    High.section(sq.selection)
+    High.w(", ")
+    High.listed(High.parts(sa))
+    High.w(")")
+  }
+  static member (mv, mn) => {
+    High.w("member2(")
+    mv()
+    High.w(", ")
+    High.symbol(mn)
+    High.w(")")
+  }
+  static called (cc, ca) => (Compiled.last_of(Compiled.trimmed(cc)) == ".") ? High.grammar_of(High.chopped(Compiled.trimmed(cc)), ca) : High.call_written(cc, ca)
+  static call_written (cc, ca) => ((High.kind(cc) == `selected_of`) && (High.kind(High.parsed_one(cc).selected_of) == `member_from`)) ? High.sel_method(High.parsed_one(High.parsed_one(cc).selected_of), High.parsed_one(cc).selection, ca) : High.called_on(() => High.expression(cc), ca)
+  static sel_method (sm, ss, sa) => High.sel_split(() => High.expression(sm.member_from), sm.member_name, ss, sa)
+  static sel_split (sw, sn, ss, sa) => (High.kind(sn) == `member_from`) ? High.sel_split(() => High.on(sw, High.parsed_one(sn).member_from), High.parsed_one(sn).member_name, ss, sa) : High.sel_written(sw, sn, ss, sa)
+  static sel_written (sw, sn, ss, sa) => {
+    High.w("selmethod(")
+    sw()
+    High.w(", ")
+    High.symbol(sn)
+    High.w(", ")
+    High.section(ss)
+    High.w(", ")
+    High.listed(High.parts(sa))
+    High.w(")")
+  }
+  static called_on (cv, ca) => ((High.parts(ca).count == 1) && Compiled.braced(Compiled.trimmed(ca))) ? High.extended(cv, Compiled.inner_of(Compiled.trimmed(ca))) : High.called_with(cv, ca)
+  static extended (ev, eb) => {
+    High.w("extended(call(")
+    ev()
+    High.w(", list(), node(0)), ")
+    High.made("closure", level cw_counted, "", eb, `extension`)
+    High.w(")")
+  }
+  static called_with (cv, ca) => {
+    High.w("invoke(")
+    cv()
+    High.w(", ")
+    High.listed(High.parts(ca))
+    High.w(", ")
+    High.named(High.parts(ca))
+    High.w(")")
+  }
+  static sectioned (sk) => (sk == `this_member`) || (sk == `in_this_code`)
+  static positional (pp) => !(High.kind(pp) == `field_name`)
+  static listed (lp) => {
+    lp.for((part) => High.listed_open(part))
+    High.w("list()")
+    lp.for((part) => High.appended_part(part))
+  }
+  static listed_open (lo) => {
+    High.w("append(") if High.positional(lo)
+  }
+  static appended_part (ap) => {
+    High.appended_value(ap) if High.positional(ap)
+  }
+  static appended_value (av) => {
+    High.w(", ")
+    High.sectioned(High.kind(av)) ? High.section(av) : High.expression(av)
+    High.closing(0)
+  }
+  static named (np) => {
+    np.for((part) => High.named_open(part))
+    High.w("node(0)")
+    np.for((part) => High.named_part(part))
+  }
+  static named_open (no) => {
+    High.w("with(") if !High.positional(no)
+  }
+  static named_part (nq) => {
+    High.named_value(High.parsed_one(nq)) if !High.positional(nq)
+  }
+  static named_value (nv) => {
+    High.w(", ")
+    High.symbol(nv.field_name)
+    High.w(", ")
+    High.expression(nv.field_type)
+    High.closing(0)
+  }
+  static rule (rh, rb) => High.statically(rh) ? High.rule(High.static_part(rh), rb) : High.rule_dynamic(rh, rb)
+  static statically (sy) => (High.kind(sy) == `static_of`) || ((High.kind(sy) == `juxtaposed`) && (Compiled.trimmed(High.parsed_one(sy).juxtaposed) == `static`))
+  static static_part (sp) => (High.kind(sp) == `static_of`) ? High.parsed_one(sp).static_of : High.parsed_one(sp).juxtaposed_arg
+  static rule_dynamic (rh, rb) => (High.kind(rh) == `dynamic_of`) ? High.rule(High.parsed_one(rh).dynamic_of, rb) : ((High.kind(rh) == `concurrent_of`) ? High.rule(High.parsed_one(rh).concurrent_of, rb) : High.rule_conjoined(rh, rb))
+  static rule_conjoined (rh, rb) => ((High.kind(rh) == `and_left`) && Compiled.bracketed(Compiled.trimmed(High.parsed_one(rh).and_right))) ? High.conjoined_with(High.parsed_one(rh).and_left, Compiled.inner_of(Compiled.trimmed(High.parsed_one(rh).and_right)), rb) : High.rule_of(rh, rb)
+  static conjoined_with (cw_s, cw_p, cw_b) => {
+    High.w("conj(")
+    High.as_type(cw_s)
+    High.w(", ")
+    High.function_value(cw_p, cw_b)
+    High.w(")")
+  }
+  static rule_of (rh, rb) => (High.kind(rh) == `rule_head`) ? High.rule(High.parsed_one(rh).rule_head, High.span_of(High.parsed_one(rh).rule_body, rb)) : ((High.kind(rh) == `def_name`) ? High.rule_defined(High.parsed_one(rh), rb) : High.rule_kind(rh, rb, Compiled.kind_of(Compiled.head_parsed(rh).first), Compiled.head_parsed(rh).first))
+  static rule_defined (rd, rb) => High.defined_as(rd.def_name, () => High.rule(rd.def_value, rb))
+  static rule_kind (rh, rb, rk, rp) => (rk == `call_of`) ? High.function_named(rp.call_of, rp.call_arguments, rb) : ((rk == `applied_name`) ? High.rule_applied(Compiled.trimmed(rp.applied_name), rp.applied_params, rb) : ((rk == `called_of`) ? High.function_named(rp.called_of, "", rb) : (Compiled.bracketed(Compiled.trimmed(rh)) ? High.function_value(Compiled.inner_of(Compiled.trimmed(rh)), rb) : (High.quoted(Compiled.trimmed(rh), "`") ? High.rule_keyed(Compiled.trimmed(rh), "", rb) : High.getter_named(rh, rb)))))
+  static rule_applied (ra_name, ra_params, ra_body) => (ra_name == `class`) ? High.class_value(ra_params, ra_body) : (High.quoted(ra_name, "`") ? High.rule_keyed(ra_name, ra_params, ra_body) : High.function_named(ra_name, ra_params, ra_body))
+  static rule_keyed (rk_head, rk_params, rk_body) => {
+    High.w("keyed(scope, headpattern(")
+    High.expression(rk_head)
+    High.w("), ")
+    High.function_value(rk_params, rk_body)
+    High.w(")")
+  }
+  static function_named (fn, fp, fb) => {
+    High.w("define(scope, ")
+    High.symbol(fn)
+    High.w(", ")
+    High.function_value(fp, fb)
+    High.w(")")
+  }
+  static getter_named (gn, gb) => {
+    High.w("define(scope, ")
+    High.symbol(gn)
+    High.w(", ")
+    High.made("getter", level cw_counted, "", gb, `function`)
+    High.w(")")
+  }
+  static function_value (vp, vb) => High.made("closure", level cw_counted, vp, vb, `function`)
+  static class_value (cp, cb) => High.class_made(level cw_counted, level cw_counted, cp, cb)
+}
+High &+= {
+  static class_made (cn, ch, cp, cb) => {
+    High.function_text(cn, cp, cb, `class`)
+    High.header_text(ch, cp)
+    High.w("classh(r")
+    High.number(cn)
+    High.w(", scope, r")
+    High.number(ch)
+    High.w(")")
+  }
+  static header_text (hn, hp) => {
+    level cw_aside {
+      High.header_written(hn, hp)
+    }
+  }
+  static header_written (ha_n, ha_p) => {
+    High.w("function r")
+    High.number(ha_n)
+    High.w("(env, args, named) {\n  var scope\n  scope = env\n  sequence(")
+    High.header_fields(High.parts(ha_p))
+    High.w(")\n}\n")
+  }
+  static header_fields (hf) => {
+    hf.for((part) => High.w("append("))
+    High.w("list()")
+    hf.for((part) => High.header_field(part))
+  }
+  static header_field (hp) => {
+    High.w(", ")
+    High.header_pattern(hp, High.kind(hp), High.parsed_one(hp))
+    High.closing(0)
+  }
+  static header_pattern (ht, hk, hq) => ((hk == `leaf`) && Compiled.bracketed(Compiled.trimmed(ht)) && (Compiled.statements_of(Compiled.inner_of(Compiled.trimmed(ht))).count > 1)) ? High.staged(Compiled.inner_of(Compiled.trimmed(ht))) : High.header_pattern_of(ht, hk, hq)
+  static staged (sg) => {
+    High.w("staged(")
+    High.made("closure", level cw_counted, "", sg, `staged`)
+    High.w(")")
+  }
+  static staged_body (sb) => High.staged_statements(Compiled.statements_of(sb))
+  static staged_statements (ss) => {
+    ss.for((st) => High.staged_isolated(st))
+  }
+  static staged_isolated (si) => {
+    level cw_isolated {
+      High.staged_statement(si)
+    }
+  }
+  static staged_statement (st) => High.fields_led(st) ? High.staged_fields(st) : High.statement(st)
+  static fields_led (fl) => (High.parts(fl).count > 1) || (High.kind(fl) == `field_name`)
+  static staged_fields (sf) => {
+    High.w("  ")
+    High.pattern_of(High.parts(sf))
+    High.w("\n")
+  }
+  static header_pattern_of (ht, hk, hq) => (hk == `optional_name`) ? High.optional_field(hq.optional_name, hq.optional_type) : ((hk == `field_name`) ? (Compiled.braced(Compiled.trimmed(hq.field_name)) ? High.dynamic_field(Compiled.inner_of(Compiled.trimmed(hq.field_name))) : High.field(hq.field_name, hq.field_type)) : ((hk == `leaf`) ? (High.given_leaf(Compiled.trimmed(ht)) ? High.as_type(ht) : High.any_field(ht)) : High.as_type(ht)))
+  static given_leaf (gl) => High.quoted(gl, "`") || (High.quoted(gl, "\"") || ((((level cw_symbol_of (gl)) >= 39) && ((level cw_symbol_of (gl)) <= 42)) || ((level cw_symbol_of (gl)) == 46)))
+  static optional_field (on, ot) => {
+    High.w("field(")
+    High.symbol(on)
+    High.w(", greedy(")
+    High.as_type(ot)
+    High.w(", 0))")
+  }
+  static any_field (an) => {
+    High.w("field(")
+    High.symbol(an)
+    High.w(", anything())")
+  }
+  static dynamic_field (dt) => {
+    High.w("field(")
+    High.symbol(High.parsed_one(dt).field_name)
+    High.w(", dynamic(")
+    High.section(High.parsed_one(dt).field_type)
+    High.w("))")
+  }
+  static made (mk, mn, mp, mb, m_mode) => {
+    High.function_text(mn, mp, mb, m_mode)
+    High.w(mk)
+    High.w("(r")
+    High.number(mn)
+    High.w(", scope)")
+  }
+  static function_text (tn, tp, tb, t_mode) => {
+    level cw_aside {
+      High.function_written(tn, tp, tb, t_mode)
+    }
+  }
+  static function_written (fw_n, fw_p, fw_b, fw_mode) => {
+    High.w("function r")
+    High.number(fw_n)
+    High.w("(env, args, named) {\n  var scope\n")
+    High.w(((fw_mode == `class`) || (fw_mode == `extension`)) ? "  scope = env\n" : (((fw_mode == `staged`) || (fw_mode == `type`)) ? "  scope = node(under(arg(args, 0), env))\n" : "  scope = node(env)\n"))
+    High.params(High.parts(fw_p), 0) if !(fw_mode == `staged`)
+    High.body(fw_b, fw_mode)
+    High.w("\n}\n")
+  }
+  static params (pf, pi) => pf.empty ? pi : High.params(pf.rest, High.param(pf.first, pi))
+  static param (pn, pi) => High.param_named(High.param_name(pn), pi)
+  static param_name (pq) => (High.kind(pq) == `optional_name`) ? High.parsed_one(pq).optional_name : ((High.kind(pq) == `field_name`) ? High.field_named(Compiled.trimmed(High.parsed_one(pq).field_name)) : pq)
+  static field_named (fq) => Compiled.braced(fq) ? High.parsed_one(Compiled.inner_of(fq)).field_name : fq
+  static param_named (pm, pi) => {
+    High.w("  define(scope, ")
+    High.symbol(pm)
+    High.w(", argn(args, named, ")
+    High.number(pi)
+    High.w(", ")
+    High.symbol(pm)
+    High.w("))\n")
+    pi + 1
+  }
+  static body (bt, b_mode) => (b_mode == `equals`) ? High.equals_body(High.after_two(bt, Compiled.bytes(bt))) : ((b_mode == `is`) ? High.equals_body(High.after_two(bt, Compiled.bytes(bt))) : ((b_mode == `staged`) ? High.staged_body(bt) : High.body_of(bt, b_mode)))
+  static after_two (at_text, at_n) => (at_n < 2) ? None : level cw_slice (at_text) (2) (at_n)
+  static type_statement (ts) => {
+    High.w("  astype(")
+    High.expression(ts)
+    High.w(", scope)\n")
+  }
+  static equals_body (eb) => {
+    High.w("  equal(get(scope, 16), ")
+    High.expression(eb)
+    High.w(")\n")
+  }
+  static body_statements (bs, bs_mode) => (bs_mode == `class`) ? High.statements_isolated(bs) : High.statements(bs)
+  static body_of (bt, b_mode) => {
+    (b_mode == `type`) ? High.type_statement(bt) : (((b_mode == `block`) || (b_mode == `extension`)) ? High.statements_isolated(Compiled.statements_of(bt)) : (Compiled.braced(Compiled.trimmed(bt)) ? High.body_statements(Compiled.statements_of(Compiled.inner_of(Compiled.trimmed(bt))), b_mode) : High.statement(bt)))
+    High.w("  scope\n") if !((b_mode == `function`) || (b_mode == `type`))
+  }
+  static block (bk) => {
+    High.w("call(")
+    High.made("closure", level cw_counted, "", bk, `block`)
+    High.w(", list(), 0)")
+  }
+}
+

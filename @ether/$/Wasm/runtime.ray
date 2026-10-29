@@ -1,0 +1,2583 @@
+function alloc(n) {
+  var p
+  p = free
+  free = free + ((n + 7) / 8) * 8
+  p
+}
+function input() {
+  text(8388608, 8388608 + (load 4088))
+}
+function applied_of(x) {
+  while (x != 0) and ((load x) != 10) {
+    x = load (x + 4)
+  }
+  x
+}
+function members_of(x) {
+  var l
+  var e
+  l = list()
+  if (tag(x) != 1) and (tag(x) != 10) {
+    return l
+  }
+  e = load (x + 8)
+  while e != 0 {
+    if (load (e + 4)) != 17 {
+      append(l, entry(name_text(load (e + 4)), load (e + 8)))
+    }
+    e = load e
+  }
+  l
+}
+function holes_of(x) {
+  var l
+  var e
+  while (x != 0) and ((load x) != 10) {
+    x = load (x + 4)
+  }
+  l = list()
+  if x == 0 {
+    return l
+  }
+  e = load (x + 8)
+  while e != 0 {
+    if (load (e + 4)) != 17 {
+      append(l, entry(name_text(load (e + 4)), load (e + 8)))
+    }
+    e = load e
+  }
+  l
+}
+function white(c) {
+  (c == 32) or ((c == 10) or ((c == 9) or (c == 13)))
+}
+function opener(c) {
+  (c == 40) or ((c == 91) or (c == 123))
+}
+function closer(c) {
+  (c == 41) or ((c == 93) or (c == 125))
+}
+function cw_trimmed(t) {
+  var a
+  var e
+  a = load (t + 4)
+  e = load (t + 8)
+  while (a < e) and white(load8 a) {
+    a = a + 1
+  }
+  while (e > a) and white(load8 (e - 1)) {
+    e = e - 1
+  }
+  text(a, e)
+}
+function cw_slice(t, x, v) {
+  if ((load (t + 4)) + untag(v)) > (load (t + 8)) {
+    return 0
+  }
+  text((load (t + 4)) + untag(x), (load (t + 4)) + untag(v))
+}
+function cw_chopped(t) {
+  if (load (t + 8)) <= (load (t + 4)) {
+    return 0
+  }
+  text(load (t + 4), (load (t + 8)) - 1)
+}
+function cw_span_of(t, x) {
+  text(load (t + 4), load (x + 8))
+}
+function cw_starts(t, x) {
+  var n
+  n = (load (x + 8)) - (load (x + 4))
+  if ((load (t + 8)) - (load (t + 4))) < n {
+    return 8
+  }
+  if texteq(load (t + 4), load (x + 4), n) {
+    return 12
+  }
+  8
+}
+function cw_unescaped(t) {
+  var o
+  var v
+  var g
+  var e
+  e = load (t + 8)
+  o = alloc((e - (load (t + 4))) + 8)
+  v = o
+  g = load (t + 4)
+  while g < e {
+    if ((load8 g) == 92) and ((g + 1) < e) {
+      g = g + 1
+      if (load8 g) == 110 {
+        v <-8 10
+      } else {
+        if (load8 g) == 116 {
+          v <-8 9
+        } else {
+          v <-8 (load8 g)
+        }
+      }
+    } else {
+      v <-8 (load8 g)
+    }
+    v = v + 1
+    g = g + 1
+  }
+  text(o, v)
+}
+function cw_enclosed(t) {
+  var a
+  var e
+  var d
+  var q
+  var c
+  a = load (t + 4)
+  e = load (t + 8)
+  while (a < e) and white(load8 a) {
+    a = a + 1
+  }
+  while (e > a) and white(load8 (e - 1)) {
+    e = e - 1
+  }
+  if (e - a) < 2 {
+    return 8
+  }
+  if opener(load8 a) == 0 {
+    return 8
+  }
+  d = 0
+  q = a
+  while q < e {
+    c = load8 q
+    if (c == 34) or (c == 96) {
+      q = q + 1
+      while (q < e) and ((load8 q) != c) {
+        if ((load8 q) == 92) and (c == 34) {
+          q = q + 1
+        }
+        q = q + 1
+      }
+    } else {
+      if opener(c) {
+        d = d + 1
+      }
+      if closer(c) {
+        d = d - 1
+        if (d == 0) and ((q + 1) < e) {
+          return 8
+        }
+      }
+    }
+    q = q + 1
+  }
+  if closer(load8 (e - 1)) {
+    return 12
+  }
+  8
+}
+function partstart(p, e) {
+  var go
+  go = 1
+  while (p < e) and (go != 0) {
+    go = 0
+    if white(load8 p) {
+      p = p + 1
+      go = 1
+    }
+    if ((go == 0) and ((p + 1) < e)) and (((load8 p) == 47) and ((load8 (p + 1)) == 47)) {
+      while (p < e) and ((load8 p) != 10) {
+        p = p + 1
+      }
+      go = 1
+    }
+  }
+  p
+}
+function trimmed_text(a, e) {
+  while (a < e) and white(load8 a) {
+    a = a + 1
+  }
+  while (e > a) and white(load8 (e - 1)) {
+    e = e - 1
+  }
+  text(a, e)
+}
+function cw_parts(t) {
+  var l
+  var d
+  var p
+  var q
+  var c
+  var e
+  l = list()
+  e = load (t + 8)
+  d = 0
+  p = partstart(load (t + 4), e)
+  q = p
+  while q < e {
+    c = load8 q
+    if ((c == 47) and ((q + 1) < e)) and ((load8 (q + 1)) == 47) {
+      while (q < e) and ((load8 q) != 10) {
+        q = q + 1
+      }
+      c = 10
+    }
+    if c == 96 {
+      q = q + 1
+      while (q < e) and ((load8 q) != 96) {
+        q = q + 1
+      }
+    } else {
+      if opener(c) {
+        d = d + 1
+      }
+      if closer(c) {
+        d = d - 1
+      }
+      if (c == 44) and (d == 0) {
+        append(l, trimmed_text(p, q))
+        p = partstart(q + 1, e)
+        q = p - 1
+      }
+    }
+    q = q + 1
+  }
+  if p < e {
+    c = trimmed_text(p, e)
+    if (load (c + 8)) > (load (c + 4)) {
+      append(l, c)
+    }
+  }
+  l
+}
+function cw_numeral_value(t) {
+  var a
+  var z
+  var h
+  var c
+  var d
+  a = load (t + 4)
+  z = load (t + 8)
+  while (a < z) and white(load8 a) {
+    a = a + 1
+  }
+  while (z > a) and white(load8 (z - 1)) {
+    z = z - 1
+  }
+  if a >= z {
+    return 0
+  }
+  h = 0
+  if ((z - a) >= 3) and (((load8 a) == 48) and (((load8 (a + 1)) == 120) or ((load8 (a + 1)) == 88))) {
+    a = a + 2
+    while a < z {
+      c = load8 a
+      d = 0 - 1
+      if (c >= 48) and (c <= 57) {
+        d = c - 48
+      }
+      if (c >= 97) and (c <= 102) {
+        d = c - 87
+      }
+      if (c >= 65) and (c <= 70) {
+        d = c - 55
+      }
+      if d < 0 {
+        return 0
+      }
+      h = (h * 16) + d
+      a = a + 1
+    }
+    return int(h)
+  }
+  while a < z {
+    c = load8 a
+    if (c < 48) or (c > 57) {
+      return 0
+    }
+    h = (h * 10) + (c - 48)
+    a = a + 1
+  }
+  int(h)
+}
+function cw_index_of(l, t) {
+  var i
+  var x
+  i = 0
+  while i < (load (l + 4)) {
+    x = at(l, i)
+    if tag(x) == 4 {
+      if ((load (x + 8)) - (load (x + 4))) == ((load (t + 8)) - (load (t + 4))) {
+        if texteq(load (x + 4), load (t + 4), (load (t + 8)) - (load (t + 4))) {
+          return int(i)
+        }
+      }
+    }
+    i = i + 1
+  }
+  0
+}
+function cw_symbol_of(t) {
+  var i
+  var x
+  if syms == 0 {
+    syms = list()
+  }
+  i = 0
+  while i < (load (syms + 4)) {
+    x = at(syms, i)
+    if ((load (x + 8)) - (load (x + 4))) == ((load (t + 8)) - (load (t + 4))) {
+      if texteq(load (x + 4), load (t + 4), (load (t + 8)) - (load (t + 4))) {
+        return int(i + 16)
+      }
+    }
+    i = i + 1
+  }
+  append(syms, t)
+  int(i + 16)
+}
+function outbyte(b) {
+  if outb == 0 {
+    outb = alloc(67108864)
+  }
+  (outb + outn) <-8 b
+  outn = outn + 1
+  0
+}
+function cw_write(b) {
+  outbyte(untag(b))
+}
+function cw_written_at() {
+  int(outn)
+}
+function cw_sized_from(x) {
+  var m
+  var n
+  var k
+  var v
+  var j
+  m = untag(x)
+  n = outn - m
+  k = 1
+  v = n >> 7
+  while v != 0 {
+    k = k + 1
+    v = v >> 7
+  }
+  j = outn - 1
+  while j >= m {
+    (outb + (j + k)) <-8 (load8 (outb + j))
+    j = j - 1
+  }
+  v = n
+  j = 0
+  while j < k {
+    if (j + 1) < k {
+      (outb + (m + j)) <-8 ((v and 127) or 128)
+    } else {
+      (outb + (m + j)) <-8 (v and 127)
+    }
+    v = v >> 7
+    j = j + 1
+  }
+  outn = outn + k
+  int(outn)
+}
+function cw_write_number(x) {
+  var n
+  var d
+  n = untag(x)
+  if n < 0 {
+    n = 0
+  }
+  d = 1
+  while (n / d) >= 10 {
+    d = d * 10
+  }
+  while d > 0 {
+    outbyte(48 + ((n / d) % 10))
+    d = d / 10
+  }
+  0
+}
+function cw_datum(t) {
+  var at
+  var j
+  if datab == 0 {
+    datab = alloc(4194304)
+  }
+  at = datan
+  j = load (t + 4)
+  while j < (load (t + 8)) {
+    (datab + datan) <-8 (load8 j)
+    datan = datan + 1
+    j = j + 1
+  }
+  int(at)
+}
+function cw_data_out() {
+  var j
+  var v
+  v = datan
+  while v >= 128 {
+    outbyte((v and 127) or 128)
+    v = v >> 7
+  }
+  outbyte(v)
+  j = 0
+  while j < datan {
+    outbyte(load8 (datab + j))
+    j = j + 1
+  }
+  0
+}
+function cw_counted() {
+  counter = counter + 1
+  int(counter - 1)
+}
+function cw_aside_from(x) {
+  var m
+  var j
+  if asideb == 0 {
+    asideb = alloc(16777216)
+  }
+  m = untag(x)
+  j = m
+  while j < outn {
+    (asideb + asiden) <-8 (load8 (outb + j))
+    asiden = asiden + 1
+    j = j + 1
+  }
+  outn = m
+  0
+}
+function cw_aside_out() {
+  var j
+  j = 0
+  while j < asiden {
+    outbyte(load8 (asideb + j))
+    j = j + 1
+  }
+  asiden = 0
+  0
+}
+function cw_taken() {
+  var c
+  if takent == 0 {
+    c = alloc(outn + 8)
+    copy(c, outb, outn)
+    takent = text(c, c + outn)
+    outn = 0
+  }
+  takent
+}
+function negated(v) {
+  if truthy(v) {
+    return 8
+  }
+  12
+}
+function input_part(i) {
+  var a
+  var e
+  var k
+  a = 8388608
+  e = 8388608 + (load 4088)
+  k = untag(i)
+  while k > 0 {
+    while (a < e) and ((load8 a) != 0) {
+      a = a + 1
+    }
+    a = a + 1
+    k = k - 1
+  }
+  k = a
+  while (k < e) and ((load8 k) != 0) {
+    k = k + 1
+  }
+  text(a, k)
+}
+function catch_all(p) {
+  p = topattern(p)
+  if tag(p) != 6 {
+    return 0
+  }
+  if (load (p + 4)) == 6 {
+    return 1
+  }
+  if (load (p + 4)) == 3 {
+    if (load ((load (p + 8)) + 4)) == 1 {
+      return (load (at(load (p + 8), 0) + 4)) == 6
+    }
+  }
+  0
+}
+function moved_keys(g, p) {
+  var lg
+  var lp
+  var lv
+  var i
+  lg = keys(member(g, 37))
+  lp = keys(member(p, 37))
+  touched(lp)
+  (lp + 4) <- 0
+  lv = list()
+  i = 0
+  while i < (load (lg + 4)) {
+    if i < 2 {
+      append(lv, at(lg, i))
+    } else {
+      if catch_all(member(at(lg, i), 17)) == 0 {
+        append(lp, at(lg, i))
+      }
+    }
+    i = i + 1
+  }
+  define(member(g, 37), 23, lv)
+  epoch = epoch + 1
+  int(load (lp + 4))
+}
+function set_parser(f) {
+  parserhook = f
+  0
+}
+function curried_value(c) {
+  if tag(c) != 9 {
+    return list()
+  }
+  load (c + 8)
+}
+function grammar_of(t) {
+  var g
+  g = node(0)
+  define(g, 32, t)
+  g
+}
+function parsed_statements(g, t) {
+  var l
+  if tag(g) == 4 {
+    g = grammar_of(g)
+  }
+  if tag(t) != 4 {
+    return list()
+  }
+  t = cw_trimmed(t)
+  if (load (t + 8)) == (load (t + 4)) {
+    return list()
+  }
+  l = list()
+  append(l, g)
+  append(l, t)
+  call(parserhook, l, 0)
+}
+function cw_statements_in(g, t) {
+  var l
+  var o
+  var i
+  l = parsed_statements(g, t)
+  o = list()
+  i = 0
+  while i < (load (l + 4)) {
+    append(o, member(at(l, i), 28))
+    i = i + 1
+  }
+  o
+}
+function statement_span(st) {
+  var s
+  var i
+  var c
+  s = member(st, 14)
+  if s == 0 {
+    return 0
+  }
+  s = load (s + 12)
+  i = 0
+  while (s != 0) and (i < (load (s + 4))) {
+    c = at(s, i)
+    if (load (c + 4)) == 28 {
+      return text(load (c + 8), load (c + 12))
+    }
+    i = i + 1
+  }
+  0
+}
+function cw_statement_texts(g, t) {
+  var l
+  var o
+  var i
+  l = parsed_statements(g, t)
+  o = list()
+  i = 0
+  while i < (load (l + 4)) {
+    append(o, continued_span(o, statement_span(at(l, i))))
+    i = i + 1
+  }
+  o
+}
+function separated(x) {
+  var e
+  if x == 0 {
+    return 0
+  }
+  e = load (x + 8)
+  while (e > (load (x + 4))) and white(load8 (e - 1)) {
+    e = e - 1
+  }
+  (e > (load (x + 4))) and ((load8 (e - 1)) == 44)
+}
+function continued_span(o, x) {
+  var p
+  if (load (o + 4)) == 0 {
+    return x
+  }
+  p = at(o, (load (o + 4)) - 1)
+  if (separated(p) == 0) or (x == 0) {
+    return x
+  }
+  (o + 4) <- ((load (o + 4)) - 1)
+  text(load (p + 4), load (x + 8))
+}
+function cw_first_member(x) {
+  var e
+  var f
+  if (tag(x) != 10) and (tag(x) != 1) {
+    return 0
+  }
+  f = 0
+  e = load (x + 8)
+  while e != 0 {
+    if (((load (e + 4)) != 17) and ((load (e + 4)) != 16)) and (((load (e + 4)) != 33) and ((load (e + 4)) != 36)) {
+      f = e
+    }
+    e = load e
+  }
+  if f == 0 {
+    return 0
+  }
+  name_text(load (f + 4))
+}
+function out_base() {
+  outb
+}
+function out_length() {
+  outn
+}
+function int(n) {
+  n + n + 1
+}
+function untag(v) {
+  v >> 1
+}
+function node(parent) {
+  var n
+  n = alloc(16)
+  n <- 1
+  (n + 4) <- parent
+  (n + 8) <- 0
+  (n + 12) <- 0
+  n
+}
+function own(n, sym) {
+  var e
+  e = load (n + 8)
+  while e != 0 {
+    if (load (e + 4)) == sym {
+      return e
+    }
+    e = load e
+  }
+  0
+}
+function define(n, sym, v) {
+  var e
+  touched(n)
+  e = own(n, sym)
+  if e == 0 {
+    e = alloc(12)
+    e <- load (n + 8)
+    (e + 4) <- sym
+    (n + 8) <- e
+  }
+  (e + 8) <- v
+  v
+}
+function lookup(n, sym) {
+  var e
+  while n != 0 {
+    e = own(n, sym)
+    if e != 0 {
+      return load (e + 8)
+    }
+    n = load (n + 4)
+  }
+  0
+}
+function assign(n, sym, v) {
+  var m
+  var e
+  m = n
+  while m != 0 {
+    e = own(m, sym)
+    if e != 0 {
+      touched(m)
+      (e + 8) <- v
+      return v
+    }
+    m = load (m + 4)
+  }
+  define(n, sym, v)
+}
+function list() {
+  var l
+  l = alloc(16)
+  l <- 3
+  (l + 4) <- 0
+  (l + 8) <- 8
+  (l + 12) <- alloc(32)
+  l
+}
+function append(l, v) {
+  var d
+  var c
+  touched(l)
+  c = load (l + 4)
+  if c == (load (l + 8)) {
+    d = alloc(c * 8)
+    copy(d, load (l + 12), c * 4)
+    (l + 12) <- d
+    (l + 8) <- c * 2
+  }
+  ((load (l + 12)) + (c * 4)) <- v
+  (l + 4) <- c + 1
+  l
+}
+function at(l, i) {
+  load ((load (l + 12)) + (i * 4))
+}
+function copy(to, from, n) {
+  var i
+  i = 0
+  while i < n {
+    (to + i) <-8 (load8 (from + i))
+    i = i + 1
+  }
+  to
+}
+function closure(f, env) {
+  var c
+  c = alloc(16)
+  c <- 2
+  (c + 4) <- f
+  (c + 8) <- env
+  (c + 12) <- 0
+  c
+}
+function getter(f, env) {
+  var c
+  c = closure(f, env)
+  (c + 12) <- 1
+  c
+}
+function classv(f, env) {
+  var c
+  c = closure(f, env)
+  c <- 5
+  c
+}
+function classh(f, env, h) {
+  var c
+  c = classv(f, env)
+  (c + 12) <- h
+  c
+}
+function pointer(v) {
+  ((v and 1) == 0) and (v >= 65536)
+}
+function tag(v) {
+  if pointer(v) {
+    return load v
+  }
+  0
+}
+function isgetter(v) {
+  if tag(v) == 2 {
+    return (load (v + 12)) == 1
+  }
+  0
+}
+function got(v) {
+  if isgetter(v) {
+    return call(v, list(), 0)
+  }
+  v
+}
+function get(scope, sym) {
+  got(lookup(scope, sym))
+}
+function member(x, sym) {
+  var e
+  var t
+  t = tag(x)
+  if (t == 1) or (t == 10) {
+    e = own(x, sym)
+    if e == 0 {
+      if sym == 23 {
+        return keys(x)
+      }
+      return 0
+    }
+    return got(load (e + 8))
+  }
+  if t == 3 {
+    if sym == 20 {
+      return int(load (x + 4))
+    }
+    if sym == 21 {
+      if (load (x + 4)) == 0 {
+        return 0
+      }
+      return at(x, 0)
+    }
+    if sym == 22 {
+      if (load (x + 4)) == 0 {
+        return 0
+      }
+      return at(x, (load (x + 4)) - 1)
+    }
+    if sym == 30 {
+      return same(load (x + 4), 0)
+    }
+    if (sym == 24) or ((sym == 25) or (sym == 38)) {
+      return bound(sym, x)
+    }
+    return mapped(x, sym)
+  }
+  if t == 4 {
+    if (sym == 20) or (sym == 19) {
+      return int((load (x + 8)) - (load (x + 4)))
+    }
+    return 0
+  }
+  0
+}
+function bound(id, x) {
+  var c
+  c = alloc(16)
+  c <- 8
+  (c + 4) <- id
+  (c + 8) <- x
+  c
+}
+function builtin(id, x, args) {
+  if id == 24 {
+    return sorted(x, arg(args, 0))
+  }
+  if id == 25 {
+    return each(x, arg(args, 0))
+  }
+  if id == 38 {
+    return each_value(x, arg(args, 0))
+  }
+  if id == 50 {
+    return place(arg(args, 0), arg(args, 1))
+  }
+  if id == 51 {
+    return noted(arg(args, 0))
+  }
+  if id == 52 {
+    return members_of(arg(args, 0))
+  }
+  0
+}
+function mapped(l, sym) {
+  var o
+  var i
+  o = list()
+  i = 0
+  while i < (load (l + 4)) {
+    append(o, member(at(l, i), sym))
+    i = i + 1
+  }
+  o
+}
+function setmember(x, sym, v) {
+  var l
+  var i
+  var p
+  if (tag(x) == 1) or (tag(x) == 10) {
+    if v == x {
+      v = copied(x)
+    }
+    define(x, sym, v)
+  }
+  if tag(x) == 6 {
+    if (load (x + 4)) == 3 {
+      l = load (x + 8)
+      i = 0
+      while i < (load (l + 4)) {
+        p = at(l, i)
+        if tag(p) == 6 {
+          if ((load (p + 4)) == 6) and ((load (p + 8)) == sym) {
+            touched(p)
+            (p + 12) <- v
+          }
+        }
+        i = i + 1
+      }
+    }
+  }
+  v
+}
+function maybe(x, sym) {
+  if x == 0 {
+    return 0
+  }
+  member(x, sym)
+}
+function orelse(a, b) {
+  if truthy(a) {
+    return a
+  }
+  b
+}
+function entry(p, v) {
+  var e
+  e = node(0)
+  define(e, 17, p)
+  define(e, 18, v)
+  e
+}
+function keys(n) {
+  var l
+  l = load (n + 12)
+  if l == 0 {
+    l = list()
+    touched(n)
+    (n + 12) <- l
+  }
+  l
+}
+function keyed(n, p, v) {
+  var e
+  epoch = epoch + 1
+  e = entry(p, v)
+  append(keys(n), e)
+  e
+}
+function select(l, f) {
+  var o
+  var i
+  var x
+  o = list()
+  i = 0
+  while i < (load (l + 4)) {
+    x = at(l, i)
+    if truthy(call(f, append(list(), x), 0)) {
+      append(o, x)
+    }
+    i = i + 1
+  }
+  o
+}
+function noted(v) {
+  var n
+  n = load 4084
+  if n < 2 {
+    (3968 + (n * 4)) <- v
+  } else {
+    (3968 + ((2 + ((n - 2) % 26)) * 4)) <- v
+  }
+  4084 <- n + 1
+  v
+}
+function zeroed(a, n) {
+  var i
+  i = 0
+  while i < n {
+    (a + i) <- 0
+    i = i + 4
+  }
+  0
+}
+function each_value(l, f) {
+  var i
+  var o
+  o = list()
+  i = 0
+  while i < (load (l + 4)) {
+    append(o, call(f, append(list(), at(l, i)), 0))
+    i = i + 1
+  }
+  o
+}
+function place(t, ctx) {
+  var p
+  if tag(t) == 1 {
+    t = member(t, 32)
+  }
+  p = alloc(16)
+  p <- 12
+  (p + 4) <- intern(t)
+  (p + 8) <- 0
+  (p + 12) <- ctx
+  p
+}
+function led_by_text(p) {
+  if tag(p) != 6 {
+    return 0
+  }
+  if (load (p + 4)) == 1 {
+    return 1
+  }
+  if (load (p + 4)) == 3 {
+    if (load ((load (p + 8)) + 4)) == 0 {
+      return 0
+    }
+    return led_by_text(at(load (p + 8), 0))
+  }
+  0
+}
+function keys_version(ctx) {
+  var v
+  var l
+  v = 1
+  while tag(ctx) == 1 {
+    l = load ((member(ctx, 37)) + 12)
+    if l != 0 {
+      v = v + (load (l + 4)) + 1
+    }
+    ctx = member(ctx, 36)
+  }
+  v
+}
+function text_led_reading(ctx, n) {
+  var h
+  var r
+  if nomemo != 0 {
+    return text_led_read(ctx, n)
+  }
+  h = memo + ((((n * 31) + ctx) + (textend * 7)) and 65535) * 16
+  if (((load h) == n) and ((load (h + 4)) == ctx)) and (((load (h + 8)) == textend) and ((load (h + 12)) == epoch)) {
+    return load (memo + 1048576 + ((h - memo) / 4))
+  }
+  r = text_led_read(ctx, n)
+  h <- n
+  (h + 4) <- ctx
+  (h + 8) <- textend
+  (h + 12) <- epoch
+  (memo + 1048576 + ((h - memo) / 4)) <- r
+  r
+}
+function text_led_read(ctx, n) {
+  var l
+  var i
+  var p
+  var r
+  var m
+  m = boundn
+  while tag(ctx) == 1 {
+    l = load ((member(ctx, 37)) + 12)
+    i = 0
+    while (l != 0) and (i < (load (l + 4))) {
+      p = topattern(member(at(l, i), 17))
+      if led_by_text(p) {
+        r = matched(p, n, 0)
+        boundn = m
+        if r > n {
+          return r
+        }
+      }
+      i = i + 1
+    }
+    ctx = member(ctx, 36)
+  }
+  0
+}
+function mapped_structure(n, f, g) {
+  var o
+  var s
+  var l
+  var i
+  var c
+  var d
+  var v
+  o = copied(n)
+  s = load (n + 12)
+  l = list()
+  i = 0
+  while i < (load (s + 4)) {
+    c = at(s, i)
+    v = load (c + 16)
+    if truthy(call(f, append(list(), v), 0)) {
+      if tag(g) == 2 {
+        v = call(g, append(list(), v), 0)
+      } else {
+        v = g
+      }
+      define(o, load (c + 4), v)
+      d = span(load (c + 4), load (c + 8), load (c + 12), v)
+      d <- 13
+    } else {
+      d = span(load (c + 4), load (c + 8), load (c + 12), v)
+    }
+    append(l, d)
+    i = i + 1
+  }
+  (o + 12) <- l
+  o
+}
+function each(l, f) {
+  var i
+  i = 0
+  while i < (load (l + 4)) {
+    call(f, append(list(), at(l, i)), 0)
+    i = i + 1
+  }
+  l
+}
+function sorted(l, f) {
+  var o
+  var i
+  var j
+  var x
+  var kx
+  o = list()
+  i = 0
+  while i < (load (l + 4)) {
+    append(o, at(l, i))
+    i = i + 1
+  }
+  i = 1
+  while i < (load (o + 4)) {
+    x = at(o, i)
+    kx = call(f, append(list(), x), 0)
+    j = i - 1
+    while (j >= 0) and (call(f, append(list(), at(o, j)), 0) > kx) {
+      ((load (o + 12)) + ((j + 1) * 4)) <- at(o, j)
+      j = j - 1
+    }
+    ((load (o + 12)) + ((j + 1) * 4)) <- x
+    i = i + 1
+  }
+  o
+}
+function readsv(p, t) {
+  var r
+  var k
+  if tag(p) == 1 {
+    k = member(p, 17)
+    if k != 0 {
+      r = reads(topattern(k), t)
+      if r != 0 {
+        define(p, 19, int(((r - (load (t + 4))) * 2) + led_by_text(topattern(k))))
+        define(p, 53, wholly)
+      }
+      return r
+    }
+  }
+  reads(topattern(p), t)
+}
+function headpattern(t) {
+  if tag(t) == 6 {
+    return t
+  }
+  if tag(t) == 1 {
+    return topattern(t)
+  }
+  sequence(gaps(list(), load (t + 4), load (t + 8)))
+}
+function seeded(t) {
+  if csyms == 0 {
+    csyms = list()
+    memo = alloc(65536 * 20)
+    epoch = 1
+    actives = alloc(1048576)
+    bounds = alloc(16777216)
+  }
+  append(csyms, t)
+  0
+}
+function name_text(sym) {
+  if sym >= 1000000 {
+    return at(names, sym - 1000000)
+  }
+  at(csyms, sym - 16)
+}
+function intern(t) {
+  var i
+  var x
+  i = 0
+  while i < (load (csyms + 4)) {
+    x = at(csyms, i)
+    if ((load (x + 8)) - (load (x + 4))) == ((load (t + 8)) - (load (t + 4))) {
+      if texteq(load (x + 4), load (t + 4), (load (t + 8)) - (load (t + 4))) {
+        return 16 + i
+      }
+    }
+    i = i + 1
+  }
+  i = 0
+  while i < (load (names + 4)) {
+    x = at(names, i)
+    if ((load (x + 8)) - (load (x + 4))) == ((load (t + 8)) - (load (t + 4))) {
+      if texteq(load (x + 4), load (t + 4), (load (t + 8)) - (load (t + 4))) {
+        return 1000000 + i
+      }
+    }
+    i = i + 1
+  }
+  append(names, t)
+  1000000 + i
+}
+function truthy(v) {
+  (v != 0) and (v != 8)
+}
+function same(a, b) {
+  if a == b {
+    12
+  } else {
+    8
+  }
+}
+function with(n, sym, v) {
+  define(n, sym, v)
+  n
+}
+function argn(args, named, i, sym) {
+  var e
+  if i < (load (args + 4)) {
+    return at(args, i)
+  }
+  if named == 0 {
+    return 0
+  }
+  e = own(named, sym)
+  if e == 0 {
+    return 0
+  }
+  load (e + 8)
+}
+function construct(c, args, named) {
+  var inst
+  var e
+  inst = node(load (c + 8))
+  define(inst, 16, inst)
+  if tag(named) == 1 {
+    e = load (named + 8)
+    while e != 0 {
+      define(inst, load (e + 4), load (e + 8))
+      e = load e
+    }
+    if (load (named + 12)) != 0 {
+      define(inst, 14, named)
+    }
+  }
+  indirect(inst, args, named, load (c + 4))
+  inst
+}
+function text(a, e) {
+  var t
+  t = alloc(12)
+  t <- 4
+  (t + 4) <- a
+  (t + 8) <- e
+  t
+}
+function arg(args, i) {
+  if i < (load (args + 4)) {
+    return at(args, i)
+  }
+  0
+}
+function call(c, args, named) {
+  var a
+  if tag(c) == 6 {
+    if (load (c + 4)) == 16 {
+      return pattern(19, c, args)
+    }
+    return 0
+  }
+  if tag(c) == 9 {
+    a = node(load ((load (c + 4)) + 8))
+    define(a, 16, load (c + 8))
+    return indirect(a, args, named, load ((load (c + 4)) + 4))
+  }
+  if tag(c) == 10 {
+    return indirect(c, args, named, load ((load (c + 12)) + 4))
+  }
+  if tag(c) == 8 {
+    return builtin(load (c + 4), load (c + 8), args)
+  }
+  if tag(c) == 5 {
+    return construct(c, args, named)
+  }
+  if tag(c) != 2 {
+    return 0
+  }
+  indirect(load (c + 8), args, named, load (c + 4))
+}
+function plus(a, b) {
+  a + b - 1
+}
+function pattern(kind, a, b) {
+  var p
+  p = alloc(24)
+  p <- 6
+  (p + 4) <- kind
+  (p + 8) <- a
+  (p + 12) <- b
+  (p + 16) <- 0
+  p
+}
+function pattern3(kind, a, b, c) {
+  var p
+  p = pattern(kind, a, b)
+  (p + 16) <- c
+  p
+}
+function pattern4(kind, a, b, c, d) {
+  var p
+  p = pattern3(kind, a, b, c)
+  (p + 20) <- d
+  p
+}
+function literal(t) {
+  pattern(1, t, 0)
+}
+function chars(c) {
+  pattern(2, c, 0)
+}
+function sequence(l) {
+  pattern(3, l, 0)
+}
+function either(l) {
+  pattern(4, l, 0)
+}
+function repeated(inner, least) {
+  if (least == 0) and (tag(inner) == 6) {
+    if (load (inner + 4)) == 5 {
+      return pattern3(5, load (inner + 8), 0, 0)
+    }
+  }
+  pattern(5, inner, least)
+}
+function field(sym, inner) {
+  pattern(6, sym, inner)
+}
+function ending() {
+  pattern(7, 0, 0)
+}
+function anything() {
+  pattern(8, 0, 0)
+}
+function sequence_from(l, i) {
+  pattern(9, l, i)
+}
+function repeat_more(inner, least) {
+  pattern(10, inner, least)
+}
+function greedy(inner, least) {
+  if (least == 0) and (tag(inner) == 6) {
+    if (load (inner + 4)) == 5 {
+      return pattern3(5, load (inner + 8), 0, 1)
+    }
+  }
+  pattern3(5, inner, least, 1)
+}
+function bound_end(sym, start, mark) {
+  pattern3(11, sym, start, mark)
+}
+function dynamic(f) {
+  pattern(12, f, 0)
+}
+function astype(v, scope) {
+  if tag(v) == 5 {
+    return pattern(13, v, scope)
+  }
+  topattern(v)
+}
+function class_end(c, mark) {
+  pattern(14, c, mark)
+}
+function applied_end(e, mark) {
+  pattern(15, e, mark)
+}
+function conj(p, f) {
+  pattern(16, p, f)
+}
+function topattern(v) {
+  if tag(v) == 6 {
+    return v
+  }
+  if tag(v) == 12 {
+    if (load (v + 8)) != 0 {
+      return field(load (v + 4), astype(load (v + 8), 0))
+    }
+    return field(load (v + 4), pattern(28, load (v + 12), 0))
+  }
+  if tag(v) == 1 {
+    if member(v, 32) != 0 {
+      return rebuilt(v)
+    }
+  }
+  if tag(v) == 4 {
+    return literal(v)
+  }
+  if tag(v) == 3 {
+    return sequence(v)
+  }
+  v
+}
+function cell(p, next) {
+  var c
+  c = alloc(8)
+  c <- p
+  (c + 4) <- next
+  c
+}
+function chared(c, k) {
+  if k == 1 {
+    return (c == 32) or (c == 9)
+  }
+  if k == 2 {
+    return c == 10
+  }
+  if k == 3 {
+    return (c == 32) or ((c == 9) or ((c == 10) or (c == 13)))
+  }
+  1
+}
+function texteq(a, b, n) {
+  var i
+  i = 0
+  while i < n {
+    if (load8 (a + i)) != (load8 (b + i)) {
+      return 0
+    }
+    i = i + 1
+  }
+  1
+}
+function touched(x) {
+  if x < markf {
+    effects = effects + 1
+  }
+  0
+}
+function matched(p, pos, k) {
+  var f
+  var e
+  var o
+  var r
+  f = free
+  e = effects
+  o = markf
+  markf = f
+  r = matched1(p, pos, k)
+  markf = o
+  if ((r < 0) and (effects == e)) and (noreclaim == 0) {
+    free = f
+  }
+  r
+}
+function read_by_another(l, i, pos) {
+  var j
+  var m
+  var r
+  j = 0
+  m = boundn
+  while j < (load (l + 4)) {
+    if j != i {
+      r = matched(at(l, j), pos, 0)
+      boundn = m
+      if r > pos {
+        return 1
+      }
+    }
+    j = j + 1
+  }
+  0
+}
+function matched1(p, pos, k) {
+  var kind
+  var n
+  var r
+  var i
+  var l
+  var m
+  var c
+  p = topattern(p)
+  kind = load (p + 4)
+  if kind == 1 {
+    l = load (p + 8)
+    n = (load (l + 8)) - (load (l + 4))
+    if (pos + n) > textend {
+      return 0 - 1
+    }
+    if texteq(pos, load (l + 4), n) {
+      return continued(pos + n, k)
+    }
+    return 0 - 1
+  }
+  if kind == 2 {
+    if pos >= textend {
+      return 0 - 1
+    }
+    if chared(load8 pos, load (p + 8)) {
+      return continued(pos + 1, k)
+    }
+    return 0 - 1
+  }
+  if kind == 3 {
+    return matched(sequence_from(load (p + 8), 0), pos, k)
+  }
+  if kind == 9 {
+    l = load (p + 8)
+    i = load (p + 12)
+    if i >= (load (l + 4)) {
+      return continued(pos, k)
+    }
+    return matched(at(l, i), pos, cell(sequence_from(l, i + 1), k))
+  }
+  if kind == 4 {
+    l = load (p + 8)
+    i = 0
+    m = boundn
+    while i < (load (l + 4)) {
+      c = at(l, i)
+      if (load (c + 4)) == 8 {
+        if (pos < textend) and (read_by_another(l, i, pos) == 0) {
+          r = continued(pos + 1, k)
+        } else {
+          r = 0 - 1
+        }
+      } else {
+        r = matched(c, pos, k)
+      }
+      if r >= 0 {
+        return r
+      }
+      boundn = m
+      i = i + 1
+    }
+    return 0 - 1
+  }
+  if kind == 28 {
+    n = pos
+    if ((load (p + 12)) == 1) or ((load (p + 12)) == 2) {
+      m = boundn
+      r = continued(pos, k)
+      if r >= 0 {
+        return r
+      }
+      boundn = m
+    }
+    while n < textend {
+      l = 0
+      if (load (p + 12)) != 2 {
+        l = text_led_reading(load (p + 8), n)
+      } else {
+        if ((load8 n) == 92) and ((n + 1) < textend) {
+          l = n + 2
+        }
+      }
+      if l > n {
+        n = l
+      } else {
+        if (((load8 n) == 10) and ((load (p + 12)) != 1)) and (comma_ended(pos, n) == 0) {
+          return 0 - 1
+        }
+        if ((load (p + 12)) == 3) and (((load8 n) == 32) or ((load8 n) == 9)) {
+          return 0 - 1
+        }
+        if (((load (p + 12)) == 0) or ((load (p + 12)) == 3)) and ((load8 (3584 + (load8 n))) != 0) {
+          return 0 - 1
+        }
+        if ((load (p + 12)) == 1) and ((load8 (3584 + (load8 n))) == 2) {
+          return 0 - 1
+        }
+        if (((load (p + 12)) == 1) or ((load (p + 12)) == 2)) and ((load8 n) == (load (p + 16))) {
+          m = boundn
+          r = continued(n, k)
+          if r >= 0 {
+            return r
+          }
+          boundn = m
+          return 0 - 1
+        }
+        n = n + 1
+      }
+      m = boundn
+      r = continued(n, k)
+      if r >= 0 {
+        return r
+      }
+      boundn = m
+    }
+    return 0 - 1
+  }
+  if kind == 27 {
+    return matched(topattern(call(load (p + 8), append(list(), load (p + 12)), 0)), pos, k)
+  }
+  if kind == 5 {
+    return matched(pattern3(10, load (p + 8), load (p + 12), load (p + 16)), pos, cell(pattern(22, boundn, 0), k))
+  }
+  if kind == 22 {
+    m = boundn
+    n = saved(load (p + 8))
+    if listing(load (p + 8)) {
+      l = list()
+      i = load (p + 8)
+      while i < boundn {
+        if (load (bounds + (i * 16))) == 0 {
+          append(l, load (bounds + (i * 16) + 12))
+        }
+        i = i + 1
+      }
+      boundn = load (p + 8)
+      bindv(0, l)
+    }
+    r = continued(pos, k)
+    if r < 0 {
+      restored(n, load (p + 8), m)
+    }
+    return r
+  }
+  if kind == 21 {
+    if pos == (load (p + 16)) {
+      if (load (p + 12)) <= 0 {
+        return continued(pos, k)
+      }
+      return 0 - 1
+    }
+    return matched(pattern3(10, load (p + 8), load (p + 12), load (p + 20)), pos, k)
+  }
+  if kind == 10 {
+    m = boundn
+    if ((load (p + 12)) <= 0) and ((load (p + 16)) == 0) {
+      r = continued(pos, k)
+      if r >= 0 {
+        return r
+      }
+      boundn = m
+    }
+    r = matched(load (p + 8), pos, cell(pattern4(21, load (p + 8), (load (p + 12)) - 1, pos, load (p + 16)), k))
+    if r >= 0 {
+      return r
+    }
+    boundn = m
+    if ((load (p + 12)) <= 0) and ((load (p + 16)) != 0) {
+      return continued(pos, k)
+    }
+    0 - 1
+  }
+  if kind == 6 {
+    return matched(load (p + 12), pos, cell(pattern4(11, load (p + 8), pos, boundn, load (p + 12)), k))
+  }
+  if kind == 11 {
+    m = boundn
+    l = saved(load (p + 16))
+    gathered(load (p + 8), load (p + 12), pos, load (p + 16), load (p + 20))
+    r = continued(pos, k)
+    if r < 0 {
+      restored(l, load (p + 16), m)
+    }
+    return r
+  }
+  if kind == 12 {
+    if reading_at(p, pos) {
+      return 0 - 1
+    }
+    activen = activen + 1
+    (actives + (activen * 8)) <- p
+    (actives + (activen * 8) + 4) <- pos
+    l = call(load (p + 8), append(list(), text(pos, textend)), 0)
+    if tag(l) != 1 {
+      activen = activen - 1
+      return 0 - 1
+    }
+    r = matched(topattern(member(l, 17)), pos, cell(applied_end(l, boundn), k))
+    activen = activen - 1
+    return r
+  }
+  if kind == 13 {
+    if reading_at(load (p + 8), pos) {
+      return 0 - 1
+    }
+    activen = activen + 1
+    (actives + (activen * 8)) <- load (p + 8)
+    (actives + (activen * 8) + 4) <- pos
+    r = matched(header(load (p + 8), load (p + 12)), pos, cell(class_end(load (p + 8), boundn), k))
+    activen = activen - 1
+    return r
+  }
+  if kind == 14 {
+    m = boundn
+    i = saved(load (p + 12))
+    l = construct(load (p + 8), list(), named_from(load (p + 12)))
+    boundn = load (p + 12)
+    bindv(0, l)
+    r = continued(pos, k)
+    if r < 0 {
+      restored(i, load (p + 12), m)
+    }
+    return r
+  }
+  if kind == 15 {
+    m = boundn
+    i = saved(load (p + 12))
+    l = application(load (p + 8), load (p + 12))
+    boundn = load (p + 12)
+    bindv(0, l)
+    r = continued(pos, k)
+    if r < 0 {
+      restored(i, load (p + 12), m)
+    }
+    return r
+  }
+  if kind == 16 {
+    l = load (p + 8)
+    if tag(l) == 6 {
+      if (load (l + 4)) == 5 {
+        return matched(pattern3(5, sequence(append(append(list(), load (l + 8)), pattern(23, 0, 0))), load (l + 12), load (l + 16)), pos, k)
+      }
+    }
+    return matched(l, pos, k)
+  }
+  if kind == 18 {
+    return matched(rebuilt(load (p + 8)), pos, k)
+  }
+  if kind == 19 {
+    l = load ((load (p + 8)) + 8)
+    if tag(l) == 6 {
+      if (load (l + 4)) == 5 {
+        return continued(in_turn(load (l + 8), load ((load (p + 8)) + 12), load (p + 12), pos), k)
+      }
+    }
+    return matched(load ((load (p + 8)) + 8), pos, cell(pattern3(20, load (p + 8), load (p + 12), boundn), k))
+  }
+  if kind == 23 {
+    if pos == textend {
+      return continued(pos, k)
+    }
+    if (load8 pos) == 10 {
+      return continued(pos, k)
+    }
+    return 0 - 1
+  }
+  if kind == 20 {
+    m = boundn
+    i = saved(load (p + 16))
+    l = valued_from(load (p + 16))
+    boundn = load (p + 16)
+    bindv(0, call(curried(load ((load (p + 8)) + 12), l), load (p + 12), 0))
+    r = continued(pos, k)
+    if r < 0 {
+      restored(i, load (p + 16), m)
+    }
+    return r
+  }
+  if kind == 17 {
+    l = call(load (p + 8), append(list(), named_from(0)), 0)
+    return matched(topattern(l), pos, k)
+  }
+  if kind == 7 {
+    if pos == textend {
+      return continued(pos, k)
+    }
+    return 0 - 1
+  }
+  if kind == 8 {
+    n = pos + 1
+    while (n <= textend) and ((load8 (n - 1)) != 10) {
+      m = boundn
+      r = continued(n, k)
+      if r >= 0 {
+        return r
+      }
+      boundn = m
+      n = n + 1
+    }
+    return 0 - 1
+  }
+  0 - 1
+}
+function continued(pos, k) {
+  if k == 0 {
+    return pos
+  }
+  matched(load k, pos, load (k + 4))
+}
+function bind(sym, a, e) {
+  var b
+  b = bounds + (boundn * 16)
+  b <- sym
+  (b + 4) <- a
+  (b + 8) <- e
+  (b + 12) <- 0
+  boundn = boundn + 1
+  0
+}
+function bindv(sym, v) {
+  bind(sym, 0, 0)
+  (bounds + ((boundn - 1) * 16) + 12) <- v
+  0
+}
+function boundvalue(i) {
+  var b
+  b = bounds + (i * 16)
+  if (load (b + 12)) != 0 {
+    return load (b + 12)
+  }
+  text(load (b + 4), load (b + 8))
+}
+function named_from(mark) {
+  var n
+  var i
+  var b
+  var s
+  n = node(0)
+  s = list()
+  i = mark
+  while i < boundn {
+    b = bounds + (i * 16)
+    if (load b) != 0 {
+      define(n, load b, boundvalue(i))
+      append(s, span(load b, load (b + 4), load (b + 8), boundvalue(i)))
+    }
+    i = i + 1
+  }
+  (n + 12) <- s
+  n
+}
+function span(sym, a, e, v) {
+  var c
+  c = alloc(20)
+  c <- 11
+  (c + 4) <- sym
+  (c + 8) <- a
+  (c + 12) <- e
+  (c + 16) <- v
+  c
+}
+function gathered(sym, a, e, mark, inner) {
+  var i
+  var b
+  var nv
+  var nn
+  var v
+  var l
+  nv = 0
+  nn = 0
+  i = mark
+  while i < boundn {
+    b = bounds + (i * 16)
+    if (load b) == 0 {
+      nv = nv + 1
+      v = load (b + 12)
+    } else {
+      nn = nn + 1
+    }
+    i = i + 1
+  }
+  if nn > 0 {
+    v = named_from(mark)
+    define(v, 32, text(a, e))
+    define(v, 15, inner)
+  } else {
+    if nv == 0 {
+      v = text(a, e)
+    }
+    if nv > 1 {
+      l = list()
+      i = mark
+      while i < boundn {
+        b = bounds + (i * 16)
+        if (load b) == 0 {
+          append(l, load (b + 12))
+        }
+        i = i + 1
+      }
+      v = l
+    }
+  }
+  boundn = mark
+  bind(sym, a, e)
+  (bounds + ((boundn - 1) * 16) + 12) <- v
+  0
+}
+function application(e, mark) {
+  var f
+  var a
+  var i
+  var b
+  f = member(e, 18)
+  a = node(load (f + 8))
+  a <- 10
+  define(a, 17, e)
+  i = mark
+  while i < boundn {
+    b = bounds + (i * 16)
+    if (load b) != 0 {
+      define(a, load b, boundvalue(i))
+    }
+    i = i + 1
+  }
+  (a + 12) <- f
+  a
+}
+function header(c, scope) {
+  var h
+  h = load (c + 12)
+  if h == 0 {
+    return anything()
+  }
+  indirect(scope, list(), 0, h)
+}
+function readtext(p, t) {
+  var r
+  var i
+  var b
+  var nv
+  var v
+  var te
+  var bn
+  if tag(t) == 1 {
+    t = member(t, 32)
+  }
+  te = textend
+  bn = boundn
+  textend = load (t + 8)
+  r = matched(sequence(append(append(list(), topattern(p)), ending())), load (t + 4), 0)
+  textend = te
+  if r < 0 {
+    boundn = bn
+    return 0
+  }
+  nv = 0
+  i = bn
+  while i < boundn {
+    b = bounds + (i * 16)
+    if (load b) == 0 {
+      nv = nv + 1
+    }
+    i = i + 1
+  }
+  v = valued_from(bn)
+  if nv == 0 {
+    v = t
+    i = bn
+    while i < boundn {
+      if (load (bounds + (i * 16))) != 0 {
+        v = named_from(bn)
+        define(v, 32, t)
+        i = boundn
+      }
+      i = i + 1
+    }
+  }
+  boundn = bn
+  if tag(p) == 6 {
+    if (load (p + 4)) == 16 {
+      return curried(load (p + 12), v)
+    }
+  }
+  v
+}
+function curried(f, v) {
+  var c
+  c = alloc(16)
+  c <- 9
+  (c + 4) <- f
+  (c + 8) <- v
+  c
+}
+function typed(t, v) {
+  if tag(v) == 4 {
+    if (tag(t) == 6) or (tag(t) == 5) {
+      return readtext(astype(t, 0), v)
+    }
+  }
+  v
+}
+function reads(p, t) {
+  var r
+  var te
+  var bn
+  if tag(t) == 1 {
+    t = member(t, 32)
+  }
+  te = textend
+  bn = boundn
+  textend = load (t + 8)
+  r = matched(p, load (t + 4), cell(pattern(23, 0, 0), 0))
+  wholly = 12
+  if r < 0 {
+    boundn = bn
+    wholly = 8
+    r = matched(p, load (t + 4), 0)
+  }
+  textend = te
+  boundn = bn
+  if r < 0 {
+    return 0
+  }
+  r
+}
+function bindings() {
+  var n
+  var i
+  var b
+  n = node(0)
+  i = 0
+  while i < boundn {
+    b = bounds + (i * 12)
+    define(n, load b, text(load (b + 4), load (b + 8)))
+    i = i + 1
+  }
+  n
+}
+function extended(x, c) {
+  indirect(x, list(), 0, load (c + 4))
+  x
+}
+function index(n, k) {
+  var l
+  var i
+  var e
+  var r
+  if tag(k) != 4 {
+    return 0
+  }
+  l = keys(n)
+  i = 0
+  while i < (load (l + 4)) {
+    e = at(l, i)
+    r = reads(topattern(member(e, 17)), k)
+    if r == (load (k + 8)) {
+      return member(e, 18)
+    }
+    i = i + 1
+  }
+  0
+}
+function last(l) {
+  if (load (l + 4)) == 0 {
+    return 0
+  }
+  at(l, (load (l + 4)) - 1)
+}
+function read_with(n, sym, v) {
+  var s
+  var t
+  s = member(n, 15)
+  if tag(s) == 6 {
+    if (load (s + 4)) == 18 {
+      s = load (s + 8)
+    }
+  }
+  if tag(s) != 1 {
+    return v
+  }
+  t = member(s, sym)
+  if tag(t) == 6 {
+    return t
+  }
+  if tag(t) == 1 {
+    if member(t, 32) != 0 {
+      return t
+    }
+  }
+  v
+}
+function rebuilt(n) {
+  var t
+  var l
+  var s
+  var i
+  var c
+  var pos
+  var v
+  t = member(n, 32)
+  l = list()
+  s = load (n + 12)
+  pos = load (t + 4)
+  i = 0
+  while i < (load (s + 4)) {
+    c = at(s, i)
+    if (load (c + 8)) > pos {
+      gaps(l, pos, load (c + 8))
+    }
+    v = load (c + 16)
+    if (tag(v) == 12) or ((load c) == 13) {
+      append(l, topattern(v))
+    } else {
+    v = member(n, load (c + 4))
+    if tag(v) == 4 {
+      v = read_with(n, load (c + 4), v)
+    }
+    if tag(v) == 6 {
+      append(l, field(load (c + 4), v))
+    } else {
+      if (tag(v) == 1) and (member(v, 32) != 0) {
+        append(l, field(load (c + 4), pattern(18, v, 0)))
+      } else {
+        append(l, field(load (c + 4), anything()))
+      }
+    }
+    }
+    pos = load (c + 12)
+    i = i + 1
+  }
+  if (load (t + 8)) > pos {
+    gaps(l, pos, load (t + 8))
+  }
+  enclosed_holes(l)
+  sequence(l)
+}
+function texts_equal(x, y) {
+  var n
+  n = (load (x + 8)) - (load (x + 4))
+  if n != ((load (y + 8)) - (load (y + 4))) {
+    return 0
+  }
+  texteq(load (x + 4), load (y + 4), n)
+}
+function spaced(l, j) {
+  var g
+  if (j < 0) or (j >= (load (l + 4))) {
+    return 0
+  }
+  g = at(l, j)
+  ((load (g + 4)) != 1) and ((load (g + 4)) != 6)
+}
+function enclosed_holes(l) {
+  var i
+  var f
+  var a
+  var b
+  var n
+  n = load (l + 4)
+  i = 0
+  while i < n {
+    f = at(l, i)
+    if (load (f + 4)) == 6 {
+      a = 0
+      b = 0
+      if i > 0 {
+        a = at(l, i - 1)
+        if (load (a + 4)) != 1 {
+          a = 0
+        }
+      }
+      if (i + 1) < n {
+        b = at(l, i + 1)
+        if (load (b + 4)) != 1 {
+          b = 0
+        }
+      }
+      f = load (f + 12)
+      if (tag(f) == 6) and ((load (f + 4)) == 28) {
+        if (a != 0) and (b != 0) {
+          (f + 12) <- 1
+          (f + 16) <- load8 (load ((load (b + 8)) + 4))
+          if texts_equal(load (a + 8), load (b + 8)) {
+            (f + 12) <- 2
+            (3584 + (load (f + 16))) <-8 2
+          } else {
+            (3584 + (load (f + 16))) <-8 1
+            (3584 + (load8 ((load ((load (a + 8)) + 8)) - 1))) <-8 1
+          }
+        } else {
+          if ((a != 0) and (spaced(l, i - 2) == 0)) or ((b != 0) and (spaced(l, i + 2) == 0)) {
+            (f + 12) <- 3
+          }
+        }
+      }
+    }
+    i = i + 1
+  }
+  0
+}
+function comma_ended(a, n) {
+  while (n > a) and white(load8 (n - 1)) {
+    n = n - 1
+  }
+  (n > a) and ((load8 (n - 1)) == 44)
+}
+function gaps(l, a, e) {
+  var q
+  var s
+  q = a
+  while q < e {
+    if chared(load8 q, 3) {
+      while (q < e) and chared(load8 q, 3) {
+        q = q + 1
+      }
+      if ((load (l + 4)) > 0) and ((load ((at(l, (load (l + 4)) - 1)) + 4)) == 1) {
+        append(l, greedy(either(append(append(list(), chars(1)), chars(2))), 1))
+      } else {
+        append(l, greedy(chars(1), 1))
+      }
+    } else {
+      s = q
+      while (q < e) and (chared(load8 q, 3) == 0) {
+        q = q + 1
+      }
+      append(l, literal(text(s, q)))
+    }
+  }
+  l
+}
+function equal(a, b) {
+  var n
+  if a == b {
+    return 12
+  }
+  if tag(b) == 6 {
+    if tag(a) == 4 {
+      if reads(b, a) == (load (a + 8)) {
+        return 12
+      }
+    }
+    return 8
+  }
+  if (tag(a) == 4) and (tag(b) == 4) {
+    n = (load (a + 8)) - (load (a + 4))
+    if n == ((load (b + 8)) - (load (b + 4))) {
+      if texteq(load (a + 4), load (b + 4), n) {
+        return 12
+      }
+    }
+  }
+  8
+}
+function mapped_text(t, f, g) {
+  var o
+  var q
+  var c
+  var r
+  var n
+  var l
+  var s
+  if (tag(g) == 2) or (tag(g) == 6) {
+    l = list()
+    q = load (t + 4)
+    s = q
+    while q < (load (t + 8)) {
+      c = text(q, q + 1)
+      if truthy(call(f, append(list(), c), 0)) {
+        if q > s {
+          append(l, literal(text(s, q)))
+        }
+        if tag(g) == 2 {
+          append(l, pattern(27, g, c))
+        } else {
+          append(l, g)
+        }
+        s = q + 1
+      }
+      q = q + 1
+    }
+    if q > s {
+      append(l, literal(text(s, q)))
+    }
+    return sequence(l)
+  }
+  o = alloc(((load (t + 8)) - (load (t + 4))) * 16 + 16)
+  n = o
+  q = load (t + 4)
+  while q < (load (t + 8)) {
+    c = text(q, q + 1)
+    if truthy(call(f, append(list(), c), 0)) {
+      r = g
+      if tag(r) == 2 {
+        r = call(r, append(list(), c), 0)
+      }
+      copy(n, load (r + 4), (load (r + 8)) - (load (r + 4)))
+      n = n + ((load (r + 8)) - (load (r + 4)))
+    } else {
+      n <-8 (load8 q)
+      n = n + 1
+    }
+    q = q + 1
+  }
+  text(o, n)
+}
+function selmethod(x, sym, f, args) {
+  if sym == 38 {
+    if tag(x) == 4 {
+      return mapped_text(x, f, arg(args, 0))
+    }
+    if tag(x) == 1 {
+      if member(x, 32) != 0 {
+        return mapped_structure(x, f, arg(args, 0))
+      }
+    }
+    return x
+  }
+  0
+}
+function with_code(a, b) {
+  a
+}
+function valued_from(mark) {
+  var v
+  var i
+  var b
+  var nv
+  nv = 0
+  i = mark
+  while i < boundn {
+    if (load (bounds + (i * 16))) == 0 {
+      nv = nv + 1
+      v = load (bounds + (i * 16) + 12)
+    }
+    i = i + 1
+  }
+  if nv == 1 {
+    return v
+  }
+  v = list()
+  i = mark
+  while i < boundn {
+    b = bounds + (i * 16)
+    if (load b) == 0 {
+      append(v, load (b + 12))
+    }
+    i = i + 1
+  }
+  v
+}
+function under(b, env) {
+  touched(b)
+  (b + 4) <- env
+  b
+}
+function staged(f) {
+  pattern(17, f, 0)
+}
+function reading_at(c, pos) {
+  var i
+  i = 1
+  while i <= activen {
+    if ((load (actives + (i * 8))) == c) and ((load (actives + (i * 8) + 4)) == pos) {
+      return 1
+    }
+    i = i + 1
+  }
+  0
+}
+function listing(mark) {
+  var i
+  i = mark
+  while i < boundn {
+    if (load (bounds + (i * 16))) != 0 {
+      return 0
+    }
+    i = i + 1
+  }
+  boundn > mark
+}
+function in_turn(item, f, args, pos) {
+  var at
+  var mark
+  var r
+  var v
+  at = pos
+  while at < textend {
+    mark = boundn
+    r = matched(item, at, cell(pattern(23, 0, 0), 0))
+    if r <= at {
+      boundn = mark
+      return at
+    }
+    v = valued_from(mark)
+    boundn = mark
+    call(curried(f, append(list(), v)), args, 0)
+    at = r
+  }
+  at
+}
+function copied(x) {
+  var n
+  var e
+  n = node(load (x + 4))
+  e = load (x + 8)
+  while e != 0 {
+    define(n, load (e + 4), load (e + 8))
+    e = load e
+  }
+  (n + 12) <- load (x + 12)
+  n
+}
+function saved(mark) {
+  var c
+  var n
+  n = (boundn - mark) * 16
+  c = alloc(n + 8)
+  copy(c, bounds + (mark * 16), n)
+  c
+}
+function restored(c, mark, m) {
+  copy(bounds + (mark * 16), c, (m - mark) * 16)
+  boundn = m
+  0
+}
+function heap_used() {
+  free
+}
+function minus(a, b) {
+  (a - b) + 1
+}
+function times(a, b) {
+  int(untag(a) * untag(b))
+}
+function quotient(a, b) {
+  int(untag(a) / untag(b))
+}
+function remainder(a, b) {
+  int(untag(a) % untag(b))
+}
+function shifted_left(a, b) {
+  int(untag(a) << untag(b))
+}
+function shifted_right(a, b) {
+  int(untag(a) >> untag(b))
+}
+function boolean(c) {
+  if c {
+    return 12
+  }
+  8
+}
+function less(a, b) {
+  boolean(a < b)
+}
+function greater(a, b) {
+  boolean(a > b)
+}
+function less_equal(a, b) {
+  boolean(a <= b)
+}
+function greater_equal(a, b) {
+  boolean(a >= b)
+}
+function unequal(a, b) {
+  negated(equal(a, b))
+}
+function cw_write_value(v) {
+  var j
+  if tag(v) == 4 {
+    j = load (v + 4)
+    while j < (load (v + 8)) {
+      outbyte(load8 j)
+      j = j + 1
+    }
+    return 0
+  }
+  outbyte(untag(v))
+}
+function sized_after(m, v) {
+  cw_sized_from(m)
+}
+function aside_after(m, v) {
+  cw_aside_from(m)
+}
+function cw_symbol_count() {
+  if syms == 0 {
+    return int(0)
+  }
+  int(load (syms + 4))
+}
+function cw_symbol_text(x) {
+  at(syms, untag(x))
+}
+function joined(a, b) {
+  var o
+  var i
+  o = list()
+  i = 0
+  while i < (load (a + 4)) {
+    append(o, at(a, i))
+    i = i + 1
+  }
+  i = 0
+  while i < (load (b + 4)) {
+    append(o, at(b, i))
+    i = i + 1
+  }
+  o
+}
+function rest_of(l) {
+  var o
+  var i
+  o = list()
+  i = 1
+  while i < (load (l + 4)) {
+    append(o, at(l, i))
+    i = i + 1
+  }
+  o
+}
+function member2(x, sym) {
+  var t
+  var a
+  var e
+  t = tag(x)
+  if t == 4 {
+    a = load (x + 4)
+    e = load (x + 8)
+    if sym == 21 {
+      if a == e {
+        return 0
+      }
+      return text(a, a + 1)
+    }
+    if sym == 22 {
+      if a == e {
+        return 0
+      }
+      return text(e - 1, e)
+    }
+    if sym == 29 {
+      if a == e {
+        return text(a, e)
+      }
+      return text(a + 1, e)
+    }
+    if sym == 30 {
+      return boolean(a == e)
+    }
+  }
+  if t == 3 {
+    if sym == 29 {
+      return rest_of(x)
+    }
+    if (sym == 54) or (sym == 55) {
+      return bound(sym, x)
+    }
+  }
+  member(x, sym)
+}
+function invoke(c, args, named) {
+  if tag(c) == 8 {
+    if (load (c + 4)) == 54 {
+      return joined(load (c + 8), arg(args, 0))
+    }
+    if (load (c + 4)) == 55 {
+      return append(load (c + 8), arg(args, 0))
+    }
+  }
+  call(c, args, named)
+}
+function array_new(env, args, named) {
+  list()
+}
+function arrays() {
+  var n
+  n = node(0)
+  define(n, 56, getter(array_new, 0))
+  n
+}

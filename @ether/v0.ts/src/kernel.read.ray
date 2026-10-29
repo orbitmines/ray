@@ -1,3 +1,0 @@
-Kernel_js &+= {
-  include @./kernel.ts
-}

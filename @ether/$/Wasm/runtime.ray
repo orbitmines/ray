@@ -571,10 +571,72 @@ function parsed_statements(g, t) {
   if (load (t + 8)) == (load (t + 4)) {
     return list()
   }
+  if lasting_span(load (t + 4), load (t + 8)) {
+    return parsed_kept(g, load (t + 4), load (t + 8))
+  }
   l = list()
   append(l, g)
   append(l, t)
   call(parserhook, l, 0)
+}
+function arena_base() {
+  536870912
+}
+function lasting_span(a, e) {
+  if e <= (8388608 + ((((load 4088) + 7) / 8) * 8)) {
+    return 1
+  }
+  if takent != 0 {
+    if a >= (load (takent + 4)) {
+      if e <= (load (takent + 8)) {
+        return 1
+      }
+    }
+  }
+  a >= arena_base()
+}
+function parsed_kept(g, a, e) {
+  var s
+  var o
+  var f
+  var m
+  var l
+  if (load 3840) == 0 {
+    3840 <- (arena_base() + 4194304)
+  }
+  s = arena_base() + (((((a * 31) + (e * 7)) + g) / 4) and 262143) * 16
+  if (((load s) == g) and ((load (s + 4)) == a)) and ((load (s + 8)) == e) {
+    return load (s + 12)
+  }
+  o = load 3844
+  if o == 0 {
+    if (load 3840) > (1040187392 * 2) {
+      l = list()
+      append(l, g)
+      append(l, text(a, e))
+      return call(parserhook, l, 0)
+    }
+    f = free
+    m = markf
+    free = load 3840
+    markf = free
+  }
+  3844 <- (o + 1)
+  l = list()
+  append(l, g)
+  append(l, text(a, e))
+  l = call(parserhook, l, 0)
+  3844 <- o
+  if o == 0 {
+    3840 <- free
+    free = f
+    markf = m
+  }
+  s <- g
+  (s + 4) <- a
+  (s + 8) <- e
+  (s + 12) <- l
+  l
 }
 function cw_statements_in(g, t) {
   var l
@@ -774,10 +836,10 @@ function define(n, sym, v) {
       return v
     }
     if pointer(v) {
-      touched(n)
+      stored(n, v)
     }
   } else {
-    touched(n)
+    stored(n, free)
   }
   if e == 0 {
     e = alloc(12)
@@ -1677,8 +1739,23 @@ function isolated_close(o, v) {
   }
   0
 }
+function stored(n, v) {
+  if v >= arena_base() {
+    if n < markf {
+      effects = effects + 1
+    }
+    return 0
+  }
+  touched(n)
+}
 function touched(x) {
   var s
+  if x >= arena_base() {
+    if (load 3844) == 0 {
+      kept()
+      return 0
+    }
+  }
   if x < markf {
     effects = effects + 1
     s = isodepth

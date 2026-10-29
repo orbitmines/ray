@@ -9,13 +9,13 @@ import { TransportKind } from 'vscode-languageclient/node';
 /**
  * The ways we can get a Ray language server running, in priority order (both `--lsp` over stdio):
  *
- *   0. `workspace`— The workspace is a checkout holding the language's host beside it (`@ether/v0.ts/src/language.ts`, with
- *                   tsx installed there): run that source as it is on disk, so a change to the host is picked up by
- *                   reloading the window, without rebuilding the extension.
+ *   0. `workspace`— The workspace is a checkout holding the language's host (`@ether/ray/bootstrap/.entrypoint.mjs`, with
+ *                   its packages installed there): run it as it is on disk, so a change to the host or to the language is
+ *                   picked up by reloading the window, without rebuilding the extension.
  *   1. `installed`— The host has a `ray` executable on PATH whose `--version` parses under Ether's version scheme and
  *                   whose `--help` lists `--lsp`. Use it.
- *   2. `bundled`  — Fall back to the language bundled with the extension itself: the language (src/language.ts) and
- *                   the library under `server/`.
+ *   2. `bundled`  — Fall back to the language bundled with the extension itself: the host (`.entrypoint.mjs`), its
+ *                   language server, and the library with the latest revision under `server/@ether`.
  *
  * When the workspace holds a language definition (a `!language` project, e.g. `@ether/ray` in a checkout of
  * orbitmines/ray), its directory is given to `--lsp`, and that language is read instead of its own.
@@ -31,8 +31,8 @@ export interface Boot {
 const LANGUAGE_DIRECTORY = path.join('@ether', 'ray');
 
 function isLanguage(dir: string): boolean {
-  // (a language's directory: its entrypoint in it, or a project saying `!language`)
-  if (fs.existsSync(path.join(dir, 'bootstrap', '.entrypoint.ray3'))) return true;
+  // (a language's directory: its host in it, or a project saying `!language`)
+  if (fs.existsSync(path.join(dir, 'bootstrap', '.entrypoint.mjs'))) return true;
   try { return fs.readFileSync(path.join(dir, '.project.ray'), 'utf-8').split('\n')[0].includes('!language'); } catch { return false; }
 }
 
@@ -74,9 +74,9 @@ function installedBoot(language: string | null): Boot | null {
     raw = cp.execFileSync(bin, ['--version'], { encoding: 'utf-8' }).trim();
   } catch { return null; }
 
-  // `ray --version` may print "ray 0.E2026.0D.0" — pick the first whitespace-
-  // separated token in Ether's version scheme.
-  const version = raw.split(/\s+/).find(t => /^\d+\.E\d{4}\.\d+[A-L]\.\d+$/.test(t));
+  // `ray --version` prints "0.1.5-E2027.0A.5" (semver, then Ether's scheme), older ones "ray 0.E2026.0D.0" — pick
+  // the first whitespace-separated token that holds a version in Ether's scheme.
+  const version = raw.split(/\s+/).find(t => /^\d+\.(\d+\.\d+-)?E\d{4}\.\d+[A-L]\.\d+$/.test(t));
   if (!version) return null;
 
   let help: string;
@@ -111,16 +111,16 @@ function nodeRuntime(): { command: string, env: NodeJS.ProcessEnv } {
 }
 
 /**
- * Last-resort: the language shipped inside the extension — src/language.ts bundled as `server/language.mjs`, and the
- * library (`server/@ether`), whose core (`server/@ether/ray`) is given to it as RAY_LIBRARY.
+ * Last-resort: the language shipped inside the extension — the host as `server/.entrypoint.mjs`, its language server
+ * (`server/.entrypoint.lsp.mjs`), and the library with the latest revision (`server/@ether`), which the host finds
+ * beside itself.
  */
 function bundledBoot(extensionPath: string, language: string | null): Boot {
-  const entry = path.join(extensionPath, 'server', 'language.mjs');
-  const library = path.join(extensionPath, 'server', '@ether', 'ray');
+  const entry = path.join(extensionPath, 'server', '.entrypoint.mjs');
   if (!fs.existsSync(entry)) throw new Error(`Bundled Ray language server not found at ${entry}`);
 
   const runtime = nodeRuntime();
-  const env = { ...process.env, ...runtime.env, RAY_LIBRARY: library };
+  const env = { ...process.env, ...runtime.env };
   const run = {
     command: runtime.command,
     args: [entry, '--lsp', ...(language ? [language] : [])],
@@ -134,20 +134,18 @@ function bundledBoot(extensionPath: string, language: string | null): Boot {
   };
 }
 
-/** The host beside a language in a checkout: `@ether/v0.ts/src/language.ts`, run with that directory's tsx. */
+/** The host of a language in a checkout: `<language>/bootstrap/.entrypoint.mjs`, with its packages installed beside it. */
 function workspaceBoot(language: string | null): Boot | null {
   if (!language) return null;
-  const v0 = path.join(path.dirname(language), 'v0.ts');
-  const host = workspace.getConfiguration('ether').get<string>('host') || 'language.ts';
-  const entry = path.join(v0, 'src', host), loader = path.join(v0, 'node_modules', 'tsx', 'dist', 'loader.mjs');
-  if (!fs.existsSync(entry) || !fs.existsSync(loader)) return null;
+  const bootstrap = path.join(language, 'bootstrap'), entry = path.join(bootstrap, '.entrypoint.mjs');
+  if (!fs.existsSync(entry) || !fs.existsSync(path.join(bootstrap, 'node_modules', 'vscode-languageserver'))) return null;
   const runtime = nodeRuntime();
   const env = { ...process.env, ...runtime.env };
   const run = {
     command: runtime.command,
-    args: ['--import', 'file://' + loader, entry, '--lsp', language],
+    args: [entry, '--lsp', language],
     transport: TransportKind.stdio,
-    options: { cwd: workspaceRoot() ?? v0, env },
+    options: { cwd: workspaceRoot() ?? bootstrap, env },
   };
   return {
     mode: 'workspace',

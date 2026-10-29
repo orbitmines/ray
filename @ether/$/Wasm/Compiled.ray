@@ -1,0 +1,131 @@
+// Compiled: Expression.ray read as it is written (its statements, each by the shape it is written in, what each hole took
+// as text), then written as WebAssembly
+Compiled := {
+  // (the shapes code is written in, each answering what read it (`external &`: its holes, by name, as text); the first
+  // hole's name says which; the tightest first, but for what is written in brackets)
+  grammar := { }
+  // (and a head's, what a definition is written with: `f (x)`, `f(x)`, `f()`)
+  heads := { }
+  parsed (parsed_text) => level cw_statements_in (Compiled.grammar) (parsed_text)
+}
+// (written in it as code read in it: a rule of a head with a member in it, `{a}.{b}`, is not read as one in a block written
+// as it is)
+(Compiled.grammar).(
+  // (the low level's statements, what the runtime is written in: functions of i32s, their locals, loops and choices)
+  function {fn_name}({fn_params}) {`{`}{fn_block}{`}`} => external &
+  function {fn0_name}() {`{`}{fn0_block}{`}`} => external &
+  var {var_name} => external &
+  while {while_condition} {`{`}{while_block}{`}`} => external &
+  if {when_condition} {`{`}{when_block}{`}`} => external &
+  if {ifelse_condition} {`{`}{ifelse_then}{`}`} else {`{`}{ifelse_else}{`}`} => external &
+  return {return_value} => external &
+  load8 {load8_at} => external &
+  load {load_at} => external &
+  .({in_this_code}) => external &
+  // (applied to what follows it without brackets, `xs.for f`: loosest of all, read only when nothing else reads it)
+  level {level_request} => external &
+  {juxtaposed} {juxtaposed_arg} => external &
+  .{this_member} => external &
+  {member_on}?.{member_maybe} => external &
+  {member_from}.{member_name} => external &
+  {member_of}.({member_code}) => external &
+  {called_of}() => external &
+  {call_of}({call_arguments}) => external &
+  {indexed_of}[{index_at}] => external &
+  {selected_of}{`{`}{selection}{`}`} => external &
+  {counted_of}# => external &
+  {any_of}[] => external &
+  {some_of}+ => external &
+  {repeated_of}[]+ => external &
+  !{not_of} => external &
+  {mul_left} * {mul_right} => external &
+  {div_left} / {div_right} => external &
+  {rem_left} % {rem_right} => external &
+  {add_left} + {add_right} => external &
+  {sub_left} - {sub_right} => external &
+  {shl_left} << {shl_right} => external &
+  {shr_left} >> {shr_right} => external &
+  {lt_left} < {lt_right} => external &
+  {gt_left} > {gt_right} => external &
+  {le_left} <= {le_right} => external &
+  {ge_left} >= {ge_right} => external &
+  {ne_left} != {ne_right} => external &
+  concurrently {concurrent_of} => external &
+  dynamically {dynamic_of} => external &
+  {equal_left} === {equal_right} => external &
+  {same_left} == {same_right} => external &
+  {reads_left} ~= {reads_right} => external &
+  {is_left} is {is_type} => external &
+  {as_value} {`as`} {as_type} => external &
+  {with_left} ~~ {with_right} => external &
+  {and_left} & {and_right} => external &
+  {field_name}: {field_type} => external &
+  {optional_name}?: {optional_type} => external &
+  {alt_left} | {alt_right} => external &
+  {or_left} ?? {or_right} => external &
+  {andl_left} and {andl_right} => external &
+  {land_left} && {land_right} => external &
+  {orl_left} or {orl_right} => external &
+  {lor_left} || {lor_right} => external &
+  {if_value} if {if_condition} => external &
+  {choice_if} ? {choice_yes} : {choice_no} => external &
+  {seq_left}, {seq_right} => external &
+  {store8_at} <-8 {store8_value} => external &
+  {store_at} <- {store_value} => external &
+  {set_place} = {set_value} => external &
+  {typed_name}: {typed_type} = {typed_value} => external &
+  {def_name} := {def_value} => external &
+  {ext_of} &+= {ext_with} => external &
+  {rule_head} {`=>`} {rule_body} => external &
+  static {static_of} => external &
+  // (last: what is written in brackets, which would read the holes of the heads after it)
+  "{string_text}" => external &
+  {`{`}{block_code}{`}`} => external &
+  ({group_code}) => external &
+  [{list_code}] => external &
+  // (after every head with a literal hole, which its holes' insides are read with: a text there is that text)
+  `{quoted_text}` => external &
+)
+// (written in it as code read in it: a rule of a head with a member in it, `{a}.{b}`, is not read as one in a block written
+// as it is)
+Compiled &+= {
+  // (what was read, written out: its shape and each hole's, in brackets; a value as it is in angle brackets)
+  // (a text of code: what is around it left out; `.` alone, what it is read on; in braces, a block's statements; in
+  // brackets, what is in them (unless they are an application of something, `(f)(x)`); else each statement by its shape)
+  trimmed (tt) => level cw_trimmed tt
+  // (how long a text is where it is written, in bytes, what a slice is taken in: `.count` may count characters, `⊣`
+  // one; as many as it counts when a slice one longer is not there, else the longest that is, found by halving)
+  bytes (bt) => (bt.count == 0) ? 0 : (((level cw_slice (bt) (1) (bt.count + 1)) === None) ? bt.count : Compiled.bytes_from(bt, bt.count + 1, bt.count * 4 + 1))
+  bytes_from (bt, b_lo, b_hi) => ((b_hi - b_lo) <= 1) ? b_lo : Compiled.bytes_mid(bt, b_lo, b_hi, (b_lo + b_hi) / 2)
+  bytes_mid (bt, b_lo, b_hi, b_mid) => ((level cw_slice (bt) (1) (b_mid)) === None) ? Compiled.bytes_from(bt, b_lo, b_mid) : Compiled.bytes_from(bt, b_mid, b_hi)
+  // (a slice from 0 given as itself: 0 given to a level request is taken for none)
+  last_of (lt) => Compiled.last_at(lt, Compiled.bytes(lt))
+  last_at (la_text, la_n) => (la_n == 1) ? la_text : level cw_slice (la_text) (la_n - 1) (la_n)
+  // (what a level request is given, compared before it is asked, which reads it: a request inside one's holes is not
+  // read there, and what a function is given is read where it is first used)
+  // (what is between the first character and the last: from the second, to where it ends but for its last)
+  inner_of (io_text) => {
+    io_from := level cw_slice (io_text) (1) (2)
+    io_to := level cw_chopped (io_text)
+    level cw_span_of (io_from) (io_to)
+  }
+  braced (bt) => (bt.first == "{") && ((level cw_enclosed (bt)) === true)
+  bracketed (pt) => (pt.first == "(") && ((level cw_enclosed (pt)) === true)
+  // (what a text holds, between commas outside any brackets, each)
+  parts (pt) => level cw_parts (pt)
+  statements_of (so_text) => level cw_statement_texts (Compiled.grammar) (so_text)
+  // (which shape read a statement: the name of its first hole (the grammar is all that reads there); anything else,
+  // `leaf`: never none, which `==` would take for anything)
+  kind_of (k_node) => Compiled.kind_in(level cw_first_member k_node)
+  kind_in (ki) => (ki === None) ? `leaf` : (((level cw_index_of (Compiled.kinds) (ki)) === None) ? `leaf` : ki)
+  kinds := Compiled.parts("level_request, land_left, lor_left, ext_of, static_of, as_value, juxtaposed, applied_name, fn_name, fn0_name, var_name, while_condition, ifelse_condition, when_condition, return_value, load8_at, load_at, in_this_code, this_member, member_on, member_from, member_of, called_of, call_of, indexed_of, selected_of, counted_of, repeated_of, any_of, some_of, not_of, mul_left, div_left, rem_left, add_left, sub_left, shl_left, shr_left, lt_left, gt_left, le_left, ge_left, ne_left, concurrent_of, dynamic_of, equal_left, same_left, reads_left, is_left, with_left, and_left, alt_left, or_left, andl_left, orl_left, if_value, choice_if, typed_name, field_name, optional_name, seq_left, store8_at, store_at, set_place, def_name, rule_head")
+}
+(Compiled.heads).(
+  {called_of}() => external &
+  {call_of}({call_arguments}) => external &
+  {applied_name} ({applied_params}) => external &
+)
+Compiled &+= {
+  head_parsed (hp) => Compiled.heads_in(Compiled.trimmed(hp))
+  heads_in (ht) => (ht === None) ? None : level cw_statements_in (Compiled.heads) (ht)
+}

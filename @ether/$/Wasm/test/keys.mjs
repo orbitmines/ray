@@ -1,5 +1,0 @@
-// node test/keys.mjs ENGINE FILE REGEX: the keys whose head matches REGEX after reading FILE: index, head, node, where written
-import { host } from './host.mjs';
-const [eng, f, re] = process.argv.slice(2); const R = new RegExp(re);
-const r = await host(eng, f, { trace: 0, notests: 1 }); const w = (a) => r.i32[a >> 2]; const s = (a, b) => Buffer.from(r.u8.subarray(a, b)).toString();
-const K = w(104); for (let k = 0; k < w(K); k++) { const kp = w(w(K + 8) + 4 * k); let t = ''; for (let j = 0; j < w(kp + 4); j++) { const q = w(kp + 8) + 24 * j, kd = w(q); t += kd === 0 ? s(w(q + 4), w(q + 4) + w(q + 8)) : kd === 1 ? ' ' : kd === 2 ? '{' + s(w(q + 4), w(q + 8)) + '}' : '{…}'; } const wh0 = r.where(w(kp + 32) - 1048576); if (R.test(t) || String(w(kp + 24)) === process.env.NODE || (process.env.AT && `${wh0.file}:${wh0.line}`.startsWith(process.env.AT))) { const wh = r.where(w(kp + 32) - 1048576); console.log(k, JSON.stringify(t).slice(0, 80), 'node', w(kp + 24), `${wh.file}:${wh.line}`); } }

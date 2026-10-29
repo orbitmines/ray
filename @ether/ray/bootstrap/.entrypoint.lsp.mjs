@@ -5,6 +5,7 @@
 // own, with room for it, made again every so often, and after a reading that read nothing.
 import { Worker, isMainThread, workerData, parentPort } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
+import { readFileSync, existsSync } from 'node:fs';
 
 // (a whole-line comment as spaces: the reader is given code, each place where the editor has it)
 const blanked = (text) => text.split('\n').map((l) => (l.trimStart().startsWith('//') ? ' '.repeat(l.length) : l)).join('\n');
@@ -113,6 +114,30 @@ function encoded(text, spans) {
   return data;
 }
 
+// (what a document is painted as: its statements' heads by how they were read, then comments, texts and numerals)
+function painted(text, statements) {
+  const spans = [];
+  for (const s of statements) {
+    const by = HEADS[s.kind], name = by && head(s);
+    if (name) spans.push([name.from, name.to, by[0], by[1]]);
+  }
+  lexical(text, 0, text.length, spans);
+  return spans;
+}
+
+// The colours each kind of token is shown in: the language's own theme, `DARK` in .entrypoint.ray (each `^name = ^ #colour`,
+// or `^name = ^other` for another's), beside this file or in the @ether it was bundled with.
+function theme() {
+  const file = [new URL('./.entrypoint.ray', import.meta.url), new URL('./@ether/ray/bootstrap/.entrypoint.ray', import.meta.url)].map(fileURLToPath).find(existsSync);
+  if (!file) return {};
+  const text = readFileSync(file, 'utf8'), at = text.indexOf('DARK := theme'), block = at < 0 ? '' : text.slice(at, text.indexOf('\n}', at));
+  const table = new Map([...block.matchAll(/^\s*\^([\w.]+)\s*=\s*\^\s*(#[0-9A-Fa-f]{6}|[\w.]+)\s*$/gm)].map((m) => [m[1], m[2]]));
+  const colour = (name, seen = new Set()) => { const v = table.get(name); if (!v || seen.has(name)) return undefined; seen.add(name); return v.startsWith('#') ? v : colour(v, seen); };
+  const styles = {};
+  for (const name of table.keys()) { const color = colour(name); if (color) styles[name] = { color }; }
+  return styles;
+}
+
 // What a document holds: its statements, as read, and what is defined in each block it defines, to a depth.
 const DEPTH = 2;
 const balanced_block = (text) => { const t = text.trim(); return t.startsWith('{') && t.endsWith('}'); };
@@ -140,6 +165,16 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
   const reader = new Reader(log, STACK_MB);
   // (what each document was read as, at its version)
   const read = new Map();
+  // (the theme channel, `ether/theme`: the styles, and each document's spans in them)
+  const styles = theme();
+  const shown = (uris) => ({
+    styles,
+    documents: uris.flatMap((uri) => {
+      const r = read.get(uri), document = documents.get(uri);
+      if (!r || !document || document.version !== r.version) return [];
+      return [{ uri, version: r.version, ranges: painted(r.text, r.statements).filter(([, , style]) => styles[style]).map(([from, to, style]) => ({ style, range: { start: document.positionAt(from), end: document.positionAt(to) } })) }];
+    }),
+  });
 
   // A document read: its statements, and each block's that a definition holds, there in the document.
   const reading = async (text) => {
@@ -174,6 +209,7 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
     connection.sendDiagnostics({ uri: document.uri, version, diagnostics });
     log(`read ${document.uri.split('/').pop()} v${version}: ${statements.length} statements in ${Date.now() - t0} ms`);
     connection.languages.semanticTokens.refresh?.();
+    connection.sendNotification('ether/theme', shown([document.uri]));
   };
   const waiting = new Map();
   const later = (document) => { clearTimeout(waiting.get(document.uri)); waiting.set(document.uri, setTimeout(() => { waiting.delete(document.uri); check(document).catch((e) => log(`reading ${document.uri} failed: ${e?.stack ?? e}`)); }, Number(process.env.ETHER_LSP_DELAY ?? 150))); };
@@ -193,13 +229,8 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
   connection.languages.semanticTokens.on(({ textDocument }) => {
     const document = documents.get(textDocument.uri), r = read.get(textDocument.uri);
     if (!document) return { data: [] };
-    const text = document.getText(), spans = [];
-    for (const s of r && r.text === text ? r.statements : []) {
-      const by = HEADS[s.kind], name = by && head(s);
-      if (name) spans.push([name.from, name.to, by[0], by[1]]);
-    }
-    lexical(text, 0, text.length, spans);
-    return { data: encoded(text, spans) };
+    const text = document.getText();
+    return { data: encoded(text, painted(text, r && r.text === text ? r.statements : [])) };
   });
   connection.onDocumentSymbol(async ({ textDocument }) => {
     const document = documents.get(textDocument.uri);
@@ -210,7 +241,7 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
   });
   // (what the editor asks of an Ether server besides: nothing more yet)
   connection.onRequest('ether/initialFiles', () => null);
-  connection.onRequest('ether/theme', () => ({ styles: {}, documents: [] }));
+  connection.onRequest('ether/theme', ({ uris } = {}) => shown(uris ?? []));
   connection.onRequest('ether/languageConfiguration', () => ({
     comments: { lineComment: '//' },
     brackets: [['{', '}'], ['[', ']'], ['(', ')']],

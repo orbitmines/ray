@@ -1,0 +1,265 @@
+// Low: the runtime's code (functions of i32s, their locals, loops and choices, memory read and written) written as
+// WebAssembly, as it is read: each function's statements, every one leaving one value, all but the last dropped. (What is
+// written goes out as it is made, `level write`; a size is written before what it counts once that is written,
+// `level cw_sized_from`.)
+Low := {
+  // (the globals, by place: where the next is made (from 65536), the end of the text read, how many holes are bound and
+  // where (from 32768))
+  static globals := Compiled.parts("free, textend, boundn, bounds, names, activen, actives, markf, effects, syms, outb, outn, datab, datan, counter, asideb, asiden, takent, csyms, memo, epoch, wholly, noreclaim, parserhook, nomemo")
+  // (where a name is among names: its place; not there, none)
+  static place_of (po_list, po_name) => level cw_index_of (po_list) (po_name)
+  static has (hs_list, hs_name) => !((level cw_index_of (hs_list) (hs_name)) === None)
+  static parsed_one (pt) => Compiled.parsed(Compiled.trimmed(pt)).first
+  static kind (kt) => Compiled.kind_of(Low.parsed_one(kt))
+  static out (ob) => level write ob
+  static outs (os) => os.for((b) => level write b)
+  static mark => level cw_written_at
+  static sized (sz) => level cw_sized_from sz
+  static leb (lv) => (lv < 128) ? Low.out(lv) : Low.leb_more(lv)
+  static leb_more (lm) => {
+    Low.out(lm % 128 + 128)
+    Low.leb(lm / 128)
+  }
+  static sleb (sv) => (sv < 64) ? Low.out(sv) : Low.sleb_more(sv)
+  static sleb_more (sm) => {
+    Low.out(sm % 128 + 128)
+    Low.sleb(sm / 128)
+  }
+  // (a module of what a text writes: its functions, named first, so each can call any)
+  static module_of (mo_text, mo_pages) => Low.module_taken(mo_text.count, mo_text, mo_pages)
+  // (the text read before anything is written: what it is given is read when first asked for)
+  static module_taken (mt_count, mt_text, mt_pages) => Low.module_named(level cw_forced (Compiled.statements_of(mt_text)), mt_pages)
+  // (what every section reads, read before any of them: each is written where what it makes is let go, what is read
+  // in one would not outlive it)
+  static module_named (mn, mn_pages) => Low.module(mn, level cw_forced (Low.names_of(mn)), mn_pages)
+  static name_of (nf) => (Low.kind(nf) == `fn_name`) ? Low.parsed_one(nf).fn_name : Low.parsed_one(nf).fn0_name
+  static params_text (pn) => (Low.kind(pn) == `fn_name`) ? Low.parsed_one(pn).fn_params : ""
+  static block_text (bn) => (Low.kind(bn) == `fn_name`) ? Low.parsed_one(bn).fn_block : Low.parsed_one(bn).fn0_block
+  // (each in turn, not one inside the other: a list of hundreds would go deeper than reading goes)
+  static names_of (nl) => nl.map((st) => Low.name_of(st))
+  static params_of (pf) => (Low.params_text(pf).count == 0) ? Array.new : Low.names_in(Low.params_text(pf))
+  static locals_of (lf) => Low.params_of(lf).joined(Low.vars_in(Low.block_text(lf)))
+  // (names written `a, b`: each, as written)
+  static names_in (ni) => Compiled.parts(ni)
+  // (the locals what a block holds declares, `var x`, in it or in a block in it, in order)
+  static vars_in (vb) => Low.vars_of(Compiled.statements_of(vb))
+  static vars_of (vs) => vs.empty ? Array.new : Low.vars_one(vs.first).joined(Low.vars_of(vs.rest))
+  static vars_one (v1) => (Low.kind(v1) == `var_name`) ? Array.new.append(Compiled.trimmed(Low.parsed_one(v1).var_name)) : ((Low.kind(v1) == `while_condition`) ? Low.vars_in(Low.parsed_one(v1).while_block) : ((Low.kind(v1) == `when_condition`) ? Low.vars_in(Low.parsed_one(v1).when_block) : ((Low.kind(v1) == `ifelse_condition`) ? Low.vars_in(Low.parsed_one(v1).ifelse_then).joined(Low.vars_in(Low.parsed_one(v1).ifelse_else)) : Array.new)))
+  // (what a block, `{ … }`, holds: its statements, each leaving a value, all but the last dropped)
+  static block (bl, bl_locals, bl_names) => Low.statements(Compiled.statements_of(bl), bl_locals, bl_names)
+  static statements (ss, ss_locals, ss_names) => ss.empty ? Low.outs([0x41, 0]) : Low.statement(ss, ss_locals, ss_names)
+  static statement (st, st_locals, st_names) => {
+    Low.ops(st.first, st_locals, st_names)
+    Low.statements_after(st.rest, st_locals, st_names)
+  }
+  // (each statement where what writing it makes is let go once it is written)
+  static ops_isolated (oi, oi_locals, oi_names) => {
+    level cw_isolated {
+      Low.ops(oi, oi_locals, oi_names)
+    }
+  }
+  static statements_after (sa, sa_locals, sa_names) => sa.empty ? None : Low.dropped_then(sa, sa_locals, sa_names)
+  static dropped_then (dt, dt_locals, dt_names) => {
+    Low.out(0x1A)
+    Low.statement(dt, dt_locals, dt_names)
+  }
+  // (one statement or what a hole took: by its shape; a name a local, a number its value)
+  static ops (op, op_locals, op_names) => Low.ops_parsed(Compiled.trimmed(op), Low.parsed_one(op), op_locals, op_names)
+  static ops_parsed (o0, o0p, o0l, o0n) => Low.ops_one(o0, Compiled.kind_of(o0p), o0p, o0l, o0n)
+  static ops_one (o1, o1k, o1p, o1l, o1n) => (o1k == `leaf`) ? (Compiled.bracketed(o1) ? Low.ops(Compiled.inner_of(o1), o1l, o1n) : Low.leaf(o1, o1l, o1n)) : Low.shaped(o1p, o1k, o1l, o1n)
+  // (a name a local, or `free`, or a function (its place, what `indirect` calls), else a numeral)
+  static leaf (lf, lf_locals, lf_names) => Low.has(lf_locals, lf) ? Low.outs([0x20, Low.place_of(lf_locals, lf)]) : (Low.has(Low.globals, lf) ? Low.outs([0x23, Low.place_of(Low.globals, lf)]) : (Low.has(lf_names, lf) ? Low.constant(Low.place_of(lf_names, lf)) : Low.constant(Low.number(lf))))
+  static constant (cv) => {
+    Low.out(0x41)
+    Low.sleb(cv)
+  }
+  // (a numeral's value: decimal, or hexadecimal after `0x`)
+  static number (nt) => level cw_numeral_value (nt)
+  static binary (bl, br, bop, bx_l, bx_n) => {
+    Low.ops(bl, bx_l, bx_n)
+    Low.ops(br, bx_l, bx_n)
+    Low.out(bop)
+  }
+  static after (af_op, af_bytes, af_l, af_n) => {
+    Low.ops(af_op, af_l, af_n)
+    Low.outs(af_bytes)
+  }
+  static stored (sd_at, sd_value, sd_op, sd_l, sd_n) => {
+    Low.binary(sd_at, sd_value, sd_op, sd_l, sd_n)
+    Low.outs([((sd_op == 0x36) ? 2 : 0), 0, 0x41, 0])
+  }
+  static shaped (sh, sk, l, n) => (sk == `add_left`) ? Low.binary(sh.add_left, sh.add_right, 0x6A, l, n) : ((sk == `sub_left`) ? Low.binary(sh.sub_left, sh.sub_right, 0x6B, l, n) : ((sk == `mul_left`) ? Low.binary(sh.mul_left, sh.mul_right, 0x6C, l, n) : ((sk == `div_left`) ? Low.binary(sh.div_left, sh.div_right, 0x6D, l, n) : ((sk == `rem_left`) ? Low.binary(sh.rem_left, sh.rem_right, 0x6F, l, n) : Low.shaped2(sh, sk, l, n)))))
+  static shaped2 (sh, sk, l, n) => (sk == `lt_left`) ? Low.binary(sh.lt_left, sh.lt_right, 0x48, l, n) : ((sk == `gt_left`) ? Low.binary(sh.gt_left, sh.gt_right, 0x4A, l, n) : ((sk == `le_left`) ? Low.binary(sh.le_left, sh.le_right, 0x4C, l, n) : ((sk == `ge_left`) ? Low.binary(sh.ge_left, sh.ge_right, 0x4E, l, n) : ((sk == `same_left`) ? Low.binary(sh.same_left, sh.same_right, 0x46, l, n) : ((sk == `ne_left`) ? Low.binary(sh.ne_left, sh.ne_right, 0x47, l, n) : Low.shaped3(sh, sk, l, n))))))
+  static shaped3 (sh, sk, l, n) => (sk == `andl_left`) ? Low.binary(sh.andl_left, sh.andl_right, 0x71, l, n) : ((sk == `orl_left`) ? Low.binary(sh.orl_left, sh.orl_right, 0x72, l, n) : ((sk == `shl_left`) ? Low.binary(sh.shl_left, sh.shl_right, 0x74, l, n) : ((sk == `shr_left`) ? Low.binary(sh.shr_left, sh.shr_right, 0x75, l, n) : Low.shaped4(sh, sk, l, n))))
+  static shaped4 (sh, sk, l, n) => (sk == `load_at`) ? Low.after(sh.load_at, [0x28, 2, 0], l, n) : ((sk == `load8_at`) ? Low.after(sh.load8_at, [0x2D, 0, 0], l, n) : ((sk == `store_at`) ? Low.stored(sh.store_at, sh.store_value, 0x36, l, n) : ((sk == `store8_at`) ? Low.stored(sh.store8_at, sh.store8_value, 0x3A, l, n) : Low.shaped5(sh, sk, l, n))))
+  static shaped5 (sh, sk, l, n) => (sk == `var_name`) ? Low.outs([0x41, 0]) : ((sk == `set_place`) ? Low.set(Compiled.trimmed(sh.set_place), sh.set_value, l, n) : ((sk == `return_value`) ? Low.after(sh.return_value, [0x0F], l, n) : Low.shaped6(sh, sk, l, n)))
+  static shaped6 (sh, sk, l, n) => (sk == `while_condition`) ? Low.looped(sh.while_condition, sh.while_block, l, n) : ((sk == `when_condition`) ? Low.when(sh.when_condition, sh.when_block, l, n) : ((sk == `ifelse_condition`) ? Low.either(sh.ifelse_condition, sh.ifelse_then, sh.ifelse_else, l, n) : Low.shaped7(sh, sk, l, n)))
+  static shaped7 (sh, sk, l, n) => (sk == `called_of`) ? Low.called(Compiled.trimmed(sh.called_of), n) : ((sk == `group_code`) ? Low.ops(sh.group_code, l, n) : ((sk == `applied_name`) ? Low.applied(Compiled.trimmed(sh.applied_name), sh.applied_params, l, n) : ((sk == `call_of`) ? ((Compiled.trimmed(sh.call_of) == `indirect`) ? Low.indirect_called(sh.call_arguments, l, n) : Low.called_with(sh.call_arguments, Compiled.trimmed(sh.call_of), l, n)) : Low.out(0x00))))
+  // (a name, a space, what is in brackets: `load (a)` a load, anything else a call)
+  static applied (an, ap, l, n) => (an == `load`) ? Low.after(ap, [0x28, 2, 0], l, n) : ((an == `load8`) ? Low.after(ap, [0x2D, 0, 0], l, n) : Low.called_with(ap, an, l, n))
+  static looped (lc, lb, l, n) => {
+    Low.outs([0x02, 0x40, 0x03, 0x40])
+    Low.ops(lc, l, n)
+    Low.outs([0x45, 0x0D, 1])
+    Low.block(lb, l, n)
+    Low.outs([0x1A, 0x0C, 0, 0x0B, 0x0B, 0x41, 0])
+  }
+  static when (wc, wb, l, n) => {
+    Low.ops(wc, l, n)
+    Low.outs([0x04, 0x40])
+    Low.block(wb, l, n)
+    Low.outs([0x1A, 0x0B, 0x41, 0])
+  }
+  static either (ec, et, ee, l, n) => {
+    Low.ops(ec, l, n)
+    Low.outs([0x04, 0x7F])
+    Low.block(et, l, n)
+    Low.out(0x05)
+    Low.block(ee, l, n)
+    Low.out(0x0B)
+  }
+  static called (cn, c_names) => {
+    Low.out(0x10)
+    Low.leb(Low.place_of(c_names, cn))
+  }
+  static called_with (ca, cn, l, n) => {
+    Low.arguments(ca, l, n)
+    Low.called(cn, n)
+  }
+  // (what a call is given, `a, b`: each in turn)
+  static arguments (at, at_l, at_n) => Compiled.parts(at).for((part) => Low.ops(part, at_l, at_n))
+  static arguments_two (a2, a2_l, a2_n) => {
+    Low.arguments(a2.seq_left, a2_l, a2_n)
+    Low.arguments(a2.seq_right, a2_l, a2_n)
+  }
+  static set (sp, sv, s_l, s_n) => Low.has(Low.globals, sp) ? Low.after(sv, [0x24, Low.place_of(Low.globals, sp), 0x41, 0], s_l, s_n) : Low.after(sv, [0x22, Low.place_of(s_l, sp)], s_l, s_n)
+  // (the module: a type of as many i32s as are taken, each answering one; the memory imported; global 0 where the next is
+  // made; every function exported by its name: each section its id, its size, its bytes)
+  static module (md, md_names, md_pages) => {
+    level cw_forced (md.count)
+    level cw_forced (md_names.count)
+    Low.outs([0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00])
+    Low.section(1, () => Low.types(0))
+    Low.section(2, () => Low.memory(md_pages))
+    Low.section(3, () => Low.takes(md))
+    Low.section(4, () => Low.table(md.count))
+    Low.section(6, () => Low.outs([25, 0x7F, 0x01, 0x41, 0x80, 0x80, 0x04, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x80, 0x80, 0x02, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x80, 0x10, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B, 0x7F, 0x01, 0x41, 0x00, 0x0B]))
+    Low.section(7, () => Low.exports(md_names))
+    Low.section(9, () => Low.elements(md_names))
+    Low.section(10, () => Low.codes(md, md_names))
+    Low.section(11, () => Low.data())
+  }
+  static section (sc_id, sc_written) => {
+    level cw_isolated {
+      Low.out(sc_id)
+      level cw_sized {
+        sc_written()
+      }
+    }
+  }
+  static name (nm) => {
+    level cw_sized {
+      level write nm
+    }
+  }
+  static types (tn) => {
+    Low.out(7)
+    Low.types_from(0)
+  }
+  static types_from (tf) => (tf == 7) ? None : Low.type_then(tf)
+  static type_then (tt) => {
+    Low.out(0x60)
+    Low.out(tt)
+    Low.i32s(tt)
+    Low.outs([1, 0x7F])
+    Low.types_from(tt + 1)
+  }
+  static i32s (n) => (n == 0) ? None : Low.i32_then(n)
+  static i32_then (it) => {
+    Low.out(0x7F)
+    Low.i32s(it - 1)
+  }
+  // (a table of every function, by its place: what `indirect` calls)
+  static table (tc) => {
+    Low.outs([1, 0x70, 0x00])
+    Low.leb(tc)
+  }
+  static elements (en) => {
+    Low.outs([1, 0x00, 0x41, 0x00, 0x0B])
+    Low.leb(en.count)
+    en.for((nm) => Low.leb(Low.place_of(en, nm)))
+  }
+  static elements_from (ef, ec) => (ef == ec) ? None : Low.element_then(ef, ec)
+  static element_then (et, ec) => {
+    Low.leb(et)
+    Low.elements_from(et + 1, ec)
+  }
+  // (a call of a function by its place in the table, `indirect(env, args, named, at)`: the three, then the place)
+  static indirect_called (ia, i_l, i_n) => {
+    Low.arguments(ia, i_l, i_n)
+    Low.outs([0x11, 3, 0])
+  }
+  // (the texts written in the program, from 4096)
+  static data => {
+    Low.outs([1, 0x00, 0x41, 0x80, 0x20, 0x0B])
+    level cw_data_out
+  }
+  static memory (mp) => {
+    Low.out(1)
+    Low.name("m")
+    Low.name("memory")
+    Low.outs([0x02, 0x01])
+    Low.leb(mp)
+    Low.leb(mp)
+  }
+  static takes (tk) => {
+    Low.leb(tk.count)
+    tk.for((f) => Low.leb(Low.params_of(f).count))
+  }
+  static exports (ex) => {
+    Low.leb(ex.count)
+    ex.for((en) => Low.export_of(en, ex))
+  }
+  static export_of (eo, eo_names) => {
+    Low.name(eo)
+    Low.out(0x00)
+    Low.leb(Low.place_of(eo_names, eo))
+  }
+  static exports_from (ef, ei) => ef.empty ? None : Low.export_then(ef, ei)
+  static export_then (et, eti) => {
+    Low.name(et.first)
+    Low.out(0x00)
+    Low.leb(eti)
+    Low.exports_from(et.rest, eti + 1)
+  }
+  static codes (cs, cs_names) => {
+    Low.leb(cs.count)
+    // (each where what it makes is let go once it is written)
+    cs.for((f) => Low.code_isolated(f, cs_names))
+  }
+  static code_isolated (ci, ci_names) => {
+    level cw_isolated {
+      Low.code(ci, ci_names)
+    }
+  }
+  // (with the runtime's already written (`level cw_cached`, while working on the language: one of the functions before
+  // `main` stands in, put back from a module written before), only the program's)
+  static code (cf, cf_names) => ((level cw_cached) && ((Low.place_of(cf_names, Low.name_of(cf))) < (Low.place_of(cf_names, `main`)))) ? Low.code_stand_in : Low.code_written(cf, cf_names)
+  static code_stand_in => {
+    level cw_sized {
+      Low.outs([0, 0x00, 0x0B])
+    }
+  }
+  static code_written (cf, cf_names) => {
+    level cw_sized {
+      Low.code_body(cf, cf_names)
+    }
+  }
+  static code_body (cb, cb_names) => {
+    Low.out(1)
+    Low.leb(Low.locals_of(cb).count - Low.params_of(cb).count)
+    Low.out(0x7F)
+    Low.block(Low.block_text(cb), Low.locals_of(cb), cb_names)
+    Low.out(0x0B)
+  }
+}

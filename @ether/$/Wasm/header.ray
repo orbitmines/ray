@@ -1,0 +1,8 @@
+!language { } {LHS} => {RHS}
+
+{lhs} => {rhs} => {
+  {lhs} => {rhs}
+}
+({grouped}) => grouped
+.{member} => {member}
+`{text}` => (external &).text

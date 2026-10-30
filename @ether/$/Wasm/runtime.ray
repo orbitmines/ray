@@ -1770,19 +1770,495 @@ function touched(x) {
   }
   0
 }
+function chosen(kind, p, pos, k) {
+  var s
+  s = load 3852
+  if (s + 48) > ((load 3848) + 67108864) {
+    unreachable_now()
+  }
+  s <- kind
+  (s + 4) <- p
+  (s + 8) <- pos
+  (s + 12) <- k
+  (s + 16) <- 0
+  (s + 20) <- 0
+  (s + 24) <- boundn
+  (s + 28) <- free
+  (s + 32) <- effects
+  (s + 36) <- activen
+  3852 <- (s + 48)
+  markf = free
+  s
+}
+function undone_by(c, mark, m) {
+  var s
+  s = load 3852
+  if (s + 48) > ((load 3848) + 67108864) {
+    unreachable_now()
+  }
+  s <- 10
+  (s + 24) <- m
+  (s + 40) <- c
+  (s + 44) <- mark
+  3852 <- (s + 48)
+  0
+}
+function unreachable_now() {
+  load (0 - 8)
+}
 function matched(p, pos, k) {
-  var f
-  var e
-  var o
+  var base
+  var om
+  var fr
+  var ef
+  var an
+  var bn
+  var mode
+  var kind
+  var l
+  var n
+  var i
   var r
-  f = free
-  e = effects
-  o = markf
-  markf = f
-  r = matched1(p, pos, k)
-  markf = o
-  if ((r < 0) and (effects == e)) and (noreclaim == 0) {
-    free = f
+  var c
+  var m
+  var s
+  var t
+  var q
+  if (load 3848) == 0 {
+    3848 <- alloc(67108864)
+    3852 <- (load 3848)
+    kept()
+  }
+  base = load 3852
+  om = markf
+  fr = free
+  ef = effects
+  an = activen
+  bn = boundn
+  markf = free
+  mode = 0
+  r = 0 - 1
+  while mode != 3 {
+    if mode == 0 {
+      if (load p) != 6 {
+        p = topattern(p)
+      }
+      kind = load (p + 4)
+      mode = 2
+      if kind == 9 {
+        l = load (p + 8)
+        i = load (p + 12)
+        if i >= (load (l + 4)) {
+          mode = 1
+        } else {
+          k = cell(sequence_from(l, i + 1), k)
+          p = at(l, i)
+          mode = 0
+        }
+      } else {
+        if kind == 1 {
+          l = load (p + 8)
+          n = (load (l + 8)) - (load (l + 4))
+          if (pos + n) <= textend {
+            if texteq(pos, load (l + 4), n) {
+              pos = pos + n
+              mode = 1
+            }
+          }
+        } else {
+          if kind == 2 {
+            if pos < textend {
+              if chared(load8 pos, load (p + 8)) {
+                pos = pos + 1
+                mode = 1
+              }
+            }
+          } else {
+            if kind == 28 {
+              chosen(2, p, pos, k)
+              mode = 4
+            } else {
+              if kind == 10 {
+                chosen(4, p, pos, k)
+                mode = 4
+              } else {
+                if kind == 21 {
+                  if pos == (load (p + 16)) {
+                    if (load (p + 12)) <= 0 {
+                      mode = 1
+                    }
+                  } else {
+                    p = pattern3(10, load (p + 8), load (p + 12), load (p + 20))
+                    mode = 0
+                  }
+                } else {
+                  if kind == 3 {
+                    p = sequence_from(load (p + 8), 0)
+                    mode = 0
+                  } else {
+                    if kind == 11 {
+                      m = boundn
+                      l = saved(load (p + 16))
+                      gathered(load (p + 8), load (p + 12), pos, load (p + 16), load (p + 20))
+                      undone_by(l, load (p + 16), m)
+                      mode = 1
+                    } else {
+                      if kind == 6 {
+                        k = cell(pattern4(11, load (p + 8), pos, boundn, load (p + 12)), k)
+                        p = load (p + 12)
+                        mode = 0
+                      } else {
+                        if kind == 22 {
+                          m = boundn
+                          n = saved(load (p + 8))
+                          if listing(load (p + 8)) {
+                            l = list()
+                            i = load (p + 8)
+                            while i < boundn {
+                              if (load (bounds + (i * 16))) == 0 {
+                                append(l, load ((bounds + (i * 16)) + 12))
+                              }
+                              i = i + 1
+                            }
+                            boundn = load (p + 8)
+                            bindv(0, l)
+                          }
+                          undone_by(n, load (p + 8), m)
+                          mode = 1
+                        } else {
+                          if kind == 4 {
+                            chosen(1, p, pos, k)
+                            mode = 4
+                          } else {
+                            if kind == 5 {
+                              k = cell(pattern(22, boundn, 0), k)
+                              p = pattern3(10, load (p + 8), load (p + 12), load (p + 16))
+                              mode = 0
+                            } else {
+                              if kind == 8 {
+                                s = chosen(3, p, pos, k)
+                                (s + 16) <- (pos + 1)
+                                mode = 4
+                              } else {
+                                if kind == 12 {
+                                  if reading_at(p, pos) == 0 {
+                                    activen = activen + 1
+                                    (actives + (activen * 8)) <- p
+                                    ((actives + (activen * 8)) + 4) <- pos
+                                    l = call(load (p + 8), append(list(), text(pos, textend)), 0)
+                                    if tag(l) != 1 {
+                                      activen = activen - 1
+                                    } else {
+                                      k = cell(applied_end(l, boundn), k)
+                                      p = topattern(member(l, 17))
+                                      mode = 0
+                                    }
+                                  }
+                                } else {
+                                  if kind == 13 {
+                                    if reading_at(load (p + 8), pos) == 0 {
+                                      activen = activen + 1
+                                      (actives + (activen * 8)) <- load (p + 8)
+                                      ((actives + (activen * 8)) + 4) <- pos
+                                      k = cell(class_end(load (p + 8), boundn), k)
+                                      p = header(load (p + 8), load (p + 12))
+                                      mode = 0
+                                    }
+                                  } else {
+                                    if kind == 14 {
+                                      m = boundn
+                                      i = saved(load (p + 12))
+                                      l = construct(load (p + 8), list(), named_from(load (p + 12)))
+                                      boundn = load (p + 12)
+                                      bindv(0, l)
+                                      undone_by(i, load (p + 12), m)
+                                      mode = 1
+                                    } else {
+                                      if kind == 15 {
+                                        m = boundn
+                                        i = saved(load (p + 12))
+                                        l = application(load (p + 8), load (p + 12))
+                                        boundn = load (p + 12)
+                                        bindv(0, l)
+                                        undone_by(i, load (p + 12), m)
+                                        mode = 1
+                                      } else {
+                                        if kind == 16 {
+                                          l = load (p + 8)
+                                          mode = 0
+                                          p = l
+                                          if tag(l) == 6 {
+                                            if (load (l + 4)) == 5 {
+                                              p = pattern3(5, sequence(append(append(list(), load (l + 8)), pattern(23, 0, 0))), load (l + 12), load (l + 16))
+                                            }
+                                          }
+                                        } else {
+                                          if kind == 18 {
+                                            p = rebuilt(load (p + 8))
+                                            mode = 0
+                                          } else {
+                                            if kind == 19 {
+                                              l = load ((load (p + 8)) + 8)
+                                              mode = 7
+                                              if tag(l) == 6 {
+                                                if (load (l + 4)) == 5 {
+                                                  pos = in_turn(load (l + 8), load ((load (p + 8)) + 12), load (p + 12), pos)
+                                                  mode = 1
+                                                }
+                                              }
+                                              if mode == 7 {
+                                                k = cell(pattern3(20, load (p + 8), load (p + 12), boundn), k)
+                                                p = load ((load (p + 8)) + 8)
+                                                mode = 0
+                                              }
+                                            } else {
+                                              if kind == 20 {
+                                                m = boundn
+                                                i = saved(load (p + 16))
+                                                l = valued_from(load (p + 16))
+                                                boundn = load (p + 16)
+                                                bindv(0, call(curried(load ((load (p + 8)) + 12), l), load (p + 12), 0))
+                                                undone_by(i, load (p + 16), m)
+                                                mode = 1
+                                              } else {
+                                                if kind == 23 {
+                                                  if pos == textend {
+                                                    mode = 1
+                                                  } else {
+                                                    if (load8 pos) == 10 {
+                                                      mode = 1
+                                                    }
+                                                  }
+                                                } else {
+                                                  if kind == 17 {
+                                                    p = topattern(call(load (p + 8), append(list(), named_from(0)), 0))
+                                                    mode = 0
+                                                  } else {
+                                                    if kind == 7 {
+                                                      if pos == textend {
+                                                        mode = 1
+                                                      }
+                                                    } else {
+                                                      if kind == 27 {
+                                                        p = topattern(call(load (p + 8), append(list(), load (p + 12)), 0))
+                                                        mode = 0
+                                                      }
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if mode == 1 {
+      if k == 0 {
+        r = pos
+        mode = 3
+      } else {
+        p = load k
+        k = load (k + 4)
+        mode = 0
+      }
+    }
+    if mode == 2 {
+      t = load 3852
+      q = 1
+      while q == 1 {
+        if t == base {
+          q = 0
+        } else {
+          if (load (t - 48)) == 10 {
+            s = t - 48
+            restored(load (s + 40), load (s + 44), load (s + 24))
+            t = s
+          } else {
+            q = 0
+          }
+        }
+      }
+      3852 <- t
+      if t == base {
+        r = 0 - 1
+        mode = 3
+      } else {
+        s = t - 48
+        boundn = load (s + 24)
+        activen = load (s + 36)
+        if ((load (s + 32)) == effects) and (noreclaim == 0) {
+          free = load (s + 28)
+        }
+        markf = load (s + 28)
+        mode = 4
+      }
+    }
+    if mode == 4 {
+      s = (load 3852) - 48
+      kind = load s
+      p = load (s + 4)
+      k = load (s + 12)
+      mode = 2
+      if kind == 1 {
+        l = load (p + 8)
+        i = load (s + 20)
+        while i < (load (l + 4)) {
+          c = at(l, i)
+          i = i + 1
+          if (load (c + 4)) == 8 {
+            if (load (s + 8)) < textend {
+              if read_by_another(l, i - 1, load (s + 8)) == 0 {
+                pos = (load (s + 8)) + 1
+                mode = 1
+              }
+            }
+          } else {
+            p = c
+            pos = load (s + 8)
+            mode = 0
+          }
+          if mode != 2 {
+            (s + 20) <- i
+            i = load (l + 4)
+          }
+        }
+      }
+      if kind == 2 {
+        q = load (s + 20)
+        if q == 0 {
+          (s + 20) <- 1
+          (s + 16) <- (load (s + 8))
+          if ((load (p + 12)) == 1) or ((load (p + 12)) == 2) {
+            pos = load (s + 8)
+            mode = 1
+            q = 9
+          } else {
+            q = 1
+          }
+        }
+        if q == 1 {
+          n = load (s + 16)
+          if n < textend {
+            l = 0
+            if (load (p + 12)) != 2 {
+              l = text_led_reading(load (p + 8), n)
+            } else {
+              if ((load8 n) == 92) and ((n + 1) < textend) {
+                l = n + 2
+              }
+            }
+            if l > n {
+              n = l
+              q = 5
+            } else {
+              q = 5
+              if (((load8 n) == 10) and ((load (p + 12)) != 1)) and (comma_ended(load (s + 8), n) == 0) {
+                q = 6
+              }
+              if q == 5 {
+                if ((load (p + 12)) == 3) and (((load8 n) == 32) or ((load8 n) == 9)) {
+                  q = 6
+                }
+              }
+              if q == 5 {
+                if (((load (p + 12)) == 0) or ((load (p + 12)) == 3)) and ((load8 (3584 + (load8 n))) != 0) {
+                  q = 6
+                }
+              }
+              if q == 5 {
+                if ((load (p + 12)) == 1) and ((load8 (3584 + (load8 n))) == 2) {
+                  q = 6
+                }
+              }
+              if q == 5 {
+                if (((load (p + 12)) == 1) or ((load (p + 12)) == 2)) and ((load8 n) == (load (p + 16))) {
+                  (s + 20) <- 2
+                  pos = n
+                  mode = 1
+                  q = 9
+                }
+              }
+              if q == 5 {
+                n = n + 1
+              }
+            }
+            if q == 5 {
+              (s + 16) <- n
+              pos = n
+              mode = 1
+            }
+          }
+        }
+      }
+      if kind == 3 {
+        n = load (s + 16)
+        if n <= textend {
+          if (load8 (n - 1)) != 10 {
+            (s + 16) <- (n + 1)
+            pos = n
+            mode = 1
+          }
+        }
+      }
+      if kind == 4 {
+        q = load (s + 20)
+        if q == 0 {
+          q = 1
+          (s + 20) <- 1
+          if ((load (p + 12)) <= 0) and ((load (p + 16)) == 0) {
+            pos = load (s + 8)
+            mode = 1
+            q = 9
+          }
+        }
+        if q == 1 {
+          (s + 20) <- 2
+          k = cell(pattern4(21, load (p + 8), (load (p + 12)) - 1, load (s + 8), load (p + 16)), k)
+          pos = load (s + 8)
+          p = load (p + 8)
+          mode = 0
+          q = 9
+        }
+        if q == 2 {
+          3852 <- s
+          if ((load (p + 12)) <= 0) and ((load (p + 16)) != 0) {
+            pos = load (s + 8)
+            mode = 1
+          }
+          q = 9
+        }
+      }
+      if mode == 2 {
+        if (load 3852) == (s + 48) {
+          3852 <- s
+        }
+      }
+    }
+  }
+  3852 <- base
+  activen = an
+  markf = om
+  if r < 0 {
+    boundn = bn
+    if (effects == ef) and (noreclaim == 0) {
+      free = fr
+    }
   }
   r
 }
@@ -1803,316 +2279,6 @@ function read_by_another(l, i, pos) {
     j = j + 1
   }
   0
-}
-function matched1(p, pos, k) {
-  var kind
-  var n
-  var r
-  var i
-  var l
-  var m
-  var c
-  p = topattern(p)
-  kind = load (p + 4)
-  if kind == 1 {
-    l = load (p + 8)
-    n = (load (l + 8)) - (load (l + 4))
-    if (pos + n) > textend {
-      return 0 - 1
-    }
-    if texteq(pos, load (l + 4), n) {
-      return continued(pos + n, k)
-    }
-    return 0 - 1
-  }
-  if kind == 2 {
-    if pos >= textend {
-      return 0 - 1
-    }
-    if chared(load8 pos, load (p + 8)) {
-      return continued(pos + 1, k)
-    }
-    return 0 - 1
-  }
-  if kind == 3 {
-    return matched(sequence_from(load (p + 8), 0), pos, k)
-  }
-  if kind == 9 {
-    l = load (p + 8)
-    i = load (p + 12)
-    if i >= (load (l + 4)) {
-      return continued(pos, k)
-    }
-    return matched(at(l, i), pos, cell(sequence_from(l, i + 1), k))
-  }
-  if kind == 4 {
-    l = load (p + 8)
-    i = 0
-    m = boundn
-    while i < (load (l + 4)) {
-      c = at(l, i)
-      if (load (c + 4)) == 8 {
-        if (pos < textend) and (read_by_another(l, i, pos) == 0) {
-          r = continued(pos + 1, k)
-        } else {
-          r = 0 - 1
-        }
-      } else {
-        r = matched(c, pos, k)
-      }
-      if r >= 0 {
-        return r
-      }
-      boundn = m
-      i = i + 1
-    }
-    return 0 - 1
-  }
-  if kind == 28 {
-    n = pos
-    if ((load (p + 12)) == 1) or ((load (p + 12)) == 2) {
-      m = boundn
-      r = continued(pos, k)
-      if r >= 0 {
-        return r
-      }
-      boundn = m
-    }
-    while n < textend {
-      l = 0
-      if (load (p + 12)) != 2 {
-        l = text_led_reading(load (p + 8), n)
-      } else {
-        if ((load8 n) == 92) and ((n + 1) < textend) {
-          l = n + 2
-        }
-      }
-      if l > n {
-        n = l
-      } else {
-        if (((load8 n) == 10) and ((load (p + 12)) != 1)) and (comma_ended(pos, n) == 0) {
-          return 0 - 1
-        }
-        if ((load (p + 12)) == 3) and (((load8 n) == 32) or ((load8 n) == 9)) {
-          return 0 - 1
-        }
-        if (((load (p + 12)) == 0) or ((load (p + 12)) == 3)) and ((load8 (3584 + (load8 n))) != 0) {
-          return 0 - 1
-        }
-        if ((load (p + 12)) == 1) and ((load8 (3584 + (load8 n))) == 2) {
-          return 0 - 1
-        }
-        if (((load (p + 12)) == 1) or ((load (p + 12)) == 2)) and ((load8 n) == (load (p + 16))) {
-          m = boundn
-          r = continued(n, k)
-          if r >= 0 {
-            return r
-          }
-          boundn = m
-          return 0 - 1
-        }
-        n = n + 1
-      }
-      m = boundn
-      r = continued(n, k)
-      if r >= 0 {
-        return r
-      }
-      boundn = m
-    }
-    return 0 - 1
-  }
-  if kind == 27 {
-    return matched(topattern(call(load (p + 8), append(list(), load (p + 12)), 0)), pos, k)
-  }
-  if kind == 5 {
-    return matched(pattern3(10, load (p + 8), load (p + 12), load (p + 16)), pos, cell(pattern(22, boundn, 0), k))
-  }
-  if kind == 22 {
-    m = boundn
-    n = saved(load (p + 8))
-    if listing(load (p + 8)) {
-      l = list()
-      i = load (p + 8)
-      while i < boundn {
-        if (load (bounds + (i * 16))) == 0 {
-          append(l, load (bounds + (i * 16) + 12))
-        }
-        i = i + 1
-      }
-      boundn = load (p + 8)
-      bindv(0, l)
-    }
-    r = continued(pos, k)
-    if r < 0 {
-      restored(n, load (p + 8), m)
-    }
-    return r
-  }
-  if kind == 21 {
-    if pos == (load (p + 16)) {
-      if (load (p + 12)) <= 0 {
-        return continued(pos, k)
-      }
-      return 0 - 1
-    }
-    return matched(pattern3(10, load (p + 8), load (p + 12), load (p + 20)), pos, k)
-  }
-  if kind == 10 {
-    m = boundn
-    if ((load (p + 12)) <= 0) and ((load (p + 16)) == 0) {
-      r = continued(pos, k)
-      if r >= 0 {
-        return r
-      }
-      boundn = m
-    }
-    r = matched(load (p + 8), pos, cell(pattern4(21, load (p + 8), (load (p + 12)) - 1, pos, load (p + 16)), k))
-    if r >= 0 {
-      return r
-    }
-    boundn = m
-    if ((load (p + 12)) <= 0) and ((load (p + 16)) != 0) {
-      return continued(pos, k)
-    }
-    0 - 1
-  }
-  if kind == 6 {
-    return matched(load (p + 12), pos, cell(pattern4(11, load (p + 8), pos, boundn, load (p + 12)), k))
-  }
-  if kind == 11 {
-    m = boundn
-    l = saved(load (p + 16))
-    gathered(load (p + 8), load (p + 12), pos, load (p + 16), load (p + 20))
-    r = continued(pos, k)
-    if r < 0 {
-      restored(l, load (p + 16), m)
-    }
-    return r
-  }
-  if kind == 12 {
-    if reading_at(p, pos) {
-      return 0 - 1
-    }
-    activen = activen + 1
-    (actives + (activen * 8)) <- p
-    (actives + (activen * 8) + 4) <- pos
-    l = call(load (p + 8), append(list(), text(pos, textend)), 0)
-    if tag(l) != 1 {
-      activen = activen - 1
-      return 0 - 1
-    }
-    r = matched(topattern(member(l, 17)), pos, cell(applied_end(l, boundn), k))
-    activen = activen - 1
-    return r
-  }
-  if kind == 13 {
-    if reading_at(load (p + 8), pos) {
-      return 0 - 1
-    }
-    activen = activen + 1
-    (actives + (activen * 8)) <- load (p + 8)
-    (actives + (activen * 8) + 4) <- pos
-    r = matched(header(load (p + 8), load (p + 12)), pos, cell(class_end(load (p + 8), boundn), k))
-    activen = activen - 1
-    return r
-  }
-  if kind == 14 {
-    m = boundn
-    i = saved(load (p + 12))
-    l = construct(load (p + 8), list(), named_from(load (p + 12)))
-    boundn = load (p + 12)
-    bindv(0, l)
-    r = continued(pos, k)
-    if r < 0 {
-      restored(i, load (p + 12), m)
-    }
-    return r
-  }
-  if kind == 15 {
-    m = boundn
-    i = saved(load (p + 12))
-    l = application(load (p + 8), load (p + 12))
-    boundn = load (p + 12)
-    bindv(0, l)
-    r = continued(pos, k)
-    if r < 0 {
-      restored(i, load (p + 12), m)
-    }
-    return r
-  }
-  if kind == 16 {
-    l = load (p + 8)
-    if tag(l) == 6 {
-      if (load (l + 4)) == 5 {
-        return matched(pattern3(5, sequence(append(append(list(), load (l + 8)), pattern(23, 0, 0))), load (l + 12), load (l + 16)), pos, k)
-      }
-    }
-    return matched(l, pos, k)
-  }
-  if kind == 18 {
-    return matched(rebuilt(load (p + 8)), pos, k)
-  }
-  if kind == 19 {
-    l = load ((load (p + 8)) + 8)
-    if tag(l) == 6 {
-      if (load (l + 4)) == 5 {
-        return continued(in_turn(load (l + 8), load ((load (p + 8)) + 12), load (p + 12), pos), k)
-      }
-    }
-    return matched(load ((load (p + 8)) + 8), pos, cell(pattern3(20, load (p + 8), load (p + 12), boundn), k))
-  }
-  if kind == 23 {
-    if pos == textend {
-      return continued(pos, k)
-    }
-    if (load8 pos) == 10 {
-      return continued(pos, k)
-    }
-    return 0 - 1
-  }
-  if kind == 20 {
-    m = boundn
-    i = saved(load (p + 16))
-    l = valued_from(load (p + 16))
-    boundn = load (p + 16)
-    bindv(0, call(curried(load ((load (p + 8)) + 12), l), load (p + 12), 0))
-    r = continued(pos, k)
-    if r < 0 {
-      restored(i, load (p + 16), m)
-    }
-    return r
-  }
-  if kind == 17 {
-    l = call(load (p + 8), append(list(), named_from(0)), 0)
-    return matched(topattern(l), pos, k)
-  }
-  if kind == 7 {
-    if pos == textend {
-      return continued(pos, k)
-    }
-    return 0 - 1
-  }
-  if kind == 8 {
-    n = pos + 1
-    while (n <= textend) and ((load8 (n - 1)) != 10) {
-      m = boundn
-      r = continued(n, k)
-      if r >= 0 {
-        return r
-      }
-      boundn = m
-      n = n + 1
-    }
-    return 0 - 1
-  }
-  0 - 1
-}
-function continued(pos, k) {
-  if k == 0 {
-    return pos
-  }
-  matched(load k, pos, load (k + 4))
 }
 function bind(sym, a, e) {
   var b

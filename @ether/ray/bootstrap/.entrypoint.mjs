@@ -238,6 +238,13 @@ export const painting = async (module, text, fuel = FUEL) => {
     if (head) return head.map((at) => ({ style, at, over: true }));
     return [{ style, at: where(b) }];
   });
+  // (a style written as a marker, `^keyword`: shown in the style it names, where it is written)
+  const markers = list(paints).flatMap((p) => {
+    const [s, , b] = list(p), style = styled(s);
+    if (!style || tag(b) !== 3) return [];
+    return list(b).flatMap((l) => list(l)).flatMap((h) => { const at = span(member(h, 'value')); if (!at) return []; let a = at[0], e = at[1]; while (a < e && input[a] <= 32) a++; while (e > a && input[e - 1] <= 32) e--; return a > 0 && input[a - 1] === 94 && input.subarray(a, e).toString() === style ? [{ style, at: [a - 1, e] }] : []; });
+  });
+  entries.push(...markers);
   const over = new Map(entries.filter((p) => p.over).map((p) => [`${p.at}`, p.style]));
   // (each once: a body run again paints the same again)
   const painted = [...new Map(entries.filter((p) => !over.has(`${p.at}`) || over.get(`${p.at}`) === p.style).map(({ style, at }) => [`${style}:${at}`, { style, at }])).values()];

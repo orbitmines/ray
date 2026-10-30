@@ -95,11 +95,18 @@ function lexical(text, from, to, out) {
     else if (/[0-9]/.test(c) && !/[A-Za-z_0-9]/.test(text[i - 1] ?? '')) { let e = i; while (e < to && /[0-9a-fA-Fx]/.test(text[e])) e++; out.push([i, e, 'number', 0]); i = e - 1; }
   }
 }
-// (spans, the smaller in a larger dropped, as the LSP's relative tokens, a line at a time)
+// (spans, a smaller one in a larger shown over it (`{name ^variable}`: the marker in what the head is painted), as the LSP's
+// relative tokens, a line at a time)
 function encoded(text, spans) {
-  spans.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const at = new Array(text.length);
+  for (const s of [...spans].sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))) for (let i = Math.max(0, s[0]); i < Math.min(s[1], text.length); i++) at[i] = s;
   const kept = [];
-  for (const s of spans) if (!kept.length || s[0] >= kept[kept.length - 1][1]) kept.push(s);
+  for (let i = 0; i < text.length;) {
+    const s = at[i]; let e = i + 1;
+    while (e < text.length && at[e] && s && at[e][2] === s[2] && at[e][3] === s[3]) e++;
+    if (s) kept.push([i, e, s[2], s[3]]);
+    i = e;
+  }
   const lines = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === '\n') lines.push(i + 1);
   const line_of = (at) => { let lo = 0, hi = lines.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (lines[m] <= at) lo = m; else hi = m - 1; } return lo; };

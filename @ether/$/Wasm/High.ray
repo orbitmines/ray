@@ -125,7 +125,7 @@ High &+= {
   static level_requested (lr) => High.level_of(High.chain(lr))
   static chain (ct) => (High.kind(ct) == `juxtaposed`) ? Array.new.append(Compiled.trimmed(High.parsed_one(ct).juxtaposed)).joined(High.chain(High.parsed_one(ct).juxtaposed_arg)) : Array.new.append(Compiled.trimmed(ct))
   static level_of (le) => High.level_named(le.first, le.rest)
-  static level_named (ln, la) => (ln == `write`) ? High.level_call("cw_write_value", la) : ((ln == `cw_isolated`) ? High.level_block(la.first) : ((ln == `cw_sized`) ? High.level_after("sized_after", la.first) : ((ln == `cw_aside`) ? High.level_after("aside_after", la.first) : ((ln == `cw_cached`) ? High.w("8") : ((ln == `cw_forced`) ? High.expression(la.first) : High.level_call(ln, la))))))
+  static level_named (ln, la) => (ln == `write`) ? High.level_call("cw_write_value", la) : ((ln == `cw_isolated`) ? High.level_isolated(la.first) : ((ln == `cw_sized`) ? High.level_after("sized_after", la.first) : ((ln == `cw_aside`) ? High.level_after("aside_after", la.first) : ((ln == `cw_cached`) ? High.w("8") : ((ln == `cw_forced`) ? High.expression(la.first) : High.level_call(ln, la))))))
   static level_call (lc_name, lc_args) => {
     High.w(lc_name)
     High.w("(")
@@ -139,6 +139,12 @@ High &+= {
     High.level_arguments(lr)
   }
   static level_block (lb) => High.grouped(Compiled.statements_of(High.block_text(lb)))
+  // (code whose making is let go once it is done, unless what it made is kept: the runtime notes where it began)
+  static level_isolated (li_block) => {
+    High.w("isolated_close(isolated_open(), ")
+    High.level_block(li_block)
+    High.w(")")
+  }
   static level_after (la_name, la_block) => {
     High.w(la_name)
     High.w("(cw_written_at(), ")

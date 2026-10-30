@@ -95,9 +95,8 @@ function lexical(text, from, to, out) {
     else if (/[0-9]/.test(c) && !/[A-Za-z_0-9]/.test(text[i - 1] ?? '')) { let e = i; while (e < to && /[0-9a-fA-Fx]/.test(text[e])) e++; out.push([i, e, 'number', 0]); i = e - 1; }
   }
 }
-// (spans, a smaller one in a larger shown over it (`{name ^variable}`: the marker in what the head is painted), as the LSP's
-// relative tokens, a line at a time)
-function encoded(text, spans) {
+// (spans, a smaller one in a larger shown over it (`{name ^variable}`: the marker in what the head is painted))
+function innermost(text, spans) {
   const at = new Array(text.length);
   for (const s of [...spans].sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))) for (let i = Math.max(0, s[0]); i < Math.min(s[1], text.length); i++) at[i] = s;
   const kept = [];
@@ -107,6 +106,11 @@ function encoded(text, spans) {
     if (s) kept.push([i, e, s[2], s[3]]);
     i = e;
   }
+  return kept;
+}
+// (as the LSP's relative tokens, a line at a time)
+function encoded(text, spans) {
+  const kept = innermost(text, spans);
   const lines = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === '\n') lines.push(i + 1);
   const line_of = (at) => { let lo = 0, hi = lines.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (lines[m] <= at) lo = m; else hi = m - 1; } return lo; };
@@ -186,7 +190,7 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
     documents: uris.flatMap((uri) => {
       const r = read.get(uri), document = documents.get(uri);
       if (!r || !document || document.version !== r.version) return [];
-      return [{ uri, version: r.version, ranges: painted(r.text, r.statements, r.paints).filter(([, , style]) => styles[style]).map(([from, to, style]) => ({ style, range: { start: document.positionAt(from), end: document.positionAt(to) } })) }];
+      return [{ uri, version: r.version, ranges: innermost(r.text, painted(r.text, r.statements, r.paints).filter(([, , style]) => styles[style])).map(([from, to, style]) => ({ style, range: { start: document.positionAt(from), end: document.positionAt(to) } })) }];
     }),
   });
 

@@ -1674,7 +1674,10 @@ function call(c, args, named) {
   if tag(c) != 2 {
     return 0
   }
-  indirect(load (c + 8), args, named, load (c + 4))
+  if isodepth > 4000 {
+    return indirect(load (c + 8), args, named, load (c + 4))
+  }
+  isolated_value(isolated_open(), indirect(load (c + 8), args, named, load (c + 4)))
 }
 function plus(a, b) {
   a + b - 1
@@ -1843,6 +1846,21 @@ function isolated_open() {
   isodepth = isodepth + 1
   markf = free
   0
+}
+function isolated_value(o, v) {
+  var s
+  isodepth = isodepth - 1
+  s = isostack + (isodepth * 12)
+  markf = load (s + 4)
+  if (((load (s + 8)) == 0) and (noreclaim == 0)) and ((load 3844) == 0) {
+    if (pointer(v) == 0) or (v < (load s)) {
+      if free > (load s) {
+        free = load s
+        epoch = epoch + 1
+      }
+    }
+  }
+  v
 }
 function isolated_close(o, v) {
   var s

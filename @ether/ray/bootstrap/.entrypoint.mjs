@@ -227,13 +227,20 @@ export const painting = async (module, text, fuel = FUEL) => {
   };
   // (what was painted, ended or not: Expression notes its `painted` first, where it is made, and it grows as it is read)
   const paints = i32[3968 >> 2];
+  // (an application painted itself, `(external &) ^passed`: shown where its rule's own `^style` showed it (what it read, its
+  // `input`, the same), in place of that)
+  const input_of = (v) => { if (tag(v) !== 1 && tag(v) !== 10) return; for (let e = i32[(v >> 2) + 2]; e; e = i32[e >> 2]) if (i32[(e >> 2) + 1] === 47) return i32[(e >> 2) + 2]; };
+  const heads = new Map();
   const entries = list(paints).flatMap((p) => {
     const [s, v, b] = list(p), style = styled(s);
-    if (tag(v) === 3 && list(v).length === 2) return literal(...list(v), b).map((at) => ({ style, at }));
+    if (tag(v) === 3 && list(v).length === 2) { const at = literal(...list(v), b); heads.set(list(v)[1], at); return at.map((at) => ({ style, at })); }
+    const head = heads.get(input_of(v));
+    if (head) return head.map((at) => ({ style, at, over: true }));
     return [{ style, at: where(b) }];
   });
+  const over = new Map(entries.filter((p) => p.over).map((p) => [`${p.at}`, p.style]));
   // (each once: a body run again paints the same again)
-  const painted = [...new Map(entries.map((p) => [`${p.style}:${p.at}`, p])).values()];
+  const painted = [...new Map(entries.filter((p) => !over.has(`${p.at}`) || over.get(`${p.at}`) === p.style).map(({ style, at }) => [`${style}:${at}`, { style, at }])).values()];
   const unread = [...new Map(list(i32[3860 >> 2]).map(span).filter((s) => s && s[1] > s[0]).map((s) => [s.join(':'), s])).values()];
   // (what was said, Expression's `reported`, noted second: each the `{message}` hole's entry and what the holes took)
   const said = i32[4084 >> 2] > 1 ? list(i32[3972 >> 2]).map((r) => {

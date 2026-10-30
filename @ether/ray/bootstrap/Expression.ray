@@ -69,9 +69,11 @@ Expression := class (
           [{value: concurrently node.prefix(.)}: node.keys, rest: String] := (caller) => {
             v := value(caller)
             on := Node(in: caller.in)
-            // (what it is read on gives what is read on it: a node its rules, anything else its fields)
-            members(v).for((m) => on.rules[[m.key]] := (c) => m.value) if (v.rules === None)
-            ((v.rules === None) ? Array.new : v.rules.keys{!((. === v.maker_key) || (. === v.split_key))}#).for((e) => on.rules[[e.key]] := e.value)
+            // (what it is read on gives what is read on it: a node its rules, anything else its fields; one of the level's own
+            // kinds of value, what the level says it is, `level kinds`)
+            o := ((level kind_of (v)) === None) ? v : named_in(Program(in: kinds_of(caller)), level kind_of (v))
+            members(o).for((m) => on.rules[[m.key]] := (c) => m.value) if (o.rules === None)
+            ((o.rules === None) ? Array.new : o.rules.keys{!((. === o.maker_key) || (. === o.split_key))}#).for((e) => on.rules[[e.key]] := e.value)
             r := (rs: Statements(on) = rest)
             me := Program(caller: caller, in: on, this: v)
             leaving(me, r(me))
@@ -137,7 +139,8 @@ Expression := class (
         to ?? Array.new
       }
       leaving (me, v) => {
-        (me.caller.at = me.at) if !(me.at === None)
+        up := me.caller
+        (up.at = me.at) if !(me.at === None)
         v
       }
       // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label (a jump's
@@ -153,6 +156,9 @@ Expression := class (
         run_later(0)
       }
       naming := Array.new
+      kinds := Array.new
+      kinds_of (kp) => kinds.first ?? known(named_in(kp, `level kinds`))
+      known (kn) => (kn.rules === None) ? kn : kinds.append(kn).first
       // (what a name is read as: without the space around it, unless it is only space)
       trimmed_or (tt, to) => (tt.length == 0) ? to : tt
       // (a body read with its rule set aside, a rule never reading itself; a hole, what the nearest program that took it took)

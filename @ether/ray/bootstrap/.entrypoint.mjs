@@ -252,7 +252,8 @@ export const painting = async (module, text, fuel = FUEL, run = 'full', from = -
   entries.push(...markers);
   const over = new Map(entries.filter((p) => p.over).map((p) => [`${p.at}`, p.style]));
   // (each once: a body run again paints the same again)
-  const painted = [...new Map(entries.filter((p) => !over.has(`${p.at}`) || over.get(`${p.at}`) === p.style).map(({ style, at }) => [`${style}:${at}`, { style, at }])).values()];
+  // (a style that answered nothing, `^(c ? a : b)` with c neither: nothing shown)
+  const painted = [...new Map(entries.filter((p) => p.style && (!over.has(`${p.at}`) || over.get(`${p.at}`) === p.style)).map(({ style, at }) => [`${style}:${at}`, { style, at }])).values()];
   const unread = [...new Map(list(i32[3860 >> 2]).map(span).filter((s) => s && s[1] > s[0]).map((s) => [s.join(':'), s])).values()];
   // (what was said, Expression's `reported`, noted second: each the `{message}` hole's entry and what the holes took)
   const said = i32[4084 >> 2] > 1 ? list(i32[3972 >> 2]).map((r) => {

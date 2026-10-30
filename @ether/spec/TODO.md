@@ -121,8 +121,10 @@ its own reading its place, unread text recorded with reading going on.
 - **A reading keeps everything it allocates** (revision 57, the main wall): ~90% of the heap is unreachable at the
   out-of-memory stop (ray-91's census), the runtime frees only a call answering a plain value. Revision 57 moved the parse
   arena to 1 GB (it overlapped the heap at 512 MB and reclaim freed live memory); the heap has 1 GB until memory is let
-  go of. Next, per Design §21.4: a test runs in memory of its own, let go of when it is done, its paints made again
-  (`level test_begin` / `level test_end (painted) (reported)` around each kept test run, with ray-45).
+  go of. Revision 59 has the runtime half of Design §21.4: `level test_begin (painted) (reported)` / `level test_end
+  (painted) (reported)` around each test run undo the writes into older memory, make its new paints, said and unread
+  again, and let the rest go. Only the outermost test lets go (an assert inside `assert { … }` continues the block
+  itself). s460: same results, heap 453 → 270 MB. Expression's `ran_later` still has to call them (ray-c4).
 - **The `Array &+= { … }` blocks read exponentially in their members** (statement 523 and line 3140): the definition key
   (`rule:`) reads the block's code as `(hole | String)[]`, asking the hole at each character and inside each nested `{`;
   a memo of those asks halves K=10..12 but K=14 still takes 129 s.

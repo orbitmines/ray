@@ -51,7 +51,7 @@ Expression := class (
               me.bound = holes
               me.caller = caller
               me.in = Node(in: rule_body)
-              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => named_in(reader(c, caller), hole.value))
+              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => held(hole, () => named_in(reader(c, caller), hole.value)))
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
               rule_style.append(painted{.rest.first === rule_own}#) if rule_style.empty
@@ -70,13 +70,13 @@ Expression := class (
             v := value(caller)
             on := Node(in: caller.in)
             members(v).for((m) => on.rules[[m.key]] := (c) => m.value)
+            ((v.rules === None) ? Array.new : v.rules.keys).for((k) => on.rules[[k]] := v.rules[[k]])
             r := (rs: Statements(on) = rest)
             me := Program(caller: caller, in: on, this: v)
             leaving(me, r(me))
           }
         }
         // (a name read inside its own reading is its place)
-        named_by (text, by) => named_as(trimmed_or(level cw_trimmed (text), text), by)
         named_as (text, by) => (naming{(.first == text) && (.last === node)}#.count > 0) ? Place(text, node) : named_now(text, by)
         named_now (text, by) => {
           naming = [[text, node]].joined(naming)
@@ -131,6 +131,7 @@ Expression := class (
       labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && (label_of(p, ls.first.args.first.word) == p.at)) ? ls.rest : labelled(p, ls.rest))
       jumped (p, to, k) => {
         later.append(k) if (to === None) && (p.at == afterwards)
+        forget(p) if !(to === None)
         (p.at = None) if !(to === None) || (p.at == afterwards)
         to ?? Array.new
       }
@@ -163,9 +164,12 @@ Expression := class (
       }
       hole_in (hc, hr, hk) => (hc === None) ? None : hole_from(hc, hr, hk, (hc.bound ?? Array.new){.key === hk}#.first)
       hole_from (hf, hr, hk, he) => (he === None) ? hole_in(hf.caller, hr, hk) : named_in(reader(hr, hf.caller), he.value)
+      // (a hole's value, read once in what applied it; a jump back in a body forgets what its holes answered, a loop asks again)
+      held (hh, hf) => ((hh.answered === None) ? (hh.answered = [hf()]) : hh.answered).first
+      forget (fp) => (fp.bound ?? Array.new).for((fh) => fh.answered = None)
       // (who reads a hole: the program reading it once it entered a block, else what applied the rule)
       reader (hr, hb) => ((hr.in === None) || !(hr.in === hr.this)) ? hb : hr
-      named_in (np, nt) => np.in.named_by(nt, np)
+      named_in (np, nt) => np.in.named_as(trimmed_or(level cw_trimmed (nt), nt), np)
       aside := Array.new
       definers := Array.new
       among (xs, x) => xs{. === x}#.count > 0

@@ -58,11 +58,11 @@ const wasm = (name) => join(root, '$', 'Wasm', name);
 export const revision = () => Math.max(0, ...readdirSync(bootstrap('.')).map((f) => f.match(/^\.entrypoint\.(\d+)\.wasm$/)).filter(Boolean).map((m) => +m[1]));
 export const engine = () => bootstrap(`.entrypoint.${revision()}.wasm`);
 
-// (what a revision reads: lines that are only a comment left out; Expression.ray up to where its parser is set (its tests
+// (what a revision reads: lines that are only a comment left out; Expression.ray up to where it reads its input (its tests
 // after), then the compiler)
 export const PAGES = 32000;
 export const uncommented = (text) => text.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
-const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'level set_parser (parser)\n'; return t.slice(0, t.indexOf(end) + end.length); };
+const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'ex := (level input_part 0) as Expression\n'; return t.slice(0, t.indexOf(end) + end.length); };
 export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray', 'High.ray', 'compile.ray'].map((f) => readFileSync(wasm(f), 'utf8'))].join(''));
 
 // (a revision, given a program: its input the header Expression reads first, the program and the runtime, apart by a 0;
@@ -126,11 +126,11 @@ export async function build() {
   console.log(`.entrypoint.${n + 1}.wasm: ${next.length} bytes, written from revision ${n}, writes itself`);
 }
 
-// Tests (`--test [FILE…]`): the language read by Expression itself, compiled by the latest revision with a reading of input
-// as its program, given the entrypoint (the level read after its first statement) and the files after it. What it painted
-// (Expression's `painted`: each style, what it styles and what the holes took in each program it ran in) says each
-// test's result, `passed` or `failed`, and where it is.
-const TESTING = 'read := (level input_part 0) as Expression\nnoted(PaintedX)\n0\n';
+// Tests (`--test [FILE…]`): the language read by Expression itself, compiled by the latest revision, given the entrypoint
+// (the level read after its first statement) and the files after it. What it painted (Expression's `painted`, noted where
+// it is made: each style, what it styles and what the holes took in each program it ran in) says each test's result,
+// `passed` or `failed`, and where it is.
+const TESTING = '0\n';
 // (a whole-line comment as an empty line: each line where it is written)
 const emptied = (text) => text.split('\n').map((l) => (l.trimStart().startsWith('//') ? '' : l));
 // (the module that reads, once per revision and sources: kept beside the revision)
@@ -225,8 +225,8 @@ export const painting = async (module, text, fuel = FUEL) => {
     }
     return out;
   };
-  // (not ended: what was painted until then, the program's own `PaintedX`)
-  const paints = i32[4084 >> 2] > 0 ? i32[3968 >> 2] : i32[3904 >> 2] && member(i32[3904 >> 2], 'PaintedX');
+  // (what was painted, ended or not: Expression notes its `painted` first, where it is made, and it grows as it is read)
+  const paints = i32[3968 >> 2];
   const entries = list(paints).flatMap((p) => {
     const [s, v, b] = list(p), style = styled(s);
     if (tag(v) === 3 && list(v).length === 2) return literal(...list(v), b).map((at) => ({ style, at }));

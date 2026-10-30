@@ -6,12 +6,6 @@
 // things are given: `external .` (a node), `external &` (what applies), `external goto` and `external label` (where control
 // goes). Read under a level, `Program{O: …}`, what it reads is a Program (statements as vertices, gotos as edges), and a
 // back end is one more level: `Wasm` writes that Program as WebAssembly.
-NodeX := None
-ProgramX := None
-StatementsX := None
-globalX := None
-PaintedX := None
-LaterX := None
 Expression := class (
   BOOTSTRAPPER: (
     HEADER: `!language`,
@@ -51,14 +45,17 @@ Expression := class (
             // (its body read once, in a node of its own, run in a node in that one each time it is applied)
             rule_body := Node(in: node)
             rule_read := Array.new
+            rule_style := Array.new
             rule_home.rules[[head]] := (caller) => {
               me := applied
               me.bound = holes
               me.caller = caller
               me.in = Node(in: rule_body)
+              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => named_in(reader(c, caller), hole.value))
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
-              painted{.rest.first === rule_own}#.for((rs) => painted.append([rs.first, [rule_lhs, me.input], [me.bound]]))
+              rule_style.append(painted{.rest.first === rule_own}#) if rule_style.empty
+              rule_style.first.for((rs) => painted.append([rs.first, [rule_lhs, me.input], [me.bound]]))
               rule_read.append(body_of(me.bound, rule_body, rule_rhs, rule_own)) if rule_read.empty
               r := rule_read.first
               leaving(me, r(me))
@@ -79,7 +76,8 @@ Expression := class (
           }
         }
         // (a name read inside its own reading is its place)
-        named_by (text, by) => (naming{(.first == text) && (.last === node)}#.count > 0) ? Place(text, node) : named_now(text, by)
+        named_by (text, by) => named_as(trimmed_or(level cw_trimmed (text), text), by)
+        named_as (text, by) => (naming{(.first == text) && (.last === node)}#.count > 0) ? Place(text, node) : named_now(text, by)
         named_now (text, by) => {
           naming = [[text, node]].joined(naming)
           v := (vs: Statements(node) = text)
@@ -111,7 +109,7 @@ Expression := class (
           `label` (to) => to.first
           `style` (how) => painted_with(how, caller)
           `shown` (how) => how.first
-        }[rule](args.map((argument) => named_in(caller, argument.word)))
+        }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
       // order, each given what applies them.
@@ -126,9 +124,11 @@ Expression := class (
       )
       listed (lr) => lr.map((s) => s.statement)
       // (in turn: after a jump, `external goto`, on after its label; none here, on in what applied them; `afterwards`, later)
-      run (p, all, ss, v) => ss.empty ? v : ran(p, all, ss.rest, ss.first(p))
+      run (p, all, ss, v) => ((ss === None) || ss.empty) ? v : ran(p, all, ss.rest, answered(ss.first, v, ss.first(p)))
+      // (a label or a jump answers nothing: the body answers what was answered before it)
+      answered (as, av, an) => ((as.rule == `label`) || (as.rule == `goto`)) ? av : an
       ran (p, all, ss, v) => run(p, all, (p.at === None) ? ss : jumped(p, labelled(p, all), [all, ss, p]), v)
-      labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && (named_in(p, ls.first.args.first.word) == p.at)) ? ls.rest : labelled(p, ls.rest))
+      labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && (label_of(p, ls.first.args.first.word) == p.at)) ? ls.rest : labelled(p, ls.rest))
       jumped (p, to, k) => {
         later.append(k) if (to === None) && (p.at == afterwards)
         (p.at = None) if !(to === None) || (p.at == afterwards)
@@ -138,6 +138,10 @@ Expression := class (
         (me.caller.at = me.at) if !(me.at === None)
         v
       }
+      // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label (a jump's
+      // first, a label's), its word, or, written in the brackets holes are written in, what that reads as)
+      given (gc, gr, ga, gf) => (((gr == `goto`) || (gr == `label`)) && (ga === gf)) ? label_of(gc, ga.word) : named_in(gc, ga.word)
+      label_of (lp, lw) => (lw ~= BOOTSTRAPPER.CAPTURE.map{== \s}(String+)) ? named_in(lp, lw) : Place(lw, global)
       later := Array.new
       afterwards := Place(`afterwards`, global)
       run_later (rl) => later.empty ? None : ran_later(later.first)
@@ -147,6 +151,8 @@ Expression := class (
         run_later(0)
       }
       naming := Array.new
+      // (what a name is read as: without the space around it, unless it is only space)
+      trimmed_or (tt, to) => (tt.length == 0) ? to : tt
       // (a body read with its rule set aside, a rule never reading itself; a hole, what the nearest program that took it took)
       body_of (took, body, code, own) => {
         took.for((hole) => body.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => hole_in(c, c, hole.key))
@@ -156,7 +162,9 @@ Expression := class (
         r
       }
       hole_in (hc, hr, hk) => (hc === None) ? None : hole_from(hc, hr, hk, (hc.bound ?? Array.new){.key === hk}#.first)
-      hole_from (hf, hr, hk, he) => (he === None) ? hole_in(hf.caller, hr, hk) : named_in(((hr.in === None) || !(hr.in === hr.this)) ? hf.caller : hr, he.value)
+      hole_from (hf, hr, hk, he) => (he === None) ? hole_in(hf.caller, hr, hk) : named_in(reader(hr, hf.caller), he.value)
+      // (who reads a hole: the program reading it once it entered a block, else what applied the rule)
+      reader (hr, hb) => ((hr.in === None) || !(hr.in === hr.this)) ? hb : hr
       named_in (np, nt) => np.in.named_by(nt, np)
       aside := Array.new
       definers := Array.new
@@ -167,6 +175,7 @@ Expression := class (
       bracketed := level closing (BOOTSTRAPPER.CAPTURE)
       // (what is painted, `external style`: each style, what it is shown on and what the holes took; the host reads them)
       painted := Array.new
+      noted(painted)
       sink := Array.new
       painted_with (pa, pc) => {
         sink.append(painted.append([pa.first, pa.last, bound_along(pc)]).last)
@@ -182,37 +191,28 @@ Expression := class (
         ((code.first == BOOTSTRAPPER.CAPTURE.first) && ((level cw_enclosed (code)) === true)) ? level cw_trimmed (level cw_span_of (level cw_slice (code) (1) (2)) (level cw_chopped (code))) : code
       }
 
-      NodeX = Node
-      ProgramX = Program
-      StatementsX = Statements
-      globalX = global
-      PaintedX = painted
-      LaterX = run_later
-      top := Program(in: global)
-      Statements(global)(top)
-    ),
-    (\s | \n)[]
+      // (the compiler's parser: a grammar's rules read in a node of their own, a word what nothing else there reads)
+      parse_node_of (grammar_text) => {
+        g := Node(in: global)
+        (gs: Statements(g) = grammar_text)(Program(in: g))
+        p := Node()
+        level moved_keys (g) (p)
+        leaf := Node(in: global)
+        (ls: Statements(leaf) = `{name_word} => external &`)(Program(in: leaf))
+        p.split_key = leaf.rules.keys.last
+        p
+      }
+      parser (grammar, program_text) => {
+        grammar.parse_node = grammar.parse_node ?? parse_node_of(grammar.text)
+        level curried_value (ps: Statements(grammar.parse_node) = program_text)
+      }
+      level set_parser (parser)
+      // (read in turn; everything read, what was kept for afterwards)
+      (Statements(global)(Program(in: global)), (\s | \n)[], (⊣ & ((end) => run_later(0)))(0))
+    )
   )
-) => {
-  // (what was kept for afterwards, run now that everything is read)
-  LaterX(0)
-}
+) => { }
 ex := (level input_part 0) as Expression
-parse_node_of (grammar_text) => {
-  g := NodeX(in: globalX)
-  (gs: StatementsX(g) = grammar_text)(ProgramX(in: g))
-  p := NodeX()
-  level moved_keys (g) (p)
-  leaf := NodeX(in: globalX)
-  (ls: StatementsX(leaf) = "{name_word} => external &")(ProgramX(in: leaf))
-  p.split_key = leaf.rules.keys.last
-  p
-}
-parser (grammar, program_text) => {
-  grammar.parse_node = grammar.parse_node ?? parse_node_of(grammar.text)
-  level curried_value (ps: StatementsX(grammar.parse_node) = program_text)
-}
-level set_parser (parser)
 assert "!language   { }   {LHS} => {RHS}\n\n" as Expression -- .(
   .BOOTSTRAPPER.CAPTURE == `{ }`
   & .BOOTSTRAPPER.CAPTURES.LHS == `{LHS}`

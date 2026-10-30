@@ -169,7 +169,7 @@ export const painting = async (module, text, fuel = FUEL, run = 'full') => {
   const it = await instance(module), { i32, u8, exports: X } = it, B = 8388608, input = Buffer.from(text + '\0');
   u8.set(input, B); i32[4088 >> 2] = input.length; i32[3896 >> 2] = fuel; i32[3900 >> 2] = run === 'abstract' ? 1 : 0;
   let error;
-  try { X.main(); } catch (e) { error = fuel && i32[3896 >> 2] === 1 ? `stopped after ${fuel} steps of reading` : String(e?.message ?? e); }
+  try { X.main(); } catch (e) { error = i32[3924 >> 2] === 1 ? 'stopped: the reading ran out of memory' : fuel && i32[3896 >> 2] === 1 ? `stopped after ${fuel} steps of reading` : String(e?.message ?? e); }
   const tag = (v) => ((v & 1) || v <= 0 ? 0 : i32[v >> 2]);
   const list = (l) => { const o = []; if (tag(l) !== 3) return o; const d = i32[(l >> 2) + 3]; for (let i = 0; i < i32[(l >> 2) + 1]; i++) o.push(i32[(d >> 2) + i]); return o; };
   const words = (t) => Buffer.from(u8.subarray(i32[(t >> 2) + 1], i32[(t >> 2) + 2])).toString();

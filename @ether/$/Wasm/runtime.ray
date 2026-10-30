@@ -2,6 +2,12 @@ function alloc(n) {
   var p
   p = free
   free = free + ((n + 7) / 8) * 8
+  if free > (1020000000 * 2) {
+    if (load 3924) == 0 {
+      3924 <- 1
+      unreachable_now()
+    }
+  }
   p
 }
 function input() {

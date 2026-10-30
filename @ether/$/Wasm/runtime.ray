@@ -1793,6 +1793,9 @@ function chared(c, k) {
   if k == 3 {
     return (c == 32) or ((c == 9) or ((c == 10) or (c == 13)))
   }
+  if k == 4 {
+    return c == 10
+  }
   1
 }
 function texteq(a, b, n) {
@@ -2018,8 +2021,10 @@ function matched(p, pos, k) {
           if kind == 2 {
             if pos < textend {
               if chared(load8 pos, load (p + 8)) {
-                pos = pos + 1
-                mode = 1
+                if ((load (p + 8)) != 4) or continued_at(pos) {
+                  pos = pos + 1
+                  mode = 1
+                }
               }
             }
           } else {
@@ -3110,17 +3115,32 @@ function comma_ended(a, n) {
   }
   (n > a) and ((load8 (n - 1)) == 44)
 }
+function line_in(a, e) {
+  while a < e {
+    if (load8 a) == 10 {
+      return 1
+    }
+    a = a + 1
+  }
+  0
+}
 function gaps(l, a, e) {
   var q
   var s
+  var t
   q = a
   while q < e {
     if chared(load8 q, 3) {
+      s = q
       while (q < e) and chared(load8 q, 3) {
         q = q + 1
       }
       if ((load (l + 4)) > 0) and ((load ((at(l, (load (l + 4)) - 1)) + 4)) == 1) {
-        append(l, greedy(either(append(append(list(), chars(1)), chars(2))), 1))
+        t = 4
+        if line_in(s, q) {
+          t = 2
+        }
+        append(l, greedy(either(append(append(list(), chars(1)), chars(t))), 1))
       } else {
         append(l, greedy(chars(1), 1))
       }
@@ -3350,6 +3370,27 @@ function white_after(q) {
     q = q + 1
   }
   q
+}
+function continued_at(n) {
+  var q
+  var d
+  var j
+  q = n
+  while (q > 0) and (((load8 (q - 1)) != 10) and ((load8 (q - 1)) != 0)) {
+    q = q - 1
+  }
+  d = indent_at(q)
+  j = indent_at(n + 1)
+  if comma_ended(q, n) {
+    return 1
+  }
+  if (n + 1 + j) >= textend {
+    return 0
+  }
+  if (load8 (n + 1 + j)) == 10 {
+    return 0
+  }
+  (j > d) or ((load8 (3584 + (load8 (n + 1 + j)))) == 3)
 }
 function indent_at(q) {
   var d

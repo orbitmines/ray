@@ -3481,12 +3481,14 @@ function spliced_into(t, oa, oe, ce, l, out) {
       }
       if out != 0 {
         copy(out + n, s, m - s)
+        copied_from(out + n, s, m - s)
       }
       n = n + (m - s)
       q = r + (ce - ca)
     } else {
       if out != 0 {
         (out + n) <-8 (load8 q)
+        copied_from(out + n, q, 1)
       }
       n = n + 1
       q = q + 1
@@ -3512,8 +3514,73 @@ function spliced(t, cap, l) {
   if ((oe - oa) == 0) or ((oe + 1) >= ce) {
     return t
   }
+  o = spliced_whole(t, oa, oe, ce, l)
+  if o != 0 {
+    return o
+  }
   n = spliced_into(t, oa, oe, ce, l, 0)
   o = alloc(n + 8)
   spliced_into(t, oa, oe, ce, l, o)
   text(o, o + n)
+}
+function spliced_whole(t, oa, oe, ce, l) {
+  var q
+  var e
+  var x
+  var s
+  var m
+  q = load (t + 4)
+  e = load (t + 8)
+  if at_text(q, e, oa, oe) == 0 {
+    return 0
+  }
+  if (e - (ce - (oe + 1))) < (q + (oe - oa)) {
+    return 0
+  }
+  if at_text(e - (ce - (oe + 1)), e, oe + 1, ce) == 0 {
+    return 0
+  }
+  x = take_named(q + (oe - oa), e - (ce - (oe + 1)), l)
+  if x == 0 {
+    return 0
+  }
+  s = load (x + 4)
+  m = load (x + 8)
+  while (s < m) and white(load8 s) {
+    s = s + 1
+  }
+  while (m > s) and white(load8 (m - 1)) {
+    m = m - 1
+  }
+  text(s, m)
+}
+function copied_from(o, s, n) {
+  var b
+  var k
+  var r
+  if (load 3864) == 0 {
+    3864 <- alloc(16777200)
+    3868 <- 0
+    kept()
+  }
+  b = load 3864
+  k = load 3868
+  if k > 0 {
+    r = b + ((k - 1) * 12)
+    if ((load r) + (load (r + 8))) == o {
+      if ((load (r + 4)) + (load (r + 8))) == s {
+        (r + 8) <- ((load (r + 8)) + n)
+        return 0
+      }
+    }
+  }
+  if k >= 1398100 {
+    return 0
+  }
+  r = b + (k * 12)
+  r <- o
+  (r + 4) <- s
+  (r + 8) <- n
+  3868 <- (k + 1)
+  0
 }

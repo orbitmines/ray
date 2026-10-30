@@ -749,6 +749,9 @@ function node(parent) {
   (n + 8) <- 0
   (n + 12) <- 0
   (n + 16) <- 0
+  if (parent == 0) and ((load 3904) == 0) {
+    3904 <- n
+  }
   n
 }
 function own(n, sym) {
@@ -1904,6 +1907,15 @@ function undone_by(c, mark, m) {
 function unreachable_now() {
   load (0 - 8)
 }
+function fueled() {
+  if (load 3896) > 0 {
+    if (load 3896) == 1 {
+      unreachable_now()
+    }
+    3896 <- ((load 3896) - 1)
+  }
+  0
+}
 function matched(p, pos, k) {
   var base
   var om
@@ -1922,6 +1934,7 @@ function matched(p, pos, k) {
   var s
   var t
   var q
+  fueled()
   if (load 3848) == 0 {
     3848 <- alloc(67108864)
     3852 <- (load 3848)

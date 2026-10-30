@@ -124,7 +124,15 @@ its own reading its place, unread text recorded with reading going on.
   go of. Revision 59 has the runtime half of Design §21.4: `level test_begin (painted) (reported)` / `level test_end
   (painted) (reported)` around each test run undo the writes into older memory, make its new paints, said and unread
   again, and let the rest go. Only the outermost test lets go (an assert inside `assert { … }` continues the block
-  itself). s460: same results, heap 453 → 270 MB. Expression's `ran_later` still has to call them (ray-c4).
+  itself). s460: same results, heap 453 → 270 MB; Expression calls them since revision 61. The whole file without its
+  loop tests then reads in 400 MB (710 before), 213 passed / 214 failed. With them it still stops out of memory (954 MB,
+  ~270M steps) inside a loop test that never ends (CC8, a reading bug, ray-c4).
+- **`Node &+= { … }` read at top level defines nothing** (revision 62, probes after the whole file): `Node.zprobe`,
+  `({ }).zprobe`, `true.zprobe` answer nothing. So Ray.ray's `==` does not exist: `true == true` is false (`===`
+  holds), and classes, lists (`Array.new` is None), enums and the boolean `==` tests fail. A rule whose head writes the
+  braces (`{on} &+! {`{`}{code}{`}`} => ((on).interior) &+= { {code} }`) works; `{on} &+ {code}` (the hole taking the
+  braces) does not. Revision 62 fixed the Node base inside tests (the top program's `this`); the braces cause is open
+  (ray-c4).
 - **The `Array &+= { … }` blocks read exponentially in their members** (statement 523 and line 3140): the definition key
   (`rule:`) reads the block's code as `(hole | String)[]`, asking the hole at each character and inside each nested `{`;
   a memo of those asks halves K=10..12 but K=14 still takes 129 s.

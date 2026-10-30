@@ -915,8 +915,8 @@ function list() {
   l = alloc(16)
   l <- 3
   (l + 4) <- 0
-  (l + 8) <- 8
-  (l + 12) <- alloc(32)
+  (l + 8) <- 0
+  (l + 12) <- 0
   l
 }
 function append(l, v) {
@@ -925,10 +925,16 @@ function append(l, v) {
   touched(l)
   c = load (l + 4)
   if c == (load (l + 8)) {
-    d = alloc(c * 8)
-    copy(d, load (l + 12), c * 4)
-    (l + 12) <- d
-    (l + 8) <- c * 2
+    if c == 0 {
+      d = alloc(16)
+      (l + 12) <- d
+      (l + 8) <- 4
+    } else {
+      d = alloc(c * 8)
+      copy(d, load (l + 12), c * 4)
+      (l + 12) <- d
+      (l + 8) <- c * 2
+    }
   }
   ((load (l + 12)) + (c * 4)) <- v
   (l + 4) <- c + 1

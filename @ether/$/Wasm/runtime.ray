@@ -2,7 +2,7 @@ function alloc(n) {
   var p
   p = free
   free = free + ((n + 7) / 8) * 8
-  if free > (1020000000 * 2) {
+  if ((p < arena_base()) and (free > arena_base())) or (free > (1020000000 * 2)) {
     if (load 3924) == 0 {
       3924 <- 1
       unreachable_now()
@@ -602,7 +602,7 @@ function parsed_statements(g, t) {
   call(parserhook, l, 0)
 }
 function arena_base() {
-  536870912
+  500000000 * 2
 }
 function lasting_span(a, e) {
   if e <= (8388608 + ((((load 4088) + 7) / 8) * 8)) {

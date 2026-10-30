@@ -98,19 +98,16 @@ what nothing read, UNREAD=n). Done on the way: statements run (they never did), 
 rule bodies read once with the rule set aside, splices (the old splicehead), a braced body its inside, a name read in
 its own reading its place, unread text recorded with reading going on.
 
-- **`:` is a closer on main** (2026-10-30): `paired` and `enclosed_holes` give an opener already known a new closer
-  (line 103's `({declared_name}: …` makes `:` one), so `x := …` after it is unread. Learning a pair only when both
-  characters are unmarked fixes it (with ray-91's Expression fixes: prefix 140 reads, 3082 paints, 6 unread, 1.0 s).
-- **A hole's text read with its trailing newline backtracks through every space split** (ray-91): a block's statements
-  failing at the end retry each earlier statement's leading whitespace (the enum block, the Narrowing block near line
-  1028); a name read trimmed fixes it.
-- **`? :` on false/None takes yes** (ray-91): the rest after a value is read with its fields, not its rules, so
-  `while` (statement 141, CC8) never ends.
-- **A hole's text is read again at every application** (an assert's computed style, `^((ensure {condition}) ? …)`):
-  90% of the matcher's work at 140 statements.
+- **The loops' tests (statements 140-149: `while`, `do … while`, `break`) never end** (revision 40): the full reading
+  stops at them.
+- **A hole's text is read again at every application** (an assert's computed style, `^((ensure {condition}) ? …)`;
+  `{a} | {b}`'s block on every `|`): most of the matcher's work. ray-45: read hole texts in the rule's shared body node.
+- **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after
+  everything is read, so a prefix passes `1 == 2` (two names nothing defines yet).
+- **Something gives `named_by` what is no text** (r115 from r36, found by the text words reading it as one, fixed in
+  revision 40 by making them refuse): a hole's value read as a name, probably a slip.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
-- **The host's `report`** (said, then on; in a test, a jump to `erred`) is not done.
 
 ## Node.ray
 

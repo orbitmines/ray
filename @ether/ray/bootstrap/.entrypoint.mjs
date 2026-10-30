@@ -306,7 +306,7 @@ export async function test(files = []) {
     if (p && !ours(p)) continue;
     if (results.get(k)?.style !== 'failed') results.set(k, { style, p });
   }
-  const warnings = run.painted.filter((x) => x.style === 'warn' && x.at).length;
+  const warnings = run.painted.filter((x) => x.style === 'warn' && x.at && ours(located({ input, at }, x.at))).length;
   let passed = 0, failed = 0, errors = 0;
   for (const { style, p } of results.values()) {
     const line = p ? readFileSync(p.file, 'utf8').split('\n')[p.line - 1]?.trim() : '';

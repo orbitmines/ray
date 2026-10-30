@@ -40,8 +40,7 @@ Expression := class (
         node := this
         rules := {
           [rule: GRAMMAR_RULE.LHS] := (caller) => {
-            // (written as each `{name}` a hole took where it is defined; defined here, or, written by the holes of a rule,
-            // where that rule is used; each hole shown as its head says, `{x ^style}`)
+            // (as the holes that wrote it took it, defined where they are used; each hole shown as its head says, `{x ^style}`)
             taken := takes(caller)
             rule_lhs := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
             rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
@@ -57,7 +56,6 @@ Expression := class (
               me.bound = holes
               me.caller = caller
               me.in = Node(in: rule_body)
-              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => hole_read(c, caller, hole.value))
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
               painted{.rest.first === rule_own}#.for((rs) => painted.append([rs.first, [rule_lhs, me.input], [me.bound]]))
@@ -92,18 +90,15 @@ Expression := class (
         }
         split_key := rules.keys.last
         maker_key := rules.keys.first
-        // (a definition, `=>` outside pairs, read by the latest rule that defines, else the rule that makes rules; anything
-        // else by the others but the split; none while its body is read)
+        // (a definition, `=>` outside pairs: the latest rule that defines, else the rule that makes rules; none set aside)
         whole (tx) => made(tx, defines(tx)) ?? in?.whole(tx)
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
         prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
         defining (tx) => rules.keys{!(among(aside, .)) && ((tx ~= .) && among(definers, .))}#.sort(.length).last
         longest (tx, d) => rules.keys{!((. === split_key) || among(aside, .)) && ((tx ~= .) && (d || !((. === maker_key) || among(definers, .))))}#.sort(.length).last
-        longer (lw, ls) => (lw === None) ? ls : ((ls === None) ? lw : ((ls.length > lw.length) ? ls : lw))
-        reading (tx) => {
-          w := whole(tx)
-          (w === maker_key) ? w : longer(w, (tx ~= split_key) ? split_key : None)
-        }
+        // (and the split, `x.f`, when it reads more)
+        reading (tx) => longer(tx, whole(tx))
+        longer (tx, w) => ((w === maker_key) || !(tx ~= split_key)) ? w : (((w === None) || (split_key.length > w.length)) ? split_key : w)
         keys => (in === None) ? rules.keys : (rules.keys | in.keys)
       }
       // A program running: what applied it, where it is.
@@ -111,13 +106,13 @@ Expression := class (
       Argument := class (\s+, word: String) => { }
       global := Node({
         rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => {
-          `.` => entered(caller, Node(in: caller.in))
+          `.` => (caller.this = (caller.in = Node(in: caller.in)))
           `&` => caller
           `goto` (to) => (caller.at = to.first) if (to.rest.empty || to.rest.first)
           `label` (to) => to.first
           `style` (how) => painted_with(how, caller)
           `shown` (how) => how.first
-        }[rule](args.map((argument) => caller.in.named(argument.word)))
+        }[rule](args.map((argument) => named_in(caller, argument.word)))
       })
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
       // order, each given what applies them.
@@ -131,11 +126,10 @@ Expression := class (
         run(caller, listed(.), listed(.), None)
       )
       listed (lr) => lr.map((s) => s.statement)
-      // (in turn; after a jump, `external goto`, on after its label, `external label`; none here, on in what applied them, but
-      // one to the host's `afterwards`, kept with the rest, run when everything is read)
+      // (in turn: after a jump, `external goto`, on after its label; none here, on in what applied them; `afterwards`, later)
       run (p, all, ss, v) => ss.empty ? v : ran(p, all, ss.rest, ss.first(p))
       ran (p, all, ss, v) => run(p, all, (p.at === None) ? ss : jumped(p, labelled(p, all), [all, ss, p]), v)
-      labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && (p.in.named(ls.first.args.first.word) == p.at)) ? ls.rest : labelled(p, ls.rest))
+      labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && (named_in(p, ls.first.args.first.word) == p.at)) ? ls.rest : labelled(p, ls.rest))
       jumped (p, to, k) => {
         later.append(k) if (to === None) && (p.at == afterwards)
         (p.at = None) if !(to === None) || (p.at == afterwards)
@@ -154,14 +148,7 @@ Expression := class (
         run_later(0)
       }
       naming := Array.new
-      // (a block entered, `external .`: a node in where it runs, which it then reads in and is on; a hole read in it by the
-      // program reading it, else by what applied the rule)
-      entered (ec, en) => {
-        ec.in = en
-        ec.this = en
-      }
-      // (a rule's body read with the rule set aside, a rule never reading its own body; each hole in it what the nearest
-      // program running it that took it took)
+      // (a body read with its rule set aside, a rule never reading itself; a hole, what the nearest program that took it took)
       body_of (took, body, code, own) => {
         took.for((hole) => body.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => hole_in(c, c, hole.key))
         aside = [own].joined(aside)
@@ -170,8 +157,8 @@ Expression := class (
         r
       }
       hole_in (hc, hr, hk) => (hc === None) ? None : hole_from(hc, hr, hk, (hc.bound ?? Array.new){.key === hk}#.first)
-      hole_from (hf, hr, hk, he) => (he === None) ? hole_in(hf.caller, hr, hk) : hole_read(hr, hf.caller, he.value)
-      hole_read (hc, hb, hv) => ((hc === None) || ((hc.in === None) || !(hc.in === hc.this))) ? hb.in.named_by(hv, hb) : hc.in.named_by(hv, hc)
+      hole_from (hf, hr, hk, he) => (he === None) ? hole_in(hf.caller, hr, hk) : named_in(((hr.in === None) || !(hr.in === hr.this)) ? hf.caller : hr, he.value)
+      named_in (np, nt) => np.in.named_by(nt, np)
       aside := Array.new
       definers := Array.new
       among (xs, x) => xs{. === x}#.count > 0
@@ -179,8 +166,7 @@ Expression := class (
       separator := level separator_of (BOOTSTRAPPER.CAPTURES.text) (BOOTSTRAPPER.CAPTURE)
       defines (dt) => (level holds_outside (dt) (separator)) === true
       bracketed := level closing (BOOTSTRAPPER.CAPTURE)
-      // (what is painted, `external style`: each style, what it is shown on and what the holes took in each program it runs
-      // in, the nearest first; the host reads them)
+      // (what is painted, `external style`: each style, what it is shown on and what the holes took; the host reads them)
       painted := Array.new
       sink := Array.new
       painted_with (pa, pc) => {
@@ -190,7 +176,7 @@ Expression := class (
       bound_along (bc) => (bc === None) ? Array.new : [bc.bound].joined(bound_along(bc.caller))
       // (what the holes took where a program runs, the nearest first; where the rule is used whose holes took a head)
       takes (tc) => (tc === None) ? Array.new : (tc.bound ?? Array.new).joined(takes(tc.caller))
-      home_of (hc, he) => ((he === None) || (hc === None)) ? None : (among(hc.bound ?? Array.new, he) ? ((hc.caller === None) ? None : hc.caller.in) : home_of(hc.caller, he))
+      home_of (hc, he) => ((he === None) || (hc === None)) ? None : (among(hc.bound ?? Array.new, he) ? hc.caller.in : home_of(hc.caller, he))
       // (a body written in the brackets holes are written in is the code inside them)
       inside_of (it) => {
         code := level cw_trimmed (it)

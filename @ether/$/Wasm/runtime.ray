@@ -3533,14 +3533,24 @@ function at_text(q, e, a, z) {
 function word_byte(c) {
   ((c >= 97) and (c <= 122)) or (((c >= 65) and (c <= 90)) or (((c >= 48) and (c <= 57)) or (c == 95)))
 }
-function take_named(na, ne, l) {
-  var i
+function take_named(na, ne, l, oa, oe, ce) {
+  take_named_from(na, ne, l, 0, oa, ce)
+}
+function take_named_from(na, ne, l, i, oa, ce) {
+  var oe
   var x
   var k
   var v
   var q
+  var s
+  var m
+  var r
   if na >= ne {
     return 0
+  }
+  oe = oa
+  while (oe < ce) and ((load8 oe) != 32) {
+    oe = oe + 1
   }
   q = na
   while q < ne {
@@ -3549,7 +3559,6 @@ function take_named(na, ne, l) {
     }
     q = q + 1
   }
-  i = 0
   while i < (load (l + 4)) {
     x = at(l, i)
     if tag(x) == 1 {
@@ -3558,6 +3567,25 @@ function take_named(na, ne, l) {
       if (tag(k) == 4) and (tag(v) == 4) {
         if ((load (k + 8)) - (load (k + 4))) == (ne - na) {
           if texteq(load (k + 4), na, ne - na) {
+            s = load (v + 4)
+            m = load (v + 8)
+            while (s < m) and white(load8 s) {
+              s = s + 1
+            }
+            while (m > s) and white(load8 (m - 1)) {
+              m = m - 1
+            }
+            if at_text(s, m, oa, oe) {
+              if at_text(m - (ce - (oe + 1)), m, oe + 1, ce) {
+                r = take_named_from(s + (oe - oa), m - (ce - (oe + 1)), l, i + 1, oa, ce)
+                if r != 0 {
+                  return r
+                }
+              }
+            }
+            if (load 3872) == 0 {
+              3872 <- x
+            }
             return v
           }
         }
@@ -3588,7 +3616,7 @@ function spliced_into(t, oa, oe, ce, l, out) {
         r = r + 1
       }
       if r < e {
-        x = take_named(q + (oe - oa), r, l)
+        x = take_named(q + (oe - oa), r, l, oa, oe, ce)
       }
     }
     if x != 0 {
@@ -3661,7 +3689,7 @@ function spliced_whole(t, oa, oe, ce, l) {
   if at_text(e - (ce - (oe + 1)), e, oe + 1, ce) == 0 {
     return 0
   }
-  x = take_named(q + (oe - oa), e - (ce - (oe + 1)), l)
+  x = take_named(q + (oe - oa), e - (ce - (oe + 1)), l, oa, oe, ce)
   if x == 0 {
     return 0
   }
@@ -3951,4 +3979,24 @@ function holds_outside(t, part) {
     }
   }
   8
+}
+function spliced_entry(t, cap, l) {
+  var oa
+  var oe
+  var ce
+  if (tag(t) != 4) or ((tag(cap) != 4) or (tag(l) != 3)) {
+    return 0
+  }
+  oa = load (cap + 4)
+  ce = load (cap + 8)
+  oe = oa
+  while (oe < ce) and ((load8 oe) != 32) {
+    oe = oe + 1
+  }
+  if ((oe - oa) == 0) or ((oe + 1) >= ce) {
+    return 0
+  }
+  3872 <- 0
+  spliced_into(t, oa, oe, ce, l, 0)
+  load 3872
 }

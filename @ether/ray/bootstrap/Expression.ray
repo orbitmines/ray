@@ -41,21 +41,26 @@ Expression := class (
         rules := {
           [rule: GRAMMAR_RULE.LHS] := (caller) => {
             // (the node its body is read in, kept with it: what it reads there, its statements, is its body)
-            body := Node(in: node)
+            rule_body := Node(in: node)
             // (what it is written as, each `{name}` a hole took where it is defined written as what that hole took)
             taken := takes(caller)
-            lhs := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
-            rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
+            rule_lhs := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
+            rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
+            // (where it is defined: here, or, when its head is what the holes of a rule took, beside the statement that applied that
+            // rule (a rule that writes a rule writes it where it is used))
+            rule_home := home_of(caller, level spliced_entry (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? node
             // (and what each hole is shown as, `{x ^style}`: what reading its head painted)
             outer_sink := sink
             sink = Array.new
-            head := (lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
-            styled := sink.map((sp) => Array.new.append(level place_name (sp.rest.first)).append(sp.first))
+            head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
+            rule_styled := sink.map((sp) => Array.new.append(level place_name (sp.rest.first)).append(sp.first))
             sink = outer_sink
             // (its body read once, when it is first applied: what each hole is, found where it runs, `bound` by what applied it)
-            kept := Array.new
-            rules[[head]] := (caller) => {
-              at := Node(in: body)
+            rule_kept := Array.new
+            // (what it is shown as, `{head} ^style => …`: looked up once it is applied)
+            rule_style := Array.new
+            rule_home.rules[[head]] := (caller) => {
+              at := Node(in: rule_body)
               holes.for((hole) => {
                 at.rules[[hole.key]] := (c) => caller.in.named_by(hole.value, caller)
                 at.rules[[BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => caller.in.named_by(hole.value, caller)
@@ -65,14 +70,16 @@ Expression := class (
               me.in = at
               me.this = caller.this
               me.bound = holes
-              holes.for((hole) => styled.for((sh) => hole_painted(sh, hole)))
-              left(me, read_once(kept, holes, body, rhs, own)(me))
+              holes.for((hole) => rule_styled.for((sh) => hole_painted(sh, hole)))
+              rule_painted((rule_style.count > 0) ? rule_style.first : kept_first(rule_style, styles_shown{.first === rule_own}#), rule_lhs, me)
+              leaving(me, read_once(rule_kept, holes, rule_body, rule_rhs, rule_own)(me))
             }
-            rules[[head]].body = body
-            own := rules.keys.last
+            rule_home.rules[[head]].body = rule_body
+            rule_own := rule_home.rules.keys.last
             // (the pairs its head writes, a hole between two characters (`({x})`, `"{x}"`), known to what is read after it)
-            level paired (lhs) (BOOTSTRAPPER.CAPTURE)
-            defining_kept(own, lhs)
+            level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE)
+            defining_kept(rule_own, rule_lhs)
+            rule_own
           }
           [{value: concurrently node.prefix(.)}: node.keys, rest: String] := (caller) => {
             v := value(caller)
@@ -83,7 +90,7 @@ Expression := class (
             me.caller = caller
             me.in = on
             me.this = v
-            left(me, r(me))
+            leaving(me, r(me))
           }
         }
         named (text) => named_by(text, Program(in: node))
@@ -97,9 +104,9 @@ Expression := class (
         }
         split_key := rules.keys.last
         maker_key := rules.keys.first
-        whole (tx) => (((rules.keys.first === maker_key) ? ((tx ~= maker_key) && defines(tx)) : false) ? (defining(tx) ?? maker_key) : rules.keys{((. === split_key) || (set_aside_is(.) || ((. === maker_key) && !(defines(tx))))) ? false : (tx ~= .)}#.sort(.length).last) ?? in?.whole(tx)
+        whole (tx) => (((rules.keys.first === maker_key) ? ((tx ~= maker_key) && defines(tx)) : false) ? (defining(tx) ?? maker_key) : rules.keys{((. === split_key) || (set_aside_is(.) || (((. === maker_key) || definer_is(.)) && !(defines(tx))))) ? false : (tx ~= .)}#.sort(.length).last) ?? in?.whole(tx)
         defining (tx) => rules.keys{(definer_is(.) && !(set_aside_is(.))) ? (tx ~= .) : false}#.sort(.length).last
-        prefix (tx) => rules.keys{((. === split_key) || (set_aside_is(.) || ((. === maker_key) && !(defines(tx))))) ? false : (tx ~= .)}#.sort(.length).last ?? in?.prefix(tx)
+        prefix (tx) => rules.keys{((. === split_key) || (set_aside_is(.) || (((. === maker_key) || definer_is(.)) && !(defines(tx))))) ? false : (tx ~= .)}#.sort(.length).last ?? in?.prefix(tx)
         longer (lw, ls) => (lw === None) ? ls : ((ls === None) ? lw : ((ls.length > lw.length) ? ls : lw))
         reading (tx) => {
           w := whole(tx)
@@ -139,9 +146,13 @@ Expression := class (
         pe := Array.new.append(pa.first).append(pa.last).append(bound_along(pc))
         painted.append(pe)
         sink.append(pe)
+        styles_shown.append(Array.new.append(pa.last).append(pa.first))
         pa.last
       }
       sink := Array.new
+      styles_shown := Array.new
+      // (a rule shown as written, `{head} ^style => …`, where it is applied: what its head reads there but the holes)
+      rule_painted (rs, rh, rm) => (rs.count > 0) ? painted.append(Array.new.append(rs.first.rest.first).append(Array.new.append(rh).append(rm.input)).append(Array.new.append(rm.bound))) : None
       // (a hole shown as its head says, `{x ^style}`, where it is applied: the text it took, in that style)
       hole_painted (hs, hh) => (hs.first == hh.key) ? painted.append(Array.new.append(hs.rest.first).append(hh.value).append(Array.new.append(Array.new.append(hh)))) : None
       // (where it is painted: what the holes took in each program it runs in, the nearest first)
@@ -190,6 +201,7 @@ Expression := class (
       // (the rules that are definitions themselves, their heads holding what a definition is written with (`=>`, as the
       // header writes it): one that reads a statement the rule that makes rules reads takes it, the latest first)
       definers := Array.new
+      home_of (hc, he) => ((he === None) || (hc === None)) ? None : ((hc.bound === None) ? home_of(hc.caller, he) : ((hc.bound{. === he}#.count > 0) ? ((hc.caller === None) ? None : hc.caller.in) : home_of(hc.caller, he)))
       defining_kept (dk, dl) => ((level holds_text (dl) (level separator_of (BOOTSTRAPPER.CAPTURES.text) (BOOTSTRAPPER.CAPTURE))) === true) ? definers.append(dk) : None
       definer_is (dk) => definers{. === dk}#.count > 0
       // (a statement is a definition when it holds what one is written with outside every pair: `=>` outside brackets)
@@ -215,7 +227,7 @@ Expression := class (
         later.append(Array.new.append(ks.rest).append(ka).append(gone_on(kc)))
         kv
       }
-      left (lm, lv) => (lm.at === None) ? lv : passed_on(lm, lv)
+      leaving (lm, lv) => (lm.at === None) ? lv : passed_on(lm, lv)
       passed_on (pm, pv) => {
         pm.caller.at = pm.at
         pv

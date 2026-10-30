@@ -1972,6 +1972,7 @@ function sorted(l, f) {
   var j
   var x
   var kx
+  var m
   o = list()
   i = 0
   while i < (load (l + 4)) {
@@ -1983,9 +1984,16 @@ function sorted(l, f) {
     x = at(o, i)
     kx = call1(f, x)
     j = i - 1
-    while (j >= 0) and (call1(f, at(o, j)) > kx) {
-      ((load (o + 12)) + ((j + 1) * 4)) <- at(o, j)
-      j = j - 1
+    m = 1
+    while m {
+      m = 0
+      if j >= 0 {
+        if call1(f, at(o, j)) > kx {
+          ((load (o + 12)) + ((j + 1) * 4)) <- at(o, j)
+          j = j - 1
+          m = 1
+        }
+      }
     }
     ((load (o + 12)) + ((j + 1) * 4)) <- x
     i = i + 1
@@ -3699,11 +3707,16 @@ function gaps(l, a, e) {
       while (q < e) and chared(load8 q, 3) {
         q = q + 1
       }
-      if ((load (l + 4)) > 0) and ((load ((at(l, (load (l + 4)) - 1)) + 4)) == 1) {
-        t = 4
-        if line_in(s, q) {
-          t = 2
+      t = 0
+      if (load (l + 4)) > 0 {
+        if (load ((at(l, (load (l + 4)) - 1)) + 4)) == 1 {
+          t = 4
+          if line_in(s, q) {
+            t = 2
+          }
         }
+      }
+      if t > 0 {
         append(l, greedy(either(append(append(list(), chars(1)), chars(t))), 1))
       } else {
         append(l, greedy(chars(1), 1))

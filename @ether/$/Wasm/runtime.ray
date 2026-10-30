@@ -64,6 +64,9 @@ function closer(c) {
 function cw_trimmed(t) {
   var a
   var e
+  if tag(t) != 4 {
+    return t
+  }
   a = load (t + 4)
   e = load (t + 8)
   while (a < e) and white(load8 a) {
@@ -75,18 +78,27 @@ function cw_trimmed(t) {
   text(a, e)
 }
 function cw_slice(t, x, v) {
+  if tag(t) != 4 {
+    return 0
+  }
   if ((load (t + 4)) + untag(v)) > (load (t + 8)) {
     return 0
   }
   text((load (t + 4)) + untag(x), (load (t + 4)) + untag(v))
 }
 function cw_chopped(t) {
+  if tag(t) != 4 {
+    return 0
+  }
   if (load (t + 8)) <= (load (t + 4)) {
     return 0
   }
   text(load (t + 4), (load (t + 8)) - 1)
 }
 function cw_span_of(t, x) {
+  if (tag(t) != 4) or (tag(x) != 4) {
+    return 0
+  }
   text(load (t + 4), load (x + 8))
 }
 function cw_starts(t, x) {
@@ -2581,6 +2593,10 @@ function readtext(p, t) {
   if tag(t) == 1 {
     t = member(t, 32)
   }
+  if tag(t) != 4 {
+    wholly = 8
+    return 0
+  }
   te = textend
   bn = boundn
   textend = load (t + 8)
@@ -2908,6 +2924,10 @@ function reads(p, t) {
   var bn
   if tag(t) == 1 {
     t = member(t, 32)
+  }
+  if tag(t) != 4 {
+    wholly = 8
+    return 0
   }
   if literals_in(p, load (t + 4), load (t + 8)) == 0 {
     wholly = 8

@@ -322,6 +322,7 @@ function cw_symbol_of(t) {
   var x
   if syms == 0 {
     syms = list()
+    kept()
   }
   i = 0
   while i < (load (syms + 4)) {
@@ -338,7 +339,8 @@ function cw_symbol_of(t) {
 }
 function outbyte(b) {
   if outb == 0 {
-    outb = alloc(67108864)
+    outb = alloc(16777216)
+    kept()
   }
   (outb + outn) <-8 b
   outn = outn + 1
@@ -405,6 +407,7 @@ function cw_datum(t) {
   var j
   if datab == 0 {
     datab = alloc(4194304)
+    kept()
   }
   at = datan
   j = load (t + 4)
@@ -439,7 +442,8 @@ function cw_aside_from(x) {
   var m
   var j
   if asideb == 0 {
-    asideb = alloc(16777216)
+    asideb = alloc(4194304)
+    kept()
   }
   m = untag(x)
   j = m
@@ -467,6 +471,7 @@ function cw_taken() {
     c = alloc(outn + 8)
     copy(c, outb, outn)
     takent = text(c, c + outn)
+    kept()
     outn = 0
   }
   takent
@@ -539,6 +544,7 @@ function moved_keys(g, p) {
 }
 function set_parser(f) {
   parserhook = f
+  kept()
   0
 }
 function curried_value(c) {
@@ -691,8 +697,17 @@ function own(n, sym) {
 }
 function define(n, sym, v) {
   var e
-  touched(n)
   e = own(n, sym)
+  if e != 0 {
+    if (load (e + 8)) == v {
+      return v
+    }
+    if pointer(v) {
+      touched(n)
+    }
+  } else {
+    touched(n)
+  }
   if e == 0 {
     e = alloc(12)
     e <- load (n + 8)
@@ -1069,26 +1084,111 @@ function text_led_reading(ctx, n) {
   (memo + 1048576 + ((h - memo) / 4)) <- r
   r
 }
+function lead_byte(p) {
+  var l
+  if (load (p + 4)) == 1 {
+    l = load (p + 8)
+    if (load (l + 8)) == (load (l + 4)) {
+      return 0 - 1
+    }
+    return load8 (load (l + 4))
+  }
+  if (load (p + 4)) == 3 {
+    l = load (p + 8)
+    if (load (l + 4)) == 0 {
+      return 0 - 1
+    }
+    return lead_byte(at(l, 0))
+  }
+  0 - 1
+}
+function led_keys(l) {
+  var s
+  var a
+  var i
+  var k
+  var p
+  var b
+  var m
+  if pcache == 0 {
+    pcache = alloc(8388608)
+    kept()
+    pcache <- 16400
+  }
+  s = pcache + (16 + ((((l / 8) * 31) and 1023) * 16))
+  if (((load s) == l) and ((load (s + 4)) == (load (l + 4)))) and ((load (s + 8)) == epoch) {
+    return load (s + 12)
+  }
+  m = load (l + 4)
+  if ((load pcache) + (8 + (m * 8))) > (8388608 - (2048 * 48)) {
+    zeroed(pcache + 16, 16384)
+    pcache <- 16400
+  }
+  a = pcache + (load pcache)
+  pcache <- ((load pcache) + (8 + (m * 8)))
+  k = 0
+  i = 0
+  while i < m {
+    p = member(at(l, i), 17)
+    if tag(p) != 6 {
+      p = topattern(p)
+      if led_by_text(p) {
+        (a + (4 + (k * 8))) <- (0 - i) - 1
+        (a + (8 + (k * 8))) <- lead_byte(p)
+        k = k + 1
+      }
+    } else {
+      if led_by_text(p) {
+        (a + (4 + (k * 8))) <- p
+        (a + (8 + (k * 8))) <- lead_byte(p)
+        k = k + 1
+      }
+    }
+    i = i + 1
+  }
+  a <- k
+  s <- l
+  (s + 4) <- m
+  (s + 8) <- epoch
+  (s + 12) <- a
+  a
+}
 function text_led_read(ctx, n) {
   var l
   var i
   var p
   var r
   var m
+  var b
+  var c
+  var a
+  var k
   m = boundn
+  c = 0 - 2
+  if n < textend {
+    c = load8 n
+  }
   while tag(ctx) == 1 {
     l = load ((member(ctx, 37)) + 12)
-    i = 0
-    while (l != 0) and (i < (load (l + 4))) {
-      p = topattern(member(at(l, i), 17))
-      if led_by_text(p) {
-        r = matched(p, n, 0)
-        boundn = m
-        if r > n {
-          return r
+    if l != 0 {
+      a = led_keys(l)
+      k = load a
+      i = 0
+      while i < k {
+        b = load (a + (8 + (i * 8)))
+        if (b < 0) or (b == c) {
+          p = load (a + (4 + (i * 8)))
+          if p < 0 {
+            p = topattern(member(at(l, (0 - p) - 1), 17))
+          }
+          r = matched(p, n, 0)
+          boundn = m
+          if r > n {
+            return r
+          }
         }
+        i = i + 1
       }
-      i = i + 1
     }
     ctx = member(ctx, 36)
   }
@@ -1190,10 +1290,14 @@ function headpattern(t) {
 function seeded(t) {
   if csyms == 0 {
     csyms = list()
+    kept()
     memo = alloc(65536 * 20)
+    kept()
     epoch = 1
     actives = alloc(1048576)
+    kept()
     bounds = alloc(16777216)
+    kept()
   }
   append(csyms, t)
   0
@@ -1459,9 +1563,53 @@ function texteq(a, b, n) {
   }
   1
 }
+function kept() {
+  var s
+  effects = effects + 1
+  s = isodepth
+  while s > 0 {
+    (isostack + (((s - 1) * 12) + 8)) <- 1
+    s = s - 1
+  }
+  0
+}
+function isolated_open() {
+  var s
+  if isostack == 0 {
+    isostack = alloc(65536)
+  }
+  s = isostack + (isodepth * 12)
+  s <- free
+  (s + 4) <- markf
+  (s + 8) <- 0
+  isodepth = isodepth + 1
+  markf = free
+  0
+}
+function isolated_close(o, v) {
+  var s
+  isodepth = isodepth - 1
+  s = isostack + (isodepth * 12)
+  markf = load (s + 4)
+  if ((load (s + 8)) == 0) and (noreclaim == 0) {
+    free = load s
+    epoch = epoch + 1
+  }
+  0
+}
 function touched(x) {
+  var s
   if x < markf {
     effects = effects + 1
+    s = isodepth
+    while s > 0 {
+      if x < (load (isostack + ((s - 1) * 12))) {
+        (isostack + (((s - 1) * 12) + 8)) <- 1
+        s = s - 1
+      } else {
+        s = 0
+      }
+    }
   }
   0
 }
@@ -2001,12 +2149,104 @@ function typed(t, v) {
   }
   v
 }
+function bytes_in(a, e) {
+  var s
+  var q
+  var c
+  if pcache == 0 {
+    pcache = alloc(8388608)
+    kept()
+    pcache <- 16400
+  }
+  s = pcache + (8388608 - (2048 * 48))
+  s = s + ((((((a * 31) + (e * 7)) / 4) and 2047)) * 48)
+  if (((load s) == a) and ((load (s + 4)) == e)) and ((load (s + 8)) == epoch) {
+    return s + 16
+  }
+  zeroed(s + 16, 32)
+  q = a
+  while q < e {
+    c = load8 q
+    (s + (16 + (c / 8))) <-8 ((load8 (s + (16 + (c / 8)))) or (1 << (c % 8)))
+    q = q + 1
+  }
+  s <- a
+  (s + 4) <- e
+  (s + 8) <- epoch
+  s + 16
+}
+function occurs(l, a, e) {
+  var n
+  var f
+  var q
+  var b
+  var i
+  n = (load (l + 8)) - (load (l + 4))
+  if n == 0 {
+    return 1
+  }
+  b = bytes_in(a, e)
+  i = 0
+  while i < n {
+    f = load8 ((load (l + 4)) + i)
+    if ((load8 (b + (f / 8))) and (1 << (f % 8))) == 0 {
+      return 0
+    }
+    i = i + 1
+  }
+  if n == 1 {
+    return 1
+  }
+  f = load8 (load (l + 4))
+  q = a
+  while (q + n) <= e {
+    if (load8 q) == f {
+      if texteq(q, load (l + 4), n) {
+        return 1
+      }
+    }
+    q = q + 1
+  }
+  0
+}
+function literals_in(p, a, e) {
+  var l
+  var i
+  var c
+  if tag(p) != 6 {
+    return 1
+  }
+  if (load (p + 4)) == 1 {
+    return occurs(load (p + 8), a, e)
+  }
+  if (load (p + 4)) != 3 {
+    return 1
+  }
+  l = load (p + 8)
+  i = 0
+  while i < (load (l + 4)) {
+    c = at(l, i)
+    if tag(c) == 6 {
+      if (load (c + 4)) == 1 {
+        if occurs(load (c + 8), a, e) == 0 {
+          return 0
+        }
+      }
+    }
+    i = i + 1
+  }
+  1
+}
 function reads(p, t) {
   var r
   var te
   var bn
   if tag(t) == 1 {
     t = member(t, 32)
+  }
+  if literals_in(p, load (t + 4), load (t + 8)) == 0 {
+    wholly = 8
+    return 0
   }
   te = textend
   bn = boundn

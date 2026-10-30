@@ -148,15 +148,19 @@ export const tester = async () => {
   return module;
 };
 // (what is read: the entrypoint's header and first statement, the level, the rest of it, then each file; each line where
-// it is written. A file given with its text is read as that, the entrypoint too)
+// it is written. A file given with its text is read as that, the entrypoint too. After it, apart by a 0, each file beside
+// the entrypoint, for `include @./X.ray`: its location as written, then its text (runtime `file_named`); one given is
+// read there, not after the entrypoint)
+export const included = () => readdirSync(bootstrap('.')).filter((f) => f.endsWith('.ray') && !f.startsWith('.entrypoint')).sort().map((f) => bootstrap(f));
 export const tested = (files, texts = {}) => {
   const lines = [], at = [], entry = bootstrap('.entrypoint.ray'), of = (f) => emptied(texts[f] ?? readFileSync(f, 'utf8'));
   const add = (file, ls, from) => ls.forEach((l, i) => { lines.push(l); at.push([file, from + i + 1]); });
-  const ls = of(entry), second = ls.findIndex((l, i) => i > 2 && l && !/^[\s)\]}]/.test(l));
+  const ls = of(entry), second = ls.findIndex((l, i) => i > 2 && l && !/^[\s)\]}]/.test(l)), beside = included();
   add(entry, ls.slice(0, second), 0);
   add(wasm('level.ray'), of(wasm('level.ray')), 0);
   add(entry, ls.slice(second), second);
-  for (const file of files) if (resolve(file) !== entry) add(file, of(file), 0);
+  for (const file of files) if (resolve(file) !== entry && !beside.includes(resolve(file))) add(file, of(file), 0);
+  for (const file of beside) { lines[lines.length - 1] += `\0@./${relative(bootstrap('.'), file)}`; add(file, of(file), 0); }
   return { text: lines.join('\n'), at };
 };
 // (the reading run: each painted style with where it is (in bytes of the input), what nothing read, and how it ended; given

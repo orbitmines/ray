@@ -238,10 +238,19 @@ Expression := class (
         later.for((lp) => ran_later(lp))
         later = Array.new
       }
+      // (each test in memory of its own (Design §21.4): what it painted and said kept, the rest let go once it is done; what
+      // it kept for afterwards run inside it)
       ran_later (lp) => {
+        level test_begin (painted) (reported)
+        outer_later := later
+        later = Array.new
         testing = lp
         finished(go(gone_on(lp), lp.waiting ?? Array.new))
         testing = None
+        inner_later := later
+        later = outer_later
+        inner_later.for((ip) => ran_later(ip))
+        level test_end (painted) (reported)
       }
       // (what is said, `external goto report`: what the hole took and where, each in turn; the host reads them)
       report := Place(`report`, global)

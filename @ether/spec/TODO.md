@@ -118,10 +118,13 @@ its own reading its place, unread text recorded with reading going on.
   defined after it, until it is defined again at line 3528. Asserts run after that, so only top-level statements read in
   between are affected; prefix readings (cut before 3528) misread every test whose comment holds such a word.
 
-- **A loop's rounds are never freed** (ray-91, revision 51: a `continue` test grows 131 MB → 2.1 GB in ~46M steps, ~40
-  bytes a step): a round's reading and run are referenced by what outlives the round (hole values held until a jump back
-  forgets them, painted and said entries), and the runtime only reclaims a call that answers a plain value. Precise
-  escape marks did not help; wanted: a collector, or a region per round with what it keeps copied out.
+- **A reading keeps everything it allocates** (revision 55, the main wall): the heap grows ~170 bytes a step from the
+  start (ray-91), so a reading of more than ~11M steps runs out of the 2 GB; the whole entrypoint stops there (now
+  cleanly: "the reading ran out of memory", paints kept) around line 2813. The runtime frees only a call that answers a
+  plain value with nothing escaping; allocations are mostly small objects (patterns 24 B, lists 16+32 B, entries and
+  texts 12 B, nodes 20 B, cells 8 B). Painting is not what keeps it (ray-91). Next: a census of what is still reachable
+  at the stop (ray-91); mostly garbage → a collector (object headers, copying the young heap at statement boundaries),
+  mostly reachable → what Expression keeps.
 - **The `Array &+= { … }` blocks read exponentially in their members** (statement 523 and line 3140): the definition key
   (`rule:`) reads the block's code as `(hole | String)[]`, asking the hole at each character and inside each nested `{`;
   a memo of those asks halves K=10..12 but K=14 still takes 129 s.

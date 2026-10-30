@@ -1930,13 +1930,13 @@ function keys_reading(l, t) {
     return l
   }
   m = load (l + 4)
-  c = load 3956
+  c = load 3912
   if c == 0 {
     c = alloc(4194304)
     kept()
     zeroed(c, 16400)
     c <- 16400
-    3956 <- c
+    3912 <- c
   }
   s = c + (16 + ((((l / 8) * 31) and 1023) * 16))
   if (((load s) != l) or ((load (s + 4)) != m)) or ((load (s + 8)) != epoch) {
@@ -1961,6 +1961,9 @@ function keys_reading(l, t) {
   b = 0 - 2
   if (load (t + 4)) < (load (t + 8)) {
     b = load8 (load (t + 4))
+    if white(b) or (b == 10) {
+      return l
+    }
   }
   o = list()
   i = 0

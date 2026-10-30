@@ -164,7 +164,16 @@ High &+= {
   static shape3 (sh, sk) => (sk == `quoted_text`) ? High.text(sh.quoted_text) : ((sk == `string_text`) ? High.text(level cw_unescaped (sh.string_text)) : ((sk == `seq_left`) ? High.pattern_of(High.parts(sh.seq_left)) : High.shape4(sh, sk)))
   static shape4 (sh, sk) => (sk == `alt_left`) ? High.alternatives(sh) : ((sk == `any_of`) ? High.repeated(sh.any_of, 0) : ((sk == `some_of`) ? High.repeated(sh.some_of, 1) : ((sk == `repeated_of`) ? High.greedy(sh.repeated_of, 1) : ((sk == `field_name`) ? High.field(sh.field_name, sh.field_type) : ((sk == `reads_left`) ? High.reads(sh.reads_left, sh.reads_right) : High.shape5(sh, sk))))))
   static shape5 (sh, sk) => (sk == `selected_of`) ? High.selected(() => High.expression(sh.selected_of), sh.selection) : ((sk == `counted_of`) ? High.expression(sh.counted_of) : ((sk == `or_left`) ? High.orelse(sh.or_left, sh.or_right) : ((sk == `member_on`) ? High.on_maybe(() => High.expression(sh.member_on), sh.member_maybe) : High.shape6(sh, sk))))
-  static shape6 (sh, sk) => (sk == `member_from`) ? (High.maybe_led(Compiled.trimmed(sh.member_from)) ? High.on_maybe(() => High.expression(High.chopped(Compiled.trimmed(sh.member_from))), sh.member_name) : High.on(() => High.expression(sh.member_from), sh.member_name)) : ((sk == `this_member`) ? High.on(() => High.name("this"), sh.this_member) : High.shape7(sh, sk))
+  static shape6 (sh, sk) => (sk == `member_from`) ? (High.selected_end(sh.member_from, Compiled.trimmed(sh.member_name)) ? High.selected_at_end(High.parsed_one(High.parsed_one(sh.member_from).counted_of), Compiled.trimmed(sh.member_name)) : (High.maybe_led(Compiled.trimmed(sh.member_from)) ? High.on_maybe(() => High.expression(High.chopped(Compiled.trimmed(sh.member_from))), sh.member_name) : High.on(() => High.expression(sh.member_from), sh.member_name))) : ((sk == `this_member`) ? High.on(() => High.name("this"), sh.this_member) : High.shape7(sh, sk))
+  // (the first or last of a selection, `xs{p}#.last`: p asked from that end until it holds, no list made)
+  static selected_end (st, sn) => ((sn == "last") || (sn == "first")) && ((High.kind(st) == `counted_of`) && (High.kind(High.parsed_one(st).counted_of) == `selected_of`))
+  static selected_at_end (ss, sn) => {
+    High.w((sn == "last") ? "last_where(" : "first_where(")
+    High.expression(ss.selected_of)
+    High.w(", ")
+    High.section(ss.selection)
+    High.w(")")
+  }
   static shape7 (sh, sk) => (sk == `dynamic_of`) ? High.expression(sh.dynamic_of) : ((sk == `concurrent_of`) ? High.expression(sh.concurrent_of) : ((sk == `and_left`) ? High.conjoined(sh.and_left, sh.and_right) : ((sk == `typed_name`) ? High.typed_value(sh.typed_name, sh.typed_type, sh.typed_value) : ((sk == `set_place`) ? High.set(sh.set_place, sh.set_value) : ((sk == `if_value`) ? High.choice(sh.if_condition, sh.if_value, `None`) : ((sk == `indexed_of`) ? High.indexed(sh.indexed_of, sh.index_at) : ((sk == `same_left`) ? High.call2("equal", sh.same_left, sh.same_right) : ((sk == `as_value`) ? High.read_as(sh.as_value, sh.as_type) : ((sk == `is_left`) ? High.call2("equal", sh.is_left, sh.is_type) : ((sk == `with_left`) ? High.with_code(sh.with_left) : ((sk == `juxtaposed`) ? High.called_with(() => High.expression(sh.juxtaposed), sh.juxtaposed_arg) : ((sk == `in_this_code`) ? High.called_with(() => High.name("this"), sh.in_this_code) : ((sk == `not_of`) ? High.call1("negated", sh.not_of) : High.unknown(sk))))))))))))))
 }
 High &+= {

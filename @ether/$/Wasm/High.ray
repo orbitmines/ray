@@ -413,7 +413,18 @@ High &+= {
     High.made("closure", level cw_counted, "", eb, `extension`)
     High.w(")")
   }
-  static called_with (cv, ca) => {
+  static called_with (cv, ca) => (!(High.any_named(High.parts(ca))) && ((High.parts(ca).count == 1) || (High.parts(ca).count == 2))) ? High.called_few(cv, High.parts(ca)) : High.called_listed(cv, ca)
+  static called_few (fw, fp) => {
+    High.w((fp.count == 1) ? "invoke1(" : "invoke2(")
+    fw()
+    fp.for((part) => High.few_value(part))
+    High.w(")")
+  }
+  static few_value (fv) => {
+    High.w(", ")
+    High.sectioned(High.kind(fv)) ? High.section(fv) : High.expression(fv)
+  }
+  static called_listed (cv, ca) => {
     High.w("invoke(")
     cv()
     High.w(", ")

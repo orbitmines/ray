@@ -1126,6 +1126,47 @@ function keyed(n, p, v) {
   append(keys(n), e)
   e
 }
+function shared_args(w, n) {
+  var l
+  l = load w
+  if l == 0 {
+    l = list()
+    append(l, 0)
+    append(l, 0)
+    kept()
+    w <- l
+  }
+  (l + 4) <- n
+  l
+}
+function invoke1(c, a) {
+  var l
+  if (tag(c) != 2) and ((tag(c) != 9) and (tag(c) != 10)) {
+    return invoke(c, append(list(), a), 0)
+  }
+  l = shared_args(3928, 1)
+  (load (l + 12)) <- a
+  call(c, l, 0)
+}
+function invoke2(c, a, b) {
+  var l
+  if (tag(c) != 2) and ((tag(c) != 9) and (tag(c) != 10)) {
+    return invoke(c, append(append(list(), a), b), 0)
+  }
+  l = shared_args(3928, 2)
+  (load (l + 12)) <- a
+  ((load (l + 12)) + 4) <- b
+  call(c, l, 0)
+}
+function call1(f, x) {
+  var l
+  if (tag(f) != 2) and ((tag(f) != 9) and (tag(f) != 10)) {
+    return call(f, append(list(), x), 0)
+  }
+  l = shared_args(3928, 1)
+  (load (l + 12)) <- x
+  call(f, l, 0)
+}
 function select(l, f) {
   var o
   var i
@@ -1134,7 +1175,7 @@ function select(l, f) {
   i = 0
   while i < (load (l + 4)) {
     x = at(l, i)
-    if truthy(call(f, append(list(), x), 0)) {
+    if truthy(call1(f, x)) {
       append(o, x)
     }
     i = i + 1
@@ -1167,7 +1208,7 @@ function each_value(l, f) {
   o = list()
   i = 0
   while i < (load (l + 4)) {
-    append(o, call(f, append(list(), at(l, i)), 0))
+    append(o, call1(f, at(l, i)))
     i = i + 1
   }
   o
@@ -1355,9 +1396,9 @@ function mapped_structure(n, f, g) {
   while i < (load (s + 4)) {
     c = at(s, i)
     v = load (c + 16)
-    if truthy(call(f, append(list(), v), 0)) {
+    if truthy(call1(f, v)) {
       if tag(g) == 2 {
-        v = call(g, append(list(), v), 0)
+        v = call1(g, v)
       } else {
         v = g
       }
@@ -1377,7 +1418,7 @@ function each(l, f) {
   var i
   i = 0
   while i < (load (l + 4)) {
-    call(f, append(list(), at(l, i)), 0)
+    call1(f, at(l, i))
     i = i + 1
   }
   l
@@ -1397,9 +1438,9 @@ function sorted(l, f) {
   i = 1
   while i < (load (o + 4)) {
     x = at(o, i)
-    kx = call(f, append(list(), x), 0)
+    kx = call1(f, x)
     j = i - 1
-    while (j >= 0) and (call(f, append(list(), at(o, j)), 0) > kx) {
+    while (j >= 0) and (call1(f, at(o, j)) > kx) {
       ((load (o + 12)) + ((j + 1) * 4)) <- at(o, j)
       j = j - 1
     }
@@ -3029,7 +3070,7 @@ function mapped_text(t, f, g) {
     s = q
     while q < (load (t + 8)) {
       c = text(q, q + 1)
-      if truthy(call(f, append(list(), c), 0)) {
+      if truthy(call1(f, c)) {
         if q > s {
           append(l, literal(text(s, q)))
         }
@@ -3052,10 +3093,10 @@ function mapped_text(t, f, g) {
   q = load (t + 4)
   while q < (load (t + 8)) {
     c = text(q, q + 1)
-    if truthy(call(f, append(list(), c), 0)) {
+    if truthy(call1(f, c)) {
       r = g
       if tag(r) == 2 {
-        r = call(r, append(list(), c), 0)
+        r = call1(r, c)
       }
       copy(n, load (r + 4), (load (r + 8)) - (load (r + 4)))
       n = n + ((load (r + 8)) - (load (r + 4)))

@@ -58,6 +58,7 @@ Expression := class (
               me.caller = caller
               me.in = Node(in: rule_body)
               me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => parameter_read(hole, applied, held(hole, () => named_in(reader(c, caller), hole.value))))
+              me.in.rules.keys.rest.rest.for((hk) => hk.named = true)
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
               rule_style.append(painted{.rest.first === rule_own}#) if rule_style.empty
@@ -110,7 +111,7 @@ Expression := class (
         fuller (tx, near, far) => ((far === None) ? false : (tx == far.key)) ? far : near
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
         prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
-        defining (tx) => rules.keys{(.defines === true) && (!(among(aside, .)) && (tx ~= .))}#.sort(.length).last
+        defining (tx) => rules.keys{(.defines === true) && (!(among(aside, .)) && (tx ~= .))}#.sort(.length).last ?? in?.defining(tx)
         longest (tx, d) => rules.keys{!((. === split_key) || among(aside, .)) && ((d || !((. === maker_key) || (.defines === true))) && (tx ~= .))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
         reading (tx) => longer(tx, whole(tx))

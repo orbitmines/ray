@@ -3047,10 +3047,12 @@ function enclosed_holes(l) {
           if texts_equal(load (a + 8), load (b + 8)) {
             (f + 12) <- 2
             (3584 + (load (f + 16))) <-8 2
+            3884 <- ((load 3884) + 1)
           } else {
-            (3584 + (load (f + 16))) <-8 3
-            if (load8 (3584 + (load8 ((load ((load (a + 8)) + 8)) - 1)))) == 0 {
+            if ((load8 (3584 + (load (f + 16)))) == 0) and ((load8 (3584 + (load8 ((load ((load (a + 8)) + 8)) - 1)))) == 0) {
+              (3584 + (load (f + 16))) <-8 3
               (3584 + (load8 ((load ((load (a + 8)) + 8)) - 1))) <-8 1
+              3884 <- ((load 3884) + 1)
             }
           }
         } else {
@@ -4420,12 +4422,11 @@ function paired(t, cap) {
                 (3584 + b) <-8 2
                 3884 <- ((load 3884) + 1)
               } else {
-                if (load8 (3584 + b)) == 0 {
+                if ((load8 (3584 + b)) == 0) and ((load8 (3584 + c)) == 0) {
                   (3584 + b) <-8 1
+                  (3584 + c) <-8 3
                   3884 <- ((load 3884) + 1)
                 }
-                (3584 + c) <-8 3
-                3884 <- ((load 3884) + 1)
               }
             }
           }

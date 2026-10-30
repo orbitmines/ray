@@ -73,7 +73,7 @@ Expression := class (
             (rule_own.named = true) if !((level holds_text (rule_lhs) (BOOTSTRAPPER.CAPTURE.first)) === true)
             // (the pairs its head writes, `({x})`, known to what is read after it; one holding `=>`, a rule that defines)
             level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE)
-            definers.append(rule_own) if ((level holds_text (rule_lhs) (separator)) === true)
+            (rule_own.defines = true) if ((level holds_text (rule_lhs) (separator)) === true)
             rule_own
           }
           [{value: concurrently node.prefix(.)}: node.keys, rest: String] := (caller) => {
@@ -110,11 +110,11 @@ Expression := class (
         fuller (tx, near, far) => ((far === None) ? false : (tx == far.key)) ? far : near
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
         prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
-        defining (tx) => rules.keys{!(among(aside, .)) && ((tx ~= .) && among(definers, .))}#.sort(.length).last
-        longest (tx, d) => rules.keys{!((. === split_key) || among(aside, .)) && ((tx ~= .) && (d || !((. === maker_key) || among(definers, .))))}#.sort(.length).last
+        defining (tx) => rules.keys{(.defines === true) && (!(among(aside, .)) && (tx ~= .))}#.sort(.length).last
+        longest (tx, d) => rules.keys{!((. === split_key) || among(aside, .)) && ((d || !((. === maker_key) || (.defines === true))) && (tx ~= .))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
         reading (tx) => longer(tx, whole(tx))
-        longer (tx, w) => ((w === maker_key) || !(tx ~= split_key)) ? w : (((w === None) || (split_key.length > read_by(tx, w))) ? split_key : w)
+        longer (tx, w) => ((w === maker_key) || ((w === None) ? false : (tx == w.key))) ? w : (((tx ~= split_key) && ((w === None) || (split_key.length > read_by(tx, w)))) ? split_key : w)
         // (how much a key reads of a text, read again: what was read since may have been another text)
         read_by (tx, k) => (tx ~= k) ? k.length : 0
         keys => (in === None) ? rules.keys : (rules.keys | in.keys)
@@ -264,7 +264,6 @@ Expression := class (
       reader (hr, hb) => ((hr.in === None) || !(hr.in === hr.this)) ? hb : hr
       named_in (np, nt) => np.in.named_as(trimmed_or(level cw_trimmed (nt), nt), np)
       aside := Array.new
-      definers := Array.new
       among (xs, x) => xs{. === x}#.count > 0
       // (what a definition is written with, the header's `=>`, outside every pair; the header's brackets a pair)
       separator := level separator_of (BOOTSTRAPPER.CAPTURES.text) (BOOTSTRAPPER.CAPTURE)

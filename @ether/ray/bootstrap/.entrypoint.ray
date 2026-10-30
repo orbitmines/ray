@@ -608,6 +608,7 @@ assert {
 // A method: `name (parameters) =>` (a space before them) gives the name a closure, as `name := (parameters) =>` does (so its locals are its own);
 // `x.name (…) =>` is a member.
 {name ^function} := ({parameters}) {`=>`} {body} ^keyword => ({name} := (({parameters}) => {body})) ^function
+{name ^function}{` `}({parameters}) {`=>`} {body} ^keyword => ({name} := (({parameters}) => {body})) ^function
 // (a method with type parameters, `== <up_to = None>(other: T) => …`: those its first locals, their defaults given; read as
 // a head, `chainable == <…>(…)`, the method of what it takes)
 {name ^function} <{generics}>({parameters}) {`=>`} {body} ^keyword => {name} ({parameters}) => {

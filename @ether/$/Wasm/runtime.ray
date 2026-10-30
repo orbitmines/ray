@@ -1321,6 +1321,17 @@ function keys_version(ctx) {
   }
   v
 }
+function inside_word(n, a) {
+  if n <= a {
+    return 0
+  }
+  if word_byte(load8 (n - 1)) {
+    if word_byte(load8 n) {
+      return 1
+    }
+  }
+  0
+}
 function text_led_reading(ctx, n) {
   var h
   var r
@@ -2364,7 +2375,10 @@ function matched(p, pos, k) {
           if n < textend {
             l = 0
             if (load (p + 12)) != 2 {
-              l = text_led_reading(load (p + 8), n)
+              l = 0
+              if inside_word(n, load (s + 8)) == 0 {
+                l = text_led_reading(load (p + 8), n)
+              }
             } else {
               if ((load8 n) == 92) and ((n + 1) < textend) {
                 l = n + 2

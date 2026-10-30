@@ -6,6 +6,8 @@
 // things are given: `external .` (a node), `external &` (what applies), `external goto` and `external label` (where control
 // goes). Read under a level, `Program{O: …}`, what it reads is a Program (statements as vertices, gotos as edges), and a
 // back end is one more level: `Wasm` writes that Program as WebAssembly.
+// (a line's end, as a text)
+line_end := "\n"
 Expression := class (
   BOOTSTRAPPER: (
     HEADER: `!language`,
@@ -89,22 +91,31 @@ Expression := class (
         named_as (text, by) => (naming{(.first == text) && (.last === node)}#.count > 0) ? Place(text, node) : named_now(text, by)
         named_now (text, by) => {
           naming = [[text, node]].joined(naming)
-          v := (vs: Statements(node) = text)
-          r := (v === None) ? Place(text, node) : apart(by, v)
+          r := lined(text) ? kept_apart(by, set_apart(by), turned(node, text, by)) : named_once(text, by)
           naming = naming.rest
           r
+        }
+        // (a text of one line is one statement, read whole, or the place it names; one of more, its statements read in turn)
+        named_once (text, by) => {
+          v := (vs: Statements(node) = text)
+          (v === None) ? Place(text, node) : kept_apart(by, set_apart(by), v(by))
         }
         split_key := rules.keys.last
         maker_key := rules.keys.first
         // (a definition, `=>` outside pairs: the latest rule that defines, else the rule that makes rules; none set aside)
-        whole (tx) => made(tx, defines(tx)) ?? in?.whole(tx)
+        // (what reads it here, unless what it is in reads it all and this only its start)
+        whole (tx) => nearer(tx, made(tx, defines(tx)))
+        nearer (tx, near) => ((near === None) ? false : (tx == near.key)) ? near : fuller(tx, near, in?.whole(tx))
+        fuller (tx, near, far) => (near === None) ? far : (((far === None) ? false : (tx == far.key)) ? far : near)
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
         prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
         defining (tx) => rules.keys{!(among(aside, .)) && ((tx ~= .) && among(definers, .))}#.sort(.length).last
         longest (tx, d) => rules.keys{!((. === split_key) || among(aside, .)) && ((tx ~= .) && (d || !((. === maker_key) || among(definers, .))))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
         reading (tx) => longer(tx, whole(tx))
-        longer (tx, w) => ((w === maker_key) || !(tx ~= split_key)) ? w : (((w === None) || (split_key.length > w.length)) ? split_key : w)
+        longer (tx, w) => ((w === maker_key) || !(tx ~= split_key)) ? w : (((w === None) || (split_key.length > read_by(tx, w))) ? split_key : w)
+        // (how much a key reads of a text, read again: what was read since may have been another text)
+        read_by (tx, k) => (tx ~= k) ? k.length : 0
         keys => (in === None) ? rules.keys : (rules.keys | in.keys)
       }
       // A program running: what applied it, where it is.
@@ -133,15 +144,22 @@ Expression := class (
       )
       listed (lr) => lr.map((s) => s.statement)
       // (a text read by a program, run apart from its own statements: what it read so far, what waits, what it answered)
-      apart (ap, av) => {
-        was := [ap.done, ap.waiting, ap.answer]
-        ap.done = None
-        ap.waiting = None
-        a := av(ap)
-        ap.done = was.first
-        ap.waiting = was.rest.first
-        ap.answer = was.last
-        a
+      set_apart (sp) => {
+        was := [sp.done, sp.waiting, sp.answer]
+        sp.done = None
+        sp.waiting = None
+        was
+      }
+      kept_apart (kp, was, ka) => {
+        kp.done = was.first
+        kp.waiting = was.rest.first
+        kp.answer = was.last
+        ka
+      }
+      lined (lt) => (level holds_text (lt) (line_end)) === true
+      turned (tn, tt, rp) => {
+        (rs: Statements(tn)(rp) = tt)
+        rp.answer
       }
       // (a text's statements run by a program of its own, its jumps going on in what applied it)
       run_by (rv, rp) => {

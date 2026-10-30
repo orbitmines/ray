@@ -3881,7 +3881,7 @@ function paired(t, cap) {
           b = load8 (q - 1)
           c = load8 r
           if (white(b) == 0) and ((white(c) == 0) and (word_byte(b) == 0)) {
-            if (word_byte(c) == 0) and ((b != (load8 (ce - 1))) and (c != (load8 oa))) {
+            if word_byte(c) == 0 {
               if b == c {
                 (3584 + b) <-8 2
               } else {

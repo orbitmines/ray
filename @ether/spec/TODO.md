@@ -113,6 +113,11 @@ its own reading its place, unread text recorded with reading going on.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
 
+- **A trailing comment holding an operator's word is read as code until line 3528** (`zc := true  // a while b` reads
+  as `{body} while {condition}`): the trailing-comment rule (line 74, led by a hole) loses to every hole-led operator
+  defined after it, until it is defined again at line 3528. Asserts run after that, so only top-level statements read in
+  between are affected; prefix readings (cut before 3528) misread every test whose comment holds such a word.
+
 ## Painting (decided 2026-10-30)
 
 - **A definition's `=>` painted, written on the first rule** (the user: "`=>` should be colored … on that first rule

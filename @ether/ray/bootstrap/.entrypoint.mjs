@@ -193,7 +193,8 @@ export const painting = async (module, text) => {
     const near = levels.find((l) => l.every((s) => s[0] >= a && s[1] <= e));
     return near.reduce((x, s) => (s[0] < x[0] ? s : x));
   };
-  const painted = list(i32[3968 >> 2]).map((p) => { const [s, , b] = list(p); return { style: styled(s), at: where(b) }; });
+  // (each once: a body run again paints the same again)
+  const painted = [...new Map(list(i32[3968 >> 2]).map((p) => { const [s, , b] = list(p); return { style: styled(s), at: where(b) }; }).map((p) => [`${p.style}:${p.at}`, p])).values()];
   const unread = [...new Map(list(i32[3860 >> 2]).map(span).filter((s) => s && s[1] > s[0]).map((s) => [s.join(':'), s])).values()];
   return { painted, unread, error, input };
 };

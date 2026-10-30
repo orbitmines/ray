@@ -3398,26 +3398,92 @@ function listing(mark) {
   }
   boundn > mark
 }
+function read_again(item, f, args, u) {
+  var l
+  var i
+  var j
+  var t
+  var a
+  var e
+  var q
+  var r
+  var mark
+  var v
+  var changed
+  changed = 1
+  while changed {
+    changed = 0
+    l = load 3860
+    if l == 0 {
+      return 0
+    }
+    i = u
+    while i < (load (l + 4)) {
+      t = at(l, i)
+      a = load (t + 4)
+      e = load (t + 8)
+      mark = boundn
+      q = textend
+      textend = e
+      r = matched(item, a, cell(pattern(23, 0, 0), 0))
+      textend = q
+      v = 0
+      if r > a {
+        if white_after(r) >= e {
+          v = 1
+        }
+      }
+      if v {
+        j = i
+        while (j + 1) < (load (l + 4)) {
+          ((load (l + 12)) + (j * 4)) <- (at(l, j + 1))
+          j = j + 1
+        }
+        (l + 4) <- ((load (l + 4)) - 1)
+        v = valued_from(mark)
+        boundn = mark
+        call(curried(f, append(list(), v)), args, 0)
+        changed = 1
+      } else {
+        boundn = mark
+        i = i + 1
+      }
+    }
+  }
+  0
+}
 function in_turn(item, f, args, pos) {
   var at
   var mark
   var r
   var v
   var q
+  var u
+  var se
+  u = 0
+  if (load 3860) != 0 {
+    u = load ((load 3860) + 4)
+  }
   at = pos
   while at < textend {
     mark = boundn
     q = textend
     textend = statement_end(pos, white_after(at))
+    se = textend
     r = matched(item, at, cell(pattern(23, 0, 0), 0))
     textend = q
     if r <= at {
       boundn = mark
-      r = unread_until(pos, at)
-      if r <= at {
+      if white_after(at) >= q {
+        read_again(item, f, args, u)
         return at
       }
-      at = r
+      if (load (3860)) == 0 {
+        3860 <- list()
+      }
+      kept()
+      append(load 3860, text(at, se))
+      at = se
     } else {
       v = valued_from(mark)
       boundn = mark
@@ -3425,6 +3491,7 @@ function in_turn(item, f, args, pos) {
       at = r
     }
   }
+  read_again(item, f, args, u)
   at
 }
 function white_after(q) {

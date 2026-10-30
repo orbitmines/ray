@@ -118,6 +118,18 @@ its own reading its place, unread text recorded with reading going on.
   defined after it, until it is defined again at line 3528. Asserts run after that, so only top-level statements read in
   between are affected; prefix readings (cut before 3528) misread every test whose comment holds such a word.
 
+- **A loop's rounds are never freed** (ray-91, revision 51: a `continue` test grows 131 MB → 2.1 GB in ~46M steps, ~40
+  bytes a step): a round's reading and run are referenced by what outlives the round (hole values held until a jump back
+  forgets them, painted and said entries), and the runtime only reclaims a call that answers a plain value. Precise
+  escape marks did not help; wanted: a collector, or a region per round with what it keeps copied out.
+- **The `Array &+= { … }` blocks read exponentially in their members** (statement 523 and line 3140): the definition key
+  (`rule:`) reads the block's code as `(hole | String)[]`, asking the hole at each character and inside each nested `{`;
+  a memo of those asks halves K=10..12 but K=14 still takes 129 s.
+- **A definition's body across lines in brackets is cut at its first line** (`zg => (\n  \`a1\`\n  )`): the rule-making
+  rule's right side is a lazy `Code` ended by `\n | ⊣`, so it ends at the first line end; a braced body survives only
+  because the hole alternative takes braces whole. Reading a statement to its region's end first breaks trailing
+  comments (the text-led `assert` takes them); wanted: no line end inside an open pair ends it.
+
 ## Painting (decided 2026-10-30)
 
 - **A definition's `=>` painted, written on the first rule** (the user: "`=>` should be colored … on that first rule

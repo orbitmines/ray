@@ -145,6 +145,22 @@ its own reading its place, unread text recorded with reading going on.
   unknowns, both sides of a branch whose condition is unknown; 87% of what is unpainted at 460 statements is code that
   never ran (coverage 20.9%).
 
+- **The chain classes → calls → `x = v`** (2026-10-31, revision 65). Each half-works alone and the next exposes the
+  one before, so none landed:
+  - *Calls*: a value's methods led by a hole (`{this}(…)` of a closure) never match the split's rest (`(false)`): Design
+    §5 "its own methods led by a hole first". Scratch: a `Led` class splits a head into its first hole and the rest
+    (`rule_own.led_rest`), the split copies `on.rules[[e.led_rest ?? e.key]]`; a styled call rule (`… ^punctuation =>`)
+    needs its body spliced twice (its `{{parameters}}` came in through `{rhs}`). Then `(() => true)()` answers true.
+  - *Closure scope*: the body's code (`{{body}}`) is read in the call's node, which chains to the closure rule's scope
+    (global), not where the closure was written (Design: "`.` is its own node, which sees where the closure was
+    written"). `recurring_flip (n) => n ? recurring_flip(false) : true` (RC1) does not see `recurring_flip`, so
+    `recur ^keyword` reads the start of the word and jumps to `recurring` for ever (out of memory at statement ~185).
+    Needs a decision: how a rule body's node sees both the rule's holes and where code handed to it was written.
+  - *Parameters*: `taking` declares them with `({written_parameters}) := …` inside `if … else` blocks, so in the block.
+  - *`x = v`* (user: Design's `{ value ; (name) := value }`, scratch w16): assigns, but the loops in `taking`/`takes`/
+    `each takes` then run over lists, and lists are a class (`Array`), which needs calls.
+  Repro: ~/.cache/ray-scratch/r45 (w70/w71 calls, w72/w76 all together), mkskip45.py N with the loop tests skipped.
+
 ## Node.ray
 
 - **The error handlers read members bare** (`diagnostics`, `diagnostics.last`, `diagnostics.some(.fatal)`, line 68–84):

@@ -277,6 +277,20 @@ export async function test(files = []) {
     if (style === 'passed') passed++; else failed++;
     console.log(`${style === 'passed' ? 'passed' : 'FAILED'}  ${shown(p)}  ${line}`);
   }
+  // (a test read but never checked, `untested` still: not run, an error)
+  const checked = new Set([...results.values()].map(({ p }) => p && `${p.file}:${p.line}`));
+  const unchecked = new Map();
+  for (const { style, at: span } of run.painted) {
+    if (style !== 'untested' || !span) continue;
+    const p = located({ input, at }, span);
+    if (p && ours(p) && !checked.has(`${p.file}:${p.line}`)) unchecked.set(`${p.file}:${p.line}`, p);
+  }
+  // (but where `untested` is written: the rule a test is, not one)
+  for (const p of unchecked.values()) {
+    const line = readFileSync(p.file, 'utf8').split('\n')[p.line - 1]?.trim() ?? '';
+    if (line.includes('^untested')) continue;
+    errors++; console.log(`NOT RUN ${shown(p)}  ${line}`);
+  }
   for (const span of run.unread) { const p = located({ input, at }, span); if (!ours(p)) continue; errors++; console.log(`ERROR   ${shown(p)}  Nothing reads this.`); }
   if (run.error) { errors++; console.log(`ERROR   the reading did not finish: ${run.error}`); }
   console.log(`${passed} passed, ${failed} failed${errors ? `, ${errors} errors` : ''}${warnings ? `, ${warnings} warnings in tests` : ''} (revision ${revision()}, ${Date.now() - t0} ms)`);

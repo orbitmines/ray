@@ -92,36 +92,27 @@ holds; what was the kernel's own is dropped). Each item: what fails, a minimal r
 ## The language run by the compiled Expression (2026-10-30)
 
 The revisions run Expression.ray compiled: the language is read by its class (`(text) as Expression`) and its statements
-run. Harness: ~/.cache/ray-scratch/run (mkrunner.mjs builds a module reading input part 0 as an Expression, paint.mjs
-reports what `external style` painted, mkinput.py puts $/Wasm/level.ray after the entrypoint's header, bis.py/probe.py
-bisect the entrypoint). Work in progress beside it: run/Expression_wip.ray.
+run (f6c56a70, revision 18): the whole entrypoint reads and runs in ~0.3 s (359 top-level statements; the last assert
+unread). Harness: ~/.cache/ray-scratch/run (mkrunner.mjs: a module reading input part 0 as an Expression, EXPR= a
+variant; mkinput.py: the entrypoint with $/Wasm/level.ray after its first statement; paint.mjs: what was painted and
+what nothing read, UNREAD=n). Done on the way: statements run (they never did), jumps and labels, `afterwards`,
+rule bodies read once with the rule set aside, splices (the old splicehead), a braced body its inside, a name read in
+its own reading its place, unread text recorded with reading going on.
 
-- **A defined rule's left side splits at either `=>`**: `{lhs} => {rhs} => { {lhs} => {rhs} }` (the entrypoint's first
-  statement) can be read with LHS `{lhs}` (a single hole: a rule reading anything) or `{lhs} => {rhs}` (meant, `[LHS: [LHS,
-  RHS], RHS]`). The header writes `GRAMMAR_RULE_DEF.LHS = Code` then `.LHS = GRAMMAR_RULE_DEF`: compiled, the second
-  replaces the first, so which reading is taken is down to the matcher's order. With the single-hole one, naming a hole
-  (`node.named(hole.inside)`, which reads and runs the name) applies that rule, which defines a rule, which names its holes:
-  without end (with two `level` rules before it, any rule of two holes after it).
-- **A rule's body is read where it is defined, with the rules before it ("a rule never reads it")**: read at its first
-  application instead, the entrypoint's maker statement reads its own body as itself, without end. Reading it at
-  definition (the head's hole places as the holes, each found at run time in the program it is `bound` in): in
-  Expression_wip.ray, where B' no longer compiles itself (the second round hangs). Kept out of the repository.
-- **A name being read, read again in its own reading**: guarded in Expression_wip.ray (`naming`: such a name is its
-  place), to be kept once the above holds.
-- **Nested splits make a chain of nodes without end**: the split rule (`[{value: …prefix}: keys, rest: String]`) makes
-  `Node(in: caller.in)` for each split and reads the rest in it; with statements running, a rule of two holes after two
-  `level` rules builds ~480K nested nodes (memory runs out in `whole`, which walks `in`).
-- **What nothing reads fails the whole reading**: one unread statement fails `Statement[]`, the reading backtracks into the
-  header (the entrypoint's three-space header has many ways to split its spaces: seconds per failure). It should be an
-  error at that statement (as it was), the reading going on. Tried `({statement: …}: keys | unread: String)`: no gain yet.
+- **The rule-maker wins over every other definition** (`whole`: the maker first whenever it reads, "Definition,
+  text-led, latest"): `foo {c} ^untested => …` is defined by the plain maker with ` ^untested` left in its head, so
+  `foo z` reads nothing, and the entrypoint's `{lhs} ^{style} {`=>`} {rhs} => …` (line 60) never reads a definition;
+  every `assert` (`assert {condition} ^untested => …`) is so, which is why no test paints `passed`/`failed` yet. A rule
+  that is itself a definition (its head holds the maker's separator) should rank with the maker, the latest first.
+- **A defined rule's left side crosses lines**: `foo z\nbar {c} => …` is read as one definition with LHS `foo z\nbar {c}`
+  (the header's `Code` takes any character, a line end too); a head is one line.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
-- **An assert costs ~0.4 s** (its body's rules read again in each fresh node: `matched` is 76%): the reading is kept per
-  rule now (bodies read once); what remains is the matcher's memo being keyed by the node (a fresh one each application).
-- **The host's labels**: `afterwards` is done (continuations kept, run by the class's body once everything is read);
-  `report` (said, then on; in a test, a jump to `erred`) is not.
-- **Painting has no places yet**: `external style` records `[style, value]` (PaintedX); the host needs where each value
-  was read (its span) to paint it, and the LSP still paints from the compiler's grammar only.
+- **An assert costs ~0.4 s** (interpreted; `matched` 76%): the matcher's memo is keyed by the node read in, a fresh one
+  each application.
+- **The host's `report`** (said, then on; in a test, a jump to `erred`) is not done.
+- **Prefixes cut between statements read erratically** (bisecting the entrypoint by top-level statements: some prefixes
+  run nothing, one took 2 min): the counts are of a reading that backtracks; compare whole files.
 
 ## Node.ray
 
@@ -173,10 +164,11 @@ bisect the entrypoint). Work in progress beside it: run/Expression_wip.ray.
 
 ## The compiled compiler's speed
 
-- **A call makes two lists and a node** (`invoke(member2(get(scope, X), m), append(list(), a), node(0))`): every call of
-  a static allocates its arguments' list and an empty named node, then `call` dispatches on the tag. Wanted: a member of
-  a block known when written (`High.x(…)`, `Low.x(…)`) called directly, its arguments given as they are; named only when
-  written. (Revision 11 has a function's parameters in locals when its scope holds nothing else, `with_locals`.)
+- **A call makes a list of what it is given** (`call_member(get(scope, X), m, append(list(), a), 0)`): revision 13 gives
+  nothing by name as `0`, revision 15 calls a member that is a function at once (`call_member`, same answer as
+  `invoke(member2(…))`). Still: the arguments' list, and `X` looked up through the scopes each time. Wanted: a block's
+  static known when written (`X := { static f … }`, X never given again) called as its function, its arguments given
+  as they are.
 - **Each text is measured for what it holds** (`bytes_in`, 13% of a self-compile in revision 11): which characters and
   pairs of characters a text holds, kept per text, so a pattern lacking one of its literals is not tried. A text read
   inside one already measured could take it from that one instead of reading its bytes again.

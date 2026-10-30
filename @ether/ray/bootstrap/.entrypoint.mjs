@@ -8,11 +8,13 @@
 //   node .entrypoint.mjs --build      the next revision, `.entrypoint.(N+1).wasm`, written by `.entrypoint.N.wasm` (N
 //                                     committed first), checked to write itself the same
 //   node .entrypoint.mjs --lsp        the language server, over stdio (.entrypoint.lsp.mjs)
-import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+//   node .entrypoint.mjs --test [FILE…]  the tests, the entrypoint's or the files': each passed or failed, where it is
+import { readFileSync, writeFileSync, readdirSync, existsSync, unlinkSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { isMainThread } from 'node:worker_threads';
+import { Worker, isMainThread, workerData, parentPort } from 'node:worker_threads';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 export const NAME = 'Ether';
 export const ALIASES = ['ray', 'orbitmines'];
@@ -124,6 +126,120 @@ export async function build() {
   console.log(`.entrypoint.${n + 1}.wasm: ${next.length} bytes, written from revision ${n}, writes itself`);
 }
 
+// Tests (`--test [FILE…]`): the language read by Expression itself, compiled by the latest revision with a reading of input
+// as its program, given the entrypoint (the level read after its first statement) and the files after it. What it painted
+// (Expression's `painted`: each style, what it styles and what the holes took in each program it ran in) says each
+// test's result, `passed` or `failed`, and where it is.
+const TESTING = 'read := (level input_part 0) as Expression\nnoted(PaintedX)\n0\n';
+// (a whole-line comment as an empty line: each line where it is written)
+const emptied = (text) => text.split('\n').map((l) => (l.trimStart().startsWith('//') ? '' : l));
+// (the module that reads, once per revision and sources: kept beside the revision)
+export const tester = async () => {
+  const program = reader() + TESTING, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), was = readFileSync(engine());
+  const key = createHash('sha256').update(was).update(program).update(runtime).update(readFileSync(wasm('header.ray'))).digest('hex').slice(0, 12);
+  const name = `.entrypoint.${revision()}.test.${key}.wasm`;
+  if (existsSync(bootstrap(name))) return readFileSync(bootstrap(name));
+  const module = await compiled(was, program);
+  try {
+    for (const f of readdirSync(bootstrap('.'))) if (/^\.entrypoint\.\d+\.test\.[0-9a-f]+\.wasm$/.test(f)) unlinkSync(bootstrap(f));
+    writeFileSync(bootstrap(name), module);
+  } catch { }
+  return module;
+};
+// (what is read: the entrypoint's header and first statement, the level, the rest of it, then each file; each line where
+// it is written)
+export const tested = (files) => {
+  const lines = [], at = [];
+  const add = (file, ls, from) => ls.forEach((l, i) => { lines.push(l); at.push([file, from + i + 1]); });
+  const entry = bootstrap('.entrypoint.ray'), ls = emptied(readFileSync(entry, 'utf8'));
+  const second = ls.findIndex((l, i) => i > 2 && l && !/^[\s)\]}]/.test(l));
+  add(entry, ls.slice(0, second), 0);
+  add(wasm('level.ray'), emptied(readFileSync(wasm('level.ray'), 'utf8')), 0);
+  add(entry, ls.slice(second), second);
+  for (const file of files) add(file, emptied(readFileSync(file, 'utf8')), 0);
+  return { text: lines.join('\n'), at };
+};
+// (the reading run: each painted style with where it is (in bytes of the input), what nothing read, and how it ended)
+export const painting = async (module, text) => {
+  const it = await instance(module), { i32, u8, exports: X } = it, B = 8388608, input = Buffer.from(text + '\0');
+  u8.set(input, B); i32[4088 >> 2] = input.length;
+  let error;
+  try { X.main(); } catch (e) { error = String(e?.message ?? e); }
+  const tag = (v) => ((v & 1) || v <= 0 ? 0 : i32[v >> 2]);
+  const list = (l) => { const o = []; if (tag(l) !== 3) return o; const d = i32[(l >> 2) + 3]; for (let i = 0; i < i32[(l >> 2) + 1]; i++) o.push(i32[(d >> 2) + i]); return o; };
+  const words = (t) => Buffer.from(u8.subarray(i32[(t >> 2) + 1], i32[(t >> 2) + 2])).toString();
+  const member = (v, name) => { for (let e = i32[(v >> 2) + 2]; e; e = i32[e >> 2]) { const k = X.name_text(i32[(e >> 2) + 1]); if (k && words(k) === name) return i32[(e >> 2) + 2]; } return 0; };
+  // (a text spliced is a copy: followed back, piece by piece, to where it is in the input)
+  const copies = [], cb = i32[3864 >> 2];
+  for (let k = 0; cb && k < i32[3868 >> 2]; k++) copies.push(i32.subarray((cb >> 2) + k * 3, (cb >> 2) + k * 3 + 3));
+  copies.sort((a, b) => a[0] - b[0]);
+  const inside = (a) => a >= B && a < B + input.length;
+  const origin = (a) => {
+    for (let n = 0; n < 64 && !inside(a); n++) {
+      let lo = 0, hi = copies.length - 1, f = -1;
+      while (lo <= hi) { const m = (lo + hi) >> 1; if (copies[m][0] <= a) { f = m; lo = m + 1; } else hi = m - 1; }
+      if (f < 0 || a >= copies[f][0] + copies[f][2]) return -1;
+      a = copies[f][1] + (a - copies[f][0]);
+    }
+    return inside(a) ? a - B : -1;
+  };
+  const span = (t) => { if (tag(t) !== 4) return; const a = origin(i32[(t >> 2) + 1]), e = i32[(t >> 2) + 2] > i32[(t >> 2) + 1] ? origin(i32[(t >> 2) + 2] - 1) + 1 : a; return a >= 0 && e >= a ? [a, e] : undefined; };
+  const styled = (s) => (tag(s) === 4 ? words(s) : tag(s) === 12 ? words(X.name_text(i32[(s >> 2) + 1])) : '');
+  // (where: of the programs it ran in, the outermost whose holes took text from the input, then the nearest whose texts
+  // are all in that one's; its first)
+  const where = (bounds) => {
+    const levels = list(bounds).map((b) => list(b).map((h) => span(member(h, 'value'))).filter(Boolean)).filter((l) => l.length);
+    if (!levels.length) return;
+    const outer = levels[levels.length - 1], a = Math.min(...outer.map((s) => s[0])), e = Math.max(...outer.map((s) => s[1]));
+    const near = levels.find((l) => l.every((s) => s[0] >= a && s[1] <= e));
+    return near.reduce((x, s) => (s[0] < x[0] ? s : x));
+  };
+  const painted = list(i32[3968 >> 2]).map((p) => { const [s, , b] = list(p); return { style: styled(s), at: where(b) }; });
+  const unread = [...new Map(list(i32[3860 >> 2]).map(span).filter((s) => s && s[1] > s[0]).map((s) => [s.join(':'), s])).values()];
+  return { painted, unread, error, input };
+};
+// (a place in the input, as where it is written)
+const located = ({ input, at }, [a]) => {
+  const before = input.subarray(0, a).toString(), line = before.split('\n').length - 1;
+  return { file: at[line]?.[0], line: at[line]?.[1], column: before.length - before.lastIndexOf('\n') };
+};
+export async function test(files = []) {
+  const t0 = Date.now(), { text, at } = tested(files), module = await tester();
+  const run = await new Promise((done) => {
+    const thread = new Worker(fileURLToPath(import.meta.url), { workerData: { tested: { module, text } }, resourceLimits: { stackSizeMb: STACK_MB } });
+    const timer = setTimeout(() => { thread.terminate(); done({ painted: [], unread: [], error: `not read in ${TEST_MS} ms` }); }, TEST_MS);
+    thread.on('message', (m) => { clearTimeout(timer); done(m); thread.terminate(); });
+    thread.on('error', (e) => { clearTimeout(timer); done({ painted: [], unread: [], error: String(e?.message ?? e) }); });
+  });
+  const input = Buffer.from(text), shown = (p) => p ? `${relative(process.cwd(), p.file).startsWith('..') ? p.file : relative(process.cwd(), p.file)}:${p.line}:${p.column}` : '(not found where)';
+  const ours = (p) => (files.length ? files.map((f) => resolve(f)) : [bootstrap('.entrypoint.ray')]).includes(p?.file && resolve(p.file));
+  // (each test once: failed where it ever failed)
+  const results = new Map();
+  for (const { style, at: span } of run.painted) {
+    if (style !== 'passed' && style !== 'failed') continue;
+    const p = span ? located({ input, at }, span) : undefined, k = p ? `${p.file}:${p.line}:${p.column}` : '?';
+    if (p && !ours(p)) continue;
+    if (results.get(k)?.style !== 'failed') results.set(k, { style, p });
+  }
+  const warnings = run.painted.filter((x) => x.style === 'warn' && x.at).length;
+  let passed = 0, failed = 0, errors = 0;
+  for (const { style, p } of results.values()) {
+    const line = p ? readFileSync(p.file, 'utf8').split('\n')[p.line - 1]?.trim() : '';
+    if (style === 'passed') passed++; else failed++;
+    console.log(`${style === 'passed' ? 'passed' : 'FAILED'}  ${shown(p)}  ${line}`);
+  }
+  for (const span of run.unread) { const p = located({ input, at }, span); if (!ours(p)) continue; errors++; console.log(`ERROR   ${shown(p)}  Nothing reads this.`); }
+  if (run.error) { errors++; console.log(`ERROR   the reading did not finish: ${run.error}`); }
+  console.log(`${passed} passed, ${failed} failed${errors ? `, ${errors} errors` : ''}${warnings ? `, ${warnings} warnings in tests` : ''} (revision ${revision()}, ${Date.now() - t0} ms)`);
+  if (failed || errors) process.exitCode = 1;
+}
+// (how long a reading of the tests may take)
+const TEST_MS = Number(process.env.RAY_TEST_MS ?? 600000);
+if (!isMainThread && workerData?.tested) {
+  const { painted, unread, error } = await painting(workerData.tested.module, workerData.tested.text);
+  parentPort.postMessage({ painted, unread, error });
+}
+
 export const help = () => [
   `${NAME} ${env.version}`,
   `Usage: ${env.command} [options] [file]`,
@@ -131,6 +247,7 @@ export const help = () => [
   '  -h, --help     Print this help and exit.',
   '      --version  Print the version number.',
   '      --lsp      Serve the language server (LSP) over stdio.',
+  '      --test     Run the tests: the entrypoint\'s, or those in the files given; each passed or failed, where it is.',
   '      --build    Write the next revision (.entrypoint.(N+1).wasm), written by the latest, checked to write itself.',
   '  -v, --verbose  Say how long compiling took.',
   '  file           Compile the file with the latest revision, then run it: what its main answers.',
@@ -142,6 +259,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (flag('--version')) return console.log(env.version.toSemver({ scheme: true }));
   if (flag('--lsp')) return (await import('./.entrypoint.lsp.mjs')).serve({ env, STACK_MB });
   if (flag('--build', 'build')) return build();
+  if (flag('--test')) return test(argv.filter((a) => !a.startsWith('-')));
   const file = argv.find((a) => !a.startsWith('-'));
   if (!file) return console.log(help());
   const t0 = Date.now(), module = await compiled(readFileSync(engine()), readFileSync(file, 'utf8'));

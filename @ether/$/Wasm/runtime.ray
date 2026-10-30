@@ -1139,6 +1139,59 @@ function shared_args(w, n) {
   (l + 4) <- n
   l
 }
+function invoke0(c) {
+  if (tag(c) != 2) and ((tag(c) != 9) and (tag(c) != 10)) {
+    return invoke(c, list(), 0)
+  }
+  call(c, shared_args(3928, 0), 0)
+}
+function own_closure(x, sym) {
+  var e
+  var c
+  if tag(x) == 1 {
+    e = own(x, sym)
+    if e != 0 {
+      c = load (e + 8)
+      if tag(c) == 2 {
+        if (load (c + 12)) == 0 {
+          return c
+        }
+      }
+    }
+  }
+  0
+}
+function call_member0(x, sym) {
+  var c
+  c = own_closure(x, sym)
+  if c != 0 {
+    return indirect(load (c + 8), shared_args(3928, 0), 0, load (c + 4))
+  }
+  invoke0(member2(x, sym))
+}
+function call_member1(x, sym, a) {
+  var c
+  var l
+  c = own_closure(x, sym)
+  if c != 0 {
+    l = shared_args(3928, 1)
+    (load (l + 12)) <- a
+    return indirect(load (c + 8), l, 0, load (c + 4))
+  }
+  invoke1(member2(x, sym), a)
+}
+function call_member2(x, sym, a, b) {
+  var c
+  var l
+  c = own_closure(x, sym)
+  if c != 0 {
+    l = shared_args(3928, 2)
+    (load (l + 12)) <- a
+    ((load (l + 12)) + 4) <- b
+    return indirect(load (c + 8), l, 0, load (c + 4))
+  }
+  invoke2(member2(x, sym), a, b)
+}
 function invoke1(c, a) {
   var l
   if (tag(c) != 2) and ((tag(c) != 9) and (tag(c) != 10)) {

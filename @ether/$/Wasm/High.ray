@@ -381,7 +381,16 @@ High &+= {
   static call_written (cc, ca) => ((High.kind(cc) == `selected_of`) && (High.kind(High.parsed_one(cc).selected_of) == `member_from`)) ? High.sel_method(High.parsed_one(High.parsed_one(cc).selected_of), High.parsed_one(cc).selection, ca) : (High.member_call(cc, ca) ? High.member_called(High.parsed_one(cc), ca) : High.called_on(() => High.expression(cc), ca))
   // (a member called, `x.f(a)`, f a name: what x holds under f called as it is, when that is a function)
   static member_call (mc, ma) => (High.kind(mc) == `member_from`) && ((High.kind(High.parsed_one(mc).member_name) == `leaf`) && ((High.maybe_led(Compiled.trimmed(High.parsed_one(mc).member_from)) || ((High.parts(ma).count == 1) && Compiled.braced(Compiled.trimmed(ma)))) ? false : true))
-  static member_called (mp, ma) => {
+  static member_called (mp, ma) => (!(High.any_named(High.parts(ma))) && (High.parts(ma).count < 3)) ? High.member_few(mp, High.parts(ma)) : High.member_listed(mp, ma)
+  static member_few (mw, mq) => {
+    High.w((mq.count == 0) ? "call_member0(" : ((mq.count == 1) ? "call_member1(" : "call_member2("))
+    High.expression(mw.member_from)
+    High.w(", ")
+    High.symbol(mw.member_name)
+    mq.for((part) => High.few_value(part))
+    High.w(")")
+  }
+  static member_listed (mp, ma) => {
     High.w("call_member(")
     High.expression(mp.member_from)
     High.w(", ")
@@ -413,9 +422,9 @@ High &+= {
     High.made("closure", level cw_counted, "", eb, `extension`)
     High.w(")")
   }
-  static called_with (cv, ca) => (!(High.any_named(High.parts(ca))) && ((High.parts(ca).count == 1) || (High.parts(ca).count == 2))) ? High.called_few(cv, High.parts(ca)) : High.called_listed(cv, ca)
+  static called_with (cv, ca) => (!(High.any_named(High.parts(ca))) && (High.parts(ca).count < 3)) ? High.called_few(cv, High.parts(ca)) : High.called_listed(cv, ca)
   static called_few (fw, fp) => {
-    High.w((fp.count == 1) ? "invoke1(" : "invoke2(")
+    High.w((fp.count == 0) ? "invoke0(" : ((fp.count == 1) ? "invoke1(" : "invoke2("))
     fw()
     fp.for((part) => High.few_value(part))
     High.w(")")

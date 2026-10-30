@@ -4789,6 +4789,7 @@ function take_named_from(na, ne, l, i, oa, ce) {
 }
 function spliced_into(t, oa, oe, ce, l, out) {
   var ca
+  var k
   var q
   var e
   var r
@@ -4802,13 +4803,29 @@ function spliced_into(t, oa, oe, ce, l, out) {
   n = 0
   while q < e {
     x = 0
+    k = 0
     if at_text(q, e, oa, oe) {
-      r = q + (oe - oa)
-      while (r < e) and (at_text(r, e, ca, ce) == 0) {
-        r = r + 1
+      if at_text(q + (oe - oa), e, oa, oe) {
+        r = q + ((oe - oa) * 2)
+        while (r < e) and (at_text(r, e, ca, ce) == 0) {
+          r = r + 1
+        }
+        if r < e {
+          if at_text(r + (ce - ca), e, ca, ce) {
+            x = take_named(q + ((oe - oa) * 2), r, l, oa, oe, ce)
+            k = ce - ca
+          }
+        }
       }
-      if r < e {
-        x = take_named(q + (oe - oa), r, l, oa, oe, ce)
+      if x == 0 {
+        k = 0
+        r = q + (oe - oa)
+        while (r < e) and (at_text(r, e, ca, ce) == 0) {
+          r = r + 1
+        }
+        if r < e {
+          x = take_named(q + (oe - oa), r, l, oa, oe, ce)
+        }
       }
     }
     if x != 0 {
@@ -4825,7 +4842,7 @@ function spliced_into(t, oa, oe, ce, l, out) {
         copied_from(out + n, s, m - s)
       }
       n = n + (m - s)
-      q = r + (ce - ca)
+      q = r + ((ce - ca) + k)
     } else {
       if out != 0 {
         (out + n) <-8 (load8 q)
@@ -4881,7 +4898,17 @@ function spliced_whole(t, oa, oe, ce, l) {
   if at_text(e - (ce - (oe + 1)), e, oe + 1, ce) == 0 {
     return 0
   }
-  x = take_named(q + (oe - oa), e - (ce - (oe + 1)), l, oa, oe, ce)
+  x = 0
+  if at_text(q + (oe - oa), e, oa, oe) {
+    if (e - ((ce - (oe + 1)) * 2)) >= (q + ((oe - oa) * 2)) {
+      if at_text(e - ((ce - (oe + 1)) * 2), e, oe + 1, ce) {
+        x = take_named(q + ((oe - oa) * 2), e - ((ce - (oe + 1)) * 2), l, oa, oe, ce)
+      }
+    }
+  }
+  if x == 0 {
+    x = take_named(q + (oe - oa), e - (ce - (oe + 1)), l, oa, oe, ce)
+  }
   if x == 0 {
     return 0
   }

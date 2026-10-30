@@ -327,7 +327,8 @@ export async function test(files = []) {
 // (how long a reading of the tests may take)
 const TEST_MS = Number(process.env.RAY_TEST_MS ?? 600000);
 if (!isMainThread && workerData?.tested) {
-  const { painted, unread, said, error } = await painting(workerData.tested.module, workerData.tested.text);
+  // (a test runs fully: a budget far past the editor's, ETHER_TEST_FUEL)
+  const { painted, unread, said, error } = await painting(workerData.tested.module, workerData.tested.text, Number(process.env.ETHER_TEST_FUEL ?? 2000000000));
   parentPort.postMessage({ painted, unread, said, error });
 }
 

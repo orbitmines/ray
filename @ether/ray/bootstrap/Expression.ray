@@ -45,7 +45,7 @@ Expression := class (
             // (what it is written as, each `{name}` a hole took where it is defined written as what that hole took)
             taken := takes(caller)
             lhs := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
-            rhs := level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken)
+            rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
             head := (lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
             // (its body read once, when it is first applied: what each hole is, found where it runs, `bound` by what applied it)
             kept := Array.new
@@ -114,19 +114,21 @@ Expression := class (
         {
           `.` => Node(in: caller.at.node)
           `&` => caller
-          `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
-          `label` (label: Node) => label
-          `style` (style_args) => painted_with(style_args)
+          `goto` (goto_args) => (goto_args.count > 1) ? ((goto_args.rest.first) ? jumping(caller, goto_args.first) : None) : jumping(caller, goto_args.first)
+          `label` (label_args) => label_args.first
+          `style` (style_args) => painted_with(style_args, caller)
           `shown` (shown_args) => shown_args.first
         }[er](ea.map((argument) => caller.in.named(argument.word)))
       }
       naming := Array.new
       // (what is painted, `external style`: each style with what it is shown on, in turn; the host reads them)
       painted := Array.new
-      painted_with (pa) => {
-        painted.append(pa)
+      painted_with (pa, pc) => {
+        painted.append(Array.new.append(pa.first).append(pa.last).append(bound_along(pc)))
         pa.last
       }
+      // (where it is painted: what the holes took in each program it runs in, the nearest first)
+      bound_along (bc) => (bc === None) ? Array.new : Array.new.append(bc.bound).joined(bound_along(bc.caller))
       // (a rule's body as read the first time it is applied, its holes found in what runs it: the nearest program it is
       // `bound` in, by what applied that one)
       // (read with the rule itself set aside, `busy`: a rule never reads its own body)
@@ -155,6 +157,19 @@ Expression := class (
       }
       hole_in (hc, hk) => (hc === None) ? None : hole_found(hc, hk, (hc.bound === None) ? None : hc.bound{.key === hk}#.first)
       hole_found (fc, fk, fe) => (fe === None) ? hole_in(fc.caller, fk) : fc.caller.in.named_by(fe.value, fc.caller)
+      // (a body written in the brackets holes are written in is the code inside them)
+      inside_of (it) => braced_by(level cw_trimmed (it), BOOTSTRAPPER.CAPTURE.first)
+      braced_by (bt, bo) => (((bt.first == bo) && ((level cw_enclosed (bt)) === true))) ? within(bt) : bt
+      within (wt) => {
+        w_from := level cw_slice (wt) (1) (2)
+        w_to := level cw_chopped (wt)
+        level cw_trimmed (level cw_span_of (w_from) (w_to))
+      }
+      // (a jump, `external goto <label> [<condition>]`: where the program goes next)
+      jumping (jc, jl) => {
+        jc.at = jl
+        jl
+      }
       // (what the holes took where a program runs, the nearest first)
       takes (tc) => (tc === None) ? Array.new : ((tc.bound === None) ? takes(tc.caller) : tc.bound.joined(takes(tc.caller)))
       // (a body run from its i-th statement on, with what the last answered: a jump one made (`external goto`) goes to its

@@ -2973,14 +2973,69 @@ function in_turn(item, f, args, pos) {
     r = matched(item, at, cell(pattern(23, 0, 0), 0))
     if r <= at {
       boundn = mark
-      return at
+      r = unread_until(pos, at)
+      if r <= at {
+        return at
+      }
+      at = r
+    } else {
+      v = valued_from(mark)
+      boundn = mark
+      call(curried(f, append(list(), v)), args, 0)
+      at = r
     }
-    v = valued_from(mark)
-    boundn = mark
-    call(curried(f, append(list(), v)), args, 0)
-    at = r
   }
   at
+}
+function unread_until(pos, at) {
+  var q
+  var i
+  var j
+  var d
+  q = at
+  while (q < textend) and white(load8 q) {
+    q = q + 1
+  }
+  if q >= textend {
+    return at
+  }
+  q = at
+  while (q > pos) and ((load8 (q - 1)) != 10) {
+    q = q - 1
+  }
+  d = 0
+  while ((q + d) < textend) and (((load8 (q + d)) == 32) or ((load8 (q + d)) == 9)) {
+    d = d + 1
+  }
+  q = at
+  while (q < textend) and ((load8 q) != 10) {
+    q = q + 1
+  }
+  while q < textend {
+    i = q + 1
+    j = 0
+    while ((i + j) < textend) and (((load8 (i + j)) == 32) or ((load8 (i + j)) == 9)) {
+      j = j + 1
+    }
+    if ((i + j) < textend) and (((load8 (i + j)) != 10) and (j <= d)) {
+      if (load (3860)) == 0 {
+        3860 <- list()
+      }
+      kept()
+      append(load 3860, text(at, q))
+      return i
+    }
+    q = i
+    while (q < textend) and ((load8 q) != 10) {
+      q = q + 1
+    }
+  }
+  if (load (3860)) == 0 {
+    3860 <- list()
+  }
+  kept()
+  append(load 3860, text(at, q))
+  q
 }
 function copied(x) {
   var n

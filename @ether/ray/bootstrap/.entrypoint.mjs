@@ -274,7 +274,8 @@ const located = ({ input, at }, [a]) => {
 // (what is painted in a file, read after the entrypoint (or as it): each style, its line and column (from 0) and length, in
 // the file's own characters)
 const SAYING = ['fatal', 'error', 'warn', 'info'];
-// (where the file begins in what is read, in bytes: its tests the only ones run; the entrypoint's own, everything)
+// (where the file begins in what is read, in bytes: its tests the only ones run (the editor's file, the first file given to
+// test, and after it); the entrypoint's own, everything)
 const edited = (input, at, file) => { const l = at.findIndex(([f]) => resolve(f) === resolve(file)); return l <= 0 ? -1 : Buffer.byteLength(input.split('\n').slice(0, l).join('\n')) + 1; };
 export const paints = async (file, text, run = EDITOR_RUN) => {
   const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, said, error } = await painting(await tester(), input, FUEL, run, edited(input, at, file));
@@ -290,7 +291,7 @@ export const paints = async (file, text, run = EDITOR_RUN) => {
 export async function test(files = []) {
   const t0 = Date.now(), { text, at } = tested(files), module = await tester();
   const run = await new Promise((done) => {
-    const thread = new Worker(fileURLToPath(import.meta.url), { workerData: { tested: { module, text } }, resourceLimits: { stackSizeMb: STACK_MB } });
+    const thread = new Worker(fileURLToPath(import.meta.url), { workerData: { tested: { module, text, from: files.length ? edited(text, at, files[0]) : -1 } }, resourceLimits: { stackSizeMb: STACK_MB } });
     const timer = setTimeout(() => { thread.terminate(); done({ painted: [], unread: [], error: `not read in ${TEST_MS} ms` }); }, TEST_MS);
     thread.on('message', (m) => { clearTimeout(timer); done(m); thread.terminate(); });
     thread.on('error', (e) => { clearTimeout(timer); done({ painted: [], unread: [], error: String(e?.message ?? e) }); });
@@ -336,7 +337,7 @@ export async function test(files = []) {
 const TEST_MS = Number(process.env.RAY_TEST_MS ?? 600000);
 if (!isMainThread && workerData?.tested) {
   // (a test runs fully: a budget far past the editor's, ETHER_TEST_FUEL)
-  const { painted, unread, said, error } = await painting(workerData.tested.module, workerData.tested.text, Number(process.env.ETHER_TEST_FUEL ?? 2000000000));
+  const { painted, unread, said, error } = await painting(workerData.tested.module, workerData.tested.text, Number(process.env.ETHER_TEST_FUEL ?? 2000000000), 'full', workerData.tested.from);
   parentPort.postMessage({ painted, unread, said, error });
 }
 

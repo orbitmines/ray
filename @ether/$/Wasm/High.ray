@@ -378,7 +378,20 @@ High &+= {
     High.w(")")
   }
   static called (cc, ca) => (Compiled.last_of(Compiled.trimmed(cc)) == ".") ? High.grammar_of(High.chopped(Compiled.trimmed(cc)), ca) : High.call_written(cc, ca)
-  static call_written (cc, ca) => ((High.kind(cc) == `selected_of`) && (High.kind(High.parsed_one(cc).selected_of) == `member_from`)) ? High.sel_method(High.parsed_one(High.parsed_one(cc).selected_of), High.parsed_one(cc).selection, ca) : High.called_on(() => High.expression(cc), ca)
+  static call_written (cc, ca) => ((High.kind(cc) == `selected_of`) && (High.kind(High.parsed_one(cc).selected_of) == `member_from`)) ? High.sel_method(High.parsed_one(High.parsed_one(cc).selected_of), High.parsed_one(cc).selection, ca) : (High.member_call(cc, ca) ? High.member_called(High.parsed_one(cc), ca) : High.called_on(() => High.expression(cc), ca))
+  // (a member called, `x.f(a)`, f a name: what x holds under f called as it is, when that is a function)
+  static member_call (mc, ma) => (High.kind(mc) == `member_from`) && ((High.kind(High.parsed_one(mc).member_name) == `leaf`) && ((High.maybe_led(Compiled.trimmed(High.parsed_one(mc).member_from)) || ((High.parts(ma).count == 1) && Compiled.braced(Compiled.trimmed(ma)))) ? false : true))
+  static member_called (mp, ma) => {
+    High.w("call_member(")
+    High.expression(mp.member_from)
+    High.w(", ")
+    High.symbol(mp.member_name)
+    High.w(", ")
+    High.listed(High.parts(ma))
+    High.w(", ")
+    High.named(High.parts(ma))
+    High.w(")")
+  }
   static sel_method (sm, ss, sa) => High.sel_split(() => High.expression(sm.member_from), sm.member_name, ss, sa)
   static sel_split (sw, sn, ss, sa) => (High.kind(sn) == `member_from`) ? High.sel_split(() => High.on(sw, High.parsed_one(sn).member_from), High.parsed_one(sn).member_name, ss, sa) : High.sel_written(sw, sn, ss, sa)
   static sel_written (sw, sn, ss, sa) => {

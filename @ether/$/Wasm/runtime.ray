@@ -3379,3 +3379,19 @@ function with_locals(f) {
   markf = s
   r
 }
+function call_member(x, sym, args, named) {
+  var e
+  var c
+  if tag(x) == 1 {
+    e = own(x, sym)
+    if e != 0 {
+      c = load (e + 8)
+      if tag(c) == 2 {
+        if (load (c + 12)) == 0 {
+          return indirect(load (c + 8), args, named, load (c + 4))
+        }
+      }
+    }
+  }
+  invoke(member2(x, sym), args, named)
+}

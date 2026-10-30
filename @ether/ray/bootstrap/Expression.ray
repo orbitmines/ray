@@ -43,7 +43,7 @@ Expression := class (
             head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))
             rule_styled := sink.map((sp) => [level place_name (sp.rest.first), sp.first])
             // (its body read once, in a node of its own, run in a node in that one each time it is applied)
-            rule_body := Node(in: node)
+            rule_body := Node(in: ((caller.bound === None) ? node : caller.in))
             rule_read := Array.new
             rule_style := Array.new
             rule_home.rules[[head]] := (caller) => {
@@ -212,9 +212,10 @@ Expression := class (
       takes (tc) => (tc === None) ? Array.new : (tc.bound ?? Array.new).joined(takes(tc.caller))
       home_of (hc, he) => ((he === None) || (hc === None)) ? None : (among(hc.bound ?? Array.new, he) ? hc.caller.in : home_of(hc.caller, he))
       // (a body written in the brackets holes are written in is the code inside them)
+      // (its lines as they are written: from right after the bracket, to the end of what is in it)
       inside_of (it) => {
         code := level cw_trimmed (it)
-        ((code.first == BOOTSTRAPPER.CAPTURE.first) && ((level cw_enclosed (code)) === true)) ? level cw_trimmed (level cw_span_of (level cw_slice (code) (1) (2)) (level cw_chopped (code))) : code
+        ((code.first == BOOTSTRAPPER.CAPTURE.first) && ((level cw_enclosed (code)) === true)) ? level cw_span_of (level cw_slice (code) (1) (2)) (level cw_trimmed (level cw_span_of (level cw_slice (code) (1) (2)) (level cw_chopped (code)))) : code
       }
 
       // (the compiler's parser: a grammar's rules read in a node of their own, a word what nothing else there reads)

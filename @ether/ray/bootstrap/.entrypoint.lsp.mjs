@@ -1,8 +1,8 @@
-// The language server, over stdio (`ether --lsp`): each document read as the latest revision reads a program, by the
-// compiler's grammar, into its statements (each its span and the first hole of the rule that read it). From those: an
-// error where a text is not read at all, the definitions in it (`x := …`, `f (x) => …`, and what a block holds), and
-// each statement painted by how it was read. Reading goes deep and its memory only grows: it is done on a thread of its
-// own, with room for it, made again every so often, and after a reading that read nothing.
+// The language server, over stdio (`ether --lsp`): each document read by the language itself, after the entrypoint (or as
+// it): what it paints there, each `^style` and each test as what it found, and an error where nothing reads the text
+// (where it paints nothing yet, each statement's head by how the compiler's grammar reads it). Its outline, the definitions in it (`x := …`, `f (x) => …`, and what a block holds), read as the latest revision reads a
+// program, by the compiler's grammar, when it is asked for. Reading goes deep and its memory only grows: it is done on a
+// thread of its own, with room for it, made again every so often, and after a reading that read nothing.
 import { Worker, isMainThread, workerData, parentPort } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, existsSync } from 'node:fs';
@@ -206,21 +206,23 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
   };
   const check = async (document) => {
     const text = document.getText(), version = document.version, t0 = Date.now();
-    const { statements, error } = await reading(text);
-    if (documents.get(document.uri)?.version !== version) return;
-    // (what the language itself paints in it, and what it does not read)
+    // (what the language itself paints in it, and what it does not read; the compiler's grammar only for its outline, when
+    // that is asked for)
     const file = document.uri.startsWith('file:') ? fileURLToPath(document.uri) : `/${document.uri.replace(/[^\w.]+/g, '_')}.ray`;
     const language = await reader.read(text, file);
     if (documents.get(document.uri)?.version !== version) return;
-    const code = blanked(text).trim();
+    // (where the language painted nothing yet, its statements' heads by the compiler's grammar)
+    const statements = language.painted?.length ? [] : (await reading(text)).statements;
+    if (documents.get(document.uri)?.version !== version) return;
     const diagnostics = [];
-    if (error) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: document.positionAt(0), end: document.positionAt(0) }, message: `not read: ${error.split('\n')[0]}`, source: 'ether' });
-    else if (code && !statements.length) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: document.positionAt(0), end: document.positionAt(Math.min(text.length, text.indexOf('\n') < 0 ? text.length : text.indexOf('\n'))) }, message: 'not read: no reading of the language reads this text as statements', source: 'ether' });
-    if (language.error) log(`the language did not paint ${document.uri.split('/').pop()}: ${language.error.split('\n')[0]}`);
+    if (language.error) {
+      log(`the language did not paint ${document.uri.split('/').pop()}: ${language.error.split('\n')[0]}`);
+      diagnostics.push({ severity: DiagnosticSeverity.Warning, range: { start: document.positionAt(0), end: document.positionAt(0) }, message: `the reading did not finish: ${language.error.split('\n')[0]}`, source: 'ether' });
+    }
     for (const u of language.unread ?? []) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: { line: u.line, character: u.column }, end: document.positionAt(document.offsetAt({ line: u.line, character: u.column }) + u.length) }, message: 'Nothing reads this.', source: 'ether' });
     read.set(document.uri, { version, text, statements, paints: language.painted ?? [] });
     connection.sendDiagnostics({ uri: document.uri, version, diagnostics });
-    log(`read ${document.uri.split('/').pop()} v${version}: ${statements.length} statements, ${language.painted?.length ?? 0} painted, ${language.unread?.length ?? 0} unread, in ${Date.now() - t0} ms`);
+    log(`read ${document.uri.split('/').pop()} v${version}: ${language.painted?.length ?? 0} painted, ${language.unread?.length ?? 0} unread, in ${Date.now() - t0} ms`);
     connection.languages.semanticTokens.refresh?.();
     connection.sendNotification('ether/theme', shown([document.uri]));
   };

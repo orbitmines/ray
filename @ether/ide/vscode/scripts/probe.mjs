@@ -18,9 +18,9 @@ child.stdout.on('data', (d) => {
       send({ method: 'initialized', params: {} });
       send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'ray', version: 1, text } } });
     } else if (m.method === 'textDocument/publishDiagnostics' && m.params.uri === uri) {
-      const unread = m.params.diagnostics.filter((d) => d.message === 'Nothing reads this.'), other = m.params.diagnostics.filter((d) => !unread.includes(d));
+      const unread = m.params.diagnostics.filter((d) => d.message === 'Nothing reads this.' || d.severity > 1), other = m.params.diagnostics.filter((d) => !unread.includes(d));
       if (other.length) done(false, 'read with diagnostics ' + JSON.stringify(other));
-      if (unread.length) console.log('the language does not read lines', unread.map((d) => d.range.start.line + 1).join(', '), 'yet');
+      if (unread.length) console.log('the language does not read yet:', unread.map((d) => `${d.range.start.line + 1} ${d.message.slice(0, 50)}`).join('; '));
       send({ id: 2, method: 'textDocument/documentSymbol', params: { textDocument: { uri } } });
     } else if (m.id === 2) {
       const names = (m.result ?? []).map((s) => s.name);

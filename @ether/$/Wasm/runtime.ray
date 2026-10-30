@@ -1667,6 +1667,7 @@ function arg(args, i) {
 }
 function call(c, args, named) {
   var a
+  fueled()
   if tag(c) == 6 {
     if (load (c + 4)) == 16 {
       return pattern(19, c, args)

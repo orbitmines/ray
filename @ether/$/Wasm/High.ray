@@ -427,7 +427,10 @@ High &+= {
     High.sectioned(High.kind(av)) ? High.section(av) : High.expression(av)
     High.closing(0)
   }
-  static named (np) => {
+  // (what is given by name: none written, none made)
+  static named (np) => High.any_named(np) ? High.named_written(np) : High.w("0")
+  static any_named (an) => an.empty ? false : (High.positional(an.first) ? High.any_named(an.rest) : true)
+  static named_written (np) => {
     np.for((part) => High.named_open(part))
     High.w("node(0)")
     np.for((part) => High.named_part(part))

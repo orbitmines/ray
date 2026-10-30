@@ -4368,8 +4368,14 @@ function paired(t, cap) {
         if (q > a) and (r < e) {
           b = load8 (q - 1)
           c = load8 r
+          if (b == (load8 (ce - 1))) and ((q - 4) >= a) {
+            b = quoted_in(q - 4, b)
+          }
+          if (c == (load8 oa)) and ((r + 4) <= e) {
+            c = quoted_in(r, c)
+          }
           if (white(b) == 0) and ((white(c) == 0) and (word_byte(b) == 0)) {
-            if word_byte(c) == 0 {
+            if (word_byte(c) == 0) and ((b != (load8 (ce - 1))) and (c != (load8 oa))) {
               if b == c {
                 (3584 + b) <-8 2
                 3884 <- ((load 3884) + 1)
@@ -4464,4 +4470,12 @@ function spliced_entry(t, cap, l) {
   3872 <- 0
   spliced_into(t, oa, oe, ce, l, 0)
   load 3872
+}
+function quoted_in(h, c) {
+  if (load8 (h + 1)) == (load8 (h + 3)) {
+    if (load8 (3584 + (load8 (h + 1)))) == 2 {
+      return load8 (h + 2)
+    }
+  }
+  c
 }

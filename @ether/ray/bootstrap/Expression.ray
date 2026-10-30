@@ -69,8 +69,9 @@ Expression := class (
           [{value: concurrently node.prefix(.)}: node.keys, rest: String] := (caller) => {
             v := value(caller)
             on := Node(in: caller.in)
-            members(v).for((m) => on.rules[[m.key]] := (c) => m.value)
-            ((v.rules === None) ? Array.new : v.rules.keys).for((k) => on.rules[[k]] := v.rules[[k]])
+            // (what it is read on gives what is read on it: a node its rules, anything else its fields)
+            members(v).for((m) => on.rules[[m.key]] := (c) => m.value) if (v.rules === None)
+            ((v.rules === None) ? Array.new : v.rules.keys{!((. === v.maker_key) || (. === v.split_key))}#).for((e) => on.rules[[e.key]] := e.value)
             r := (rs: Statements(on) = rest)
             me := Program(caller: caller, in: on, this: v)
             leaving(me, r(me))

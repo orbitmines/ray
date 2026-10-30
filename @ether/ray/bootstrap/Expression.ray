@@ -57,7 +57,7 @@ Expression := class (
               me.bound = holes
               me.caller = caller
               me.in = Node(in: rule_body)
-              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => held(hole, () => named_in(reader(c, caller), hole.value)))
+              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => parameter_read(hole, applied, held(hole, () => named_in(reader(c, caller), hole.value))))
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
               rule_style.append(painted{.rest.first === rule_own}#) if rule_style.empty
@@ -70,6 +70,7 @@ Expression := class (
               leaving(finished(me), me.answer)
             }
             rule_own := rule_home.rules.keys.last
+            (rule_own.named = true) if !((level holds_text (rule_lhs) (BOOTSTRAPPER.CAPTURE.first)) === true)
             // (the pairs its head writes, `({x})`, known to what is read after it; one holding `=>`, a rule that defines)
             level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE)
             definers.append(rule_own) if ((level holds_text (rule_lhs) (separator)) === true)
@@ -103,10 +104,10 @@ Expression := class (
         split_key := rules.keys.last
         maker_key := rules.keys.first
         // (a definition, `=>` outside pairs: the latest rule that defines, else the rule that makes rules; none set aside)
-        // (what reads it here, unless what it is in reads it all and this only its start)
+        // (what reads it here, but a name, `x`, read at its start, when what it is in reads it all, `x = v`)
         whole (tx) => nearer(tx, made(tx, defines(tx)))
-        nearer (tx, near) => ((near === None) ? false : (tx == near.key)) ? near : fuller(tx, near, in?.whole(tx))
-        fuller (tx, near, far) => (near === None) ? far : (((far === None) ? false : (tx == far.key)) ? far : near)
+        nearer (tx, near) => (near === None) ? in?.whole(tx) : (((near.named === true) && !(tx == near.key)) ? fuller(tx, near, in?.whole(tx)) : near)
+        fuller (tx, near, far) => ((far === None) ? false : (tx == far.key)) ? far : near
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
         prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
         defining (tx) => rules.keys{!(among(aside, .)) && ((tx ~= .) && among(definers, .))}#.sort(.length).last
@@ -277,6 +278,11 @@ Expression := class (
       painted_with (pa, pc) => {
         sink.append(painted.append([pa.first, pa.last, bound_along(pc)]).last)
         pa.last
+      }
+      // (a hole read in its body: its name shown as a parameter, where it is read)
+      parameter_read (pr_hole, pr_at, pr_value) => {
+        painted.append([`parameter`, [pr_hole.key, pr_at.input], [Array.new]])
+        pr_value
       }
       // (what a value is shown as: the style it was given last, `made ^class`; else what is given)
       shown_of (sp, sd) => sp.empty ? sd : sp.last.first

@@ -235,7 +235,12 @@ export const painting = async (module, text, fuel = FUEL) => {
   // (each once: a body run again paints the same again)
   const painted = [...new Map(entries.map((p) => [`${p.style}:${p.at}`, p])).values()];
   const unread = [...new Map(list(i32[3860 >> 2]).map(span).filter((s) => s && s[1] > s[0]).map((s) => [s.join(':'), s])).values()];
-  return { painted, unread, error, input };
+  // (what was said, Expression's `reported`, noted second: each the `{message}` hole's entry and what the holes took)
+  const said = i32[4084 >> 2] > 1 ? list(i32[3972 >> 2]).map((r) => {
+    const [hole, b] = list(r), v = member(hole, 'value');
+    return { message: tag(v) === 4 ? words(v).trim() : '', at: where(b) ?? span(v) };
+  }) : [];
+  return { painted, unread, said, error, input };
 };
 // (a place in the input, as where it is written)
 const located = ({ input, at }, [a]) => {
@@ -292,6 +297,7 @@ export async function test(files = []) {
     errors++; console.log(`NOT RUN ${shown(p)}  ${line}`);
   }
   for (const span of run.unread) { const p = located({ input, at }, span); if (!ours(p)) continue; errors++; console.log(`ERROR   ${shown(p)}  Nothing reads this.`); }
+  for (const { message, at: span } of run.said ?? []) { const p = span && located({ input, at }, span); if (p && !ours(p)) continue; console.log(`SAID    ${shown(p)}  ${message}`); }
   if (run.error) { errors++; console.log(`ERROR   the reading did not finish: ${run.error}`); }
   console.log(`${passed} passed, ${failed} failed${errors ? `, ${errors} errors` : ''}${warnings ? `, ${warnings} warnings in tests` : ''} (revision ${revision()}, ${Date.now() - t0} ms)`);
   if (failed || errors) process.exitCode = 1;
@@ -299,8 +305,8 @@ export async function test(files = []) {
 // (how long a reading of the tests may take)
 const TEST_MS = Number(process.env.RAY_TEST_MS ?? 600000);
 if (!isMainThread && workerData?.tested) {
-  const { painted, unread, error } = await painting(workerData.tested.module, workerData.tested.text);
-  parentPort.postMessage({ painted, unread, error });
+  const { painted, unread, said, error } = await painting(workerData.tested.module, workerData.tested.text);
+  parentPort.postMessage({ painted, unread, said, error });
 }
 
 export const help = () => [

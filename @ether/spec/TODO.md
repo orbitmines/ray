@@ -98,8 +98,12 @@ what nothing read, UNREAD=n). Done on the way: statements run (they never did), 
 rule bodies read once with the rule set aside, splices (the old splicehead), a braced body its inside, a name read in
 its own reading its place, unread text recorded with reading going on.
 
-- **The loops' tests (statements 140-149: `while`, `do … while`, `break`) never end** (revision 40): the full reading
-  stops at them.
+- **A body is read all at once, before it runs** (ray-45 on it, 2026-10-30): a name its first line defines is not seen
+  by its next (`zq => { flg := …; flg }`), so a loop in a block never ends (statements 140-149); and when a statement
+  of it fails it backtracks through every earlier one (`Array &+= { … }`, statement 523, ~2.3x per member), where the
+  whole entrypoint now stops (revision 44). Wanted: a body read in turn, as the top level is.
+- **`:=` defined again at line 2484** (`… given (value)`): every `:=` after it runs `given`; check its cost once the
+  whole file reads.
 - **A hole's text is read again at every application** (an assert's computed style, `^((ensure {condition}) ? …)`;
   `{a} | {b}`'s block on every `|`): most of the matcher's work. ray-45: read hole texts in the rule's shared body node.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after

@@ -504,6 +504,48 @@ function negated(v) {
   }
   12
 }
+function file_named(t) {
+  var a
+  var e
+  var s
+  var m
+  var k
+  var r
+  if tag(t) != 4 {
+    return 0
+  }
+  s = load (t + 4)
+  m = load (t + 8)
+  while (s < m) and white(load8 s) {
+    s = s + 1
+  }
+  while (m > s) and white(load8 (m - 1)) {
+    m = m - 1
+  }
+  a = 8388608
+  e = 8388608 + (load 4088)
+  while (a < e) and ((load8 a) != 0) {
+    a = a + 1
+  }
+  a = a + 1
+  while a < e {
+    k = a
+    while ((k < e) and ((load8 k) != 10)) and ((load8 k) != 0) {
+      k = k + 1
+    }
+    r = k
+    while (r < e) and ((load8 r) != 0) {
+      r = r + 1
+    }
+    if (k < e) and ((load8 k) == 10) {
+      if ((k - a) == (m - s)) and texteq(a, s, m - s) {
+        return text(k + 1, r)
+      }
+    }
+    a = r + 1
+  }
+  0
+}
 function input_part(i) {
   var a
   var e

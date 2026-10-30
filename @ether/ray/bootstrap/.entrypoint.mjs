@@ -249,13 +249,17 @@ const located = ({ input, at }, [a]) => {
 };
 // (what is painted in a file, read after the entrypoint (or as it): each style, its line and column (from 0) and length, in
 // the file's own characters)
+const SAYING = ['fatal', 'error', 'warn', 'info'];
 export const paints = async (file, text) => {
-  const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, error } = await painting(await tester(), input);
+  const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, said, error } = await painting(await tester(), input);
   const bytes = Buffer.from(input), place = ([a, e]) => {
     const p = located({ input: bytes, at }, [a]);
     return resolve(p.file ?? '') === resolve(file) ? { line: p.line - 1, column: p.column - 1, length: bytes.subarray(a, e).toString().length } : undefined;
   };
-  return { painted: painted.flatMap(({ style, at: s }) => { const p = s && place(s); return p ? [{ style, ...p }] : []; }), unread: unread.map(place).filter(Boolean), error };
+  const shown = painted.flatMap(({ style, at: s }) => { const p = s && place(s); return p ? [{ style, ...p }] : []; });
+  // (what was said there, as severe as how its line is painted: `ERROR …` as an error, `WARN …` a warning, else an error)
+  const severity = (p) => shown.filter((s) => s.line === p.line && SAYING.includes(s.style) && s.column <= p.column).sort((x, y) => y.column - x.column)[0]?.style ?? 'error';
+  return { painted: shown, unread: unread.map(place).filter(Boolean), said: (said ?? []).flatMap(({ message, at: s }) => { const p = s && place(s); return p ? [{ message, ...p, severity: severity(p) }] : []; }), error };
 };
 export async function test(files = []) {
   const t0 = Date.now(), { text, at } = tested(files), module = await tester();

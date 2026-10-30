@@ -219,6 +219,8 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
       log(`the language did not paint ${document.uri.split('/').pop()}: ${language.error.split('\n')[0]}`);
       diagnostics.push({ severity: DiagnosticSeverity.Warning, range: { start: document.positionAt(0), end: document.positionAt(0) }, message: `the reading did not finish: ${language.error.split('\n')[0]}`, source: 'ether' });
     }
+    const SEVERITY = { fatal: DiagnosticSeverity.Error, error: DiagnosticSeverity.Error, warn: DiagnosticSeverity.Warning, info: DiagnosticSeverity.Information };
+    for (const s of language.said ?? []) diagnostics.push({ severity: SEVERITY[s.severity] ?? DiagnosticSeverity.Error, range: { start: { line: s.line, character: s.column }, end: document.positionAt(document.offsetAt({ line: s.line, character: s.column }) + s.length) }, message: s.message || 'said', source: 'ether' });
     for (const u of language.unread ?? []) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: { line: u.line, character: u.column }, end: document.positionAt(document.offsetAt({ line: u.line, character: u.column }) + u.length) }, message: 'Nothing reads this.', source: 'ether' });
     read.set(document.uri, { version, text, statements, paints: language.painted ?? [] });
     connection.sendDiagnostics({ uri: document.uri, version, diagnostics });

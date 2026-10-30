@@ -44,10 +44,11 @@ this => .
   (on).({code})
   on
 }
-// A name given a value: the value read, then the name a rule answering it, here. A member given one, given in what it is on.
+// A name given a value: the value read, then the name, read as a value (in a pair), a rule answering it where it is declared,
+// else here (Design §6.1). A member given one, given in what it is on.
 {name ^variable} = {value} => {
   value
-  {name} => value
+  ({name}) => value
 }
 // A name with a type: its type kept with it (in a head, `{x: T}`: the hole takes what T's own rules read whole). Given no
 // value, its value is the type: all it may be, superposed (`named: "p"` reads "p").

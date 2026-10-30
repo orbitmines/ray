@@ -1907,6 +1907,44 @@ function undone_by(c, mark, m) {
 function unreachable_now() {
   load (0 - 8)
 }
+function kind_of(v) {
+  var t
+  var o
+  if v == 0 {
+    t = alloc(8)
+    o = put4(t, 110, 111, 116, 104)
+    o = put4(o, 105, 110, 103, 0)
+    return text(t, o)
+  }
+  if v == 8 {
+    t = alloc(8)
+    o = put4(t, 102, 97, 108, 115)
+    o = put4(o, 101, 0, 0, 0)
+    return text(t, o)
+  }
+  if v == 12 {
+    t = alloc(8)
+    o = put4(t, 116, 114, 117, 101)
+    return text(t, o)
+  }
+  if (v and 1) == 1 {
+    t = alloc(8)
+    o = put4(t, 110, 117, 109, 98)
+    o = put4(o, 101, 114, 0, 0)
+    return text(t, o)
+  }
+  if tag(v) == 4 {
+    t = alloc(8)
+    o = put4(t, 116, 101, 120, 116)
+    return text(t, o)
+  }
+  if tag(v) == 3 {
+    t = alloc(8)
+    o = put4(t, 108, 105, 115, 116)
+    return text(t, o)
+  }
+  0
+}
 function fueled() {
   if (load 3896) > 0 {
     if (load 3896) == 1 {

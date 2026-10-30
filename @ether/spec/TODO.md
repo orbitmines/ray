@@ -159,9 +159,6 @@ its own reading its place, unread text recorded with reading going on.
 
 ## The compiled compiler's speed
 
-- **A named argument's value stops at `?`, `??`, `if`** (`f(x: a ? b : c)` is `(f(x: a)) ? b : c`, `g(x: None ?? 3)` a node):
-  the compiler's `{field_name}: {field_type}` binds tighter than those; moved below them the compiler's own sources no
-  longer read (they rely on it elsewhere). Wanted: an argument written `name: …` takes all of it. Until then, brackets.
 - **A call looks up what it calls through the scopes each time** (`get(scope, X)`): revisions 24-25 give one or two
   values, or none, without a new list (`invoke0-2`, `call_member0-2`, `call1` in the runtime's loops), and revision 22
   keeps a parameter as a local where nothing writes it. Still wanted: a block's static known when written

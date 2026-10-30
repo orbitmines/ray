@@ -360,6 +360,6 @@ export async function main(argv = process.argv.slice(2)) {
 }
 
 // (the stack a reading thread is given: reading no longer goes deep, so what a thread has)
-export const STACK_MB = 4;
+export const STACK_MB = 512;
 export const start = (argv = process.argv.slice(2)) => main(argv);
 if (isMainThread && (import.meta.main || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href))) await start();

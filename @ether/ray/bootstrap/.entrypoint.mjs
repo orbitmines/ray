@@ -10,7 +10,7 @@
 //   node .entrypoint.mjs --lsp        the language server, over stdio (.entrypoint.lsp.mjs)
 import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { Worker, isMainThread, workerData } from 'node:worker_threads';
+import { isMainThread } from 'node:worker_threads';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -109,13 +109,19 @@ export async function build() {
   const n = revision(), name = `.entrypoint.${n}.wasm`;
   const committed = execFileSync('git', ['status', '--porcelain', '--', name], { cwd: bootstrap('.') }).toString().trim() === '' && execFileSync('git', ['ls-files', '--', name], { cwd: bootstrap('.') }).toString().trim() !== '';
   if (!committed) { console.log(`${name} is not committed: commit it before building the next`); process.exitCode = 1; return; }
-  const was = readFileSync(bootstrap(name)), text = source();
-  const next = await compiled(was, text);
-  if (next.length === was.length && next.every((x, i) => x === was[i])) { console.log(`${name} is what the source writes: nothing to build`); return; }
-  const again = await compiled(next, text);
-  if (again.length !== next.length || again.some((x, i) => x !== next[i])) { console.log(`revision ${n + 1} does not write itself: not kept`); process.exitCode = 1; return; }
+  const was = readFileSync(bootstrap(name)), text = source(), same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  // (what the source writes, written again by what it wrote, until it writes itself: a change in what is written takes a
+  // round or two to be written by itself)
+  let next = await compiled(was, text);
+  if (same(next, was)) { console.log(`${name} is what the source writes: nothing to build`); return; }
+  for (let round = 1; ; round++) {
+    const again = await compiled(next, text);
+    if (same(again, next)) break;
+    if (round === 3) { console.log(`revision ${n + 1} does not write itself after ${round} rounds: not kept`); process.exitCode = 1; return; }
+    next = again;
+  }
   writeFileSync(bootstrap(`.entrypoint.${n + 1}.wasm`), next);
-  console.log(`.entrypoint.${n + 1}.wasm: ${next.length} bytes, written by revision ${n}, writes itself`);
+  console.log(`.entrypoint.${n + 1}.wasm: ${next.length} bytes, written from revision ${n}, writes itself`);
 }
 
 export const help = () => [
@@ -144,12 +150,7 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(answer);
 }
 
-// (its reading goes deep: under Node it runs in a thread with room for it; Deno is given it as a V8 flag when compiled)
-export const STACK_MB = 512;
-export async function start(argv = process.argv.slice(2)) {
-  if (typeof Deno !== 'undefined' || !isMainThread || argv.includes('--lsp')) return main(argv);
-  await new Promise((done) => new Worker(fileURLToPath(import.meta.url), { workerData: { ether: argv }, resourceLimits: { stackSizeMb: STACK_MB } })
-    .on('error', (e) => { console.error(e); process.exitCode = 1; }).on('exit', (code) => { if (code) process.exitCode = code; done(); }));
-}
-if (!isMainThread && workerData?.ether) await main(workerData.ether);
-else if (isMainThread && (import.meta.main || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href))) await start();
+// (the stack a reading thread is given: reading no longer goes deep, so what a thread has)
+export const STACK_MB = 4;
+export const start = (argv = process.argv.slice(2)) => main(argv);
+if (isMainThread && (import.meta.main || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href))) await start();

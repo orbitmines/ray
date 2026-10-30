@@ -10,6 +10,8 @@ NodeX := None
 ProgramX := None
 StatementsX := None
 globalX := None
+PaintedX := None
+LaterX := None
 Expression := class (
   BOOTSTRAPPER: (
     HEADER: `!language`,
@@ -41,6 +43,8 @@ Expression := class (
             // (the node its body is read in, kept with it: what it reads there, its statements, is its body)
             body := Node(in: node)
             head := (rule.LHS as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
+            // (its body read once, when it is first applied: what each hole is, found where it runs, `bound` by what applied it)
+            kept := Array.new
             rules[[head]] := (caller) => {
               at := Node(in: body)
               holes.for((hole) => {
@@ -51,8 +55,8 @@ Expression := class (
               me.caller = caller
               me.in = at
               me.this = caller.this
-              r := (rhs: Statements(at) = rule.RHS)
-              r(me)
+              me.bound = holes
+              left(me, read_once(kept, holes, body, rule)(me))
             }
             rules[[head]].body = body
           }
@@ -65,7 +69,7 @@ Expression := class (
             me.caller = caller
             me.in = on
             me.this = v
-            r(me)
+            left(me, r(me))
           }
         }
         named (text) => named_by(text, Program(in: node))
@@ -88,14 +92,7 @@ Expression := class (
       Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node) => { }
       Argument := class (\s+, word: String) => { }
       global := Node({
-        rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => {
-          `.` => Node(in: caller.at.node)
-          `&` => caller
-          `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
-          `label` (label: Node) => label
-          `style` (style_args) => style_args.last
-          `shown` (shown_args) => shown_args.first
-        }[rule](args.map((argument) => caller.in.named(argument.word)))
+        rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => externally(caller, rule, args)
       })
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
       // order, each given what applies them.
@@ -103,22 +100,96 @@ Expression := class (
         leading_whitespace?: (\s | \n)[]+,
         {statement: concurrently context.reading(.)}: context.keys
       ) => {}
+      // (what the host gives, `external <rule> <arguments…>`: each argument read where it is written)
+      externally (caller, er, ea) => {
+        {
+          `.` => Node(in: caller.at.node)
+          `&` => caller
+          `goto` (label: Node, condition?: Node) => caller.at = label if condition ?? true
+          `label` (label: Node) => label
+          `style` (style_args) => painted_with(style_args)
+          `shown` (shown_args) => shown_args.first
+        }[er](ea.map((argument) => caller.in.named(argument.word)))
+      }
+      // (what is painted, `external style`: each style with what it is shown on, in turn; the host reads them)
+      painted := Array.new
+      painted_with (pa) => {
+        painted.append(pa)
+        pa.last
+      }
+      // (a rule's body as read the first time it is applied, its holes found in what runs it: the nearest program it is
+      // `bound` in, by what applied that one)
+      read_once (rk, rh, rb, rr) => (rk.count > 0) ? rk.first : kept_first(rk, read_body(rh, rb, rr))
+      kept_first (kk, kr) => {
+        kk.append(kr)
+        kr
+      }
+      read_body (bh, bb, br) => {
+        shape := Node(in: bb)
+        bh.for((hole) => {
+          shape.rules[[hole.key]] := (c) => hole_in(c, hole.key)
+          shape.rules[[BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => hole_in(c, hole.key)
+        })
+        (rhs: Statements(shape) = br.RHS)
+      }
+      hole_in (hc, hk) => (hc === None) ? None : hole_found(hc, hk, (hc.bound === None) ? None : hc.bound{.key === hk}#.first)
+      hole_found (fc, fk, fe) => (fe === None) ? hole_in(fc.caller, fk) : fc.caller.in.named_by(fe.value, fc.caller)
+      // (a body run from its i-th statement on, with what the last answered: a jump one made (`external goto`) goes to its
+      // label there (`external label`); none there, it leaves the body for the one that applied it (`left`). One nothing takes
+      // to the host's `afterwards` is kept, with where it was, and run when everything is read)
+      later := Array.new
+      afterwards := Place(`afterwards`, global)
+      run_from (rs, ra, rc, rv) => (rs.count == 0) ? rv : stepped(rs, ra, rc, rs.first(rc))
+      stepped (ss, sa, sc, sv) => (sc.at === None) ? run_from(ss.rest, sa, sc, sv) : jumped(ss, sa, sc, sv, labelled(sa, sc.at, sc))
+      jumped (js, ja, jc, jv, jl) => (jl === None) ? unlabelled(js, ja, jc, jv) : run_from(jl, ja, gone_on(jc), jv)
+      labelled (ls, lt, lc) => (ls.count == 0) ? None : (label_is(ls.first, lt, lc) ? ls.rest : labelled(ls.rest, lt, lc))
+      label_is (la, lt, lc) => (la.rule == `label`) && (lc.in.named(la.args.first.word) == lt)
+      gone_on (gc) => {
+        gc.at = None
+        gc
+      }
+      unlabelled (us, ua, uc, uv) => (uc.at == afterwards) ? kept_later(us, ua, uc, uv) : uv
+      kept_later (ks, ka, kc, kv) => {
+        later.append(Array.new.append(ks.rest).append(ka).append(gone_on(kc)))
+        kv
+      }
+      left (lm, lv) => (lm.at === None) ? lv : passed_on(lm, lv)
+      passed_on (pm, pv) => {
+        pm.caller.at = pm.at
+        pv
+      }
+      run_later (rl) => (later.count == 0) ? None : ran_later(later.first, later.rest)
+      ran_later (lf, lr) => {
+        later = lr
+        run_from(lf.first, lf.rest.first, lf.rest.rest.first, None)
+        run_later(0)
+      }
       // (the statements as read kept on the node they are read in, `statements`: what each read, its rule and what that took)
       Statements (context: Node) => dynamically Statement[] & (caller: Program) => (
         context.statements = .
-        .statement#.map((s) => s(caller)).last
+        run_from(listed(.), listed(.), caller, None)
       )
+      // (what was read, one after another)
+      listed (lr) => {
+        items := Array.new
+        lr.map((s) => items.append(s.statement))
+        items
+      }
 
       NodeX = Node
       ProgramX = Program
       StatementsX = Statements
       globalX = global
-      Statements(global)(Program(in: global))
+      PaintedX = painted
+      LaterX = run_later
+      top := Program(in: global)
+      Statements(global)(top)
     ),
     (\s | \n)[]
   )
 ) => {
-
+  // (what was kept for afterwards, run now that everything is read)
+  LaterX(0)
 }
 ex := (level input_part 0) as Expression
 parse_node_of (grammar_text) => {

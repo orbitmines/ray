@@ -113,6 +113,15 @@ its own reading its place, unread text recorded with reading going on.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
 
+## Painting (decisions for the user)
+
+- **A definition's `=>` has no style to paint it with** (Design §4.7: punctuation): the rule that makes rules,
+  `{lhs} => {rhs}`, and line 60's styled form paint the head they define, not the `=>`. A style on it needs a way to
+  style a literal in a head (``{`=>` ^punctuation}``?): new syntax, to decide.
+- **Code that never runs is never painted** (87% of what is unpainted, ray-91, coverage 20.9% of non-space characters
+  at 460 statements): unapplied bodies, untaken branches. Proposal with ray-45: after `afterwards`, a reading that does
+  not run, painting each application's static styles.
+
 ## Node.ray
 
 - **The error handlers read members bare** (`diagnostics`, `diagnostics.last`, `diagnostics.some(.fatal)`, line 68–84):

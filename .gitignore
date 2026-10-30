@@ -12,3 +12,4 @@
 /@ether/ray/bootstrap/node_modules/
 /@ether/ray/bootstrap/README.md
 /@ether/ray/bootstrap/LICENSE
+/@ether/ray/bootstrap/.entrypoint.*.test.*.wasm

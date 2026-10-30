@@ -36,3 +36,11 @@ level reading {reading_text} => external reading reading_text
 level read_keys => external read_keys
 // (the text between two of those places)
 level span {span_from} {span_to} => external span span_from span_to
+// (the level's own kinds of value, each what it is in the language (Design §21.2): what is read on nothing is read on
+// None, on its false and true the language's, on its texts String's)
+level kinds => ({
+  nothing => None
+  false => false
+  true => true
+  text => String
+})

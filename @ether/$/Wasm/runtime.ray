@@ -2018,7 +2018,27 @@ function fueled() {
   }
   0
 }
+function open_before(a, n) {
+  var q
+  var t
+  var r
+  q = a
+  while q < n {
+    t = load8 (3584 + (load8 q))
+    if (t == 1) or (t == 2) {
+      r = pair_end(q)
+      if (r == 0) or (r > n) {
+        return 1
+      }
+      q = r
+    } else {
+      q = q + 1
+    }
+  }
+  0
+}
 function matched(p, pos, k) {
+  var start
   var base
   var om
   var fr
@@ -2043,6 +2063,7 @@ function matched(p, pos, k) {
     kept()
   }
   base = load 3852
+  start = pos
   om = markf
   fr = free
   ef = effects
@@ -2242,7 +2263,9 @@ function matched(p, pos, k) {
                                                     mode = 1
                                                   } else {
                                                     if (load8 pos) == 10 {
-                                                      mode = 1
+                                                      if open_before(start, pos) == 0 {
+                                                        mode = 1
+                                                      }
                                                     }
                                                   }
                                                 } else {

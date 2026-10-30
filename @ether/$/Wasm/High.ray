@@ -237,7 +237,9 @@ High &+= {
     High.w("))")
   }
   static set (sp, sv) => (High.kind(sp) == `with_left`) ? High.with_code(High.parsed_one(sp).with_left) : High.set_of(sp, sv)
-  static set_of (sp, sv) => (High.kind(sp) == `member_from`) ? High.set_member(() => High.expression(High.parsed_one(sp).member_from), High.parsed_one(sp).member_name, sv) : ((High.kind(sp) == `this_member`) ? High.set_member(() => High.name("this"), High.parsed_one(sp).this_member, sv) : High.assigned(sp, sv))
+  static set_of (sp, sv) => (High.kind(sp) == `member_from`) ? High.set_split(() => High.expression(High.parsed_one(sp).member_from), High.parsed_one(sp).member_name, sv) : ((High.kind(sp) == `this_member`) ? High.set_split(() => High.name("this"), High.parsed_one(sp).this_member, sv) : High.assigned(sp, sv))
+  // (`a.b.c = v`: c set on what a.b is)
+  static set_split (split_on, split_name, split_value) => (High.kind(split_name) == `member_from`) ? High.set_split(() => High.on(split_on, High.parsed_one(split_name).member_from), High.parsed_one(split_name).member_name, split_value) : High.set_member(split_on, split_name, split_value)
   static set_member (sv_on, sm, sv) => {
     High.w("setmember(")
     sv_on()
@@ -378,7 +380,29 @@ High &+= {
     High.w(")")
   }
   static called (cc, ca) => (Compiled.last_of(Compiled.trimmed(cc)) == ".") ? High.grammar_of(High.chopped(Compiled.trimmed(cc)), ca) : High.call_written(cc, ca)
-  static call_written (cc, ca) => ((High.kind(cc) == `selected_of`) && (High.kind(High.parsed_one(cc).selected_of) == `member_from`)) ? High.sel_method(High.parsed_one(High.parsed_one(cc).selected_of), High.parsed_one(cc).selection, ca) : High.called_on(() => High.expression(cc), ca)
+  static call_written (cc, ca) => ((High.kind(cc) == `selected_of`) && (High.kind(High.parsed_one(cc).selected_of) == `member_from`)) ? High.sel_method(High.parsed_one(High.parsed_one(cc).selected_of), High.parsed_one(cc).selection, ca) : (High.member_call(cc, ca) ? High.member_called(High.parsed_one(cc), ca) : High.called_on(() => High.expression(cc), ca))
+  // (a member called, `x.f(a)`, f a name: what x holds under f called as it is, when that is a function)
+  static member_call (mc, ma) => (High.kind(mc) == `member_from`) && ((High.kind(High.parsed_one(mc).member_name) == `leaf`) && ((High.maybe_led(Compiled.trimmed(High.parsed_one(mc).member_from)) || ((High.parts(ma).count == 1) && Compiled.braced(Compiled.trimmed(ma)))) ? false : true))
+  static member_called (mp, ma) => (!(High.any_named(High.parts(ma))) && (High.parts(ma).count < 3)) ? High.member_few(mp, High.parts(ma)) : High.member_listed(mp, ma)
+  static member_few (mw, mq) => {
+    High.w((mq.count == 0) ? "call_member0(" : ((mq.count == 1) ? "call_member1(" : "call_member2("))
+    High.expression(mw.member_from)
+    High.w(", ")
+    High.symbol(mw.member_name)
+    mq.for((part) => High.few_value(part))
+    High.w(")")
+  }
+  static member_listed (mp, ma) => {
+    High.w("call_member(")
+    High.expression(mp.member_from)
+    High.w(", ")
+    High.symbol(mp.member_name)
+    High.w(", ")
+    High.listed(High.parts(ma))
+    High.w(", ")
+    High.named(High.parts(ma))
+    High.w(")")
+  }
   static sel_method (sm, ss, sa) => High.sel_split(() => High.expression(sm.member_from), sm.member_name, ss, sa)
   static sel_split (sw, sn, ss, sa) => (High.kind(sn) == `member_from`) ? High.sel_split(() => High.on(sw, High.parsed_one(sn).member_from), High.parsed_one(sn).member_name, ss, sa) : High.sel_written(sw, sn, ss, sa)
   static sel_written (sw, sn, ss, sa) => {
@@ -400,7 +424,18 @@ High &+= {
     High.made("closure", level cw_counted, "", eb, `extension`)
     High.w(")")
   }
-  static called_with (cv, ca) => {
+  static called_with (cv, ca) => (!(High.any_named(High.parts(ca))) && (High.parts(ca).count < 3)) ? High.called_few(cv, High.parts(ca)) : High.called_listed(cv, ca)
+  static called_few (fw, fp) => {
+    High.w((fp.count == 0) ? "invoke0(" : ((fp.count == 1) ? "invoke1(" : "invoke2("))
+    fw()
+    fp.for((part) => High.few_value(part))
+    High.w(")")
+  }
+  static few_value (fv) => {
+    High.w(", ")
+    High.sectioned(High.kind(fv)) ? High.section(fv) : High.expression(fv)
+  }
+  static called_listed (cv, ca) => {
     High.w("invoke(")
     cv()
     High.w(", ")
@@ -410,7 +445,9 @@ High &+= {
     High.w(")")
   }
   static sectioned (sk) => (sk == `this_member`) || (sk == `in_this_code`)
-  static positional (pp) => !(High.kind(pp) == `field_name`)
+  static positional (pp) => High.named_left(pp) === None
+  // (`f(x: a ? b : c)`: given by name all of what follows the name, not the field read tighter than `?`, `??`, `if`)
+  static named_left (nl) => (High.kind(nl) == `field_name`) ? nl : ((High.kind(nl) == `choice_if`) ? High.named_left(High.parsed_one(nl).choice_if) : ((High.kind(nl) == `or_left`) ? High.named_left(High.parsed_one(nl).or_left) : ((High.kind(nl) == `if_value`) ? High.named_left(High.parsed_one(nl).if_value) : None)))
   static listed (lp) => {
     lp.for((part) => High.listed_open(part))
     High.w("list()")
@@ -427,7 +464,10 @@ High &+= {
     High.sectioned(High.kind(av)) ? High.section(av) : High.expression(av)
     High.closing(0)
   }
-  static named (np) => {
+  // (what is given by name: none written, none made)
+  static named (np) => High.any_named(np) ? High.named_written(np) : High.w("0")
+  static any_named (an) => an.empty ? false : (High.positional(an.first) ? High.any_named(an.rest) : true)
+  static named_written (np) => {
     np.for((part) => High.named_open(part))
     High.w("node(0)")
     np.for((part) => High.named_part(part))
@@ -436,13 +476,13 @@ High &+= {
     High.w("with(") if !High.positional(no)
   }
   static named_part (nq) => {
-    High.named_value(High.parsed_one(nq)) if !High.positional(nq)
+    High.named_value(High.named_left(nq), nq) if !High.positional(nq)
   }
-  static named_value (nv) => {
+  static named_value (nf, nw) => {
     High.w(", ")
-    High.symbol(nv.field_name)
+    High.symbol(High.parsed_one(nf).field_name)
     High.w(", ")
-    High.expression(nv.field_type)
+    High.expression(level cw_span_of (High.parsed_one(nf).field_type) (Compiled.trimmed(nw)))
     High.closing(0)
   }
   static rule (rh, rb) => High.statically(rh) ? High.rule(High.static_part(rh), rb) : High.rule_dynamic(rh, rb)

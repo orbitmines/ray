@@ -95,9 +95,7 @@ function Invoke-Compile([string] $target) {
   if (-not $root -or -not (Test-Path -LiteralPath (Join-Path $root $Entry))) { throw "-Compile needs a checkout of $Repository (run .\install.ps1 from inside it)" }
   if (-not (Get-Command deno -ErrorAction SilentlyContinue)) { throw "-Compile needs Deno (https://deno.com): irm https://deno.land/install.ps1 | iex" }
   $work = New-TemporaryDirectory
-  # (its reading goes deep: room for it within a main thread's 8 MB, where the platform gives that)
-  $deep = if ($target -like '*windows*') { @() } else { @('--v8-flags=--stack-size=7000') }
-  $arguments = @('compile', '-A', '--no-check', '--config', $Config, '--quiet') + ($Includes | ForEach-Object { '--include', $_ }) + $deep + @('--target', $target, '--output', (Join-Path $work (Get-Executable $target $Name)), $Entry)
+  $arguments = @('compile', '-A', '--no-check', '--config', $Config, '--quiet') + ($Includes | ForEach-Object { '--include', $_ }) + @('--target', $target, '--output', (Join-Path $work (Get-Executable $target $Name)), $Entry)
   Write-Host "Compiling $Name for $target ..."
   Push-Location $root
   try { & deno @arguments; if ($LASTEXITCODE -ne 0) { throw "Compiling for $target failed" } } finally { Pop-Location }

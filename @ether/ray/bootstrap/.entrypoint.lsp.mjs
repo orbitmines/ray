@@ -1,8 +1,8 @@
-// The language server, over stdio (`ether --lsp`): each document read as the latest revision reads a program, by the
-// compiler's grammar, into its statements (each its span and the first hole of the rule that read it). From those: an
-// error where a text is not read at all, the definitions in it (`x := …`, `f (x) => …`, and what a block holds), and
-// each statement painted by how it was read. Reading goes deep and its memory only grows: it is done on a thread of its
-// own, with room for it, made again every so often, and after a reading that read nothing.
+// The language server, over stdio (`ether --lsp`): each document read by the language itself, after the entrypoint (or as
+// it): what it paints there, each `^style` and each test as what it found, and an error where nothing reads the text
+// (where it paints nothing yet, each statement's head by how the compiler's grammar reads it). Its outline, the definitions in it (`x := …`, `f (x) => …`, and what a block holds), read as the latest revision reads a
+// program, by the compiler's grammar, when it is asked for. Reading goes deep and its memory only grows: it is done on a
+// thread of its own, with room for it, made again every so often, and after a reading that read nothing.
 import { Worker, isMainThread, workerData, parentPort } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, existsSync } from 'node:fs';
@@ -12,10 +12,10 @@ const blanked = (text) => text.split('\n').map((l) => (l.trimStart().startsWith(
 
 // The reading thread: the latest revision's reader, asked one text at a time.
 if (!isMainThread && workerData?.lsp === 'reader') {
-  const { statements } = await import('./.entrypoint.mjs');
+  const { statements, paints } = await import('./.entrypoint.mjs');
   const parse = await statements();
-  parentPort.on('message', ({ id, text }) => {
-    try { parentPort.postMessage({ id, statements: parse(blanked(text)) }); }
+  parentPort.on('message', async ({ id, text, file }) => {
+    try { parentPort.postMessage(file ? { id, ...(await paints(file, text)) } : { id, statements: parse(blanked(text)) }); }
     catch (e) { parentPort.postMessage({ id, error: String(e?.stack ?? e) }); }
   });
   parentPort.postMessage({ ready: true });
@@ -29,21 +29,22 @@ const READINGS = Number(process.env.ETHER_LSP_READINGS ?? 40), PATIENCE = Number
 class Reader {
   constructor(log, stack) { this.log = log; this.stack = stack; this.queue = []; this.thread = undefined; this.readings = 0; this.busy = false; }
   async start() {
-    this.thread = new Worker(fileURLToPath(import.meta.url), { workerData: { lsp: 'reader' }, resourceLimits: { stackSizeMb: this.stack } });
+    const thread = this.thread = new Worker(fileURLToPath(import.meta.url), { workerData: { lsp: 'reader' }, resourceLimits: { stackSizeMb: this.stack } });
     this.readings = 0;
     this.ready = new Promise((resolve, reject) => {
-      this.thread.on('message', (m) => { if (m.ready) resolve(); else this.answered?.(m); });
-      this.thread.on('error', (e) => { this.log(`the reader failed: ${e?.stack ?? e}`); reject(e); this.failed?.(e); });
-      this.thread.on('exit', () => { this.thread = undefined; });
+      thread.on('message', (m) => { if (m.ready) resolve(); else if (this.thread === thread) this.answered?.(m); });
+      thread.on('error', (e) => { this.log(`the reader failed: ${e?.stack ?? e}`); reject(e); if (this.thread === thread) this.failed?.(e); });
+      // (a thread ended: no longer the reader, unless one was made since)
+      thread.on('exit', () => { if (this.thread === thread) this.thread = undefined; });
     });
     return this.ready;
   }
   restart() { this.thread?.terminate(); this.thread = undefined; }
-  read(text) { return new Promise((resolve) => { this.queue.push({ text, resolve }); this.next(); }); }
+  read(text, file) { return new Promise((resolve) => { this.queue.push({ text, file, resolve }); this.next(); }); }
   async next() {
     if (this.busy || !this.queue.length) return;
     this.busy = true;
-    const { text, resolve } = this.queue.shift();
+    const { text, file, resolve } = this.queue.shift();
     let answer;
     try {
       if (!this.thread || this.readings >= READINGS) { this.restart(); await this.start(); }
@@ -52,11 +53,11 @@ class Reader {
         const timer = setTimeout(() => { done({ error: `not read in ${PATIENCE} ms` }); this.restart(); }, PATIENCE);
         this.answered = (m) => { clearTimeout(timer); done(m); };
         this.failed = (e) => { clearTimeout(timer); done({ error: String(e?.message ?? e) }); };
-        this.thread.postMessage({ id: this.readings, text });
+        this.thread.postMessage({ id: this.readings, text, file });
       });
     } catch (e) { answer = { error: String(e?.message ?? e) }; this.restart(); }
     // (a text read as nothing leaves the reader unable to read the next: made again)
-    if (!answer.statements?.length && text.trim()) this.restart();
+    if (!file && !answer.statements?.length && text.trim()) this.restart();
     this.busy = false;
     resolve(answer);
     this.next();
@@ -94,11 +95,18 @@ function lexical(text, from, to, out) {
     else if (/[0-9]/.test(c) && !/[A-Za-z_0-9]/.test(text[i - 1] ?? '')) { let e = i; while (e < to && /[0-9a-fA-Fx]/.test(text[e])) e++; out.push([i, e, 'number', 0]); i = e - 1; }
   }
 }
-// (spans, the smaller in a larger dropped, as the LSP's relative tokens, a line at a time)
+// (spans, a smaller one in a larger shown over it (`{name ^variable}`: the marker in what the head is painted), as the LSP's
+// relative tokens, a line at a time)
 function encoded(text, spans) {
-  spans.sort((a, b) => a[0] - b[0] || b[1] - a[1]);
+  const at = new Array(text.length);
+  for (const s of [...spans].sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))) for (let i = Math.max(0, s[0]); i < Math.min(s[1], text.length); i++) at[i] = s;
   const kept = [];
-  for (const s of spans) if (!kept.length || s[0] >= kept[kept.length - 1][1]) kept.push(s);
+  for (let i = 0; i < text.length;) {
+    const s = at[i]; let e = i + 1;
+    while (e < text.length && at[e] && s && at[e][2] === s[2] && at[e][3] === s[3]) e++;
+    if (s) kept.push([i, e, s[2], s[3]]);
+    i = e;
+  }
   const lines = [0];
   for (let i = 0; i < text.length; i++) if (text[i] === '\n') lines.push(i + 1);
   const line_of = (at) => { let lo = 0, hi = lines.length - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (lines[m] <= at) lo = m; else hi = m - 1; } return lo; };
@@ -114,15 +122,21 @@ function encoded(text, spans) {
   return data;
 }
 
-// (what a document is painted as: its statements' heads by how they were read, then comments, texts and numerals)
-function painted(text, statements) {
-  const spans = [];
+// (what a document is painted as: what the language painted in it, read after the entrypoint (each `^style`, a test as
+// what it found); elsewhere its statements' heads by how they were read, then comments, texts and numerals)
+function painted(text, statements, paints = []) {
+  const spans = [], own = [];
+  const lines = [0];
+  for (let i = 0; i < text.length; i++) if (text[i] === '\n') lines.push(i + 1);
+  for (const p of paints) if (p.length > 0 && p.line < lines.length) own.push([lines[p.line] + p.column, lines[p.line] + p.column + p.length, p.style, 0]);
+  const free = (a, e) => !own.some(([x, y]) => a < y && x < e);
   for (const s of statements) {
     const by = HEADS[s.kind], name = by && head(s);
-    if (name) spans.push([name.from, name.to, by[0], by[1]]);
+    if (name && free(name.from, name.to)) spans.push([name.from, name.to, by[0], by[1]]);
   }
-  lexical(text, 0, text.length, spans);
-  return spans;
+  const lexed = [];
+  lexical(text, 0, text.length, lexed);
+  return [...own, ...spans, ...lexed.filter(([a, e]) => free(a, e))];
 }
 
 // The colours each kind of token is shown in: the language's own theme, `DARK` in .entrypoint.ray (each `^name = ^ #colour`,
@@ -172,7 +186,7 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
     documents: uris.flatMap((uri) => {
       const r = read.get(uri), document = documents.get(uri);
       if (!r || !document || document.version !== r.version) return [];
-      return [{ uri, version: r.version, ranges: painted(r.text, r.statements).filter(([, , style]) => styles[style]).map(([from, to, style]) => ({ style, range: { start: document.positionAt(from), end: document.positionAt(to) } })) }];
+      return [{ uri, version: r.version, ranges: painted(r.text, r.statements, r.paints).filter(([, , style]) => styles[style]).map(([from, to, style]) => ({ style, range: { start: document.positionAt(from), end: document.positionAt(to) } })) }];
     }),
   });
 
@@ -199,15 +213,25 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
   };
   const check = async (document) => {
     const text = document.getText(), version = document.version, t0 = Date.now();
-    const { statements, error } = await reading(text);
+    // (what the language itself paints in it, and what it does not read; the compiler's grammar only for its outline, when
+    // that is asked for)
+    const file = document.uri.startsWith('file:') ? fileURLToPath(document.uri) : `/${document.uri.replace(/[^\w.]+/g, '_')}.ray`;
+    const language = await reader.read(text, file);
     if (documents.get(document.uri)?.version !== version) return;
-    const code = blanked(text).trim();
+    // (where the language painted nothing yet, its statements' heads by the compiler's grammar)
+    const statements = language.painted?.length ? [] : (await reading(text)).statements;
+    if (documents.get(document.uri)?.version !== version) return;
     const diagnostics = [];
-    if (error) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: document.positionAt(0), end: document.positionAt(0) }, message: `not read: ${error.split('\n')[0]}`, source: 'ether' });
-    else if (code && !statements.length) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: document.positionAt(0), end: document.positionAt(Math.min(text.length, text.indexOf('\n') < 0 ? text.length : text.indexOf('\n'))) }, message: 'not read: no reading of the language reads this text as statements', source: 'ether' });
-    read.set(document.uri, { version, text, statements });
+    if (language.error) {
+      log(`the language did not paint ${document.uri.split('/').pop()}: ${language.error.split('\n')[0]}`);
+      diagnostics.push({ severity: DiagnosticSeverity.Warning, range: { start: document.positionAt(0), end: document.positionAt(0) }, message: `the reading did not finish: ${language.error.split('\n')[0]}`, source: 'ether' });
+    }
+    const SEVERITY = { fatal: DiagnosticSeverity.Error, error: DiagnosticSeverity.Error, warn: DiagnosticSeverity.Warning, info: DiagnosticSeverity.Information };
+    for (const s of language.said ?? []) diagnostics.push({ severity: SEVERITY[s.severity] ?? DiagnosticSeverity.Error, range: { start: { line: s.line, character: s.column }, end: document.positionAt(document.offsetAt({ line: s.line, character: s.column }) + s.length) }, message: s.message || 'said', source: 'ether' });
+    for (const u of language.unread ?? []) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: { line: u.line, character: u.column }, end: document.positionAt(document.offsetAt({ line: u.line, character: u.column }) + u.length) }, message: 'Nothing reads this.', source: 'ether' });
+    read.set(document.uri, { version, text, statements, paints: language.painted ?? [] });
     connection.sendDiagnostics({ uri: document.uri, version, diagnostics });
-    log(`read ${document.uri.split('/').pop()} v${version}: ${statements.length} statements in ${Date.now() - t0} ms`);
+    log(`read ${document.uri.split('/').pop()} v${version}: ${language.painted?.length ?? 0} painted, ${language.unread?.length ?? 0} unread, in ${Date.now() - t0} ms`);
     connection.languages.semanticTokens.refresh?.();
     connection.sendNotification('ether/theme', shown([document.uri]));
   };
@@ -230,7 +254,7 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
     const document = documents.get(textDocument.uri), r = read.get(textDocument.uri);
     if (!document) return { data: [] };
     const text = document.getText();
-    return { data: encoded(text, painted(text, r && r.text === text ? r.statements : [])) };
+    return { data: encoded(text, (r && r.text === text ? painted(text, r.statements, r.paints) : painted(text, [])).filter(([, , type]) => TOKEN_TYPES.includes(type))) };
   });
   connection.onDocumentSymbol(async ({ textDocument }) => {
     const document = documents.get(textDocument.uri);

@@ -1,5 +1,5 @@
 // probe.mjs DIR: the bundled language server in DIR/server answers on its own: initialize, then a document read, its
-// statements found (no diagnostic) and its definitions listed
+// statements found (no diagnostic but what the language itself does not read yet) and its definitions listed
 import { spawn } from 'child_process';
 const dir = process.argv[2];
 const child = spawn('node', [dir + '/server/.entrypoint.mjs', '--lsp'], { cwd: dir + '/server', stdio: ['pipe', 'pipe', 'inherit'] });
@@ -18,7 +18,9 @@ child.stdout.on('data', (d) => {
       send({ method: 'initialized', params: {} });
       send({ method: 'textDocument/didOpen', params: { textDocument: { uri, languageId: 'ray', version: 1, text } } });
     } else if (m.method === 'textDocument/publishDiagnostics' && m.params.uri === uri) {
-      if (m.params.diagnostics.length) done(false, 'read with diagnostics ' + JSON.stringify(m.params.diagnostics));
+      const unread = m.params.diagnostics.filter((d) => d.message === 'Nothing reads this.' || d.severity > 1), other = m.params.diagnostics.filter((d) => !unread.includes(d));
+      if (other.length) done(false, 'read with diagnostics ' + JSON.stringify(other));
+      if (unread.length) console.log('the language does not read yet:', unread.map((d) => `${d.range.start.line + 1} ${d.message.slice(0, 50)}`).join('; '));
       send({ id: 2, method: 'textDocument/documentSymbol', params: { textDocument: { uri } } });
     } else if (m.id === 2) {
       const names = (m.result ?? []).map((s) => s.name);

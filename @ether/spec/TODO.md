@@ -92,20 +92,22 @@ holds; what was the kernel's own is dropped). Each item: what fails, a minimal r
 ## The language run by the compiled Expression (2026-10-30)
 
 The revisions run Expression.ray compiled: the language is read by its class (`(text) as Expression`) and its statements
-run (f6c56a70, revision 18; 500 statements in 1.3 s at revision 25, 346 run, 507 texts unread, 225 paints). Harness: ~/.cache/ray-scratch/run (mkrunner.mjs: a module reading input part 0 as an Expression, EXPR= a
+run (f6c56a70, revision 18). The host gives a reading fuel (revision 29, ETHER_FUEL): a stopped one keeps what it painted. Harness: ~/.cache/ray-scratch/run (mkrunner.mjs: a module reading input part 0 as an Expression, EXPR= a
 variant; mkinput.py: the entrypoint with $/Wasm/level.ray after its first statement; paint.mjs: what was painted and
 what nothing read, UNREAD=n). Done on the way: statements run (they never did), jumps and labels, `afterwards`,
 rule bodies read once with the rule set aside, splices (the old splicehead), a braced body its inside, a name read in
 its own reading its place, unread text recorded with reading going on.
 
-- **The pair table is wrong on main** (ray-91, 2026-10-30): `paired` takes the hole brackets of neighbouring holes
-  (``{`{`}{code}{`}`}``) as a pair, so `{` ends up a closer and nothing is paired. With it corrected, line 60 (`{lhs}
-  ^{style} {`=>`} {rhs}`) defines styled rules and blocks read their bodies, but needs `naming` keyed by (text, node)
-  and `external .` entering its node (with ray-45).
-- **A rule's body is read at each application** (Expression's rewrite, 2026-10-30): with the corrected pairs the heap
-  reaches 2 GB at ~137 statements; a body read once per rule and run in each `at` is wanted.
-- **A block's `{code}` hole tries every `}`** while `{`/`}` are not a pair: statement 524 (`Array &+= {…}`, 13 members)
-  takes over a minute, ~4x per member. Goes with the corrected pairs.
+- **`:` is a closer on main** (2026-10-30): `paired` and `enclosed_holes` give an opener already known a new closer
+  (line 103's `({declared_name}: …` makes `:` one), so `x := …` after it is unread. Learning a pair only when both
+  characters are unmarked fixes it (with ray-91's Expression fixes: prefix 140 reads, 3082 paints, 6 unread, 1.0 s).
+- **A hole's text read with its trailing newline backtracks through every space split** (ray-91): a block's statements
+  failing at the end retry each earlier statement's leading whitespace (the enum block, the Narrowing block near line
+  1028); a name read trimmed fixes it.
+- **`? :` on false/None takes yes** (ray-91): the rest after a value is read with its fields, not its rules, so
+  `while` (statement 141, CC8) never ends.
+- **A hole's text is read again at every application** (an assert's computed style, `^((ensure {condition}) ? …)`):
+  90% of the matcher's work at 140 statements.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
 - **The host's `report`** (said, then on; in a test, a jump to `erred`) is not done.

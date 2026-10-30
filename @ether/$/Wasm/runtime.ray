@@ -3395,3 +3395,125 @@ function call_member(x, sym, args, named) {
   }
   invoke(member2(x, sym), args, named)
 }
+function at_text(q, e, a, z) {
+  var i
+  if (q + (z - a)) > e {
+    return 0
+  }
+  i = 0
+  while (a + i) < z {
+    if (load8 (q + i)) != (load8 (a + i)) {
+      return 0
+    }
+    i = i + 1
+  }
+  1
+}
+function word_byte(c) {
+  ((c >= 97) and (c <= 122)) or (((c >= 65) and (c <= 90)) or (((c >= 48) and (c <= 57)) or (c == 95)))
+}
+function take_named(na, ne, l) {
+  var i
+  var x
+  var k
+  var v
+  var q
+  if na >= ne {
+    return 0
+  }
+  q = na
+  while q < ne {
+    if word_byte(load8 q) == 0 {
+      return 0
+    }
+    q = q + 1
+  }
+  i = 0
+  while i < (load (l + 4)) {
+    x = at(l, i)
+    if tag(x) == 1 {
+      k = member(x, 17)
+      v = member(x, 18)
+      if (tag(k) == 4) and (tag(v) == 4) {
+        if ((load (k + 8)) - (load (k + 4))) == (ne - na) {
+          if texteq(load (k + 4), na, ne - na) {
+            return v
+          }
+        }
+      }
+    }
+    i = i + 1
+  }
+  0
+}
+function spliced_into(t, oa, oe, ce, l, out) {
+  var ca
+  var q
+  var e
+  var r
+  var x
+  var n
+  var s
+  var m
+  ca = oe + 1
+  q = load (t + 4)
+  e = load (t + 8)
+  n = 0
+  while q < e {
+    x = 0
+    if at_text(q, e, oa, oe) {
+      r = q + (oe - oa)
+      while (r < e) and (at_text(r, e, ca, ce) == 0) {
+        r = r + 1
+      }
+      if r < e {
+        x = take_named(q + (oe - oa), r, l)
+      }
+    }
+    if x != 0 {
+      s = load (x + 4)
+      m = load (x + 8)
+      while (s < m) and white(load8 s) {
+        s = s + 1
+      }
+      while (m > s) and white(load8 (m - 1)) {
+        m = m - 1
+      }
+      if out != 0 {
+        copy(out + n, s, m - s)
+      }
+      n = n + (m - s)
+      q = r + (ce - ca)
+    } else {
+      if out != 0 {
+        (out + n) <-8 (load8 q)
+      }
+      n = n + 1
+      q = q + 1
+    }
+  }
+  n
+}
+function spliced(t, cap, l) {
+  var oa
+  var oe
+  var ce
+  var n
+  var o
+  if (tag(t) != 4) or ((tag(cap) != 4) or (tag(l) != 3)) {
+    return t
+  }
+  oa = load (cap + 4)
+  ce = load (cap + 8)
+  oe = oa
+  while (oe < ce) and ((load8 oe) != 32) {
+    oe = oe + 1
+  }
+  if ((oe - oa) == 0) or ((oe + 1) >= ce) {
+    return t
+  }
+  n = spliced_into(t, oa, oe, ce, l, 0)
+  o = alloc(n + 8)
+  spliced_into(t, oa, oe, ce, l, o)
+  text(o, o + n)
+}

@@ -42,7 +42,11 @@ Expression := class (
           [rule: GRAMMAR_RULE.LHS] := (caller) => {
             // (the node its body is read in, kept with it: what it reads there, its statements, is its body)
             body := Node(in: node)
-            head := (rule.LHS as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
+            // (what it is written as, each `{name}` a hole took where it is defined written as what that hole took)
+            taken := takes(caller)
+            lhs := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
+            rhs := level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken)
+            head := (lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
             // (its body read once, when it is first applied: what each hole is, found where it runs, `bound` by what applied it)
             kept := Array.new
             rules[[head]] := (caller) => {
@@ -56,7 +60,7 @@ Expression := class (
               me.in = at
               me.this = caller.this
               me.bound = holes
-              left(me, read_once(kept, holes, body, rule, own)(me))
+              left(me, read_once(kept, holes, body, rhs, own)(me))
             }
             rules[[head]].body = body
             own := rules.keys.last
@@ -147,10 +151,12 @@ Expression := class (
           shape.rules[[hole.key]] := (c) => hole_in(c, hole.key)
           shape.rules[[BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => hole_in(c, hole.key)
         })
-        (rhs: Statements(shape) = br.RHS)
+        (rhs: Statements(shape) = br)
       }
       hole_in (hc, hk) => (hc === None) ? None : hole_found(hc, hk, (hc.bound === None) ? None : hc.bound{.key === hk}#.first)
       hole_found (fc, fk, fe) => (fe === None) ? hole_in(fc.caller, fk) : fc.caller.in.named_by(fe.value, fc.caller)
+      // (what the holes took where a program runs, the nearest first)
+      takes (tc) => (tc === None) ? Array.new : ((tc.bound === None) ? takes(tc.caller) : tc.bound.joined(takes(tc.caller)))
       // (a body run from its i-th statement on, with what the last answered: a jump one made (`external goto`) goes to its
       // label there (`external label`); none there, it leaves the body for the one that applied it (`left`). One nothing takes
       // to the host's `afterwards` is kept, with where it was, and run when everything is read)

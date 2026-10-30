@@ -235,7 +235,9 @@ Expression := class (
       later := Array.new
       afterwards := Place(`afterwards`, global)
       run_later (rl) => {
-        later.for((lp) => ran_later(lp))
+        later.for((lp) => {
+          ran_later(lp) if ((level tested_here ((lp.bound.first).value)) === true)
+        })
         later = Array.new
       }
       // (each test in memory of its own (Design §21.4): what it painted and said kept, the rest let go once it is done; what

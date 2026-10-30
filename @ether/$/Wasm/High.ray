@@ -237,7 +237,9 @@ High &+= {
     High.w("))")
   }
   static set (sp, sv) => (High.kind(sp) == `with_left`) ? High.with_code(High.parsed_one(sp).with_left) : High.set_of(sp, sv)
-  static set_of (sp, sv) => (High.kind(sp) == `member_from`) ? High.set_member(() => High.expression(High.parsed_one(sp).member_from), High.parsed_one(sp).member_name, sv) : ((High.kind(sp) == `this_member`) ? High.set_member(() => High.name("this"), High.parsed_one(sp).this_member, sv) : High.assigned(sp, sv))
+  static set_of (sp, sv) => (High.kind(sp) == `member_from`) ? High.set_split(() => High.expression(High.parsed_one(sp).member_from), High.parsed_one(sp).member_name, sv) : ((High.kind(sp) == `this_member`) ? High.set_split(() => High.name("this"), High.parsed_one(sp).this_member, sv) : High.assigned(sp, sv))
+  // (`a.b.c = v`: c set on what a.b is)
+  static set_split (split_on, split_name, split_value) => (High.kind(split_name) == `member_from`) ? High.set_split(() => High.on(split_on, High.parsed_one(split_name).member_from), High.parsed_one(split_name).member_name, split_value) : High.set_member(split_on, split_name, split_value)
   static set_member (sv_on, sm, sv) => {
     High.w("setmember(")
     sv_on()

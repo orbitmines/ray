@@ -131,22 +131,24 @@ Expression := class (
       // (a label or a jump answers nothing: the body answers what was answered before it)
       answered (as, av, an) => ((as.rule == `label`) || (as.rule == `goto`)) ? av : an
       ran (p, all, ss, v) => run(p, all, (p.at === None) ? ss : jumped(p, labelled(p, all), [all, ss, p]), v)
-      labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && (label_of(p, ls.first.args.first.word) == p.at)) ? ls.rest : labelled(p, ls.rest))
+      labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && same_label(label_of(Program(in: p.in), ls.first.args.first.word), p.at)) ? ls.rest : labelled(p, ls.rest))
+      // (a value gone to that no label here is, `external goto {a}`: on to the next)
       jumped (p, to, k) => {
         later.append(k) if (to === None) && (p.at == afterwards)
         forget(p) if !(to === None)
-        (p.at = None) if !(to === None) || (p.at == afterwards)
-        to ?? Array.new
+        gone_on := (to === None) && ((level kind_of (p.at)) == `list`)
+        (p.at = None) if (gone_on || !(to === None)) || (p.at == afterwards)
+        gone_on ? k.rest.first : (to ?? Array.new)
       }
       leaving (me, v) => {
-        up := me.caller
-        (up.at = me.at) if !(me.at === None)
+        (me.caller.at = me.at) if !(me.at === None)
         v
       }
       // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label (a jump's
-      // first, a label's), its word, or, written in the brackets holes are written in, what that reads as)
+      // first, a label's), its word, or, written in the brackets holes are written in, the value that reads as)
       given (gc, gr, ga, gf) => (((gr == `goto`) || (gr == `label`)) && (ga === gf)) ? label_of(gc, ga.word) : named_in(gc, ga.word)
-      label_of (lp, lw) => (lw ~= BOOTSTRAPPER.CAPTURE.map{== \s}(String+)) ? named_in(lp, lw) : Place(lw, global)
+      label_of (lp, lw) => (lw ~= BOOTSTRAPPER.CAPTURE.map{== \s}(String+)) ? [named_in(lp, lw)] : Place(lw, global)
+      same_label (sa, sb) => ((level kind_of (sa)) == `list`) ? (((level kind_of (sb)) == `list`) && (sa.first == sb.first)) : (sa == sb)
       later := Array.new
       afterwards := Place(`afterwards`, global)
       run_later (rl) => later.empty ? None : ran_later(later.first)

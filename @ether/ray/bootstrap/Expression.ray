@@ -46,7 +46,7 @@ Expression := class (
             rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
             rule_home := home_of(caller, level spliced_entry (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? (caller.in ?? node)
             sink = Array.new
-            head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => node.named(hole.inside))
+            head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))
             rule_styled := sink.map((sp) => [level place_name (sp.rest.first), sp.first])
             // (its body read once, in a node of its own, run in a node in that one each time it is applied)
             rule_body := Node(in: node)
@@ -78,7 +78,6 @@ Expression := class (
             leaving(me, r(me))
           }
         }
-        named (text) => named_by(text, Program(in: node))
         // (a name read inside its own reading is its place)
         named_by (text, by) => (naming{(.first == text) && (.last === node)}#.count > 0) ? Place(text, node) : named_now(text, by)
         named_now (text, by) => {

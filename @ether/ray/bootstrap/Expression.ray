@@ -56,9 +56,10 @@ Expression := class (
               me.in = at
               me.this = caller.this
               me.bound = holes
-              left(me, read_once(kept, holes, body, rule)(me))
+              left(me, read_once(kept, holes, body, rule, own)(me))
             }
             rules[[head]].body = body
+            own := rules.keys.last
           }
           [{value: concurrently node.prefix(.)}: node.keys, rest: String] := (caller) => {
             v := value(caller)
@@ -73,14 +74,18 @@ Expression := class (
           }
         }
         named (text) => named_by(text, Program(in: node))
-        named_by (text, by) => {
+        named_by (text, by) => (naming{. == text}#.count > 0) ? Place(text, node) : named_now(text, by)
+        named_now (text, by) => {
+          naming = Array.new.append(text).joined(naming)
           v := (vs: Statements(node) = text)
-          (v === None) ? Place(text, node) : v(by)
+          r := (v === None) ? Place(text, node) : v(by)
+          naming = naming.rest
+          r
         }
         split_key := rules.keys.last
         maker_key := rules.keys.first
-        whole (tx) => (((rules.keys.first === maker_key) ? (tx ~= maker_key) : false) ? maker_key : rules.keys{(. === split_key) ? false : (tx ~= .)}#.sort(.length).last) ?? in?.whole(tx)
-        prefix (tx) => rules.keys{(. === split_key) ? false : (tx ~= .)}#.sort(.length).last ?? in?.prefix(tx)
+        whole (tx) => (((rules.keys.first === maker_key) ? (tx ~= maker_key) : false) ? maker_key : rules.keys{((. === split_key) || set_aside_is(.)) ? false : (tx ~= .)}#.sort(.length).last) ?? in?.whole(tx)
+        prefix (tx) => rules.keys{((. === split_key) || set_aside_is(.)) ? false : (tx ~= .)}#.sort(.length).last ?? in?.prefix(tx)
         longer (lw, ls) => (lw === None) ? ls : ((ls === None) ? lw : ((ls.length > lw.length) ? ls : lw))
         reading (tx) => {
           w := whole(tx)
@@ -111,6 +116,7 @@ Expression := class (
           `shown` (shown_args) => shown_args.first
         }[er](ea.map((argument) => caller.in.named(argument.word)))
       }
+      naming := Array.new
       // (what is painted, `external style`: each style with what it is shown on, in turn; the host reads them)
       painted := Array.new
       painted_with (pa) => {
@@ -119,7 +125,18 @@ Expression := class (
       }
       // (a rule's body as read the first time it is applied, its holes found in what runs it: the nearest program it is
       // `bound` in, by what applied that one)
-      read_once (rk, rh, rb, rr) => (rk.count > 0) ? rk.first : kept_first(rk, read_body(rh, rb, rr))
+      // (read with the rule itself set aside, `busy`: a rule never reads its own body)
+      read_once (rk, rh, rb, rr, re) => (rk.count > 0) ? rk.first : kept_first(rk, taken_back(read_body(rh, rb, set_aside(re, rr))))
+      aside := Array.new
+      set_aside (se, sv) => {
+        aside = Array.new.append(se).joined(aside)
+        sv
+      }
+      taken_back (tv) => {
+        aside = aside.rest
+        tv
+      }
+      set_aside_is (sk) => aside{. === sk}#.count > 0
       kept_first (kk, kr) => {
         kk.append(kr)
         kr

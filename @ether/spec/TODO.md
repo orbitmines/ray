@@ -164,14 +164,13 @@ its own reading its place, unread text recorded with reading going on.
 
 ## The compiled compiler's speed
 
-- **A call makes a list of what it is given** (`call_member(get(scope, X), m, append(list(), a), 0)`): revision 13 gives
-  nothing by name as `0`, revision 15 calls a member that is a function at once (`call_member`, same answer as
-  `invoke(member2(…))`). Still: the arguments' list, and `X` looked up through the scopes each time. Wanted: a block's
-  static known when written (`X := { static f … }`, X never given again) called as its function, its arguments given
-  as they are.
-- **Each text is measured for what it holds** (`bytes_in`, 13% of a self-compile in revision 11): which characters and
-  pairs of characters a text holds, kept per text, so a pattern lacking one of its literals is not tried. A text read
-  inside one already measured could take it from that one instead of reading its bytes again.
+- **A call looks up what it calls through the scopes each time** (`get(scope, X)`): revisions 24-25 give one or two
+  values, or none, without a new list (`invoke0-2`, `call_member0-2`, `call1` in the runtime's loops), and revision 22
+  keeps a parameter as a local where nothing writes it. Still wanted: a block's static known when written
+  (`X := { static f … }`, X never given again) called as its function, `X` not looked up.
+- **Reading a statement asks every rule key through a closure** (Expression's `longest`/`defining`, ~25% of a
+  self-compile in revision 25): `among(aside, .)`, `among(definers, .)` and `defines(tx)` per key, at each node up the
+  `in` chain.
 
 ## Painting
 

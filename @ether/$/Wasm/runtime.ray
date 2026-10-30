@@ -3639,3 +3639,9 @@ function copied_from(o, s, n) {
   3868 <- (k + 1)
   0
 }
+function place_name(p) {
+  if tag(p) == 12 {
+    return name_text(load (p + 4))
+  }
+  0
+}

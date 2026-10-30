@@ -147,16 +147,15 @@ export const tester = async () => {
   return module;
 };
 // (what is read: the entrypoint's header and first statement, the level, the rest of it, then each file; each line where
-// it is written)
-export const tested = (files) => {
-  const lines = [], at = [];
+// it is written. A file given with its text is read as that, the entrypoint too)
+export const tested = (files, texts = {}) => {
+  const lines = [], at = [], entry = bootstrap('.entrypoint.ray'), of = (f) => emptied(texts[f] ?? readFileSync(f, 'utf8'));
   const add = (file, ls, from) => ls.forEach((l, i) => { lines.push(l); at.push([file, from + i + 1]); });
-  const entry = bootstrap('.entrypoint.ray'), ls = emptied(readFileSync(entry, 'utf8'));
-  const second = ls.findIndex((l, i) => i > 2 && l && !/^[\s)\]}]/.test(l));
+  const ls = of(entry), second = ls.findIndex((l, i) => i > 2 && l && !/^[\s)\]}]/.test(l));
   add(entry, ls.slice(0, second), 0);
-  add(wasm('level.ray'), emptied(readFileSync(wasm('level.ray'), 'utf8')), 0);
+  add(wasm('level.ray'), of(wasm('level.ray')), 0);
   add(entry, ls.slice(second), second);
-  for (const file of files) add(file, emptied(readFileSync(file, 'utf8')), 0);
+  for (const file of files) if (resolve(file) !== entry) add(file, of(file), 0);
   return { text: lines.join('\n'), at };
 };
 // (the reading run: each painted style with where it is (in bytes of the input), what nothing read, and how it ended)
@@ -202,6 +201,16 @@ export const painting = async (module, text) => {
 const located = ({ input, at }, [a]) => {
   const before = input.subarray(0, a).toString(), line = before.split('\n').length - 1;
   return { file: at[line]?.[0], line: at[line]?.[1], column: before.length - before.lastIndexOf('\n') };
+};
+// (what is painted in a file, read after the entrypoint (or as it): each style, its line and column (from 0) and length, in
+// the file's own characters)
+export const paints = async (file, text) => {
+  const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, error } = await painting(await tester(), input);
+  const bytes = Buffer.from(input), place = ([a, e]) => {
+    const p = located({ input: bytes, at }, [a]);
+    return resolve(p.file ?? '') === resolve(file) ? { line: p.line - 1, column: p.column - 1, length: bytes.subarray(a, e).toString().length } : undefined;
+  };
+  return { painted: painted.flatMap(({ style, at: s }) => { const p = s && place(s); return p ? [{ style, ...p }] : []; }), unread: unread.map(place).filter(Boolean), error };
 };
 export async function test(files = []) {
   const t0 = Date.now(), { text, at } = tested(files), module = await tester();

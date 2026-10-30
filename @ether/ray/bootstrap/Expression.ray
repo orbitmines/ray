@@ -132,11 +132,13 @@ Expression := class (
       answered (as, av, an) => ((as.rule == `label`) || (as.rule == `goto`)) ? av : an
       ran (p, all, ss, v) => run(p, all, (p.at === None) ? ss : jumped(p, labelled(p, all), [all, ss, p]), v)
       labelled (p, ls) => ls.empty ? None : (((ls.first.rule == `label`) && same_label(label_of(Program(in: p.in), ls.first.args.first.word), p.at)) ? ls.rest : labelled(p, ls.rest))
-      // (a value gone to that no label here is, `external goto {a}`: on to the next)
+      // (a value gone to that no label here is, `external goto {a}`: on to the next; one to the host's `report`, said, then on,
+      // but inside a test, to its `erred`)
       jumped (p, to, k) => {
         later.append(k) if (to === None) && (p.at == afterwards)
+        said(p) if (to === None) && (p.at == report)
         forget(p) if !(to === None)
-        gone_on := (to === None) && ((level kind_of (p.at)) == `list`)
+        gone_on := (to === None) && ((p.at === None) || ((level kind_of (p.at)) == `list`))
         (p.at = None) if (gone_on || !(to === None)) || (p.at == afterwards)
         gone_on ? k.rest.first : (to ?? Array.new)
       }
@@ -154,8 +156,18 @@ Expression := class (
       run_later (rl) => later.empty ? None : ran_later(later.first)
       ran_later (lf) => {
         later = later.rest
+        testing = lf.last
         run(lf.last, lf.first, lf.rest.first, None)
+        testing = None
         run_later(0)
+      }
+      // (what is said, `external goto report`: what the hole took and where, each in turn; the host reads them)
+      report := Place(`report`, global)
+      reported := Array.new
+      testing := None
+      said (sp) => {
+        reported.append([takes(sp).first, bound_along(sp)])
+        sp.at = (testing === None) ? None : Place(`erred`, global)
       }
       naming := Array.new
       kinds := Array.new
@@ -189,6 +201,7 @@ Expression := class (
       // (what is painted, `external style`: each style, what it is shown on and what the holes took; the host reads them)
       painted := Array.new
       noted(painted)
+      noted(reported)
       sink := Array.new
       painted_with (pa, pc) => {
         sink.append(painted.append([pa.first, pa.last, bound_along(pc)]).last)

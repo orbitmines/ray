@@ -111,7 +111,7 @@ Expression := class (
           `goto` (to) => (caller.at = to.first) if (to.rest.empty || to.rest.first)
           `label` (to) => to.first
           `style` (how) => painted_with(how, caller)
-          `shown` (how) => how.first
+          `shown` (how) => shown_of(painted{.rest.first === how.first}#, how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
@@ -207,6 +207,8 @@ Expression := class (
         sink.append(painted.append([pa.first, pa.last, bound_along(pc)]).last)
         pa.last
       }
+      // (what a value is shown as: the style it was given last, `made ^class`; else what is given)
+      shown_of (sp, sd) => sp.empty ? sd : sp.last.first
       bound_along (bc) => (bc === None) ? Array.new : [bc.bound].joined(bound_along(bc.caller))
       // (what the holes took where a program runs, the nearest first; where the rule is used whose holes took a head)
       takes (tc) => (tc === None) ? Array.new : (tc.bound ?? Array.new).joined(takes(tc.caller))

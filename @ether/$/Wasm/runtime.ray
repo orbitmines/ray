@@ -832,6 +832,9 @@ function indexed(n) {
     e = load e
   }
   touched(n)
+  if (n + 16) < (load 3944) {
+    logged(n + 16)
+  }
   (n + 16) <- x
   0
 }
@@ -847,6 +850,15 @@ function index_in(x, e) {
       return 0
     }
     k = (k + 1) and c
+  }
+  if (x + (8 + (k * 8))) < (load 3944) {
+    logged(x + (8 + (k * 8)))
+  }
+  if (x + (12 + (k * 8))) < (load 3944) {
+    logged(x + (12 + (k * 8)))
+  }
+  if (x + 4) < (load 3944) {
+    logged(x + 4)
   }
   (x + (8 + (k * 8))) <- s
   (x + (12 + (k * 8))) <- e
@@ -870,6 +882,9 @@ function define(n, sym, v) {
     e = alloc(12)
     e <- load (n + 8)
     (e + 4) <- sym
+    if (n + 8) < (load 3944) {
+      logged(n + 8)
+    }
     (n + 8) <- e
     if (load n) == 1 {
       if (load (n + 16)) != 0 {
@@ -880,6 +895,9 @@ function define(n, sym, v) {
         }
       }
     }
+  }
+  if (e + 8) < (load 3944) {
+    logged(e + 8)
   }
   (e + 8) <- v
   v
@@ -903,6 +921,9 @@ function assign(n, sym, v) {
     e = own(m, sym)
     if e != 0 {
       touched(m)
+      if (e + 8) < (load 3944) {
+        logged(e + 8)
+      }
       (e + 8) <- v
       return v
     }
@@ -919,12 +940,429 @@ function list() {
   (l + 12) <- 0
   l
 }
+function origin_at(a) {
+  var b
+  var k
+  var r
+  var n
+  var f
+  n = 0
+  while n < 64 {
+    if (a >= 8388608) and (a < (8388608 + (load 4088))) {
+      return a
+    }
+    b = load 3864
+    if b == 0 {
+      return 0 - 1
+    }
+    k = load 3868
+    f = 0
+    while (k > 0) and (f == 0) {
+      k = k - 1
+      r = b + (k * 12)
+      if (a >= (load r)) and (a < ((load r) + (load (r + 8)))) {
+        a = (load (r + 4)) + (a - (load r))
+        f = 1
+      }
+    }
+    if f == 0 {
+      return 0 - 1
+    }
+    n = n + 1
+  }
+  0 - 1
+}
+function shared_id(v) {
+  var t
+  var h
+  var i
+  var n
+  t = load 3932
+  h = load (t + 1060)
+  n = load (t + 1064)
+  i = 0
+  while i < n {
+    if (load (h + (i * 4))) == v {
+      return i
+    }
+    i = i + 1
+  }
+  if n < 8000 {
+    (h + (n * 4)) <- v
+    (t + 1064) <- (n + 1)
+  }
+  0 - 1
+}
+function kept_out(w, v, f0, depth) {
+  var t
+  var a
+  var sid
+  var e
+  var oa
+  var oe
+  var n
+  var i
+  var x
+  if (pointer(v) == 0) or ((v < f0) or (v >= arena_base())) {
+    w <- 7
+    (w + 4) <- v
+    return w + 8
+  }
+  t = load v
+  if depth > 6 {
+    w <- 0
+    return w + 4
+  }
+  sid = shared_id(v)
+  if sid >= 0 {
+    w <- 8
+    (w + 4) <- sid
+    return w + 8
+  }
+  w <- 9
+  w = w + 4
+  if t == 4 {
+    a = load (v + 4)
+    e = load (v + 8)
+    if a < f0 {
+      w <- 1
+      (w + 4) <- a
+      (w + 8) <- e
+      return w + 12
+    }
+    oa = origin_at(a)
+    oe = oa
+    if e > a {
+      oe = origin_at(e - 1) + 1
+    }
+    if (oa >= 0) and (oe >= oa) {
+      w <- 1
+      (w + 4) <- oa
+      (w + 8) <- oe
+      return w + 12
+    }
+    w <- 2
+    (w + 4) <- (e - a)
+    copy(w + 8, a, e - a)
+    return w + (8 + ((((e - a) + 3) / 4) * 4))
+  }
+  if t == 3 {
+    n = load (v + 4)
+    if n > 64 {
+      n = 64
+    }
+    w <- 3
+    (w + 4) <- n
+    w = w + 8
+    i = 0
+    while i < n {
+      w = kept_out(w, at(v, i), f0, depth + 1)
+      i = i + 1
+    }
+    return w
+  }
+  if (t == 1) or (t == 10) {
+    w <- 4
+    if t == 10 {
+      w <- 6
+    }
+    x = w + 4
+    w = w + 8
+    n = 0
+    e = load (v + 8)
+    while (e != 0) and (n < 64) {
+      a = load (e + 8)
+      if pointer(a) {
+        if ((load a) == 4) or ((t == 1) and ((n < 8) and (((load a) == 3) or ((load a) == 1)))) {
+          w <- (load (e + 4))
+          w = kept_out(w + 4, a, f0, depth + 1)
+          n = n + 1
+        }
+      }
+      e = load e
+    }
+    x <- n
+    return w
+  }
+  if t == 12 {
+    w <- 5
+    (w + 4) <- (load (v + 4))
+    return w + 8
+  }
+  w <- 0
+  w + 4
+}
+function made_again(r) {
+  var p
+  var v
+  var t
+  var n
+  t = load 3932
+  p = load r
+  if (load p) == 8 {
+    r <- (p + 8)
+    return load ((load (t + 1068)) + ((load (p + 4)) * 4))
+  }
+  if (load p) == 9 {
+    n = load (t + 1072)
+    (t + 1072) <- (n + 1)
+    r <- (p + 4)
+    v = made_one(r)
+    ((load (t + 1068)) + (n * 4)) <- v
+    return v
+  }
+  made_one(r)
+}
+function made_one(r) {
+  var op
+  var v
+  var n
+  var i
+  var s
+  var p
+  op = load (load r)
+  p = load r
+  if op == 7 {
+    r <- (p + 8)
+    return load (p + 4)
+  }
+  if op == 1 {
+    r <- (p + 12)
+    return text(load (p + 4), load (p + 8))
+  }
+  if op == 2 {
+    n = load (p + 4)
+    v = alloc(n + 8)
+    copy(v, p + 8, n)
+    r <- (p + (8 + (((n + 3) / 4) * 4)))
+    return text(v, v + n)
+  }
+  if op == 3 {
+    n = load (p + 4)
+    r <- (p + 8)
+    v = list()
+    i = 0
+    while i < n {
+      append(v, made_again(r))
+      i = i + 1
+    }
+    return v
+  }
+  if (op == 4) or (op == 6) {
+    n = load (p + 4)
+    r <- (p + 8)
+    v = node(0)
+    if op == 6 {
+      v <- 10
+    }
+    i = 0
+    while i < n {
+      s = load (load r)
+      r <- ((load r) + 4)
+      define(v, s, made_again(r))
+      i = i + 1
+    }
+    return v
+  }
+  if op == 5 {
+    r <- (p + 8)
+    v = alloc(8)
+    v <- 12
+    (v + 4) <- (load (p + 4))
+    return v
+  }
+  r <- (p + 4)
+  0
+}
+function logged(a) {
+  var t
+  var u
+  var n
+  if a < 8388608 {
+    return 0
+  }
+  t = load 3932
+  n = load (t + 1048)
+  if n >= 2000000 {
+    (t + 1056) <- 1
+    return 0
+  }
+  u = (load (t + 1044)) + (n * 8)
+  u <- a
+  (u + 4) <- (load a)
+  (t + 1048) <- (n + 1)
+  0
+}
+function test_begin(painted, reported) {
+  var d
+  var t
+  var b
+  if (load 3932) == 0 {
+    t = alloc(1088)
+    zeroed(t, 1088)
+    (t + 1044) <- alloc(16000000)
+    (t + 1060) <- alloc(32000)
+    (t + 1068) <- alloc(32000)
+    3940 <- alloc(8388608)
+    3932 <- t
+    kept()
+  }
+  t = load 3932
+  d = load 3936
+  3936 <- (d + 1)
+  if d > 0 {
+    return 0
+  }
+  b = t
+  b <- free
+  (b + 4) <- (load (t + 1048))
+  (b + 8) <- (load 3868)
+  (b + 12) <- (load 3860)
+  (b + 16) <- 0
+  if (load 3860) != 0 {
+    (b + 16) <- (load ((load 3860) + 4))
+  }
+  (b + 20) <- 0
+  if tag(painted) == 3 {
+    (b + 20) <- (load (painted + 4))
+  }
+  (b + 24) <- 0
+  if tag(reported) == 3 {
+    (b + 24) <- (load (reported + 4))
+  }
+  (b + 28) <- boundn
+  (b + 32) <- (load 3852)
+  (b + 36) <- activen
+  (b + 40) <- effects
+  (b + 44) <- 0
+  (t + 1048) <- 0
+  3944 <- free
+  0
+}
+function test_end(painted, reported) {
+  var d
+  var t
+  var b
+  var f0
+  var w
+  var r
+  var i
+  var np
+  var nr
+  var nu
+  var l
+  var u
+  var n
+  t = load 3932
+  d = load 3936
+  if d == 0 {
+    return 0
+  }
+  d = d - 1
+  3936 <- d
+  if d > 0 {
+    return 0
+  }
+  b = t
+  f0 = load b
+  3944 <- 0
+  if ((load (b + 44)) != 0) or (((load (t + 1056)) != 0) or (((load 3844) != 0) or (noreclaim != 0))) {
+    (t + 1048) <- 0
+    (t + 1056) <- 0
+    return 0
+  }
+  w = load 3940
+  (t + 1064) <- 0
+  (t + 1072) <- 0
+  np = 0
+  nr = 0
+  nu = 0
+  if tag(painted) == 3 {
+    i = load (b + 20)
+    while i < (load (painted + 4)) {
+      w = kept_out(w, at(painted, i), f0, 0)
+      i = i + 1
+      np = np + 1
+    }
+  }
+  if tag(reported) == 3 {
+    i = load (b + 24)
+    while i < (load (reported + 4)) {
+      w = kept_out(w, at(reported, i), f0, 0)
+      i = i + 1
+      nr = nr + 1
+    }
+  }
+  l = load 3860
+  if (l != 0) and (l == (load (b + 12))) {
+    i = load (b + 16)
+    while i < (load (l + 4)) {
+      w = kept_out(w, at(l, i), f0, 0)
+      i = i + 1
+      nu = nu + 1
+    }
+  }
+  n = load (t + 1048)
+  while n > 0 {
+    n = n - 1
+    u = (load (t + 1044)) + (n * 8)
+    (load u) <- (load (u + 4))
+  }
+  (t + 1048) <- n
+  3860 <- (load (b + 12))
+  if (load 3860) != 0 {
+    ((load 3860) + 4) <- (load (b + 16))
+  }
+  3868 <- (load (b + 8))
+  boundn = load (b + 28)
+  3852 <- (load (b + 32))
+  activen = load (b + 36)
+  if free > f0 {
+    zeroed(f0, free - f0)
+  }
+  free = f0
+  if f0 <= (load 3920) {
+    epoch = epoch + 1
+    3920 <- 0
+  }
+  r = alloc(8)
+  r <- (load 3940)
+  i = 0
+  while i < np {
+    append(painted, made_again(r))
+    i = i + 1
+  }
+  i = 0
+  while i < nr {
+    append(reported, made_again(r))
+    i = i + 1
+  }
+  i = 0
+  while i < nu {
+    if (load 3860) == 0 {
+      3860 <- list()
+      kept()
+    }
+    append(load 3860, made_again(r))
+    i = i + 1
+  }
+  0
+}
 function append(l, v) {
   var d
   var c
   touched(l)
+  if (l + 4) < (load 3944) {
+    logged(l + 4)
+  }
   c = load (l + 4)
   if c == (load (l + 8)) {
+    if (l + 8) < (load 3944) {
+      logged(l + 8)
+    }
+    if (l + 12) < (load 3944) {
+      logged(l + 12)
+    }
     if c == 0 {
       d = alloc(16)
       (l + 12) <- d
@@ -935,6 +1373,9 @@ function append(l, v) {
       (l + 12) <- d
       (l + 8) <- c * 2
     }
+  }
+  if ((load (l + 12)) + (c * 4)) < (load 3944) {
+    logged((load (l + 12)) + (c * 4))
   }
   ((load (l + 12)) + (c * 4)) <- v
   (l + 4) <- c + 1
@@ -1108,6 +1549,9 @@ function setmember(x, sym, v) {
         if tag(p) == 6 {
           if ((load (p + 4)) == 6) and ((load (p + 8)) == sym) {
             touched(p)
+            if (p + 12) < (load 3944) {
+              logged(p + 12)
+            }
             (p + 12) <- v
           }
         }
@@ -1142,6 +1586,9 @@ function keys(n) {
   if l == 0 {
     l = list()
     touched(n)
+    if (n + 12) < (load 3944) {
+      logged(n + 12)
+    }
     (n + 12) <- l
   }
   l
@@ -1855,7 +2302,14 @@ function texteq(a, b, n) {
 }
 function kept() {
   var s
+  var t
   effects = effects + 1
+  t = load 3932
+  if t != 0 {
+    if (load 3936) > 0 {
+      (t + 44) <- 1
+    }
+  }
   s = isodepth
   while s > 0 {
     (isostack + (((s - 1) * 12) + 8)) <- 1
@@ -2072,6 +2526,7 @@ function matched(p, pos, k) {
   fueled()
   if (load 3848) == 0 {
     3848 <- alloc(67108864)
+    kept()
     3852 <- (load 3848)
     kept()
   }
@@ -3390,6 +3845,9 @@ function valued_from(mark) {
 }
 function under(b, env) {
   touched(b)
+  if (b + 4) < (load 3944) {
+    logged(b + 4)
+  }
   (b + 4) <- env
   b
 }
@@ -3401,6 +3859,7 @@ function reading_of(p, pos) {
   var l
   if (load 3908) == 0 {
     3908 <- alloc(65536 * 20)
+    kept()
     zeroed(load 3908, 65536 * 20)
     kept()
   }
@@ -4429,6 +4888,7 @@ function copied_from(o, s, n) {
   var r
   if (load 3864) == 0 {
     3864 <- alloc(16777200)
+    kept()
     3868 <- 0
     kept()
   }
@@ -4554,6 +5014,7 @@ function pair_end(q) {
   if (q < 8388608) or (q >= (8388608 + (load 4088))) {
     if (load 3880) == 0 {
       3880 <- alloc(1048576)
+      kept()
       zeroed(load 3880, 1048576)
       kept()
     }
@@ -4575,6 +5036,7 @@ function pair_end(q) {
   }
   if (load 3876) == 0 {
     3876 <- alloc((load 4088) * 8)
+    kept()
     zeroed(load 3876, (load 4088) * 8)
     kept()
   }

@@ -1,7 +1,8 @@
-# TODO: bootstrap / kernel
+# TODO: the language and its library
 
-What the library (`@ether/ray`, the optional projects) needs from `ray/bootstrap/` or the kernel, found while making each
-library file load and pass on its own. Each item: what fails, a minimal repro, where it shows.
+What the library (`@ether/ray`, the optional projects) needs from `ray/bootstrap/`, found while making each library file
+load and pass on its own (most under the old kernel, `v0.ts`, gone since 2026-10-30: what they say of the language still
+holds; what was the kernel's own is dropped). Each item: what fails, a minimal repro, where it shows.
 
 ## Conversions
 
@@ -13,6 +14,14 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 
 ## Classes and members
 
+- **A header is read again for each instance** (§21.3, H agreed 2026-10-26): every Box re-reads Shape's 34-field header
+  inside the instance (~20 s a Box). A 30-field probe: 4.1 s an instance today, 0.55 s with each default read on the
+  instance from the class's field list. The names in order are there once per class (`fields_now`'s `written_name`).
+  Open: a default's code. Passing header text between rules loses it (a typed hole takes no spliced hole; `({n}: {t} =
+  {d})` no longer reads a text handed on). The kernel's lazy default (37cf2362) holds the code but reads it only in the
+  frame it was taken in. Not done: a new external for its text, a kernel change to read it on the instance (the user,
+  2026-10-26: no to both). Tried without gain: `taking` written out in the constructor (-10%), the header as the
+  instance's first statement (its reading still not kept). Probes in ~/.cache/ray-scratch/once (run.sh NAME).
 - **`static X := v` is not read on the class**: `B := class { static R := 5 }`, `B.R == 5` fails, with or without a header;
   `static g => 7` and `static f (x) => …` read. Every nested class and constant declared so is unread from outside:
   `Access.Reading`, `Report.Claim`, `Diagnostic.Severity`, `Location.Query`, `Version.Pin`, `Unit.Rate`, `OS.Environment`.
@@ -80,6 +89,40 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **`external io` is gone from the kernel**: the effect tests now use `external read` (Program.ray AC60, EFF2–EFF5); what
   an `@c` / `@js` fragment calls should be an effect too (`os`) once a fragment runs.
 
+## The language run by the compiled Expression (2026-10-30)
+
+The revisions run Expression.ray compiled: the language is read by its class (`(text) as Expression`) and its statements
+run. Harness: ~/.cache/ray-scratch/run (mkrunner.mjs builds a module reading input part 0 as an Expression, paint.mjs
+reports what `external style` painted, mkinput.py puts $/Wasm/level.ray after the entrypoint's header, bis.py/probe.py
+bisect the entrypoint). Work in progress beside it: run/Expression_wip.ray.
+
+- **A defined rule's left side splits at either `=>`**: `{lhs} => {rhs} => { {lhs} => {rhs} }` (the entrypoint's first
+  statement) can be read with LHS `{lhs}` (a single hole: a rule reading anything) or `{lhs} => {rhs}` (meant, `[LHS: [LHS,
+  RHS], RHS]`). The header writes `GRAMMAR_RULE_DEF.LHS = Code` then `.LHS = GRAMMAR_RULE_DEF`: compiled, the second
+  replaces the first, so which reading is taken is down to the matcher's order. With the single-hole one, naming a hole
+  (`node.named(hole.inside)`, which reads and runs the name) applies that rule, which defines a rule, which names its holes:
+  without end (with two `level` rules before it, any rule of two holes after it).
+- **A rule's body is read where it is defined, with the rules before it ("a rule never reads it")**: read at its first
+  application instead, the entrypoint's maker statement reads its own body as itself, without end. Reading it at
+  definition (the head's hole places as the holes, each found at run time in the program it is `bound` in): in
+  Expression_wip.ray, where B' no longer compiles itself (the second round hangs). Kept out of the repository.
+- **A name being read, read again in its own reading**: guarded in Expression_wip.ray (`naming`: such a name is its
+  place), to be kept once the above holds.
+- **Nested splits make a chain of nodes without end**: the split rule (`[{value: …prefix}: keys, rest: String]`) makes
+  `Node(in: caller.in)` for each split and reads the rest in it; with statements running, a rule of two holes after two
+  `level` rules builds ~480K nested nodes (memory runs out in `whole`, which walks `in`).
+- **What nothing reads fails the whole reading**: one unread statement fails `Statement[]`, the reading backtracks into the
+  header (the entrypoint's three-space header has many ways to split its spaces: seconds per failure). It should be an
+  error at that statement (as it was), the reading going on. Tried `({statement: …}: keys | unread: String)`: no gain yet.
+- **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
+  are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
+- **An assert costs ~0.4 s** (its body's rules read again in each fresh node: `matched` is 76%): the reading is kept per
+  rule now (bodies read once); what remains is the matcher's memo being keyed by the node (a fresh one each application).
+- **The host's labels**: `afterwards` is done (continuations kept, run by the class's body once everything is read);
+  `report` (said, then on; in a test, a jump to `erred`) is not.
+- **Painting has no places yet**: `external style` records `[style, value]` (PaintedX); the host needs where each value
+  was read (its span) to paint it, and the LSP still paints from the compiler's grammar only.
+
 ## Node.ray
 
 - **The error handlers read members bare** (`diagnostics`, `diagnostics.last`, `diagnostics.some(.fatal)`, line 68–84):
@@ -98,11 +141,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 
 - **A project's dependency lines are read by nothing** (`@ether/random`, `@x25519` at the top of a `.project.ray`): a file
   given directly reports them unread, and nothing loads the projects they name.
-
-- **Every project at once does not fit**: the 84 files of optional/, `$/` and os/ (with ray/) given to one run fill the
-  2 GB wasm memory (`out of memory (2147483648 bytes)`, then `RangeError: Invalid file ID` in `FileStore.getRecord`), so
-  for now each project is tested with only what it depends on. (Each file read took a 16 MB chunk more, every pending hole
-  type tried again in each settle: now once per text, what a failed try made let go of. A small file is ~0 MB again.)
 
 - **Tagged literals read by nothing** (`@html <p>{who}</p>`, `@json {…}`, `@css …`, `@c …`, `@js …`, `` @ray`1 + 2` ``):
   Language.ray (deleted) read them through `Language.named(ext).level`. They come back when a dependency is flagged as a
@@ -133,12 +171,18 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **`@me/device/os` in the bootstrap** (Node.ray IO3, Ether.entrypoint.ray's `threads` default): the OS is one of the
   devices `@me/device` superposes, selected by its type, `(@me/device as OS)`.
 
+## The compiled compiler's speed
+
+- **A call makes two lists and a node** (`invoke(member2(get(scope, X), m), append(list(), a), node(0))`): every call of
+  a static allocates its arguments' list and an empty named node, then `call` dispatches on the tag. Wanted: a member of
+  a block known when written (`High.x(…)`, `Low.x(…)`) called directly, its arguments given as they are; named only when
+  written. (Revision 11 has a function's parameters in locals when its scope holds nothing else, `with_locals`.)
+- **Each text is measured for what it holds** (`bytes_in`, 13% of a self-compile in revision 11): which characters and
+  pairs of characters a text holds, kept per text, so a pattern lacking one of its literals is not tried. A text read
+  inside one already measured could take it from that one instead of reading its bytes again.
+
 ## Painting
 
-- **A hole's style breaks reading** (`{name ^variable} := …`, `.{member ^property}`, `{word ^variable}` in Name): the kernel
-  crashes now and then (memory access out of bounds in refer ← follow ← valued, ~1 run in 3 at 26 threads) and some enum
-  tests are lost. The style is a member on the hole's node, which is `this` when the hole's code is read: probably why.
-  Until it holds, member names, declared and bare names, and method heads (`allows (called) =>`) are not painted.
 - **A body no test runs is never painted** (a method's, e.g. Access.ray's `covers`): it is read only when it runs.
 
 ## Running a program (found getting `(@me/device as Terminal) = x` to run from the CLI)
@@ -214,9 +258,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   size in cells, against `extent: Length?`): said as an error, and the extent is then the type (all Lengths), so `holds`
   compares against every Length and runs out of memory when asked twice. (A Length is a distance with a unit: the grid's
   extent wants a Quantity, the user, 2026-10-23.)
-- **The CLI's first frame does not fit in 2 GB**: the bootstrap and the 34 files it includes (ray/, $/ devices, os, Device,
-  World, Geometry, ANSI, UI) leave little: "almost all the memory there is is in use" at points that differ from run to run
-  (one thread or many). `RAY_MEMORY` above 2³¹ hangs (above).
 - **A method written against what follows it takes one word of it** (`0..p.width` is `(0..p).width`; `0 .. p.width` and
   `0..(p.width)` read): the member is read on what the method answered. `..<` so is read whole by a rule in Ray.ray (`0..<p.width`,
   `(0..<.height)` in UI's Grid); `..` is not (a rule `{low}..{high}` would take `..<` too): UI's `(from.x..to.x)` (underlines).
@@ -248,14 +289,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
 - **`.` in an argument is what the code is read in, not a section** (`(0..<24).map(8 + 10 * . -- Geometry.Color(., ., .))`
   in ANSI's `Palette`; `[0, 1].map(8 + .)` answers 1): read where ANSI is declared it was `10 * ANSI`, 6000 deep, and ANSI
   was left half-declared (`ANSI.Cell() is ANSI.Cell` false). Lazy statics keep it unread until asked.
-- **The kernel's translation to WebAssembly mishandles a default parameter after another** (`function line(at, end, lo =
-  0, head = at)`, and `head = 0` as well): every caller that leaves them out reads garbage. `line_of` takes them explicitly.
-- **`RAY_MEMORY` above 2³¹ hangs the kernel** (`RAY_MEMORY=3221225472`: a run of the kernel's own translation, two functions,
-  never ends, main's kernel as well; 2³¹, the default, ends in two minutes): an address past 2³¹ is negative as a 32-bit
-  integer. So the self-hosting check runs at the default, and the translation of `apply_` is at the edge of it.
-- **A statement's memory running out is a crash, not a report** (`RAY_STATEMENT_MB=200`, a 20 by 1 TUI grid written: "Worker
-  queue failed: memory access out of bounds", no diagnostic naming the statement; at 400 the frame is written). After the
-  frame, the run ends in "out of memory (2147483648 bytes, all of it in use)": something after the last statement holds 2 GB.
 - **A word method written both with and without parameters, called infix, reads the one without** (`mn (b) => b` and
   `mn => 7`: `qb mn 5`, `qb.mn 5` answer 7's reading, not 5): the decided rule (§21.3, brackets read the one with
   parameters, none the other) takes `mn 5` as `mn` then `5`. Number's `min`/`max` (Ordered's, and Ray's `min =>`) are not
@@ -306,20 +339,10 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   program runs, so the level would not reach them: a level reaching a program's project is still to be designed.
 - **`assert Program(code: { … }){O: L}() == x` without brackets around the program is false** where `(Program(code: { …
   }){O: L})() == x` holds (CO35 is written so).
-- **The kernel's translation of itself mistranslates statements written on an `if`'s own line** (`if (c) { let p = …;
-  while (…) p = …;` on one line: SH6 differs at the first of them); written a statement a line, the same.
 - **A class written as a header alone, no block, makes nothing of it** (`Pa := class (x: Number = 1)`: `Pa(x: 2) is Pa` and
   `Pa().x == 1` are false; `class (x: Number = 1) { }` and `=> { }` hold both).
 - **`Compiler.folding + x` is not a composition** (`(Compiler.folding) + x` is): ` + x` is read as a method of the member's
   value (found by ray-61).
-- **Header defaults given anything (done 2026-10-25, ray-61)**: a call given anything reads its header as a left side; there
-  a default, `b = 0`, `s: T = T()`, now declares its place and gives it the default when first asked for, unless it holds a
-  value already, and what the call gives replaces it (kernel `apply_`, `assigns`: §6.1 "a value read inside a left side is a
-  value", §10.1 "the default, run first and overwritten by an argument given"; the language's own reading of a left side
-  gives the same). `Dq(c: 5).s` is a Vq, `Df(a: 5).b` is 6, a default making its own class reads (NA26–NA29). Before, a
-  default was read as part of the left side (`Vq()` a call pattern), and reading the header again as code got the take's
-  cached places. Still open: given nothing, the header is read as code, in order, so a default reading a field after it
-  (`class (a = b + 1, b = 2)`, Shape's `boundary` reading `space`) reads nothing there.
 - **A header's default reads the fields before it now** (`class (a = 1, b = a)`): `same_block` takes a header after a word
   or `{` as well as after `:`. Anything wider (every bracket) silently lost a test (Ray.ray's IT11: neither passed nor
   failed).
@@ -327,9 +350,6 @@ library file load and pass on its own. Each item: what fails, a minimal repro, w
   hold): and, written to a terminal, ANSI.Colored's `as String` (six joined, `";2;" + … + ANSI.digits(this.blue)`) says
   "nothing in what it is read on reads `+ ";" + …`" when Style's `as String` calls it inside a `map` (directly it writes
   `38;2;255;0;0`); a class written in the entry file with `as String => "r" + ANSI.digits(this.red)` writes nothing.
-- (fixed 2026-10-24) `class: Parent (fields) { … }` without `=>`: a rule's definition whose body is itself a class (`=> class:
-  … => { … }`) is read as that class, never defined: written in brackets. A static conversion naming its class
-  (`static (x: T) as (=== Space)`) is that class's `from` now (the class's name is not given it while its block is read).
 - **`right-to-left` with names written together defines none of them** (Ray.ray's `right-to-left Σ | ∑ | sum => …`:
   `[1, 2, 3].sum` is not 6, though `sumA | sumB => …` and `right-to-left sumC => …` each work): `right-to-left`'s body
   `{operator} => {body}` is read as a definition whose head is the hole, so the alias rule never sees `a | b`. Inlining it

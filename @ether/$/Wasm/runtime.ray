@@ -2056,7 +2056,7 @@ function matched(p, pos, k) {
                                     activen = activen + 1
                                     (actives + (activen * 8)) <- p
                                     ((actives + (activen * 8)) + 4) <- pos
-                                    l = call(load (p + 8), append(list(), text(pos, textend)), 0)
+                                    l = reading_of(p, pos)
                                     if tag(l) != 1 {
                                       activen = activen - 1
                                     } else {
@@ -3226,6 +3226,33 @@ function under(b, env) {
 }
 function staged(f) {
   pattern(17, f, 0)
+}
+function reading_of(p, pos) {
+  var h
+  var l
+  if (load 3908) == 0 {
+    3908 <- alloc(65536 * 20)
+    zeroed(load 3908, 65536 * 20)
+    kept()
+  }
+  h = (load 3908) + (((((p / 4) * 31) + (pos * 7)) + (textend * 13)) and 65535) * 20
+  if (((load h) == p) and ((load (h + 4)) == pos)) and (((load (h + 8)) == textend) and ((load (h + 12)) == epoch)) {
+    return load (h + 16)
+  }
+  l = call(load (p + 8), append(list(), text(pos, textend)), 0)
+  if (lasting_span(pos, textend) == 0) or (tag(l) != 1) {
+    return l
+  }
+  if l < arena_base() {
+    if l < markf {
+      h <- p
+      (h + 4) <- pos
+      (h + 8) <- textend
+      (h + 12) <- epoch
+      (h + 16) <- l
+    }
+  }
+  l
 }
 function reading_at(c, pos) {
   var i

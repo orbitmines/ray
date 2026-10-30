@@ -113,14 +113,16 @@ its own reading its place, unread text recorded with reading going on.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
 
-## Painting (decisions for the user)
+## Painting (decided 2026-10-30)
 
-- **A definition's `=>` has no style to paint it with** (Design §4.7: punctuation): the rule that makes rules,
-  `{lhs} => {rhs}`, and line 60's styled form paint the head they define, not the `=>`. A style on it needs a way to
-  style a literal in a head (``{`=>` ^punctuation}``?): new syntax, to decide.
-- **Code that never runs is never painted** (87% of what is unpainted, ray-91, coverage 20.9% of non-space characters
-  at 460 statements): unapplied bodies, untaken branches. Proposal with ray-45: after `afterwards`, a reading that does
-  not run, painting each application's static styles.
+- **A definition's `=>` painted, written on the first rule** (the user: "`=>` should be colored … on that first rule
+  definition, not separate"): ``{lhs} {`=>` ^punctuation} {rhs} => {…}`` as the first statement breaks the reading (`^`
+  is not defined yet when the header reads it), and its body never runs (the maker is Expression's own). Wanted:
+  Expression honouring a style on the first rule's head, read once `^` is (ray-45, after reading bodies in turn).
+- **Code that never runs is painted by running it abstractly** (the user: "Everything should run as abstraction
+  interpretation is the design"; Design §17.1, the editor runs files abstractly, tests fully): every body run with
+  unknowns, both sides of a branch whose condition is unknown; 87% of what is unpainted at 460 statements is code that
+  never ran (coverage 20.9%).
 
 ## Node.ray
 

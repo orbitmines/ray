@@ -327,7 +327,7 @@ Expression := class (
       }
       level set_parser (parser)
       // (read in turn; everything read, what was kept for afterwards)
-      (Statements(global)(Program(in: global)), (\s | \n)[], (⊣ & ((end) => run_later(0)))(0))
+      (Statements(global)(Program(in: global, this: global)), (\s | \n)[], (⊣ & ((end) => run_later(0)))(0))
     )
   )
 ) => { }

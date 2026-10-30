@@ -1904,6 +1904,74 @@ function lead_byte(p) {
   }
   0 - 1
 }
+function key_lead(x) {
+  var p
+  p = x
+  if tag(x) == 1 {
+    if member(x, 17) != 0 {
+      p = member(x, 17)
+    }
+  }
+  p = topattern(p)
+  if led_by_text(p) {
+    return lead_byte(p)
+  }
+  0 - 1
+}
+function keys_reading(l, t) {
+  var c
+  var s
+  var a
+  var m
+  var i
+  var o
+  var b
+  if (tag(l) != 3) or (tag(t) != 4) {
+    return l
+  }
+  m = load (l + 4)
+  c = load 3956
+  if c == 0 {
+    c = alloc(4194304)
+    kept()
+    zeroed(c, 16400)
+    c <- 16400
+    3956 <- c
+  }
+  s = c + (16 + ((((l / 8) * 31) and 1023) * 16))
+  if (((load s) != l) or ((load (s + 4)) != m)) or ((load (s + 8)) != epoch) {
+    if ((load c) + ((m * 4) + 8)) > 4194304 {
+      zeroed(c + 16, 16384)
+      c <- 16400
+    }
+    a = c + (load c)
+    c <- ((load c) + ((m * 4) + 8))
+    i = 0
+    while i < m {
+      (a + (i * 4)) <- key_lead(at(l, i))
+      i = i + 1
+    }
+    s <- l
+    (s + 4) <- m
+    (s + 8) <- epoch
+    (s + 12) <- a
+    cache_key(l)
+  }
+  a = load (s + 12)
+  b = 0 - 2
+  if (load (t + 4)) < (load (t + 8)) {
+    b = load8 (load (t + 4))
+  }
+  o = list()
+  i = 0
+  while i < m {
+    if ((load (a + (i * 4))) < 0) or ((load (a + (i * 4))) == b) {
+      append(o, at(l, i))
+    }
+    i = i + 1
+  }
+  o
+}
 function led_keys(l) {
   var s
   var a

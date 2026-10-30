@@ -65,7 +65,8 @@ export const uncommented = (text) => text.split('\n').filter((l) => !l.trimStart
 const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'ex := (level input_part 0) as Expression\n'; return t.slice(0, t.indexOf(end) + end.length); };
 export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray', 'High.ray', 'compile.ray'].map((f) => readFileSync(wasm(f), 'utf8'))].join(''));
 
-// (a revision, given a program: its input the header Expression reads first, the program and the runtime, apart by a 0;
+// (a revision, given a program: its input the header Expression reads first, the program and the runtime (each without
+// its lines that are only a comment), apart by a 0;
 // what it writes, from out_base on)
 export const instance = async (module) => {
   const memory = new WebAssembly.Memory({ initial: PAGES, maximum: PAGES });
@@ -73,7 +74,7 @@ export const instance = async (module) => {
   return { exports: instance.exports, memory, u8: new Uint8Array(memory.buffer), i32: new Int32Array(memory.buffer) };
 };
 export const given = (it, program, runtime = readFileSync(wasm('runtime.ray'), 'utf8')) => {
-  const input = Buffer.from([readFileSync(wasm('header.ray'), 'utf8'), uncommented(program), runtime].join('\0'));
+  const input = Buffer.from([readFileSync(wasm('header.ray'), 'utf8'), uncommented(program), uncommented(runtime)].join('\0'));
   it.u8.set(input, 8388608); it.i32[4088 >> 2] = input.length;
 };
 export const compiled = async (module, program) => {
@@ -165,9 +166,9 @@ export const FUEL = Number(process.env.ETHER_FUEL ?? 100000000);
 // or `full`, as a test does; the editor's way is ETHER_RUN's, abstract unless it says `full`; the runtime's `abstractly`
 // answers which)
 export const EDITOR_RUN = process.env.ETHER_RUN === 'full' ? 'full' : 'abstract';
-export const painting = async (module, text, fuel = FUEL, run = 'full') => {
+export const painting = async (module, text, fuel = FUEL, run = 'full', from = -1) => {
   const it = await instance(module), { i32, u8, exports: X } = it, B = 8388608, input = Buffer.from(text + '\0');
-  u8.set(input, B); i32[4088 >> 2] = input.length; i32[3896 >> 2] = fuel; i32[3900 >> 2] = run === 'abstract' ? 1 : 0;
+  u8.set(input, B); i32[4088 >> 2] = input.length; i32[3896 >> 2] = fuel; i32[3900 >> 2] = run === 'abstract' ? 1 : 0; i32[3948 >> 2] = from < 0 ? 0 : B + from;
   let error;
   try { X.main(); } catch (e) { error = i32[3924 >> 2] === 1 ? 'stopped: the reading ran out of memory' : fuel && i32[3896 >> 2] === 1 ? `stopped after ${fuel} steps of reading` : String(e?.message ?? e); }
   const tag = (v) => ((v & 1) || v <= 0 ? 0 : i32[v >> 2]);
@@ -268,8 +269,10 @@ const located = ({ input, at }, [a]) => {
 // (what is painted in a file, read after the entrypoint (or as it): each style, its line and column (from 0) and length, in
 // the file's own characters)
 const SAYING = ['fatal', 'error', 'warn', 'info'];
+// (where the file begins in what is read, in bytes: its tests the only ones run; the entrypoint's own, everything)
+const edited = (input, at, file) => { const l = at.findIndex(([f]) => resolve(f) === resolve(file)); return l <= 0 ? -1 : Buffer.byteLength(input.split('\n').slice(0, l).join('\n')) + 1; };
 export const paints = async (file, text, run = EDITOR_RUN) => {
-  const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, said, error } = await painting(await tester(), input, FUEL, run);
+  const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, said, error } = await painting(await tester(), input, FUEL, run, edited(input, at, file));
   const bytes = Buffer.from(input), place = ([a, e]) => {
     const p = located({ input: bytes, at }, [a]);
     return resolve(p.file ?? '') === resolve(file) ? { line: p.line - 1, column: p.column - 1, length: bytes.subarray(a, e).toString().length } : undefined;

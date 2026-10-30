@@ -2484,6 +2484,20 @@ function abstractly() {
   }
   8
 }
+// (whether a test written at t runs: every test, but when the editor runs a file only those written in it, from where the
+// host says it begins (its word 3948, an address in the input))
+function tested_here(t) {
+  if (load 3948) == 0 {
+    return 12
+  }
+  if tag(t) != 4 {
+    return 12
+  }
+  if origin_at(load (t + 4)) < (load 3948) {
+    return 8
+  }
+  12
+}
 function fueled() {
   if (load 3896) > 0 {
     if (load 3896) == 1 {

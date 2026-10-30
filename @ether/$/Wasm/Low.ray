@@ -28,7 +28,10 @@ Low := {
   // (a module of what a text writes: its functions, named first, so each can call any)
   static module_of (mo_text, mo_pages) => Low.module_taken(mo_text.count, mo_text, mo_pages)
   // (the text read before anything is written: what it is given is read when first asked for)
-  static module_taken (mt_count, mt_text, mt_pages) => Low.module_named(level cw_forced (Compiled.statements_of(mt_text)), mt_pages)
+  static module_taken (mt_count, mt_text, mt_pages) => Low.module_named(level cw_forced (Compiled.statements_of(mt_text).map((mf) => Low.localised(mf))), mt_pages)
+  // (a function whose scope holds only what it is given, its parameters, kept in its own locals, and names read from where
+  // it was made)
+  static localised (lf) => level with_locals lf
   // (what every section reads, read before any of them: each is written where what it makes is let go, what is read
   // in one would not outlive it)
   static module_named (mn, mn_pages) => Low.module(mn, level cw_forced (Low.names_of(mn)), mn_pages)

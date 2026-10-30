@@ -125,13 +125,6 @@ its own reading its place, unread text recorded with reading going on.
 - **The `Array &+= { … }` blocks read exponentially in their members** (statement 523 and line 3140): the definition key
   (`rule:`) reads the block's code as `(hole | String)[]`, asking the hole at each character and inside each nested `{`;
   a memo of those asks halves K=10..12 but K=14 still takes 129 s.
-- **A definition's body across lines in brackets is cut at its first line** (`zg => (\n  \`a1\`\n  )`): the rule-making
-  rule's right side is a lazy `Code` ended by `\n | ⊣`, so it ends at the first line end; a braced body survives only
-  because the hole alternative takes braces whole. Reading a statement to its region's end first breaks trailing
-  comments (the text-led `assert` takes them); wanted: no line end inside an open pair ends it.
-
-## Painting (decided 2026-10-30)
-
 - **A definition's `=>` painted, written on the first rule** (the user: "`=>` should be colored … on that first rule
   definition, not separate"): ``{lhs} {`=>` ^punctuation} {rhs} => {…}`` as the first statement breaks the reading (`^`
   is not defined yet when the header reads it), and its body never runs (the maker is Expression's own). Wanted:

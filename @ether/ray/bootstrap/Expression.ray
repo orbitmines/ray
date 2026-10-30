@@ -31,7 +31,7 @@ Expression := class (
     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
     statements: (
       // A node: its rules by their heads; what it does not read, what it is in reads.
-      Node := class (in?: Node) => {
+      Node := class (in?: Node, of?: Node) => {
         // (itself, as its rules' bodies name it: `this` there is what a statement calls them on)
         node := this
         rules := {
@@ -44,7 +44,7 @@ Expression := class (
             valued := ((written.first == BOOTSTRAPPER.CAPTURE.first) || !((level cw_enclosed (written)) === true)) ? false : !((level holds_text (named) (BOOTSTRAPPER.CAPTURE.first)) === true)
             rule_lhs := valued ? named : written
             rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
-            rule_where := home_of(caller, level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? (caller.in ?? node)
+            rule_where := home_of(caller, level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? ((((caller.for_value === None) || (caller.for_value.rules === None)) ? caller.in : caller.for_value) ?? node)
             rule_home := (valued ? defined_in(rule_where, rule_lhs) : None) ?? rule_where
             sink = Array.new
             head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))
@@ -57,7 +57,7 @@ Expression := class (
               me.bound = holes
               me.caller = caller
               me.in = Node(in: rule_body)
-              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => parameter_read(hole, applied, held(hole, () => named_in(reader(c, caller), hole.value))))
+              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => parameter_read(hole, applied, held(hole, () => named_for(c, reader(c, caller), hole.value))))
               me.in.rules.keys.rest.rest.for((hk) => hk.named = true)
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
@@ -79,7 +79,7 @@ Expression := class (
           }
           [{value: concurrently node.prefix(.)}: node.keys, rest: String] := (caller) => {
             v := value(caller)
-            on := Node(in: caller.in)
+            on := Node(in: caller.in, of: v)
             // (what it is read on gives what is read on it: a node its rules, anything else its fields; one of the level's own
             // kinds of value, what the level says it is, `level kinds`)
             o := ((level kind_of (v)) === None) ? v : named_in(Program(in: kinds_of(caller)), level kind_of (v))
@@ -111,8 +111,8 @@ Expression := class (
         fuller (tx, near, far) => ((far === None) ? false : (tx == far.key)) ? far : near
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
         prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
-        defining (tx) => rules.keys{(.defines === true) && (!(among(aside, .)) && (tx ~= .))}#.sort(.length).last ?? in?.defining(tx)
-        longest (tx, d) => rules.keys{!((. === split_key) || among(aside, .)) && ((d || !((. === maker_key) || (.defines === true))) && (tx ~= .))}#.sort(.length).last
+        defining (tx) => rules.keys{(.defines === true) && ((aside.empty || !(among(aside, .))) && (tx ~= .))}#.sort(.length).last ?? in?.defining(tx)
+        longest (tx, d) => rules.keys{!((. === split_key) || (!(aside.empty) && among(aside, .))) && ((d || !((. === maker_key) || (.defines === true))) && (tx ~= .))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
         reading (tx) => longer(tx, whole(tx))
         longer (tx, w) => ((w === maker_key) || ((w === None) ? false : (tx == w.key))) ? w : (((tx ~= split_key) && ((w === None) || (split_key.length > read_by(tx, w)))) ? split_key : w)
@@ -121,7 +121,7 @@ Expression := class (
         keys => (in === None) ? rules.keys : (rules.keys | in.keys)
       }
       // A program running: what applied it, where it is.
-      Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node) => { }
+      Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node, for_value?: Node) => { }
       Argument := class (\s+, word: String) => { }
       global := Node({
         rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => {
@@ -274,6 +274,15 @@ Expression := class (
       forget (fp) => (fp.bound ?? Array.new).for((fh) => fh.answered = None)
       // (who reads a hole: the program reading it once it entered a block, else what applied the rule)
       reader (hr, hb) => ((hr.in === None) || !(hr.in === hr.this)) ? hb : hr
+      // (a hole read for code read in a value, `x.( … )`: read where it is written, what it defines the value's)
+      named_for (fc, fp, ft) => (((fc.in === None) || (fc.in.of === None)) || (fp.in === fc.in)) ? named_in(fp, ft) : for_value(fp, fc.in.of, ft)
+      for_value (vp, vv, vt) => {
+        was := vp.for_value
+        vp.for_value = vv
+        r := named_in(vp, vt)
+        vp.for_value = was
+        r
+      }
       named_in (np, nt) => np.in.named_as(trimmed_or(level cw_trimmed (nt), nt), np)
       aside := Array.new
       among (xs, x) => xs{. === x}#.count > 0

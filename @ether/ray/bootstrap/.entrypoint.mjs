@@ -193,8 +193,43 @@ export const painting = async (module, text) => {
     const near = levels.find((l) => l.every((s) => s[0] >= a && s[1] <= e));
     return near.reduce((x, s) => (s[0] < x[0] ? s : x));
   };
+  // (a rule shown as written, `{head} ^style => …`: in what it read where it is applied, its head's text but the holes, any
+  // space in the head any amount of space there)
+  const space = (c) => c === 32 || c === 9 || c === 10 || c === 13;
+  const [open, close] = Buffer.from(text.slice(0, text.indexOf('\n')).trim().split(/\s+/).slice(1, 3).join(''));
+  const literal = (head, read, bounds) => {
+    const whole = span(read); if (!whole || tag(head) !== 4) return [];
+    const holes = new Map(list(list(bounds)[0]).map((h) => [words(member(h, 'key')), span(member(h, 'value'))]));
+    const h = Buffer.from(u8.subarray(i32[(head >> 2) + 1], i32[(head >> 2) + 2])), out = [], end = whole[1];
+    let at = whole[0], i = 0;
+    while (i < h.length) {
+      if (h[i] === open) {
+        let d = 0, j = i;
+        do { if (h[j] === open) d++; else if (h[j] === close) d--; j++; } while (j < h.length && d > 0);
+        const inside = h.subarray(i + 1, j - 1).toString().trim(), quoted = /^`(.*)`$/s.exec(inside);
+        i = j;
+        if (quoted) { const q = Buffer.from(quoted[1]); while (at < end && space(input[at])) at++; if (input.subarray(at, at + q.length).equals(q)) { out.push([at, at + q.length]); at += q.length; continue; } return out; }
+        const taken = holes.get(/^[A-Za-z_][A-Za-z0-9_]*/.exec(inside)?.[0]);
+        if (!taken) return out;
+        at = taken[1];
+        continue;
+      }
+      if (space(h[i])) { while (i < h.length && space(h[i])) i++; while (at < end && space(input[at])) at++; continue; }
+      if (space(input[at] ?? 0)) while (at < end && space(input[at])) at++;
+      const from = at;
+      while (i < h.length && h[i] !== open && !space(h[i]) && at < end && input[at] === h[i]) { i++; at++; }
+      if (at > from) out.push([from, at]);
+      if (i < h.length && h[i] !== open && !space(h[i])) return out;
+    }
+    return out;
+  };
+  const entries = list(i32[3968 >> 2]).flatMap((p) => {
+    const [s, v, b] = list(p), style = styled(s);
+    if (tag(v) === 3 && list(v).length === 2) return literal(...list(v), b).map((at) => ({ style, at }));
+    return [{ style, at: where(b) }];
+  });
   // (each once: a body run again paints the same again)
-  const painted = [...new Map(list(i32[3968 >> 2]).map((p) => { const [s, , b] = list(p); return { style: styled(s), at: where(b) }; }).map((p) => [`${p.style}:${p.at}`, p])).values()];
+  const painted = [...new Map(entries.map((p) => [`${p.style}:${p.at}`, p])).values()];
   const unread = [...new Map(list(i32[3860 >> 2]).map(span).filter((s) => s && s[1] > s[0]).map((s) => [s.join(':'), s])).values()];
   return { painted, unread, error, input };
 };

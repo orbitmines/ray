@@ -23,7 +23,9 @@ function members_of(x) {
   e = load (x + 8)
   while e != 0 {
     if (load (e + 4)) != 17 {
-      append(l, entry(name_text(load (e + 4)), load (e + 8)))
+      if (load (e + 4)) != 47 {
+        append(l, entry(name_text(load (e + 4)), load (e + 8)))
+      }
     }
     e = load e
   }
@@ -42,7 +44,9 @@ function holes_of(x) {
   e = load (x + 8)
   while e != 0 {
     if (load (e + 4)) != 17 {
-      append(l, entry(name_text(load (e + 4)), load (e + 8)))
+      if (load (e + 4)) != 47 {
+        append(l, entry(name_text(load (e + 4)), load (e + 8)))
+      }
     }
     e = load e
   }
@@ -1646,8 +1650,8 @@ function astype(v, scope) {
 function class_end(c, mark) {
   pattern(14, c, mark)
 }
-function applied_end(e, mark) {
-  pattern(15, e, mark)
+function applied_end(e, mark, at) {
+  pattern3(15, e, mark, at)
 }
 function conj(p, f) {
   pattern(16, p, f)
@@ -1949,7 +1953,7 @@ function matched(p, pos, k) {
                                     if tag(l) != 1 {
                                       activen = activen - 1
                                     } else {
-                                      k = cell(applied_end(l, boundn), k)
+                                      k = cell(applied_end(l, boundn, pos), k)
                                       p = topattern(member(l, 17))
                                       mode = 0
                                     }
@@ -1978,6 +1982,7 @@ function matched(p, pos, k) {
                                         m = boundn
                                         i = saved(load (p + 12))
                                         l = application(load (p + 8), load (p + 12))
+                                        define(l, 47, text(load (p + 16), pos))
                                         boundn = load (p + 12)
                                         bindv(0, l)
                                         undone_by(i, load (p + 12), m)

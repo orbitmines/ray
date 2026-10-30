@@ -1335,6 +1335,9 @@ function text_led_reading(ctx, n) {
   h <- n
   (h + 4) <- ctx
   (h + 8) <- textend
+  cache_key(n)
+  cache_key(ctx)
+  cache_key(textend)
   (h + 12) <- epoch
   (memo + 1048576 + ((h - memo) / 4)) <- r
   r
@@ -1394,6 +1397,7 @@ function led_keys(l) {
       }
     } else {
       if led_by_text(p) {
+        cache_key(p)
         (a + (4 + (k * 8))) <- p
         (a + (8 + (k * 8))) <- lead_byte(p)
         k = k + 1
@@ -1404,6 +1408,7 @@ function led_keys(l) {
   a <- k
   s <- l
   (s + 4) <- m
+  cache_key(l)
   (s + 8) <- epoch
   (s + 12) <- a
   a
@@ -1847,6 +1852,12 @@ function isolated_open() {
   markf = free
   0
 }
+function cache_key(x) {
+  if x > (load 3920) {
+    3920 <- x
+  }
+  0
+}
 function isolated_value(o, v) {
   var s
   isodepth = isodepth - 1
@@ -1855,8 +1866,10 @@ function isolated_value(o, v) {
   if (((load (s + 8)) == 0) and (noreclaim == 0)) and ((load 3844) == 0) {
     if (pointer(v) == 0) or (v < (load s)) {
       if free > (load s) {
+        if (load s) <= (load 3920) {
+          epoch = epoch + 1
+        }
         free = load s
-        epoch = epoch + 1
       }
     }
   }
@@ -2713,6 +2726,7 @@ function bytes_in(a, e) {
   }
   s <- a
   (s + 4) <- e
+  cache_key(e)
   (s + 8) <- epoch
   s + 16
 }
@@ -3346,6 +3360,9 @@ function reading_of(p, pos) {
       h <- p
       (h + 4) <- pos
       (h + 8) <- textend
+      cache_key(p)
+      cache_key(pos)
+      cache_key(textend)
       (h + 12) <- epoch
       (h + 16) <- l
     }
@@ -4427,6 +4444,7 @@ function pair_end(q) {
       h <- q
       (h + 4) <- r
       (h + 8) <- ((load 3884) + 1)
+      cache_key(r)
       (h + 12) <- epoch
     }
     return r

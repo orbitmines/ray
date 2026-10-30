@@ -3352,6 +3352,115 @@ function param_of(ps, n, a, e) {
   }
   0
 }
+function second_symbol(n, e) {
+  var x
+  var d
+  var v
+  x = n
+  d = 0
+  while x < e {
+    if (load8 x) == 40 {
+      d = d + 1
+    }
+    if (load8 x) == 41 {
+      if d == 0 {
+        return 0 - 1
+      }
+      d = d - 1
+    }
+    if ((load8 x) == 44) and (d == 0) {
+      x = x + 2
+      v = digits_at(x, e)
+      if (v == x) or ((v - x) > 4) {
+        return 0 - 1
+      }
+      d = 0
+      while x < v {
+        d = (d * 10) + ((load8 x) - 48)
+        x = x + 1
+      }
+      return d
+    }
+    x = x + 1
+  }
+  0 - 1
+}
+function written_symbols() {
+  var a
+  var e
+  var x
+  var n
+  var v
+  var b
+  if takent == 0 {
+    return 0
+  }
+  if ((load 3892) == takent) and ((load 3888) != 0) {
+    return load 3888
+  }
+  b = alloc(8192)
+  zeroed(b, 8192)
+  kept()
+  a = load (takent + 4)
+  e = load (takent + 8)
+  x = a
+  while (x + 10) < e {
+    n = 0
+    if m4(x, 97, 115, 115, 105) and m4(x + 4, 103, 110, 40, 0) {
+      n = x + 7
+    }
+    if (m4(x, 115, 101, 116, 109) and m4(x + 4, 101, 109, 98, 101)) and m4(x + 8, 114, 40, 0, 0) {
+      n = x + 10
+    }
+    if m4(x, 119, 105, 116, 104) and m4(x + 4, 40, 0, 0, 0) {
+      n = x + 5
+    }
+    if m4(x, 100, 101, 102, 105) and m4(x + 4, 110, 101, 40, 0) {
+      n = x + 7
+      if m4(n, 115, 99, 111, 112) and m4(n + 4, 101, 44, 32, 0) {
+        n = 0
+      }
+    }
+    if n != 0 {
+      v = second_symbol(n, e)
+      if (v >= 0) and (v < 65536) {
+        (b + (v / 8)) <-8 ((load8 (b + (v / 8))) or (1 << (v % 8)))
+      }
+    }
+    x = x + 1
+  }
+  3888 <- b
+  3892 <- takent
+  b
+}
+function kept_param(w, a, e, k, d) {
+  var x
+  var v
+  var c
+  v = 0
+  x = k
+  while x < d {
+    v = (v * 10) + ((load8 x) - 48)
+    x = x + 1
+  }
+  if (w == 0) or (v >= 65536) {
+    return 0
+  }
+  if ((load8 (w + (v / 8))) and (1 << (v % 8))) != 0 {
+    return 0
+  }
+  c = 0
+  x = a
+  while (x + 14) < e {
+    if ((m4(x, 100, 101, 102, 105) and m4(x + 4, 110, 101, 40, 115)) and (m4(x + 8, 99, 111, 112, 101) and m4(x + 12, 44, 32, 0, 0))) {
+      if texteq(x + 14, k, d - k) and ((load8 (x + 14 + (d - k))) == 44) {
+        c = c + 1
+      }
+    }
+    x = x + 1
+  }
+  c == 1
+}
 function with_locals(f) {
   var a
   var e
@@ -3368,6 +3477,10 @@ function with_locals(f) {
   var g
   var m
   var x
+  var mixed
+  var w
+  var qs
+  var qn
   if tag(f) != 4 {
     return f
   }
@@ -3423,13 +3536,33 @@ function with_locals(f) {
   }
   m = q
   x = q
+  mixed = 0
   while (x + 5) <= e {
     if (m4(x, 115, 99, 111, 112) and m4((x) + 4, 101, 0, 0, 0)) {
       if (((m4(x - 4, 103, 101, 116, 40) and m4((x - 4) + 4, 115, 99, 111, 112)) and m4((x - 4) + 8, 101, 44, 32, 0))) == 0 {
-        return f
+        mixed = 1
       }
     }
     x = x + 1
+  }
+  qs = ps
+  qn = n
+  if mixed {
+    w = written_symbols()
+    qs = alloc(256)
+    qn = 0
+    k = 0
+    while k < n {
+      if kept_param(w, a, e, load (ps + (k * 8)), load (ps + ((k * 8) + 4))) {
+        (qs + (qn * 8)) <- (load (ps + (k * 8)))
+        (qs + ((qn * 8) + 4)) <- (load (ps + ((k * 8) + 4)))
+        qn = qn + 1
+      }
+      k = k + 1
+    }
+    if qn == 0 {
+      return f
+    }
   }
   g = free
   s = markf
@@ -3445,18 +3578,47 @@ function with_locals(f) {
   o = put4(o, 114, 32, 115, 99)
   o = put4(o, 111, 112, 101, 10)
   k = 0
-  while k < n {
+  while k < qn {
     o = put4(o, 32, 32, 118, 97)
     o = put4(o, 114, 32, 112, 0)
-    o = put_span(o, load (ps + (k * 8)), load (ps + ((k * 8) + 4)))
+    o = put_span(o, load (qs + (k * 8)), load (qs + ((k * 8) + 4)))
     o <-8 10
     o = o + 1
     k = k + 1
   }
-  o = put4(o, 32, 32, 115, 99)
-  o = put4(o, 111, 112, 101, 32)
-  o = put4(o, 61, 32, 101, 110)
-  o = put4(o, 118, 10, 0, 0)
+  if mixed {
+    o = put_span(o, h + 13, h + 33)
+    x = h + 33
+    while x < m {
+      r = x
+      while (load8 r) != 10 {
+        r = r + 1
+      }
+      d = digits_at(x + 16, e)
+      if param_of(qs, qn, x + 16, d) {
+        o = put4(o, 32, 32, 112, 0)
+        o = put_span(o, x + 16, d)
+        o = put4(o, 32, 61, 32, 0)
+        o = put_span(o, d + 2, r - 1)
+        o <-8 10
+        o = o + 1
+        o = put_span(o, x, d + 2)
+        o <-8 112
+        o = o + 1
+        o = put_span(o, x + 16, d)
+        o = put4(o, 41, 10, 0, 0)
+      } else {
+        o = put_span(o, x, r + 1)
+      }
+      x = r + 1
+    }
+    n = 0
+  } else {
+    o = put4(o, 32, 32, 115, 99)
+    o = put4(o, 111, 112, 101, 32)
+    o = put4(o, 61, 32, 101, 110)
+    o = put4(o, 118, 10, 0, 0)
+  }
   k = 0
   while k < n {
     o = put4(o, 32, 32, 112, 0)
@@ -3479,7 +3641,7 @@ function with_locals(f) {
   while x < e {
     if ((m4(x, 103, 101, 116, 40) and m4((x) + 4, 115, 99, 111, 112)) and m4((x) + 8, 101, 44, 32, 0)) {
       d = digits_at(x + 11, e)
-      if ((load8 d) == 41) and param_of(ps, n, x + 11, d) {
+      if ((load8 d) == 41) and param_of(qs, qn, x + 11, d) {
         o = put_span(o, r, x)
         o <-8 112
         o = o + 1
@@ -3829,6 +3991,46 @@ function anything_end(n) {
   n
 }
 function pair_end(q) {
+  var h
+  var r
+  if (q < 8388608) or (q >= (8388608 + (load 4088))) {
+    if (load 3880) == 0 {
+      3880 <- alloc(1048576)
+      zeroed(load 3880, 1048576)
+      kept()
+    }
+    h = (load 3880) + (((q * 7) and 65535) * 16)
+    if (((load h) == q) and ((load (h + 8)) == ((load 3884) + 1))) and ((load (h + 4)) <= textend) {
+      if lasting_span(q, load (h + 4)) or ((load (h + 12)) == epoch) {
+        return load (h + 4)
+      }
+    }
+    r = pair_ending(q)
+    if r != 0 {
+      h <- q
+      (h + 4) <- r
+      (h + 8) <- ((load 3884) + 1)
+      (h + 12) <- epoch
+    }
+    return r
+  }
+  if (load 3876) == 0 {
+    3876 <- alloc((load 4088) * 8)
+    zeroed(load 3876, (load 4088) * 8)
+    kept()
+  }
+  h = (load 3876) + ((q - 8388608) * 8)
+  if ((load (h + 4)) == ((load 3884) + 1)) and ((load h) <= textend) {
+    return load h
+  }
+  r = pair_ending(q)
+  if r != 0 {
+    h <- r
+    (h + 4) <- ((load 3884) + 1)
+  }
+  r
+}
+function pair_ending(q) {
   var c
   var d
   var x
@@ -3912,11 +4114,14 @@ function paired(t, cap) {
             if word_byte(c) == 0 {
               if b == c {
                 (3584 + b) <-8 2
+                3884 <- ((load 3884) + 1)
               } else {
                 if (load8 (3584 + b)) == 0 {
                   (3584 + b) <-8 1
+                  3884 <- ((load 3884) + 1)
                 }
                 (3584 + c) <-8 3
+                3884 <- ((load 3884) + 1)
               }
             }
           }
@@ -3970,12 +4175,14 @@ function holds_outside(t, part) {
         return 12
       }
       if c == 1 {
-        d = d + 1
+        r = pair_end(q)
+        if (r == 0) or (r > e) {
+          return 8
+        }
+        q = r
+      } else {
+        q = q + 1
       }
-      if (c == 3) and (d > 0) {
-        d = d - 1
-      }
-      q = q + 1
     }
   }
   8

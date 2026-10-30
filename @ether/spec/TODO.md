@@ -92,27 +92,23 @@ holds; what was the kernel's own is dropped). Each item: what fails, a minimal r
 ## The language run by the compiled Expression (2026-10-30)
 
 The revisions run Expression.ray compiled: the language is read by its class (`(text) as Expression`) and its statements
-run (f6c56a70, revision 18): the whole entrypoint reads and runs in ~0.3 s (359 top-level statements; the last assert
-unread). Harness: ~/.cache/ray-scratch/run (mkrunner.mjs: a module reading input part 0 as an Expression, EXPR= a
+run (f6c56a70, revision 18; 500 statements in 1.3 s at revision 25, 346 run, 507 texts unread, 225 paints). Harness: ~/.cache/ray-scratch/run (mkrunner.mjs: a module reading input part 0 as an Expression, EXPR= a
 variant; mkinput.py: the entrypoint with $/Wasm/level.ray after its first statement; paint.mjs: what was painted and
 what nothing read, UNREAD=n). Done on the way: statements run (they never did), jumps and labels, `afterwards`,
 rule bodies read once with the rule set aside, splices (the old splicehead), a braced body its inside, a name read in
 its own reading its place, unread text recorded with reading going on.
 
-- **The rule-maker wins over every other definition** (`whole`: the maker first whenever it reads, "Definition,
-  text-led, latest"): `foo {c} ^untested => …` is defined by the plain maker with ` ^untested` left in its head, so
-  `foo z` reads nothing, and the entrypoint's `{lhs} ^{style} {`=>`} {rhs} => …` (line 60) never reads a definition;
-  every `assert` (`assert {condition} ^untested => …`) is so, which is why no test paints `passed`/`failed` yet. A rule
-  that is itself a definition (its head holds the maker's separator) should rank with the maker, the latest first.
-- **A defined rule's left side crosses lines**: `foo z\nbar {c} => …` is read as one definition with LHS `foo z\nbar {c}`
-  (the header's `Code` takes any character, a line end too); a head is one line.
+- **The pair table is wrong on main** (ray-91, 2026-10-30): `paired` takes the hole brackets of neighbouring holes
+  (``{`{`}{code}{`}`}``) as a pair, so `{` ends up a closer and nothing is paired. With it corrected, line 60 (`{lhs}
+  ^{style} {`=>`} {rhs}`) defines styled rules and blocks read their bodies, but needs `naming` keyed by (text, node)
+  and `external .` entering its node (with ray-45).
+- **A rule's body is read at each application** (Expression's rewrite, 2026-10-30): with the corrected pairs the heap
+  reaches 2 GB at ~137 statements; a body read once per rule and run in each `at` is wanted.
+- **A block's `{code}` hole tries every `}`** while `{`/`}` are not a pair: statement 524 (`Array &+= {…}`, 13 members)
+  takes over a minute, ~4x per member. Goes with the corrected pairs.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
-- **An assert costs ~0.4 s** (interpreted; `matched` 76%): the matcher's memo is keyed by the node read in, a fresh one
-  each application.
 - **The host's `report`** (said, then on; in a test, a jump to `erred`) is not done.
-- **Prefixes cut between statements read erratically** (bisecting the entrypoint by top-level statements: some prefixes
-  run nothing, one took 2 min): the counts are of a reading that backtracks; compare whole files.
 
 ## Node.ray
 

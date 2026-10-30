@@ -1991,6 +1991,13 @@ function kind_of(v) {
   }
   0
 }
+// (whether the reading runs abstractly, as the editor runs a file, or fully, as a test: the host's word 3900)
+function abstractly() {
+  if (load 3900) != 0 {
+    return 12
+  }
+  8
+}
 function fueled() {
   if (load 3896) > 0 {
     if (load 3896) == 1 {

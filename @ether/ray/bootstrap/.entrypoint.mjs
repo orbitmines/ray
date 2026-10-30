@@ -161,9 +161,13 @@ export const tested = (files, texts = {}) => {
 // (the reading run: each painted style with where it is (in bytes of the input), what nothing read, and how it ended; given
 // fuel, it stops after that many steps of reading, keeping what it painted until then)
 export const FUEL = Number(process.env.ETHER_FUEL ?? 100000000);
-export const painting = async (module, text, fuel = FUEL) => {
+// (how a reading runs (Design §17.1): `abstract`, as the editor runs a file (what never runs is run with unknowns, and painted),
+// or `full`, as a test does; the editor's way is ETHER_RUN's, abstract unless it says `full`; the runtime's `abstractly`
+// answers which)
+export const EDITOR_RUN = process.env.ETHER_RUN === 'full' ? 'full' : 'abstract';
+export const painting = async (module, text, fuel = FUEL, run = 'full') => {
   const it = await instance(module), { i32, u8, exports: X } = it, B = 8388608, input = Buffer.from(text + '\0');
-  u8.set(input, B); i32[4088 >> 2] = input.length; i32[3896 >> 2] = fuel;
+  u8.set(input, B); i32[4088 >> 2] = input.length; i32[3896 >> 2] = fuel; i32[3900 >> 2] = run === 'abstract' ? 1 : 0;
   let error;
   try { X.main(); } catch (e) { error = fuel && i32[3896 >> 2] === 1 ? `stopped after ${fuel} steps of reading` : String(e?.message ?? e); }
   const tag = (v) => ((v & 1) || v <= 0 ? 0 : i32[v >> 2]);
@@ -264,8 +268,8 @@ const located = ({ input, at }, [a]) => {
 // (what is painted in a file, read after the entrypoint (or as it): each style, its line and column (from 0) and length, in
 // the file's own characters)
 const SAYING = ['fatal', 'error', 'warn', 'info'];
-export const paints = async (file, text) => {
-  const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, said, error } = await painting(await tester(), input);
+export const paints = async (file, text, run = EDITOR_RUN) => {
+  const files = { [file]: text }, { text: input, at } = tested([file], files), { painted, unread, said, error } = await painting(await tester(), input, FUEL, run);
   const bytes = Buffer.from(input), place = ([a, e]) => {
     const p = located({ input: bytes, at }, [a]);
     return resolve(p.file ?? '') === resolve(file) ? { line: p.line - 1, column: p.column - 1, length: bytes.subarray(a, e).toString().length } : undefined;

@@ -2486,6 +2486,20 @@ function typed(t, v) {
   }
   v
 }
+function bytes_cached(a, e) {
+  var s
+  if pcache == 0 {
+    return 0
+  }
+  s = pcache + (8388608 - (2048 * 560))
+  s = s + ((((((a * 31) + (e * 7)) / 4) and 2047)) * 560)
+  if ((load s) == a) and ((load (s + 4)) == e) {
+    if lasting_span(a, e) or ((load (s + 8)) == epoch) {
+      return s + 16
+    }
+  }
+  0
+}
 function bytes_in(a, e) {
   var s
   var q
@@ -2518,6 +2532,135 @@ function bytes_in(a, e) {
   (s + 8) <- epoch
   s + 16
 }
+function based_index(b0, e0, w) {
+  var n
+  var x
+  var q
+  var c
+  var h
+  var i
+  var t
+  if ((load (w + 4)) == b0) and ((load w) != 0) {
+    return load w
+  }
+  n = e0 - b0
+  x = alloc(((257 + 4097) + (n * 2)) * 4)
+  t = alloc(4097 * 4)
+  zeroed(x, (257 + 4097) * 4)
+  kept()
+  q = b0
+  c = 0
+  while q < e0 {
+    (x + (((load8 q) + 1) * 4)) <- ((load (x + (((load8 q) + 1) * 4))) + 1)
+    if q > b0 {
+      h = ((c * 31) + (load8 q)) and 4095
+      (x + ((257 + (h + 1)) * 4)) <- ((load (x + ((257 + (h + 1)) * 4))) + 1)
+    }
+    c = load8 q
+    q = q + 1
+  }
+  i = 1
+  while i < 257 {
+    (x + (i * 4)) <- ((load (x + (i * 4))) + (load (x + ((i - 1) * 4))))
+    i = i + 1
+  }
+  i = 1
+  while i < 4097 {
+    (x + ((257 + i) * 4)) <- ((load (x + ((257 + i) * 4))) + (load (x + ((257 + (i - 1)) * 4))))
+    i = i + 1
+  }
+  i = 0
+  while i < 4097 {
+    (t + (i * 4)) <- (load (x + ((257 + i) * 4)))
+    i = i + 1
+  }
+  q = b0
+  c = 0
+  while q < e0 {
+    if q > b0 {
+      h = ((c * 31) + (load8 q)) and 4095
+      (x + ((257 + 4097 + (n + (load (t + (h * 4))))) * 4)) <- q
+      (t + (h * 4)) <- ((load (t + (h * 4))) + 1)
+    }
+    c = load8 q
+    q = q + 1
+  }
+  i = 0
+  while i < 256 {
+    (t + (i * 4)) <- (load (x + (i * 4)))
+    i = i + 1
+  }
+  q = b0
+  while q < e0 {
+    c = load8 q
+    (x + ((257 + (4097 + (load (t + (c * 4))))) * 4)) <- q
+    (t + (c * 4)) <- ((load (t + (c * 4))) + 1)
+    q = q + 1
+  }
+  w <- x
+  (w + 4) <- b0
+  x
+}
+function first_from(x, lo, hi, a) {
+  var m
+  while lo < hi {
+    m = (lo + hi) / 2
+    if (load (x + (m * 4))) < a {
+      lo = m + 1
+    } else {
+      hi = m
+    }
+  }
+  lo
+}
+function occurs_based(x, nb, l, a, e) {
+  var n
+  var b
+  var i
+  var f
+  var j
+  var k
+  var p
+  var g
+  n = (load (l + 8)) - (load (l + 4))
+  b = load (l + 4)
+  p = x + ((257 + 4097) * 4)
+  g = p + (nb * 4)
+  i = 0
+  while i < n {
+    f = load8 (b + i)
+    j = first_from(p, load (x + (f * 4)), load (x + ((f + 1) * 4)), a)
+    if (j >= (load (x + ((f + 1) * 4)))) or ((load (p + (j * 4))) >= e) {
+      return 0
+    }
+    i = i + 1
+  }
+  if n == 1 {
+    return 1
+  }
+  i = 1
+  while i < n {
+    f = (((load8 (b + (i - 1))) * 31) + (load8 (b + i))) and 4095
+    j = first_from(g, load (x + ((257 + f) * 4)), load (x + ((257 + (f + 1)) * 4)), a + 1)
+    if (j >= (load (x + ((257 + (f + 1)) * 4)))) or ((load (g + (j * 4))) >= e) {
+      return 0
+    }
+    i = i + 1
+  }
+  f = (((load8 b) * 31) + (load8 (b + 1))) and 4095
+  k = load (x + ((257 + (f + 1)) * 4))
+  j = first_from(g, load (x + ((257 + f) * 4)), k, a + 1)
+  while j < k {
+    if (((load (g + (j * 4))) - 1) + n) > e {
+      return 0
+    }
+    if texteq((load (g + (j * 4))) - 1, b, n) {
+      return 1
+    }
+    j = j + 1
+  }
+  0
+}
 function occurs(l, a, e) {
   var n
   var f
@@ -2527,6 +2670,27 @@ function occurs(l, a, e) {
   n = (load (l + 8)) - (load (l + 4))
   if n == 0 {
     return 1
+  }
+  if (e - a) > 64 {
+    b = bytes_cached(a, e)
+    if b != 0 {
+      i = 0
+      while i < n {
+        f = load8 ((load (l + 4)) + i)
+        if ((load8 (b + (f / 8))) and (1 << (f % 8))) == 0 {
+          return 0
+        }
+        i = i + 1
+      }
+    }
+    if (a >= 8388608) and (e <= (8388608 + (load 4088))) {
+      return occurs_based(based_index(8388608, 8388608 + (load 4088), 3960), load 4088, l, a, e)
+    }
+    if takent != 0 {
+      if (a >= (load (takent + 4))) and (e <= (load (takent + 8))) {
+        return occurs_based(based_index(load (takent + 4), load (takent + 8), 3952), (load (takent + 8)) - (load (takent + 4)), l, a, e)
+      }
+    }
   }
   b = bytes_in(a, e)
   i = 0

@@ -3330,8 +3330,8 @@ function matched(p, pos, k) {
                           } else {
                             if kind == 5 {
                               k = cell(pattern(22, boundn, 0), k)
-                              p = pattern3(10, load (p + 8), load (p + 12), load (p + 16))
-                              mode = 0
+                              chosen(4, p, pos, k)
+                              mode = 4
                             } else {
                               if kind == 8 {
                                 s = chosen(3, p, pos, k)

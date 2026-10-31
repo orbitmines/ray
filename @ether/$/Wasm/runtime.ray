@@ -963,7 +963,7 @@ function indexed(n) {
     index_in(x, e)
     e = load e
   }
-  touched_by(n, x)
+  touched_by(n, n + 16, x)
   if (n + 16) < (load 3944) {
     logged(n + 16)
   }
@@ -1005,10 +1005,10 @@ function define(n, sym, v) {
       return v
     }
     if pointer(v) {
-      stored(n, v)
+      stored(n, e + 8, v)
     }
   } else {
-    stored(n, free)
+    stored(n, n + 8, free)
   }
   if e == 0 {
     e = alloc(12)
@@ -1052,7 +1052,7 @@ function assign(n, sym, v) {
   while m != 0 {
     e = own(m, sym)
     if e != 0 {
-      touched_by(m, v)
+      touched_by(m, e + 8, v)
       if (e + 8) < (load 3944) {
         logged(e + 8)
       }
@@ -1516,7 +1516,11 @@ function test_end(painted, reported) {
 function append(l, v) {
   var d
   var c
-  touched_by(l, v)
+  if (load (l + 4)) == (load (l + 8)) {
+    touched_by(l, 0, v)
+  } else {
+    touched_by(l, (load (l + 12)) + ((load (l + 4)) * 4), v)
+  }
   if (l + 4) < (load 3944) {
     logged(l + 4)
   }
@@ -1528,7 +1532,7 @@ function append(l, v) {
     if (l + 12) < (load 3944) {
       logged(l + 12)
     }
-    touched_by(l, free)
+    touched_by(l, l + 12, free)
     if c == 0 {
       d = alloc(16)
       (l + 12) <- d
@@ -1721,7 +1725,7 @@ function setmember(x, sym, v) {
         p = at(l, i)
         if tag(p) == 6 {
           if ((load (p + 4)) == 6) and ((load (p + 8)) == sym) {
-            touched_by(p, v)
+            touched_by(p, p + 12, v)
             if (p + 12) < (load 3944) {
               logged(p + 12)
             }
@@ -1758,7 +1762,7 @@ function keys(n) {
   l = load (n + 12)
   if l == 0 {
     l = list()
-    touched_by(n, l)
+    touched_by(n, n + 12, l)
     if (n + 12) < (load 3944) {
       logged(n + 12)
     }
@@ -2616,6 +2620,7 @@ function roomy(l, k) {
   var c
   c = load (l + 4)
   if ((load (l + 8)) - c) < k {
+    touched_by(l, l + 12, free)
     d = alloc((c + k) * 8)
     copy(d, load (l + 12), c * 4)
     (l + 12) <- d
@@ -2826,9 +2831,13 @@ function kept_append(l, v) {
   if (isodepth == 0) or (pointer(v) == 0) {
     return append(l, v)
   }
+  s = 0
   f0 = 0
-  if l < (load isostack) {
-    f0 = load isostack
+  while s < isodepth {
+    if (f0 == 0) and (l < (load (isostack + (s * 12)))) {
+      f0 = load (isostack + (s * 12))
+    }
+    s = s + 1
   }
   if (((f0 == 0) or (v < f0)) or (v >= arena_base())) or (free >= arena_base()) {
     return append(l, v)
@@ -2872,6 +2881,115 @@ function kept_append(l, v) {
   free = f
   markf = m
   l
+}
+function pin_slot(d, w) {
+  var f
+  var b
+  var c
+  f = isostack + ((d * 12) + 8)
+  if (load f) == 2 {
+    return 0
+  }
+  if w == 0 {
+    return 0
+  }
+  b = (load 4056) + (d * 1028)
+  c = load b
+  if c > 0 {
+    if (load (b + (c * 4))) == w {
+      f <- 1
+      return 0
+    }
+  }
+  if c >= 256 {
+    c = slots_compacted(d, b)
+    if c > 200 {
+      f <- 2
+      return 0
+    }
+  }
+  (b + ((c + 1) * 4)) <- w
+  b <- (c + 1)
+  f <- 1
+  0
+}
+function pins_gone(s) {
+  var b
+  var c
+  var i
+  var x
+  if ((load (s + 8)) != 1) or ((load s) < 536870912) {
+    return (load (s + 8)) == 0
+  }
+  b = (load 4056) + (((s - isostack) / 12) * 1028)
+  c = load b
+  i = 1
+  while i <= c {
+    x = load (load (b + (i * 4)))
+    if (x >= (load s)) and (x < free) {
+      return 0
+    }
+    i = i + 1
+  }
+  1
+}
+function pins_up(s) {
+  var d
+  var b
+  var c
+  var i
+  var w
+  var x
+  d = (s - isostack) / 12
+  if d == 0 {
+    return 0
+  }
+  if (load (s + 8)) == 2 {
+    (s - 4) <- 2
+    return 0
+  }
+  if (load s) < 536870912 {
+    if ((load (s + 8)) == 1) and ((load (s - 4)) == 0) {
+      (s - 4) <- 1
+    }
+    return 0
+  }
+  if (load (s + 8)) != 1 {
+    return 0
+  }
+  b = (load 4056) + (d * 1028)
+  c = load b
+  i = 1
+  while i <= c {
+    w = load (b + (i * 4))
+    if w < (load (s - 12)) {
+      x = load ((w / 4) * 4)
+      if (x >= (load s)) and (x < free) {
+        pin_slot(d - 1, w)
+      }
+    }
+    i = i + 1
+  }
+  0
+}
+function slots_compacted(d, b) {
+  var s
+  var i
+  var j
+  var x
+  s = isostack + (d * 12)
+  j = 0
+  i = 1
+  while i <= (load b) {
+    x = load (load (b + (i * 4)))
+    if (x >= (load s)) and (x < free) {
+      j = j + 1
+      (b + (j * 4)) <- (load (b + (i * 4)))
+    }
+    i = i + 1
+  }
+  b <- j
+  j
 }
 function eager_caches() {
   if isodepth > 0 {
@@ -3002,7 +3120,7 @@ function frames_kept() {
   effects = effects + 1
   s = isodepth
   while s > 0 {
-    (isostack + (((s - 1) * 12) + 8)) <- 1
+    (isostack + (((s - 1) * 12) + 8)) <- 2
     s = s - 1
   }
   0
@@ -3012,6 +3130,9 @@ function isolated_open() {
   if isostack == 0 {
     isostack = alloc(65536)
   }
+  if (load 4056) == 0 {
+    4056 <- lasting_alloc(4096 * 1028)
+  }
   if (load 3876) == 0 {
     eager_caches()
   }
@@ -3019,6 +3140,7 @@ function isolated_open() {
   s <- free
   (s + 4) <- markf
   (s + 8) <- 0
+  ((load 4056) + (isodepth * 1028)) <- 0
   isodepth = isodepth + 1
   markf = free
   0
@@ -3031,11 +3153,14 @@ function cache_key(x) {
 }
 function isolated_value(o, v) {
   var s
+  var k
   isodepth = isodepth - 1
   s = isostack + (isodepth * 12)
   markf = load (s + 4)
-  if (((load (s + 8)) == 0) and (noreclaim == 0)) and ((load 3844) == 0) {
+  k = 0
+  if (pins_gone(s) and (noreclaim == 0)) and ((load 3844) == 0) {
     if (pointer(v) == 0) or (v < (load s)) {
+      k = 1
       if free > (load s) {
         if (load s) <= (load 3920) {
           epoch = epoch + 1
@@ -3047,6 +3172,9 @@ function isolated_value(o, v) {
       }
     }
   }
+  if k == 0 {
+    pins_up(s)
+  }
   v
 }
 function isolated_close(o, v) {
@@ -3054,24 +3182,26 @@ function isolated_close(o, v) {
   isodepth = isodepth - 1
   s = isostack + (isodepth * 12)
   markf = load (s + 4)
-  if ((load (s + 8)) == 0) and (noreclaim == 0) {
+  if pins_gone(s) and (noreclaim == 0) {
     free = load s
     epoch = epoch + 1
     4004 <- 0
     3996 <- ((load 3996) + 1)
+  } else {
+    pins_up(s)
   }
   0
 }
-function stored(n, v) {
+function stored(n, w, v) {
   if v >= arena_base() {
     if n < markf {
       effects = effects + 1
     }
     return 0
   }
-  touched_by(n, v)
+  touched_by(n, w, v)
 }
-function touched_by(x, v) {
+function touched_by(x, w, v) {
   var s
   if x >= arena_base() {
     if (load 3844) == 0 {
@@ -3086,9 +3216,17 @@ function touched_by(x, v) {
       while s > 0 {
         if x < (load (isostack + ((s - 1) * 12))) {
           if v >= (load (isostack + ((s - 1) * 12))) {
-            (isostack + (((s - 1) * 12) + 8)) <- 1
+            if (load (isostack + ((s - 1) * 12))) < 536870912 {
+              if (load (isostack + (((s - 1) * 12) + 8))) == 0 {
+                (isostack + (((s - 1) * 12) + 8)) <- 1
+              }
+            } else {
+              pin_slot(s - 1, w)
+            }
+            s = 0
+          } else {
+            s = s - 1
           }
-          s = s - 1
         } else {
           s = 0
         }
@@ -3110,7 +3248,7 @@ function touched(x) {
     s = isodepth
     while s > 0 {
       if x < (load (isostack + ((s - 1) * 12))) {
-        (isostack + (((s - 1) * 12) + 8)) <- 1
+        (isostack + (((s - 1) * 12) + 8)) <- 2
         s = s - 1
       } else {
         s = 0
@@ -4694,7 +4832,7 @@ function valued_from(mark) {
   v
 }
 function under(b, env) {
-  touched_by(b, env)
+  touched_by(b, b + 4, env)
   if (b + 4) < (load 3944) {
     logged(b + 4)
   }

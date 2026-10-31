@@ -363,8 +363,7 @@ function cw_symbol_of(t) {
 }
 function outbyte(b) {
   if outb == 0 {
-    outb = alloc(16777216)
-    kept()
+    outb = lasting_alloc(16777216)
   }
   (outb + outn) <-8 b
   outn = outn + 1
@@ -430,8 +429,7 @@ function cw_datum(t) {
   var at
   var j
   if datab == 0 {
-    datab = alloc(4194304)
-    kept()
+    datab = lasting_alloc(4194304)
   }
   at = datan
   j = load (t + 4)
@@ -466,8 +464,7 @@ function cw_aside_from(x) {
   var m
   var j
   if asideb == 0 {
-    asideb = alloc(4194304)
-    kept()
+    asideb = lasting_alloc(4194304)
   }
   m = untag(x)
   j = m
@@ -550,8 +547,7 @@ function file_named(t) {
 }
 function entry_read(f) {
   var b
-  b = alloc(16)
-  kept()
+  b = lasting_alloc(16)
   b <- f
   (b + 4) <- 0
   (b + 8) <- 0
@@ -576,8 +572,7 @@ function entry_given(t) {
 }
 function image_out() {
   var b
-  b = alloc(112)
-  kept()
+  b = lasting_alloc(112)
   b <- free
   (b + 4) <- textend
   (b + 8) <- boundn
@@ -1225,6 +1220,10 @@ function kept_out(w, v, f0, depth) {
           w = kept_out(w + 4, a, f0, depth + 1)
           n = n + 1
         }
+      } else {
+        w <- (load (e + 4))
+        w = kept_out(w + 4, a, f0, depth + 1)
+        n = n + 1
       }
       e = load e
     }
@@ -1345,18 +1344,17 @@ function test_begin(painted, reported) {
   var t
   var b
   if (load 3932) == 0 {
-    t = alloc(1088)
+    t = lasting_alloc(1088)
     zeroed(t, 1088)
-    (t + 1044) <- alloc(16000000)
-    (t + 1060) <- alloc(32000)
-    (t + 1068) <- alloc(32000)
-    (t + 1076) <- alloc(1048576)
+    (t + 1044) <- lasting_alloc(16000000)
+    (t + 1060) <- lasting_alloc(32000)
+    (t + 1068) <- lasting_alloc(32000)
+    (t + 1076) <- lasting_alloc(1048576)
     (t + 1080) <- 0
-    (t + 1084) <- alloc(131072)
+    (t + 1084) <- lasting_alloc(131072)
     zeroed(load (t + 1084), 131072)
-    3940 <- alloc(8388608)
+    3940 <- lasting_alloc(8388608)
     3932 <- t
-    kept()
   }
   t = load 3932
   d = load 3936
@@ -1781,12 +1779,25 @@ function keyed(n, p, v) {
 }
 function shared_args(w, n) {
   var l
+  var f
+  var m
   l = load w
   if l == 0 {
+    if (load 3840) == 0 {
+      3840 <- (arena_base() + 4194304)
+    }
+    f = free
+    m = markf
+    free = load 3840
+    markf = free
+    3844 <- ((load 3844) + 1)
     l = list()
     append(l, 0)
     append(l, 0)
-    kept()
+    3844 <- ((load 3844) - 1)
+    3840 <- free
+    free = f
+    markf = m
     w <- l
   }
   (l + 4) <- n
@@ -1890,8 +1901,7 @@ function column_index(l, k) {
   var h
   c = load 3992
   if c == 0 {
-    c = alloc(16 + (2097152 + 4194304))
-    kept()
+    c = lasting_alloc(16 + (2097152 + 4194304))
     zeroed(c, 16 + 2097152)
     3992 <- c
   }
@@ -2236,8 +2246,7 @@ function keys_reading(l, t) {
   m = load (l + 4)
   c = load 3912
   if c == 0 {
-    c = alloc(4194304)
-    kept()
+    c = lasting_alloc(4194304)
     zeroed(c, 16400)
     c <- 16400
     3912 <- c
@@ -2300,8 +2309,7 @@ function keys_read(l, t, a) {
   var d
   c = load 3984
   if c == 0 {
-    c = alloc(8388608)
-    kept()
+    c = lasting_alloc(8388608)
     zeroed(c, 1572880)
     c <- 1572880
     3984 <- c
@@ -2553,10 +2561,8 @@ function seeded(t) {
     memo = alloc(65536 * 20)
     kept()
     epoch = 1
-    actives = alloc(1048576)
-    kept()
-    bounds = alloc(16777216)
-    kept()
+    actives = lasting_alloc(1048576)
+    bounds = lasting_alloc(16777216)
   }
   append(csyms, t)
   0
@@ -2783,6 +2789,85 @@ function ending() {
 function anything() {
   pattern(8, 0, 0)
 }
+function lasting_alloc(n) {
+  var f
+  var m
+  var p
+  if (load 3840) == 0 {
+    3840 <- (arena_base() + 4194304)
+  }
+  f = free
+  m = markf
+  free = load 3840
+  p = alloc(n)
+  3840 <- free
+  free = f
+  markf = m
+  p
+}
+function kept_append(l, v) {
+  var s
+  var f0
+  var t
+  var w
+  var r
+  var f
+  var m
+  var c
+  if (isodepth == 0) or (pointer(v) == 0) {
+    return append(l, v)
+  }
+  s = 0
+  f0 = 0
+  while s < isodepth {
+    if (f0 == 0) and (l < (load (isostack + (s * 12)))) {
+      f0 = load (isostack + (s * 12))
+    }
+    s = s + 1
+  }
+  if ((f0 == 0) or (v < f0)) or (v >= arena_base()) {
+    return append(l, v)
+  }
+  if (load 3840) == 0 {
+    3840 <- (arena_base() + 4194304)
+  }
+  f = free
+  m = markf
+  free = load 3840
+  markf = free
+  3844 <- ((load 3844) + 1)
+  t = load 3932
+  if t == 0 {
+    t = alloc(1088)
+    zeroed(t, 1088)
+    (t + 1044) <- alloc(16000000)
+    (t + 1060) <- alloc(32000)
+    (t + 1068) <- alloc(32000)
+    (t + 1076) <- alloc(1048576)
+    (t + 1080) <- 0
+    (t + 1084) <- alloc(131072)
+    zeroed(load (t + 1084), 131072)
+    3940 <- alloc(8388608)
+    3932 <- t
+  }
+  (t + 1064) <- 0
+  (t + 1072) <- 0
+  w = kept_out(load 3940, v, f0, 0)
+  r = alloc(8)
+  r <- (load 3940)
+  c = made_again(r)
+  append(l, c)
+  if (load (t + 1064)) != 0 {
+    zeroed(load (t + 1084), 131072)
+  }
+  (t + 1064) <- 0
+  (t + 1072) <- 0
+  3844 <- ((load 3844) - 1)
+  3840 <- free
+  free = f
+  markf = m
+  l
+}
 function sequence_from(l, i) {
   pattern(9, l, i)
 }
@@ -2925,6 +3010,7 @@ function isolated_value(o, v) {
           epoch = epoch + 1
           4004 <- 0
           3996 <- ((load 3996) + 1)
+          3920 <- 0
         }
         free = load s
       }
@@ -3196,10 +3282,8 @@ function matched(p, pos, k) {
   var q
   fueled()
   if (load 3848) == 0 {
-    3848 <- alloc(67108864)
-    kept()
+    3848 <- lasting_alloc(67108864)
     3852 <- (load 3848)
-    kept()
   }
   base = load 3852
   start = pos
@@ -4727,8 +4811,8 @@ function in_turn(item, f, args, pos) {
       }
       if (load (3860)) == 0 {
         3860 <- list()
+        frames_kept()
       }
-      frames_kept()
       append(load 3860, text(at, se))
       at = se
     } else {
@@ -5764,10 +5848,8 @@ function copied_from(o, s, n) {
   var k
   var r
   if (load 3864) == 0 {
-    3864 <- alloc(16777200)
-    kept()
+    3864 <- lasting_alloc(16777200)
     3868 <- 0
-    kept()
   }
   b = load 3864
   k = load 3868
@@ -6002,8 +6084,7 @@ function pair_set(c, k, home) {
   var n
   b = load 3988
   if b == 0 {
-    b = alloc(65536)
-    kept()
+    b = lasting_alloc(65536)
     b <- 0
     3988 <- b
   }
@@ -6127,8 +6208,7 @@ function holds_outside(t, part) {
   h = 0
   if ((load (t + 4)) >= 8388608) and ((load (t + 8)) <= (8388608 + (load 4088))) {
     if (load 4000) == 0 {
-      4000 <- alloc(1572864)
-      kept()
+      4000 <- lasting_alloc(1572864)
       zeroed(load 4000, 1572864)
     }
     h = (load 4000) + ((((((load (t + 4)) * 31) + ((load (t + 8)) * 7)) + (part / 8)) and 65535) * 24)

@@ -734,7 +734,7 @@ function parsed_statements(g, t) {
   call(parserhook, l, 0)
 }
 function arena_base() {
-  500000000 * 2
+  750000000 * 2
 }
 function lasting_span(a, e) {
   if e <= (8388608 + ((((load 4088) + 7) / 8) * 8)) {
@@ -2873,6 +2873,29 @@ function kept_append(l, v) {
   markf = m
   l
 }
+function eager_caches() {
+  if isodepth > 0 {
+    return 0
+  }
+  if pcache == 0 {
+    pcache = alloc(8388608)
+    pcache <- 16400
+  }
+  if (load 3908) == 0 {
+    3908 <- alloc(65536 * 20)
+    zeroed(load 3908, 65536 * 20)
+  }
+  if (load 3880) == 0 {
+    3880 <- alloc(1048576)
+    zeroed(load 3880, 1048576)
+  }
+  if (load 3876) == 0 {
+    3876 <- alloc((load 4088) * 8)
+    zeroed(load 3876, (load 4088) * 8)
+  }
+  kept()
+  0
+}
 function sequence_from(l, i) {
   pattern(9, l, i)
 }
@@ -2988,6 +3011,9 @@ function isolated_open() {
   var s
   if isostack == 0 {
     isostack = alloc(65536)
+  }
+  if (load 3876) == 0 {
+    eager_caches()
   }
   s = isostack + (isodepth * 12)
   s <- free
@@ -4073,10 +4099,18 @@ function based_index(b0, e0, w) {
     return load w
   }
   n = e0 - b0
-  x = alloc(((257 + 4097) + (n * 2)) * 4)
+  x = load w
+  if x != 0 {
+    if (load (x - 8)) < (((257 + 4097) + (n * 2)) * 4) {
+      x = 0
+    }
+  }
+  if x == 0 {
+    x = (lasting_alloc(((((257 + 4097) + (n * 2)) * 4) + 8))) + 8
+    (x - 8) <- (((257 + 4097) + (n * 2)) * 4)
+  }
   t = alloc(4097 * 4)
   zeroed(x, (257 + 4097) * 4)
-  kept()
   q = b0
   c = 0
   while q < e0 {

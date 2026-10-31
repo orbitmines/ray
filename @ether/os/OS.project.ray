@@ -33,6 +33,9 @@ OS.Ether &+= {
   reading (text: String) => text as Expression
   // a level's own rules reading a value (`level_reads`): the latest of them of one hole whose type the value is
   level_reads (level, value) => TODO `the latest of the level's rules of one hole whose type the value is, given the value`
+  // a file the level is given by its location (the level's `file_named`, what `include` reads): the text the storage keeps
+  // there
+  file_named (location: Location) => (@me/device as Storage)[location as String]
   // a file executed: read as the Ray program it is, run with the arguments
   executed (location: Location, args) => (location as String as Program)(args)
   // sockets: TCP, UDP and TLS in Ray over the network device's frames (Ethernet, IP; RFC 9293, RFC 768, RFC 8446)

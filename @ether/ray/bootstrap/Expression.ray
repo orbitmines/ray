@@ -130,6 +130,7 @@ Expression := class (
           `goto` (to) => (caller.at = to.first) if (to.rest.empty || to.rest.first)
           `label` (to) => to.first
           `style` (how) => painted_with(how, caller)
+          `include` (file) => included(caller, file.first)
           `shown` (how) => shown_of(painted{.rest.first === how.first}#.last, how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
@@ -229,7 +230,7 @@ Expression := class (
       }
       // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label (a jump's
       // first, a label's), its word, or, written in the brackets holes are written in, the value that reads as)
-      given (gc, gr, ga, gf) => (((gr == `goto`) || (gr == `label`)) && (ga === gf)) ? label_of(gc, ga.word) : named_in(gc, ga.word)
+      given (gc, gr, ga, gf) => (((gr == `goto`) || (gr == `label`)) && (ga === gf)) ? label_of(gc, ga.word) : ((gr == `include`) ? takes(gc){.key == ((ga.word.first == BOOTSTRAPPER.CAPTURE.first) ? between(ga.word) : ga.word)}#.first : named_in(gc, ga.word))
       label_of (lp, lw) => (lw ~= BOOTSTRAPPER.CAPTURE.map{== \s}(String+)) ? [named_in(lp, lw)] : Place(lw, global)
       same_label (sa, sb) => ((level kind_of (sa)) == `list`) ? (((level kind_of (sb)) == `list`) && (sa.first == sb.first)) : (sa == sb)
       later := Array.new
@@ -309,6 +310,14 @@ Expression := class (
       bound_along (bc) => (bc === None) ? Array.new : [bc.bound].joined(bound_along(bc.caller))
       // (what the holes took where a program runs, the nearest first; where the rule is used whose holes took a head)
       takes (tc) => (tc === None) ? Array.new : (tc.bound ?? Array.new).joined(takes(tc.caller))
+      // (a file, `external include <location>`: the text the host gave for the location as written where the include is, read
+      // in turn there, as the code written in its place)
+      included (ic, ie) => file_read(holder(ic, written_by(ic, ie)), written_by(ic, ie))
+      file_read (fp, fe) => ((fp === None) || ((level file_named (level cw_trimmed (fe.value))) === None)) ? None : named_in(fp.caller, level file_named (level cw_trimmed (fe.value)))
+      // (the hole a hole's text names, `{x}`, further out, as far as one does)
+      written_by (wc, we) => (((we === None) || !((level cw_trimmed (we.value)).first == BOOTSTRAPPER.CAPTURE.first)) || (holder(wc, we) === None)) ? we : (outer_hole(holder(wc, we), between(level cw_trimmed (we.value))) ?? we)
+      outer_hole (oh, ok) => (takes(oh.caller){.key == ok}#.first === None) ? None : written_by(oh.caller, takes(oh.caller){.key == ok}#.first)
+      holder (oc, oe) => ((oe === None) || (oc === None)) ? None : (among(oc.bound ?? Array.new, oe) ? oc : holder(oc.caller, oe))
       home_of (hc, he) => ((he === None) || (hc === None)) ? None : (among(hc.bound ?? Array.new, he) ? hc.caller.in : home_of(hc.caller, he))
       // (the nearest node that defines a name itself)
       defined_in (dn, dt) => (dn === None) ? None : ((dn.rules.keys{!((. === dn.maker_key) || (. === dn.split_key)) && (dt ~= .)}#.count > 0) ? dn : defined_in(dn.in, dt))

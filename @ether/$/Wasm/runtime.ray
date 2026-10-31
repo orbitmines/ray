@@ -2652,6 +2652,46 @@ function fueled() {
   }
   0
 }
+function block_closed(a, n) {
+  var q
+  var d
+  var f
+  var l
+  d = 0
+  q = a
+  while q < textend {
+    if (q >= n) and (d <= 0) {
+      return 0
+    }
+    f = q
+    while (f < textend) and (((load8 f) == 32) or ((load8 f) == 9)) {
+      f = f + 1
+    }
+    if f < textend {
+      if (load8 (3584 + (load8 f))) == 3 {
+        d = d - 1
+        if (d == 0) and (f >= n) {
+          return f + 1
+        }
+      }
+    }
+    l = f
+    while (l < textend) and ((load8 l) != 10) {
+      l = l + 1
+    }
+    f = l
+    while (f > q) and (((load8 (f - 1)) == 32) or ((load8 (f - 1)) == 9)) {
+      f = f - 1
+    }
+    if f > q {
+      if (load8 (3584 + (load8 (f - 1)))) == 1 {
+        d = d + 1
+      }
+    }
+    q = l + 1
+  }
+  0
+}
 function open_before(a, n) {
   var q
   var t
@@ -4151,6 +4191,12 @@ function in_turn(item, f, args, pos) {
     q = textend
     textend = statement_end(pos, white_after(at))
     se = textend
+    textend = q
+    v = block_closed(at, se)
+    if v > 0 {
+      se = statement_end(pos, v)
+    }
+    textend = se
     r = matched(item, at, cell(pattern(23, 0, 0), 0))
     textend = q
     if r <= at {

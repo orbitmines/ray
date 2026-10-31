@@ -161,15 +161,15 @@ its own reading its place, unread text recorded with reading going on.
     a freed call (kept_out/made_again). Correct, but 2.9 → 3.9 s on the entrypoint, and x21 still keeps calls through
     live references. ray-98 is moving run state off nodes older than the call.
   - *Evacuation* (2026-10-31, ray-4d, ray-98 agreed): a call whose answer, or one live write, is new keeps its whole
-    region. The fix is to copy out what those reach at the region's close and free the rest. A copier exists in scratch
-    (/tmp/claude-1000/s/ev/rt_ev9.ray: nodes, entries, indexes, lists, texts and their bytes with the copies table
-    remapped, closures, places, spans, most pattern kinds; it gives up on others). Now /tmp/claude-1000/s/ev/rt_evW2.ray
-    (on revision 101). Fixed there: the commit loop read `x / 4 * 4` as `x / (4 * 4)` and rewrote no slot; the copier's
-    tables were made inside the region it closed; the bindings, the matcher's saved bindings and the test log are roots.
-    Each single evacuation now runs the entrypoint clean, and all of them do: 420 → 256 MB, but 2.9 → 59 s (not the memo
-    flushes, the roots or the remap; what runs after a move is slower), and painting the tests breaks (a list the host
-    reads is garbage), with or without evacuating inside a test. Next: a heap scan of the painting run, as for the
-    entrypoint (scank.mjs, K=n evacuates only the n-th).
+    region. The fix is to copy out what those reach at the region's close and free the rest. The copier is in scratch,
+    /tmp/claude-1000/s/ev/rt_evE23.ray (on revision 102; evacuates only regions begun past 512 MB, rt_evE23z always).
+    Always on, it gives the same test results on main. Not landed: (1) its code alone, never called, makes main 3-4%
+    slower (29 trivial dead functions cost nothing; this is V8, not the compiler); (2) ray-98's calls build (b3) still
+    runs out of memory: 80-140 MB freed of 950. What still blocks the regions kept there: a binding record
+    (`[sym, a, e, value]`, a matcher snapshot) reached as a value and read as a list, text positions into bytes no text
+    holds, the copy space running out near the limit. Found on the way (all fixed there): `a / 4 * 4` reads as
+    `a / (4 * 4)` in runtime.ray; the slot log repeats a slot, and its second rewrite wrote 0; every unread statement
+    marked every open region kept (`in_turn`'s `frames_kept`); several caches keyed by address outlived a move.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

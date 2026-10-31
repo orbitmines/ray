@@ -3228,7 +3228,9 @@ function matched(p, pos, k) {
         if i >= (load (l + 4)) {
           mode = 1
         } else {
-          k = cell(sequence_from(l, i + 1), k)
+          if (i + 1) < (load (l + 4)) {
+            k = cell(sequence_from(l, i + 1), k)
+          }
           p = at(l, i)
           mode = 0
         }
@@ -3281,8 +3283,16 @@ function matched(p, pos, k) {
                   }
                 } else {
                   if kind == 3 {
-                    p = sequence_from(load (p + 8), 0)
-                    mode = 0
+                    l = load (p + 8)
+                    if (load (l + 4)) == 0 {
+                      mode = 1
+                    } else {
+                      if (load (l + 4)) > 1 {
+                        k = cell(sequence_from(l, 1), k)
+                      }
+                      p = at(l, 0)
+                      mode = 0
+                    }
                   } else {
                     if kind == 11 {
                       m = boundn

@@ -1912,7 +1912,7 @@ function lead_byte(p) {
   }
   0 - 1
 }
-function key_lead(x) {
+function key_pattern(x) {
   var p
   p = x
   if tag(x) == 1 {
@@ -1921,10 +1921,8 @@ function key_lead(x) {
     }
   }
   p = topattern(p)
-  if led_by_text(p) {
-    return lead_byte(p)
-  }
-  0 - 1
+  cache_key(p)
+  p
 }
 function keys_reading(l, t) {
   var c
@@ -1934,6 +1932,8 @@ function keys_reading(l, t) {
   var i
   var o
   var b
+  var p
+  var d
   if (tag(l) != 3) or (tag(t) != 4) {
     return l
   }
@@ -1948,15 +1948,20 @@ function keys_reading(l, t) {
   }
   s = c + (16 + ((((l / 8) * 31) and 1023) * 16))
   if (((load s) != l) or ((load (s + 4)) != m)) or ((load (s + 8)) != epoch) {
-    if ((load c) + ((m * 4) + 8)) > 4194304 {
+    if ((load c) + ((m * 8) + 8)) > 4194304 {
       zeroed(c + 16, 16384)
       c <- 16400
     }
     a = c + (load c)
-    c <- ((load c) + ((m * 4) + 8))
+    c <- ((load c) + ((m * 8) + 8))
     i = 0
     while i < m {
-      (a + (i * 4)) <- key_lead(at(l, i))
+      p = key_pattern(at(l, i))
+      (a + (i * 8)) <- p
+      (a + ((i * 8) + 4)) <- (0 - 1)
+      if led_by_text(p) {
+        (a + ((i * 8) + 4)) <- lead_byte(p)
+      }
       i = i + 1
     }
     s <- l
@@ -1970,14 +1975,17 @@ function keys_reading(l, t) {
   if (load (t + 4)) < (load (t + 8)) {
     b = load8 (load (t + 4))
     if white(b) or (b == 10) {
-      return l
+      b = 0 - 3
     }
   }
   o = list()
   i = 0
   while i < m {
-    if ((load (a + (i * 4))) < 0) or ((load (a + (i * 4))) == b) {
-      append(o, at(l, i))
+    d = load (a + ((i * 8) + 4))
+    if ((d < 0) or (d == b)) or (b == (0 - 3)) {
+      if literals_in(load (a + (i * 8)), load (t + 4), load (t + 8)) {
+        append(o, at(l, i))
+      }
     }
     i = i + 1
   }

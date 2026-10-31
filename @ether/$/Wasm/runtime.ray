@@ -2806,7 +2806,7 @@ function tested_here(t) {
 }
 function fueled() {
   if (load 3944) != 0 {
-    if (((free - (load 3944)) > 134217728) or (free > (arena_base() - 67108864))) or (((load ((load 3932) + 48)) - (load 3896)) > 60000000) {
+    if (((free - (load 3944)) > 134217728) or (free > (arena_base() - 67108864))) or (((load ((load 3932) + 48)) - (load 3896)) > 20000000) {
       3916 <- 1
     }
   }

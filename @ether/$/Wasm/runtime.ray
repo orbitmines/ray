@@ -1853,20 +1853,15 @@ function column_of(e, k) {
   }
   at(e, k)
 }
-function last_with(l, kv, v) {
+function column_index(l, k) {
   var c
-  var k
   var i
   var n
   var x
   var h
-  if tag(l) != 3 {
-    return 0
-  }
-  k = untag(kv)
   c = load 3992
   if c == 0 {
-    c = alloc(16 + 2097152)
+    c = alloc(16 + (2097152 + 4194304))
     kept()
     zeroed(c, 16 + 2097152)
     3992 <- c
@@ -1880,8 +1875,9 @@ function last_with(l, kv, v) {
     (c + 12) <- 0
   }
   i = load (c + 8)
-  while i < n {
+  while (i < n) and (i < 1048576) {
     x = column_of(at(l, i), k)
+    (c + (2097168 + (i * 4))) <- 0
     if (x != 0) and ((load (c + 12)) < 200000) {
       h = (((x / 8) * 40503) and 262143)
       while ((load (c + (16 + (h * 8)))) != 0) and ((load (c + (16 + (h * 8)))) != x) {
@@ -1891,13 +1887,42 @@ function last_with(l, kv, v) {
         (c + 12) <- ((load (c + 12)) + 1)
       }
       (c + (16 + (h * 8))) <- x
+      (c + (2097168 + (i * 4))) <- (load (c + (20 + (h * 8))))
       (c + (20 + (h * 8))) <- (i + 1)
     }
     i = i + 1
   }
-  (c + 8) <- n
-  if ((load (c + 12)) >= 200000) or (v == 0) {
-    i = n - 1
+  (c + 8) <- i
+  if ((load (c + 12)) >= 200000) or (i < n) {
+    return 0
+  }
+  c
+}
+function column_last(c, v) {
+  var h
+  h = (((v / 8) * 40503) and 262143)
+  while (load (c + (16 + (h * 8)))) != 0 {
+    if (load (c + (16 + (h * 8)))) == v {
+      return load (c + (20 + (h * 8)))
+    }
+    h = (h + 1) and 262143
+  }
+  0
+}
+function last_with(l, kv, v) {
+  var c
+  var k
+  var i
+  if tag(l) != 3 {
+    return 0
+  }
+  k = untag(kv)
+  c = 0
+  if v != 0 {
+    c = column_index(l, k)
+  }
+  if c == 0 {
+    i = (load (l + 4)) - 1
     while i >= 0 {
       if column_of(at(l, i), k) == v {
         return at(l, i)
@@ -1906,14 +1931,50 @@ function last_with(l, kv, v) {
     }
     return 0
   }
-  h = (((v / 8) * 40503) and 262143)
-  while (load (c + (16 + (h * 8)))) != 0 {
-    if (load (c + (16 + (h * 8)))) == v {
-      return at(l, (load (c + (20 + (h * 8)))) - 1)
-    }
-    h = (h + 1) and 262143
+  i = column_last(c, v)
+  if i == 0 {
+    return 0
   }
-  0
+  at(l, i - 1)
+}
+function all_with(l, kv, v) {
+  var c
+  var k
+  var i
+  var o
+  var r
+  var n
+  o = list()
+  if tag(l) != 3 {
+    return o
+  }
+  k = untag(kv)
+  c = 0
+  if v != 0 {
+    c = column_index(l, k)
+  }
+  if c == 0 {
+    i = 0
+    while i < (load (l + 4)) {
+      if column_of(at(l, i), k) == v {
+        append(o, at(l, i))
+      }
+      i = i + 1
+    }
+    return o
+  }
+  r = list()
+  i = column_last(c, v)
+  while i != 0 {
+    append(r, at(l, i - 1))
+    i = load (c + (2097168 + ((i - 1) * 4)))
+  }
+  n = (load (r + 4)) - 1
+  while n >= 0 {
+    append(o, at(r, n))
+    n = n - 1
+  }
+  o
 }
 function first_where(l, f) {
   var i

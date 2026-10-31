@@ -4381,14 +4381,6 @@ function enclosed_holes(l) {
           (f + 16) <- load8 (load ((load (b + 8)) + 4))
           if texts_equal(load (a + 8), load (b + 8)) {
             (f + 12) <- 2
-            (3584 + (load (f + 16))) <-8 2
-            3884 <- ((load 3884) + 1)
-          } else {
-            if ((load8 (3584 + (load (f + 16)))) == 0) and ((load8 (3584 + (load8 ((load ((load (a + 8)) + 8)) - 1)))) == 0) {
-              (3584 + (load (f + 16))) <-8 3
-              (3584 + (load8 ((load ((load (a + 8)) + 8)) - 1))) <-8 1
-              3884 <- ((load 3884) + 1)
-            }
           }
         } else {
           if ((a != 0) and (spaced(l, i - 2) == 0)) or ((b != 0) and (spaced(l, i + 2) == 0)) {
@@ -6003,7 +5995,51 @@ function pair_ending(q) {
   }
   0
 }
-function paired(t, cap) {
+function pair_set(c, k, home) {
+  var b
+  var n
+  b = load 3988
+  if b == 0 {
+    b = alloc(65536)
+    kept()
+    b <- 0
+    3988 <- b
+  }
+  n = load b
+  if n < 5460 {
+    (b + (4 + (n * 12))) <- c
+    (b + (8 + (n * 12))) <- (load8 (3584 + c))
+    (b + (12 + (n * 12))) <- home
+    b <- (n + 1)
+  }
+  (3584 + c) <-8 k
+  3884 <- ((load 3884) + 1)
+  0
+}
+function unpaired(home) {
+  var b
+  var n
+  var r
+  b = load 3988
+  if b == 0 {
+    return 0
+  }
+  n = load b
+  while n > 0 {
+    r = b + (4 + ((n - 1) * 12))
+    if (load (r + 8)) == home {
+      (3584 + (load r)) <-8 (load (r + 4))
+      3884 <- ((load 3884) + 1)
+      n = n - 1
+    } else {
+      b <- n
+      return 0
+    }
+  }
+  b <- n
+  0
+}
+function paired(t, cap, home) {
   var oa
   var oe
   var ce
@@ -6048,13 +6084,11 @@ function paired(t, cap) {
           if (white(b) == 0) and ((white(c) == 0) and (word_byte(b) == 0)) {
             if (word_byte(c) == 0) and ((b != (load8 (ce - 1))) and (c != (load8 oa))) {
               if b == c {
-                (3584 + b) <-8 2
-                3884 <- ((load 3884) + 1)
+                pair_set(b, 2, home)
               } else {
                 if ((load8 (3584 + b)) == 0) and ((load8 (3584 + c)) == 0) {
-                  (3584 + b) <-8 1
-                  (3584 + c) <-8 3
-                  3884 <- ((load 3884) + 1)
+                  pair_set(b, 1, home)
+                  pair_set(c, 3, home)
                 }
               }
             }

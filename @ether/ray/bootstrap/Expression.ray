@@ -61,7 +61,7 @@ Expression := class (
               me.in.rules.keys.rest.rest.for((hk) => hk.named = true)
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
-              rule_style.append(painted{.rest.first === rule_own}#) if rule_style.empty
+              rule_style.append(level all_with (painted) (1) (rule_own)) if rule_style.empty
               rule_style.first.for((rs) => painted.append([rs.first, [rule_lhs, me.input], [me.bound]]))
               // (its body read and run in turn where it runs, the rule set aside while it is read: a rule never reads itself)
               me.outside = aside

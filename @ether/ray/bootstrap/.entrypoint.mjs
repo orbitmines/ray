@@ -277,6 +277,7 @@ const read_out = (it, input, regions, text, error) => {
     const [hole, b] = list(r), v = member(hole, 'value');
     return { message: tag(v) === 4 ? words(v).trim() : '', at: where(b) ?? span(v) };
   }) : [];
+  if (i32[4068 >> 2]) for (const t of list(i32[4068 >> 2])) said.push({ message: 'ran past its budget: 200000000 steps', at: span(t) });
   return { painted, unread, said, error, input };
 };
 // (the editor's image (Design: the entrypoint and what it includes read once): their reading kept, its memory's pages and

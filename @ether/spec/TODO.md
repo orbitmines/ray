@@ -150,6 +150,10 @@ its own reading its place, unread text recorded with reading going on.
   - *`x = v`* (user: Design's `{ value ; (name) := value }`, scratch w16): assigns, but the loops in `taking`/`takes`/
     `each takes` then run over lists, and lists are a class (`Array`), which needs calls.
   Repro: ~/.cache/ray-scratch/r45 (w70/w71 calls, w72/w76 all together), mkskip45.py N with the loop tests skipped.
+- **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
+  0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
+  - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the
+    comment as `backward`, so `assert !(true)  // …` passes (r91/in/pnot2.ray). Every test line ends with a comment.
 
 ## Node.ray
 
@@ -164,6 +168,13 @@ its own reading its place, unread text recorded with reading going on.
 - **Expected errors.** A test passes only when nothing erred, so a test of an error path cannot pass: the rules that
   prevent each other (Control.ray PV1–PV3) and a function raising a non-fatal error (Diagnostics.ray ER14–ER21) fail with
   the error they expect. Something must say that an error is expected.
+- **Tests in a class's block are never read** (2026-10-31): a class body is read per instance, so Project.ray's asserts
+  (all inside `Project := class: Location { … }`) are neither run nor painted `untested`: `--test @ether/ray/Project.ray`
+  says 0 passed, 0 failed. They should at least be reported.
+- `--test FILE` per library file, rev 73 (with include; passed/failed): Access 7/0, Character 4/2, Choice 6/10, Control
+  15/15, Diagnostics 6/17, Location 14/4, OS 3/1, Program 21/13, Project 0/0 (30 s), Unit 27/5; bootstrap Ray 20/39,
+  Number 35/25, String 32/24, Node 25/12. ~7-8 s a file (2-3 s before include). Whole file (9 loop tests blanked):
+  361/289, of which ~36 passes are comment captures (`{ }` in a head takes a trailing comment, r91/cdiff.mjs).
 
 ## Projects
 
@@ -211,11 +222,24 @@ its own reading its place, unread text recorded with reading going on.
   and `longer`/`read_by` read the text with the chosen key again (~20%).
 - **The editor reads the entrypoint and its includes again for every file** (~4.8 of ~6 s an edit, revision 74: Ray.ray
   1.4 s, String 1.3, Number 0.9, Expression 0.6, Compiler 0.5): an image (revisions 76-78: `image_out`/`image_in`, Expression's
-  `level entry_read (read_text)`, the export `entry_given(text)`), the host's snapshot/restore (ray-6b) still to wire.
+  `level entry_read (read_text)`, the export `entry_given(text)`); the host reads each file after it by default since
+  9994f8a8 (OS 0.2 s, Choice 0.47, Control 1.6, was 6-7 s; the image ~3 s once, ~356 MB). Paints equal the full run's but
+  one extra `string.punctuation` in Control.ray (40:2).
 
 ## Painting
 
 - **A body no test runs is never painted** (a method's, e.g. Access.ray's `covers`): it is read only when it runs.
+  Measured 2026-10-31 in the editor (own tests only): OS 91%, Character 86, Choice 80, Diagnostics 73, Access 67,
+  Location 67, Program 59, Unit 50, Project 38% of characters painted; the rest is nearly all bodies, a definition's `=>`
+  and its head's holes. Even applied bodies (`choose {type} ^keyword => Program(name: "choose"): type`) leave nothing in
+  the definition. Abstract runs of rules never applied: read each one's own head as a statement (prototype
+  ~/.cache/ray-scratch/r91/e_ab.ray), little gain until applied bodies paint.
+- **Names painted in a style not theirs**: `Number`, `Array`, `Program`, `Narrowing`, `into`, `narrowed_whole` are
+  painted `string.punctuation` at every use, via the rule-level style (`painted{.rest.first === rule_own}#`) — an entry of
+  the `` `{text ^string}` ^string.punctuation `` definitions matches their rule. Not `keys.last` (tried), not rule_own
+  None, not per-test memory. The entry's value is those rules' own keys: likely `` (level rule `"{text ^string}"`)
+  ^string.punctuation `` (entrypoint, before that head is defined; also the `(level rule …) ^punctuation` lines), as
+  `level rule` asks `external rule`, which Expression does not answer.
 
 ## Running a program (found getting `(@me/device as Terminal) = x` to run from the CLI)
 

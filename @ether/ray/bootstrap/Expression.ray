@@ -70,14 +70,17 @@ Expression := class (
               aside = [rule_own].joined(aside)
               (rs: Statements(me.in)(me) = rule_rhs)
               aside = me.outside
-              leaving(finished(me), me.answer)
+              left := leaving(finished(me), me.answer)
+              // (the pairs its body's rules wrote, known only while it is read)
+              level unpaired (me.in)
+              left
             }
             rule_own := rule_home.rules.keys.last
             rule_own.written_head = rule_lhs
             written_here.append(rule_own) if ((level tested_here (rule_lhs)) === true)
             (rule_own.named = true) if !((level holds_text (rule_lhs) (BOOTSTRAPPER.CAPTURE.first)) === true)
             // (the pairs its head writes, `({x})`, known to what is read after it; one holding `=>`, a rule that defines)
-            level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE)
+            level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE) (rule_home)
             (rule_own.defines = true) if ((level holds_text (rule_lhs) (separator)) === true)
             rule_own
           }

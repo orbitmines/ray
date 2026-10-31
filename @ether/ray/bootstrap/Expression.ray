@@ -111,8 +111,8 @@ Expression := class (
         fuller (tx, near, far) => ((far === None) ? false : (tx == far.key)) ? far : near
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
         prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
-        defining (tx) => rules.keys{(.defines === true) && ((aside.empty || !(among(aside, .))) && (tx ~= .))}#.sort(.length).last ?? in?.defining(tx)
-        longest (tx, d) => rules.keys{!((. === split_key) || (!(aside.empty) && among(aside, .))) && ((d || !((. === maker_key) || (.defines === true))) && (tx ~= .))}#.sort(.length).last
+        defining (tx) => (level keys_reading (rules.keys) (tx)){(.defines === true) && ((aside.empty || !(among(aside, .))) && (tx ~= .))}#.sort(.length).last ?? in?.defining(tx)
+        longest (tx, d) => (level keys_reading (rules.keys) (tx)){!((. === split_key) || (!(aside.empty) && among(aside, .))) && ((d || !((. === maker_key) || (.defines === true))) && (tx ~= .))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
         reading (tx) => longer(tx, whole(tx))
         longer (tx, w) => ((w === maker_key) || ((w === None) ? false : (tx == w.key))) ? w : (((tx ~= split_key) && ((w === None) || (split_key.length > read_by(tx, w)))) ? split_key : w)

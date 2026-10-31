@@ -168,6 +168,12 @@ its own reading its place, unread text recorded with reading going on.
     go to its caller). With calls it lets en_inode finish; on main ~3% slower (recording a slot per write), so it lands
     with calls. (2) The evacuator on those slots (rt_ev5A.ray): correct (painting identical), but most attempts give up
     on text positions and the attempts make it ~6x slower. Needs: positions resolved without a fixup list per attempt.
+    (1) landed as revision 115, past 512 MB only (32 slots per call, compacted).
+  - *Per-statement budget* (2026-10-31, revision 116): an innermost statement past 200M steps, or begun with the heap
+    within 128 MB of the arena, answers nothing until it ends and is SAID "ran past its budget"; main cuts none. With
+    calls (x37k) `--test` finishes in ~11 s but nothing is tested: rule bodies read at call time (`level include
+    {location}`, `({class_name} := (class …) => { {class_body} })) ^class`, `class: Node { {class_body} }`, `value`)
+    each keep 54-70 MB (include Node.ray 339 MB), ~20 of them reach 1.3 GB and every later statement is cut.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

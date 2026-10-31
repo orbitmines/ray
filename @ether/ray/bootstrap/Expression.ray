@@ -295,6 +295,14 @@ Expression := class (
       painted := Array.new
       noted(painted)
       noted(reported)
+      // (the program the text is run by, and a text read after it as more of it, by the same program (the editor's file read
+      // on what the entrypoint already read))
+      top := Program(in: global, this: global)
+      read_text (rt) => {
+        (ps: Statements(global) = rt)(top)
+        run_later(0)
+      }
+      level entry_read (read_text)
       sink := Array.new
       painted_with (pa, pc) => {
         sink.append(painted.append([pa.first, pa.last, bound_along(pc)]).last)
@@ -347,7 +355,7 @@ Expression := class (
       }
       level set_parser (parser)
       // (read in turn; everything read, what was kept for afterwards)
-      (Statements(global)(Program(in: global, this: global)), (\s | \n)[], (⊣ & ((end) => run_later(0)))(0))
+      (Statements(global)(top), (\s | \n)[], (⊣ & ((end) => run_later(0)))(0))
     )
   )
 ) => { }

@@ -131,7 +131,7 @@ Expression := class (
           `label` (to) => to.first
           `style` (how) => painted_with(how, caller)
           `include` (file) => included(caller, file.first)
-          `shown` (how) => shown_of(painted{.rest.first === how.first}#.last, how.last)
+          `shown` (how) => shown_of(level last_with (painted) (1) (how.first), how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in

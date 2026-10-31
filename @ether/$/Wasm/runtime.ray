@@ -1782,6 +1782,12 @@ function shared_args(w, n) {
   var f
   var m
   l = load w
+  if (l == 0) and (free >= arena_base()) {
+    l = list()
+    append(l, 0)
+    append(l, 0)
+    w <- l
+  }
   if l == 0 {
     if (load 3840) == 0 {
       3840 <- (arena_base() + 4194304)
@@ -2793,6 +2799,9 @@ function lasting_alloc(n) {
   var f
   var m
   var p
+  if free >= arena_base() {
+    return alloc(n)
+  }
   if (load 3840) == 0 {
     3840 <- (arena_base() + 4194304)
   }
@@ -2817,15 +2826,11 @@ function kept_append(l, v) {
   if (isodepth == 0) or (pointer(v) == 0) {
     return append(l, v)
   }
-  s = 0
   f0 = 0
-  while s < isodepth {
-    if (f0 == 0) and (l < (load (isostack + (s * 12)))) {
-      f0 = load (isostack + (s * 12))
-    }
-    s = s + 1
+  if l < (load isostack) {
+    f0 = load isostack
   }
-  if ((f0 == 0) or (v < f0)) or (v >= arena_base()) {
+  if (((f0 == 0) or (v < f0)) or (v >= arena_base())) or (free >= arena_base()) {
     return append(l, v)
   }
   if (load 3840) == 0 {

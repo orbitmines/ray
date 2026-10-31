@@ -182,6 +182,19 @@ its own reading its place, unread text recorded with reading going on.
     `//`), declared after the rule led by text that reads the same line, is read around it. Expression's `longer`/
     `whole` don't have it. Needs the user: does that rule still hold next to 2026-10-29's order?
 
+- **Operators don't group as in mathematics yet** (Design §4.4, decided 2026-10-31). Two causes. (1) Each operator is on
+  a level of its own by declaration order, so `a / 4 * 4` is `a / (4 * 4)` (Compiled.ray declares `*` before `/`, `+`
+  before `-`; runtime.ray parenthesizes; High.ray re-folds the chains, Low.ray doesn't). `*`, `/`, `%` need one level,
+  and `+`, `-` another, but nothing declares two operators on one level (`{a} | {b} => …` heads are names only). (2) The
+  runtime matcher's untyped hole grows shortest-first, so `{a} - {b}` on `x - y - z` binds `a` = `x` and groups right
+  (trace ~/.cache/ray-scratch/r45/cl/trh1.txt; Number.ray PC5 wants left). Taking the longest left hole instead changes
+  every rule led by a hole (`:=`, `? :`), so those that group right have to be declared right-to-left first.
+- **A rule written in a block makes pairs for everything read after it.** GR8's `.{x}? => x` (entrypoint, in an
+  `assert { }`) puts `.` and `?` into the runtime's pair table (3584) for good, through Expression's `level paired` and
+  `enclosed_holes` in `rebuilt`. From then on, a statement holding `.x` mid-line runs over its line end and swallows the
+  rest of its block silently (`co := .succ` then `assert false` passes). Blanking that rule: `--test` 243 → 249 passed.
+  Needs the pair entries scoped to where the rule is visible (ray-4d + Expression).
+
 ## Node.ray
 
 - **The error handlers read members bare** (`diagnostics`, `diagnostics.last`, `diagnostics.some(.fatal)`, line 68–84):

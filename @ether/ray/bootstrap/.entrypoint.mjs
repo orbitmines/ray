@@ -9,6 +9,7 @@
 //                                     committed first), checked to write itself the same
 //   node .entrypoint.mjs --lsp        the language server, over stdio (.entrypoint.lsp.mjs)
 //   node .entrypoint.mjs --test [FILE…]  the tests, the entrypoint's or the files': each passed or failed, where it is
+//   node .entrypoint.mjs --test-all      the tests of every file the entrypoint includes, as one run
 import { readFileSync, writeFileSync, readdirSync, existsSync, unlinkSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -351,6 +352,7 @@ export const help = () => [
   '      --version  Print the version number.',
   '      --lsp      Serve the language server (LSP) over stdio.',
   '      --test     Run the tests: the entrypoint\'s, or those in the files given; each passed or failed, where it is.',
+  '      --test-all Run the tests of every file the entrypoint includes (Ray.ray, Number.ray, …), as one run.',
   '      --build    Write the next revision (.entrypoint.(N+1).wasm), written by the latest, checked to write itself.',
   '  -v, --verbose  Say how long compiling took.',
   '  file           Compile the file with the latest revision, then run it: what its main answers.',
@@ -362,6 +364,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (flag('--version')) return console.log(env.version.toSemver({ scheme: true }));
   if (flag('--lsp')) return (await import('./.entrypoint.lsp.mjs')).serve({ env, STACK_MB });
   if (flag('--build', 'build')) return build();
+  if (flag('--test-all')) return test(included());
   if (flag('--test')) return test(argv.filter((a) => !a.startsWith('-')));
   const file = argv.find((a) => !a.startsWith('-'));
   if (!file) return console.log(help());

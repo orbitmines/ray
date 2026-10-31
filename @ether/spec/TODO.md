@@ -189,6 +189,9 @@ its own reading its place, unread text recorded with reading going on.
   Diagnostics.ray now defines; once Diagnostics passes, the handlers can move there (user: and from there into the
   bootstrap, only if it does not fail).
 - **`Class~label()`** (Node.ray `~{label}` → `Entry`): `Panel~opened().shown` (Control.ray CMP3/CMP4) is unread.
+- **`suggest { … }`** (Node.ray:397 `mathematics := suggest { forall == ∀ … }`) is not defined, so the block is unread
+  (`--test-all` ERROR). It is meant for the IDE: it suggests using, or rewriting into, a particular kind of structure (a
+  `suggest` equivalence, Design §20.2/§4.7), not something applied when the code runs.
 
 ## Tests
 

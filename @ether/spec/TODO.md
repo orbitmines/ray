@@ -265,6 +265,11 @@ its own reading its place, unread text recorded with reading going on.
   Node.ray's `@` is one now (`x := @name` read `(x :=) @ name` before).
 - **An unset optional field reads as its type**, so `x ?? y` never falls back (`registry: Character?`); written `= None`.
   `a | b: T = v` (two names and a default) does not keep the default either (World.ray's `presence` is one name now).
+- **The pair table takes one-hole heads' texts as brackets** (2026-10-31, ray-4d): after the entrypoint, the runtime's
+  byte classes are `" ( ) . < > ? [ ] ` { }` with `.` and `<` openers and `?` and `>` closers (from heads like
+  `.({member})`, `{c} ? {a} : {b}`, `<…>`), so a scan for the end of `(`, `{` or `[` counts every `.` as an opening
+  bracket: `pair_end` and `open_before` can answer a wrong end or none. Holes skip pairs with it; revision 97-99's
+  continuation guard could not use it for that reason (it uses the block-shaped brackets instead).
 - **A selection between backslashes does not read**: `\x\` (U-C2, `instance`'s primary) is read as an escape (`\s…`)
   and a label (`name\`), and `\(` as an escaped bracket whose `)` still closes (it ended `Character &+= {` early). A
   backslash inside backticks in a comment escapes the closing backtick and opens a quote to the next one: comments are

@@ -1114,20 +1114,21 @@ function origin_at(a) {
 function shared_id(v) {
   var t
   var h
-  var i
   var n
+  var q
   t = load 3932
-  h = load (t + 1060)
+  h = load (t + 1084)
   n = load (t + 1064)
-  i = 0
-  while i < n {
-    if (load (h + (i * 4))) == v {
-      return i
+  q = (((v / 8) * 40503) and 16383)
+  while (load (h + (q * 8))) != 0 {
+    if (load (h + (q * 8))) == v {
+      return load (h + ((q * 8) + 4))
     }
-    i = i + 1
+    q = (q + 1) and 16383
   }
   if n < 8000 {
-    (h + (n * 4)) <- v
+    (h + (q * 8)) <- v
+    (h + ((q * 8) + 4)) <- n
     (t + 1064) <- (n + 1)
     return 0 - 1
   }
@@ -1347,6 +1348,8 @@ function test_begin(painted, reported) {
     (t + 1068) <- alloc(32000)
     (t + 1076) <- alloc(1048576)
     (t + 1080) <- 0
+    (t + 1084) <- alloc(131072)
+    zeroed(load (t + 1084), 131072)
     3940 <- alloc(8388608)
     3932 <- t
     kept()
@@ -1464,9 +1467,10 @@ function test_end(painted, reported) {
   boundn = load (b + 28)
   3852 <- (load (b + 32))
   activen = load (b + 36)
-  if (load 3992) != 0 {
-    (load 3992) <- 0
+  if (load (t + 1064)) != 0 {
+    zeroed(load (t + 1084), 131072)
   }
+  column_back(painted, load (b + 20))
   if free > f0 {
     zeroed(f0, free - f0)
   }
@@ -1897,6 +1901,38 @@ function column_index(l, k) {
     return 0
   }
   c
+}
+function column_back(l, m) {
+  var c
+  var i
+  var x
+  var h
+  c = load 3992
+  if (c == 0) or (tag(l) != 3) {
+    return 0
+  }
+  if (load c) != l {
+    return 0
+  }
+  if m > (load (c + 8)) {
+    return 0
+  }
+  i = (load (c + 8)) - 1
+  while i >= m {
+    x = column_of(at(l, i), load (c + 4))
+    if (x != 0) and ((load (c + 12)) < 200000) {
+      h = (((x / 8) * 40503) and 262143)
+      while ((load (c + (16 + (h * 8)))) != 0) and ((load (c + (16 + (h * 8)))) != x) {
+        h = (h + 1) and 262143
+      }
+      if (load (c + (16 + (h * 8)))) == x {
+        (c + (20 + (h * 8))) <- (load (c + (2097168 + (i * 4))))
+      }
+    }
+    i = i - 1
+  }
+  (c + 8) <- m
+  0
 }
 function column_last(c, v) {
   var h

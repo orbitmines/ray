@@ -1553,6 +1553,13 @@ function at(l, i) {
 function copy(to, from, n) {
   var i
   i = 0
+  if (((to or from) or n) and 3) == 0 {
+    while i < n {
+      (to + i) <- (load (from + i))
+      i = i + 4
+    }
+    return to
+  }
   while i < n {
     (to + i) <-8 (load8 (from + i))
     i = i + 1
@@ -4972,6 +4979,9 @@ function saved(mark) {
   var c
   var n
   n = (boundn - mark) * 16
+  if n <= 0 {
+    return 0
+  }
   c = alloc(n + 8)
   copy(c, bounds + (mark * 16), n)
   c

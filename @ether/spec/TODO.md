@@ -161,15 +161,13 @@ its own reading its place, unread text recorded with reading going on.
     a freed call (kept_out/made_again). Correct, but 2.9 → 3.9 s on the entrypoint, and x21 still keeps calls through
     live references. ray-98 is moving run state off nodes older than the call.
   - *Evacuation* (2026-10-31, ray-4d, ray-98 agreed): a call whose answer, or one live write, is new keeps its whole
-    region. The fix is to copy out what those reach at the region's close and free the rest. The copier is in scratch,
-    /tmp/claude-1000/s/ev/rt_evE23.ray (on revision 102; evacuates only regions begun past 512 MB, rt_evE23z always).
-    Always on, it gives the same test results on main. Not landed: (1) its code alone, never called, makes main 3-4%
-    slower (29 trivial dead functions cost nothing; this is V8, not the compiler); (2) ray-98's calls build (b3) still
-    runs out of memory: 80-140 MB freed of 950. What still blocks the regions kept there: a binding record
-    (`[sym, a, e, value]`, a matcher snapshot) reached as a value and read as a list, text positions into bytes no text
-    holds, the copy space running out near the limit. Found on the way (all fixed there): `a / 4 * 4` reads as
-    `a / (4 * 4)` in runtime.ray; the slot log repeats a slot, and its second rewrite wrote 0; every unread statement
-    marked every open region kept (`in_turn`'s `frames_kept`); several caches keyed by address outlived a move.
+    region. Revisions 111-114 removed the false keeps (lasting tables in the kept arena, `in_turn`), moved the heap/arena
+    split to 1.5e9 and made the entrypoint's memory 440 -> 299 MB at the same speed; with calls (ray-98's x37k) memory is
+    no longer the first wall. Not landed yet, both in /tmp/claude-1000/s/ev: (1) the pin re-check (rt_l3g.ray: each
+    pinned call records which slots point into it, 256 at most; at its end, freed if none still does, else its live slots
+    go to its caller). With calls it lets en_inode finish; on main ~3% slower (recording a slot per write), so it lands
+    with calls. (2) The evacuator on those slots (rt_ev5A.ray): correct (painting identical), but most attempts give up
+    on text positions and the attempts make it ~6x slower. Needs: positions resolved without a fixup list per attempt.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

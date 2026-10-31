@@ -104,6 +104,8 @@ its own reading its place, unread text recorded with reading going on.
   whole entrypoint now stops (revision 44). Wanted: a body read in turn, as the top level is.
 - **`:=` defined again at line 2484 runs `given` for every name** (`… given (value)`): ~3600 steps more per `:=`
   (1.8x), the same answer for a plain name (ray-91, 2026-10-30); only a bracketed left side (`(a, b) := list`) needs it.
+  Measured 2026-10-31 (revision 97, --test input): without `given` 63.0M → 58.5M steps (7%); split into a plain rule
+  and a second `({names}) := {value}` with `given`, 78.1M (the `(`-led rule is tried at every statement led by `(`).
 - **A hole's text is read again at every application** (an assert's computed style, `^((ensure {condition}) ? …)`;
   `{a} | {b}`'s block on every `|`): most of the matcher's work. ray-45: read hole texts in the rule's shared body node.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after

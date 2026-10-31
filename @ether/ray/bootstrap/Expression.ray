@@ -299,7 +299,7 @@ Expression := class (
       // on what the entrypoint already read))
       top := Program(in: global, this: global)
       read_text (rt) => {
-        (ps: Statements(global) = rt)(top)
+        named_in(top, rt)
         run_later(0)
       }
       level entry_read (read_text)

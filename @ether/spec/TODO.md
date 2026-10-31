@@ -150,6 +150,14 @@ its own reading its place, unread text recorded with reading going on.
   - *`x = v`* (user: Design's `{ value ; (name) := value }`, scratch w16): assigns, but the loops in `taking`/`takes`/
     `each takes` then run over lists, and lists are a class (`Array`), which needs calls.
   Repro: ~/.cache/ray-scratch/r45 (w70/w71 calls, w72/w76 all together), mkskip45.py N with the loop tests skipped.
+  - *Memory once calls run* (2026-10-31, ray-4d, ray-98's x7-x21): a call's memory is freed on return unless its answer
+    or a write into something older keeps it (revision 91: only a write of something made in the call keeps it; each
+    statement its own region). With calls running, each class definition kept ~12 MB and the includes ran out of memory:
+    the rule-maker's writes onto `applied` (made before the call), `p.done`, `context.statements`, the `naming`
+    push/pop, and every paint (`painted.append` holds `applied`'s input and holes). Tried in scratch, not landed
+    (/tmp/claude-1000/s/nt/rt_ntp2.ray): a write undone by the call's end no longer keeps it, and paints are copied out of
+    a freed call (kept_out/made_again). Correct, but 2.9 → 3.9 s on the entrypoint, and x21 still keeps calls through
+    live references. ray-98 is moving run state off nodes older than the call.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

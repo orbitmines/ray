@@ -194,7 +194,9 @@ export const painting = async (module, text, fuel = FUEL, run = 'full', from = -
     return inside(a) ? a - B : -1;
   };
   const span = (t) => { if (tag(t) !== 4) return; const a = origin(i32[(t >> 2) + 1]), e = i32[(t >> 2) + 2] > i32[(t >> 2) + 1] ? origin(i32[(t >> 2) + 2] - 1) + 1 : a; return a >= 0 && e >= a ? [a, e] : undefined; };
-  const styled = (s) => (tag(s) === 4 ? words(s) : tag(s) === 12 ? words(X.name_text(i32[(s >> 2) + 1])) : '');
+  // (a style is a word: a longer text (a name a reading that never ended kept growing) is none)
+  const short = (t) => (tag(t) === 4 && i32[(t >> 2) + 2] - i32[(t >> 2) + 1] <= 256 ? words(t) : '');
+  const styled = (s) => (tag(s) === 4 ? short(s) : tag(s) === 12 ? short(X.name_text(i32[(s >> 2) + 1])) : '');
   // (where: of the programs it ran in, the outermost whose holes took text from the input, then the nearest whose texts
   // are all in that one's; its first)
   const where = (bounds) => {

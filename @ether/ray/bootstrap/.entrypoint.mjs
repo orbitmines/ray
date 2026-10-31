@@ -232,7 +232,7 @@ const read_out = (it, input, regions, text, error) => {
         do { if (h[j] === 96) j = Math.max(j, h.indexOf(96, j + 1)); else if (h[j] === open) d++; else if (h[j] === close) d--; j++; } while (j < h.length && d > 0);
         const inside = h.subarray(i + 1, j - 1).toString().trim(), quoted = /^`(.*)`$/s.exec(inside);
         i = j;
-        if (quoted) { const q = Buffer.from(quoted[1]); while (at < end && space(input[at])) at++; if (input.subarray(at, at + q.length).equals(q)) { out.push([at, at + q.length]); at += q.length; continue; } return out; }
+        if (quoted) { const q = Buffer.from(quoted[1]); if (!space(q[0])) while (at < end && space(input[at])) at++; if (input.subarray(at, at + q.length).equals(q)) { if (!q.every(space)) out.push([at, at + q.length]); at += q.length; continue; } return out; }
         const taken = holes.get(/^[A-Za-z_][A-Za-z0-9_]*/.exec(inside)?.[0]);
         if (!taken) return out;
         at = taken[1];

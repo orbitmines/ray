@@ -174,6 +174,11 @@ its own reading its place, unread text recorded with reading going on.
     calls (x37k) `--test` finishes in ~11 s but nothing is tested: rule bodies read at call time (`level include
     {location}`, `({class_name} := (class …) => { {class_body} })) ^class`, `class: Node { {class_body} }`, `value`)
     each keep 54-70 MB (include Node.ray 339 MB), ~20 of them reach 1.3 GB and every later statement is cut.
+    Measured (free at statement 3608, the include of Node.ray): 116 891 MB; evacuator ported onto 116
+    (/tmp/claude-1000/s/ev/rt_ev7bz.ray, slots from 0 MB) 586 MB but 6x slower and still past 1.3 GB by 3615;
+    success-reclaim in `matched` (rt_mr2) 834 MB, +5% steps. Of 6 GB allocated, 3 GB are matcher patterns (kind 9
+    sequence steps 1.17 GB, kind 21->10 repeat turns 1.25 GB). Next (ray-98, needs the user): a reading cache by
+    (rule, scope), reading a body once instead of per application.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

@@ -965,7 +965,7 @@ function indexed(n) {
     index_in(x, e)
     e = load e
   }
-  touched(n)
+  touched_by(n, x)
   if (n + 16) < (load 3944) {
     logged(n + 16)
   }
@@ -1054,7 +1054,7 @@ function assign(n, sym, v) {
   while m != 0 {
     e = own(m, sym)
     if e != 0 {
-      touched(m)
+      touched_by(m, v)
       if (e + 8) < (load 3944) {
         logged(e + 8)
       }
@@ -1514,7 +1514,7 @@ function test_end(painted, reported) {
 function append(l, v) {
   var d
   var c
-  touched(l)
+  touched_by(l, v)
   if (l + 4) < (load 3944) {
     logged(l + 4)
   }
@@ -1526,6 +1526,7 @@ function append(l, v) {
     if (l + 12) < (load 3944) {
       logged(l + 12)
     }
+    touched_by(l, free)
     if c == 0 {
       d = alloc(16)
       (l + 12) <- d
@@ -1711,7 +1712,7 @@ function setmember(x, sym, v) {
         p = at(l, i)
         if tag(p) == 6 {
           if ((load (p + 4)) == 6) and ((load (p + 8)) == sym) {
-            touched(p)
+            touched_by(p, v)
             if (p + 12) < (load 3944) {
               logged(p + 12)
             }
@@ -1748,7 +1749,7 @@ function keys(n) {
   l = load (n + 12)
   if l == 0 {
     l = list()
-    touched(n)
+    touched_by(n, l)
     if (n + 12) < (load 3944) {
       logged(n + 12)
     }
@@ -2931,7 +2932,33 @@ function stored(n, v) {
     }
     return 0
   }
-  touched(n)
+  touched_by(n, v)
+}
+function touched_by(x, v) {
+  var s
+  if x >= arena_base() {
+    if (load 3844) == 0 {
+      kept()
+      return 0
+    }
+  }
+  if x < markf {
+    effects = effects + 1
+    if pointer(v) and (v < arena_base()) {
+      s = isodepth
+      while s > 0 {
+        if x < (load (isostack + ((s - 1) * 12))) {
+          if v >= (load (isostack + ((s - 1) * 12))) {
+            (isostack + (((s - 1) * 12) + 8)) <- 1
+          }
+          s = s - 1
+        } else {
+          s = 0
+        }
+      }
+    }
+  }
+  0
 }
 function touched(x) {
   var s
@@ -4474,7 +4501,7 @@ function valued_from(mark) {
   v
 }
 function under(b, env) {
-  touched(b)
+  touched_by(b, env)
   if (b + 4) < (load 3944) {
     logged(b + 4)
   }
@@ -4615,9 +4642,11 @@ function in_turn(item, f, args, pos) {
       se = statement_end(pos, v)
     }
     textend = se
+    isolated_open()
     r = matched(item, at, cell(pattern(23, 0, 0), 0))
     textend = q
     if r <= at {
+      isolated_value(0, 0)
       boundn = mark
       if white_after(at) >= q {
         read_again(item, f, args, u)
@@ -4633,6 +4662,7 @@ function in_turn(item, f, args, pos) {
       v = valued_from(mark)
       boundn = mark
       call(curried(f, append(list(), v)), args, 0)
+      isolated_value(0, 0)
       at = r
     }
   }

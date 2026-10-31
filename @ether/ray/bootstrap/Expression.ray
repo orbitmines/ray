@@ -94,11 +94,12 @@ Expression := class (
           }
         }
         // (a name read inside its own reading is its place)
-        named_as (text, by) => (naming{(.first == text) && (.last === node)}#.count > 0) ? Place(text, node) : named_now(text, by)
+        named_as (text, by) => ((node.naming_here ?? Array.new){. == text}#.count > 0) ? Place(text, node) : named_now(text, by)
         named_now (text, by) => {
-          naming = [[text, node]].joined(naming)
+          was_naming := node.naming_here
+          node.naming_here = [text].joined(was_naming ?? Array.new)
           r := lined(text) ? kept_apart(by, set_apart(by), turned(node, text, by)) : named_once(text, by)
-          naming = naming.rest
+          node.naming_here = was_naming
           r
         }
         // (a text of one line is one statement, read whole, or the place it names; one of more, its statements read in turn)
@@ -281,7 +282,6 @@ Expression := class (
         sp.at = None
         (testing.at = Place(`erred`, global)) if !(testing === None)
       }
-      naming := Array.new
       kinds := Array.new
       kinds_of (kp) => kinds.first ?? known(named_in(kp, `level kinds`))
       known (kn) => (kn.rules === None) ? kn : kinds.append(kn).first

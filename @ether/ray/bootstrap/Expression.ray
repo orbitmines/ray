@@ -61,7 +61,8 @@ Expression := class (
               me.in.rules.keys.rest.rest.for((hk) => hk.named = true)
               me.this = caller.this
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
-              rule_style.append(level all_with (painted) (1) (rule_own)) if rule_style.empty
+              (rule_style = [level all_with (painted) (1) (rule_own)]) if (rule_style.empty || (rule_own.restyled === true))
+              (rule_own.restyled = false) if (rule_own.restyled === true)
               rule_style.first.for((rs) => painted.append([rs.first, [rule_lhs, me.input], [me.bound]]))
               // (its body read and run in turn where it runs, the rule set aside while it is read: a rule never reads itself)
               me.outside = aside
@@ -71,6 +72,7 @@ Expression := class (
               leaving(finished(me), me.answer)
             }
             rule_own := rule_home.rules.keys.last
+            rule_own.written_head = rule_lhs
             (rule_own.named = true) if !((level holds_text (rule_lhs) (BOOTSTRAPPER.CAPTURE.first)) === true)
             // (the pairs its head writes, `({x})`, known to what is read after it; one holding `=>`, a rule that defines)
             level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE)
@@ -131,6 +133,7 @@ Expression := class (
           `label` (to) => to.first
           `style` (how) => painted_with(how, caller)
           `include` (file) => included(caller, file.first)
+          `rule` (head) => rule_written(caller.in, head.first)
           `shown` (how) => (how.first === None) ? how.last : shown_of(level last_with (painted) (1) (how.first), how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
@@ -315,6 +318,13 @@ Expression := class (
       }
       // (what a value is shown as: the style it was given last, `made ^class`; else what is given)
       shown_of (sp, sd) => (sp === None) ? sd : sp.first
+      // (a rule by its head as written, `level rule`: the latest written so, here or around)
+      rule_written (rn, rt) => (rt === None) ? None : restyled(written_rule(rn, rt))
+      written_rule (rn, rt) => (rn === None) ? None : (rn.rules.keys{.written_head == rt}#.last ?? written_rule(rn.in, rt))
+      restyled (rk) => {
+        (rk.restyled = true) if !(rk === None)
+        rk
+      }
       bound_along (bc) => (bc === None) ? Array.new : [bc.bound].joined(bound_along(bc.caller))
       // (what the holes took where a program runs, the nearest first; where the rule is used whose holes took a head)
       takes (tc) => (tc === None) ? Array.new : (tc.bound ?? Array.new).joined(takes(tc.caller))

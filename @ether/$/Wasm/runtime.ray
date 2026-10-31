@@ -3576,7 +3576,7 @@ function matched(p, pos, k) {
             } else {
               q = 5
               if ((load8 n) == 10) and ((load (p + 12)) != 1) {
-                if continued_from(load (s + 8), n) == 0 {
+                if (continued_from(load (s + 8), n) == 0) and (quoted_around(load (s + 8), n) == 0) {
                   q = 6
                 } else {
                   if block_closed(load (s + 8), n) > 0 {
@@ -4842,6 +4842,14 @@ function continued_where_written(q) {
   b = continued_at(o)
   textend = r
   b
+}
+function quoted_around(a, n) {
+  var r
+  if pair_class(a - 1) != 2 {
+    return 0
+  }
+  r = pair_end(a - 1)
+  r > n
 }
 function quote_open(a, n) {
   var q

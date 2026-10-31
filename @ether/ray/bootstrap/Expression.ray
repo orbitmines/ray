@@ -111,13 +111,15 @@ Expression := class (
         maker_key := rules.keys.first
         // (a definition, `=>` outside pairs: the latest rule that defines, else the rule that makes rules; none set aside)
         // (what reads it here, but a name, `x`, read at its start, when what it is in reads it all, `x = v`)
-        whole (tx) => nearer(tx, made(tx, defines(tx)))
-        nearer (tx, near) => (near === None) ? in?.whole(tx) : (((near.named === true) && !(tx == near.key)) ? fuller(tx, near, in?.whole(tx)) : near)
+        whole (tx) => whole_with(tx, defines(tx))
+        whole_with (tx, d) => nearer(tx, d, made(tx, d))
+        nearer (tx, d, near) => (near === None) ? in?.whole_with(tx, d) : (((near.named === true) && !(tx == near.key)) ? fuller(tx, near, in?.whole_with(tx, d)) : near)
         fuller (tx, near, far) => ((far === None) ? false : (tx == far.key)) ? far : near
         made (tx, d) => (((rules.keys.first === maker_key) && d) && (tx ~= maker_key)) ? (defining(tx) ?? maker_key) : longest(tx, d)
-        prefix (tx) => longest(tx, defines(tx)) ?? in?.prefix(tx)
+        prefix (tx) => prefix_with(tx, defines(tx))
+        prefix_with (tx, d) => longest(tx, d) ?? in?.prefix_with(tx, d)
         defining (tx) => (level keys_reading (rules.keys) (tx)){(.defines === true) && ((aside.empty || !(among(aside, .))) && (tx ~= .))}#.sort(.length).last ?? in?.defining(tx)
-        longest (tx, d) => (level keys_reading (rules.keys) (tx)){!((. === split_key) || (!(aside.empty) && among(aside, .))) && ((d || !((. === maker_key) || (.defines === true))) && (tx ~= .))}#.sort(.length).last
+        longest (tx, d) => (level keys_reading (rules.keys) (tx)){!(. === split_key) && ((d || !((. === maker_key) || (.defines === true))) && ((aside.empty || !(among(aside, .))) && (tx ~= .)))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
         reading (tx) => longer(tx, whole(tx))
         longer (tx, w) => ((w === maker_key) || ((w === None) ? false : (tx == w.key))) ? w : (((tx ~= split_key) && ((w === None) || (split_key.length > read_by(tx, w)))) ? split_key : w)

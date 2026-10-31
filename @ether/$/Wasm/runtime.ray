@@ -1460,6 +1460,7 @@ function test_end(painted, reported) {
       nu = nu + 1
     }
   }
+  column_back(painted, load (b + 20))
   n = load (t + 1048)
   while n > 0 {
     n = n - 1
@@ -1478,7 +1479,6 @@ function test_end(painted, reported) {
   if (load (t + 1064)) != 0 {
     zeroed(load (t + 1084), 131072)
   }
-  column_back(painted, load (b + 20))
   if free > f0 {
     zeroed(f0, free - f0)
   }

@@ -695,6 +695,7 @@ function moved_keys(g, p) {
   }
   define(member(g, 37), 23, lv)
   epoch = epoch + 1
+  4004 <- 0
   3996 <- ((load 3996) + 1)
   int(load (lp + 4))
 }
@@ -1485,6 +1486,7 @@ function test_end(painted, reported) {
   free = f0
   if f0 <= (load 3920) {
     epoch = epoch + 1
+    4004 <- 0
     3996 <- ((load 3996) + 1)
     3920 <- 0
   }
@@ -1759,7 +1761,11 @@ function keys(n) {
 }
 function keyed(n, p, v) {
   var e
-  epoch = epoch + 1
+  if (n < (load 4004)) or (n >= arena_base()) {
+    epoch = epoch + 1
+    4004 <- 0
+    4004 <- 0
+  }
   e = entry(p, v)
   append(keys(n), e)
   e
@@ -2169,6 +2175,9 @@ function text_led_reading(ctx, n) {
   cache_key(ctx)
   cache_key(textend)
   (h + 12) <- epoch
+  if free > (load 4004) {
+    4004 <- free
+  }
   (memo + 1048576 + ((h - memo) / 4)) <- r
   r
 }
@@ -2905,6 +2914,7 @@ function isolated_value(o, v) {
       if free > (load s) {
         if (load s) <= (load 3920) {
           epoch = epoch + 1
+          4004 <- 0
           3996 <- ((load 3996) + 1)
         }
         free = load s
@@ -2921,6 +2931,7 @@ function isolated_close(o, v) {
   if ((load (s + 8)) == 0) and (noreclaim == 0) {
     free = load s
     epoch = epoch + 1
+    4004 <- 0
     3996 <- ((load 3996) + 1)
   }
   0
@@ -3930,6 +3941,9 @@ function bytes_in(a, e) {
   (s + 4) <- e
   cache_key(e)
   (s + 8) <- epoch
+  if free > (load 4004) {
+    4004 <- free
+  }
   s + 16
 }
 function based_index(b0, e0, w) {
@@ -4575,6 +4589,9 @@ function reading_of(p, pos) {
       cache_key(pos)
       cache_key(textend)
       (h + 12) <- epoch
+      if free > (load 4004) {
+        4004 <- free
+      }
       (h + 16) <- l
     }
   }
@@ -5839,6 +5856,9 @@ function pair_end(q) {
       (h + 8) <- ((load 3884) + 1)
       cache_key(r)
       (h + 12) <- epoch
+      if free > (load 4004) {
+        4004 <- free
+      }
     }
     return r
   }

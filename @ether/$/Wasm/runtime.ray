@@ -1032,8 +1032,9 @@ function shared_id(v) {
   if n < 8000 {
     (h + (n * 4)) <- v
     (t + 1064) <- (n + 1)
+    return 0 - 1
   }
-  0 - 1
+  0 - 2
 }
 function kept_out(w, v, f0, depth) {
   var t
@@ -1061,8 +1062,10 @@ function kept_out(w, v, f0, depth) {
     (w + 4) <- sid
     return w + 8
   }
-  w <- 9
-  w = w + 4
+  if sid == (0 - 1) {
+    w <- 9
+    w = w + 4
+  }
   if t == 4 {
     a = load (v + 4)
     e = load (v + 8)
@@ -1245,6 +1248,8 @@ function test_begin(painted, reported) {
     (t + 1044) <- alloc(16000000)
     (t + 1060) <- alloc(32000)
     (t + 1068) <- alloc(32000)
+    (t + 1076) <- alloc(1048576)
+    (t + 1080) <- 0
     3940 <- alloc(8388608)
     3932 <- t
     kept()
@@ -1256,6 +1261,7 @@ function test_begin(painted, reported) {
     return 0
   }
   b = t
+  roomy(names, 256)
   b <- free
   (b + 4) <- (load (t + 1048))
   (b + 8) <- (load 3868)
@@ -1277,6 +1283,7 @@ function test_begin(painted, reported) {
   (b + 36) <- activen
   (b + 40) <- effects
   (b + 44) <- 0
+  (b + 48) <- (load 3896)
   (t + 1048) <- 0
   3944 <- free
   0
@@ -1308,7 +1315,8 @@ function test_end(painted, reported) {
   b = t
   f0 = load b
   3944 <- 0
-  if ((load (b + 44)) != 0) or (((load (t + 1056)) != 0) or (((load 3844) != 0) or (noreclaim != 0))) {
+  3916 <- 0
+  if ((load (b + 44)) != 0) or ((((load (t + 1056)) != 0) or (((load 3844) != 0) or (noreclaim != 0))) or ((free - f0) < 2097152)) {
     (t + 1048) <- 0
     (t + 1056) <- 0
     return 0
@@ -2214,8 +2222,50 @@ function intern(t) {
     }
     i = i + 1
   }
+  if (load 3944) != 0 {
+    if lasting_name(t) {
+      return 1000000 + i
+    }
+    kept()
+  }
   append(names, t)
   1000000 + i
+}
+function roomy(l, k) {
+  var d
+  var c
+  c = load (l + 4)
+  if ((load (l + 8)) - c) < k {
+    d = alloc((c + k) * 8)
+    copy(d, load (l + 12), c * 4)
+    (l + 12) <- d
+    (l + 8) <- ((c + k) * 2)
+  }
+  0
+}
+function lasting_name(t) {
+  var r
+  var u
+  var n
+  var x
+  var f
+  r = load 3932
+  n = (load (t + 8)) - (load (t + 4))
+  u = load (r + 1080)
+  if (((u + n) + 24) > 1048576) or ((load (names + 4)) >= (load (names + 8))) {
+    return 0
+  }
+  x = (load (r + 1076)) + u
+  x <- 4
+  copy(x + 12, load (t + 4), n)
+  (x + 4) <- (x + 12)
+  (x + 8) <- ((x + 12) + n)
+  (r + 1080) <- (u + ((((n + 12) + 7) / 8) * 8))
+  f = load 3944
+  3944 <- 0
+  append(names, x)
+  3944 <- f
+  1
 }
 function truthy(v) {
   (v != 0) and (v != 8)
@@ -2280,6 +2330,9 @@ function arg(args, i) {
 function call(c, args, named) {
   var a
   fueled()
+  if (load 3916) != 0 {
+    return 0
+  }
   if tag(c) == 6 {
     if (load (c + 4)) == 16 {
       return pattern(19, c, args)
@@ -2454,15 +2507,18 @@ function texteq(a, b, n) {
   1
 }
 function kept() {
-  var s
   var t
-  effects = effects + 1
   t = load 3932
   if t != 0 {
     if (load 3936) > 0 {
       (t + 44) <- 1
     }
   }
+  frames_kept()
+}
+function frames_kept() {
+  var s
+  effects = effects + 1
   s = isodepth
   while s > 0 {
     (isostack + (((s - 1) * 12) + 8)) <- 1
@@ -2644,6 +2700,11 @@ function tested_here(t) {
   12
 }
 function fueled() {
+  if (load 3944) != 0 {
+    if (((free - (load 3944)) > 134217728) or (free > (arena_base() - 67108864))) or (((load ((load 3932) + 48)) - (load 3896)) > 60000000) {
+      3916 <- 1
+    }
+  }
   if (load 3896) > 0 {
     if (load 3896) == 1 {
       unreachable_now()
@@ -4208,7 +4269,7 @@ function in_turn(item, f, args, pos) {
       if (load (3860)) == 0 {
         3860 <- list()
       }
-      kept()
+      frames_kept()
       append(load 3860, text(at, se))
       at = se
     } else {
@@ -4322,7 +4383,7 @@ function unread_until(pos, at) {
       if (load (3860)) == 0 {
         3860 <- list()
       }
-      kept()
+      frames_kept()
       append(load 3860, text(at, q))
       return i
     }
@@ -4334,7 +4395,7 @@ function unread_until(pos, at) {
   if (load (3860)) == 0 {
     3860 <- list()
   }
-  kept()
+  frames_kept()
   append(load 3860, text(at, q))
   q
 }

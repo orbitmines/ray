@@ -141,7 +141,8 @@ Expression := class (
       // order, each given what applies them.
       Statement := class (
         leading_whitespace?: (\s | \n)[]+,
-        {statement: concurrently context.reading(.)}: context.keys
+        {statement: concurrently context.reading(.)}: context.keys,
+        trailing_whitespace?: (\s | \n)[]+
       ) => {}
       // (the statements as read kept on the node they are read in, `statements`: what each read, its rule and what that took)
       Statements (context: Node) => dynamically Statement[] & (caller: Program) => (

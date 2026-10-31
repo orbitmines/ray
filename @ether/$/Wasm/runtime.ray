@@ -3081,7 +3081,7 @@ function touched_by(x, v) {
   }
   if x < markf {
     effects = effects + 1
-    if pointer(v) and (v < arena_base()) {
+    if (pointer(v) and (v < arena_base())) and (v >= (load isostack)) {
       s = isodepth
       while s > 0 {
         if x < (load (isostack + ((s - 1) * 12))) {

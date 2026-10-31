@@ -163,9 +163,13 @@ its own reading its place, unread text recorded with reading going on.
   - *Evacuation* (2026-10-31, ray-4d, ray-98 agreed): a call whose answer, or one live write, is new keeps its whole
     region. The fix is to copy out what those reach at the region's close and free the rest. A copier exists in scratch
     (/tmp/claude-1000/s/ev/rt_ev9.ray: nodes, entries, indexes, lists, texts and their bytes with the copies table
-    remapped, closures, places, spans, most pattern kinds; it gives up on others). It corrupts once copies move back:
-    some runtime structures hold values across a call without a write barrier (the matcher's saved bindings, found by a
-    heap scan for pointers into the freed region, rt_evH.ray + scan.mjs). Those must be barriered or be roots first.
+    remapped, closures, places, spans, most pattern kinds; it gives up on others). Now /tmp/claude-1000/s/ev/rt_evW2.ray
+    (on revision 101). Fixed there: the commit loop read `x / 4 * 4` as `x / (4 * 4)` and rewrote no slot; the copier's
+    tables were made inside the region it closed; the bindings, the matcher's saved bindings and the test log are roots.
+    Each single evacuation now runs the entrypoint clean, and all of them do: 420 → 256 MB, but 2.9 → 59 s (not the memo
+    flushes, the roots or the remap; what runs after a move is slower), and painting the tests breaks (a list the host
+    reads is garbage), with or without evacuating inside a test. Next: a heap scan of the painting run, as for the
+    entrypoint (scank.mjs, K=n evacuates only the n-th).
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

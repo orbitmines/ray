@@ -182,6 +182,13 @@ its own reading its place, unread text recorded with reading going on.
     `//`), declared after the rule led by text that reads the same line, is read around it. Expression's `longer`/
     `whole` don't have it. Needs the user: does that rule still hold next to 2026-10-29's order?
 
+- **An undeclared name passes an assert**: `assert zzundef` passes (a name nothing declares reads as its Place, which
+  holds), so an assert on a misspelled or never-defined name is vacuous. It should be the unknown a failed lookup is
+  (Design §21.3: "a failed lookup yields an unknown"), which doesn't hold.
+- **`=` doesn't reassign yet** (`dt := true`, `dt = false`, then `assert dt` passes): `=` as `(name) := value` waits on
+  calls. With it, `a ; b` must read its sides where they are written (`first`/`rest` as values, like the guards; it
+  splices them into a node of its own now, so `x := 1 ; y := 2` declares into that node). Scratch:
+  ~/.cache/ray-scratch/r45/cl/semi.diff. CF20 (entrypoint:182) is also written before `;` and `+=` are defined.
 - **Operators don't group as in mathematics yet** (Design §4.4, decided 2026-10-31). Two causes. (1) Each operator is on
   a level of its own by declaration order, so `a / 4 * 4` is `a / (4 * 4)` (Compiled.ray declares `*` before `/`, `+`
   before `-`; runtime.ray parenthesizes; High.ray re-folds the chains, Low.ray doesn't). `*`, `/`, `%` need one level,

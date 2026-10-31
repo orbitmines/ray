@@ -2,10 +2,12 @@ function alloc(n) {
   var p
   p = free
   free = free + ((n + 7) / 8) * 8
-  if ((p <= arena_base()) and (free > arena_base())) or (free > (1020000000 * 2)) {
-    if (load 3924) == 0 {
-      3924 <- 1
-      unreachable_now()
+  if free > arena_base() {
+    if (p <= arena_base()) or (free > (1020000000 * 2)) {
+      if (load 3924) == 0 {
+        3924 <- 1
+        unreachable_now()
+      }
     }
   }
   p

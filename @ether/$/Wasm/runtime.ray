@@ -2074,7 +2074,7 @@ function noted(v) {
   if n < 2 {
     (3968 + (n * 4)) <- v
   } else {
-    (3968 + ((2 + ((n - 2) % 26)) * 4)) <- v
+    (3968 + ((2 + ((n - 2) % 2)) * 4)) <- v
   }
   4084 <- n + 1
   v
@@ -2248,6 +2248,9 @@ function keys_reading(l, t) {
     cache_key(l)
   }
   a = load (s + 12)
+  if ((load (t + 4)) >= 8388608) and ((load (t + 8)) <= (8388608 + (load 4088))) {
+    return keys_read(l, t, a)
+  }
   b = 0 - 2
   if (load (t + 4)) < (load (t + 8)) {
     b = load8 (load (t + 4))
@@ -2266,6 +2269,67 @@ function keys_reading(l, t) {
     }
     i = i + 1
   }
+  o
+}
+function keys_read(l, t, a) {
+  var c
+  var h
+  var i
+  var m
+  var o
+  var b
+  var d
+  c = load 3984
+  if c == 0 {
+    c = alloc(8388608)
+    kept()
+    zeroed(c, 1572880)
+    c <- 1572880
+    3984 <- c
+  }
+  m = load (l + 4)
+  h = c + (16 + (((((l / 8) * 7) + (((load (t + 4)) * 31) + ((load (t + 8)) * 13))) and 65535) * 24))
+  if ((((load h) == l) and ((load (h + 4)) == m)) and (((load (h + 8)) == (load (t + 4))) and ((load (h + 12)) == (load (t + 8))))) and ((load (h + 16)) == (load 3996)) {
+    d = load (h + 20)
+    o = list()
+    i = 0
+    while i < (load d) {
+      append(o, at(l, load (d + ((i + 1) * 4))))
+      i = i + 1
+    }
+    return o
+  }
+  b = 0 - 2
+  if (load (t + 4)) < (load (t + 8)) {
+    b = load8 (load (t + 4))
+    if white(b) or (b == 10) {
+      b = 0 - 3
+    }
+  }
+  if ((load c) + ((m * 4) + 4)) > 8388608 {
+    zeroed(c + 16, 1572864)
+    c <- 1572880
+  }
+  d = c + (load c)
+  o = list()
+  i = 0
+  while i < m {
+    if (((load (a + ((i * 8) + 4))) < 0) or ((load (a + ((i * 8) + 4))) == b)) or (b == (0 - 3)) {
+      if literals_in(load (a + (i * 8)), load (t + 4), load (t + 8)) {
+        append(o, at(l, i))
+        (d + ((load (o + 4)) * 4)) <- i
+      }
+    }
+    i = i + 1
+  }
+  d <- (load (o + 4))
+  c <- ((load c) + (((load d) * 4) + 4))
+  h <- l
+  (h + 4) <- m
+  (h + 8) <- (load (t + 4))
+  (h + 12) <- (load (t + 8))
+  (h + 16) <- (load 3996)
+  (h + 20) <- d
   o
 }
 function led_keys(l) {

@@ -154,6 +154,13 @@ its own reading its place, unread text recorded with reading going on.
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the
     comment as `backward`, so `assert !(true)  // …` passes (r91/in/pnot2.ray). Every test line ends with a comment.
+    Why (2026-10-31, ray-4d): `assert {condition}` and `{statement} // {comment}` both read the whole line, and §4.3's
+    order (a definition, then a rule led by text, then the latest) takes the one led by text. Inside the hole, `!{ }…`
+    (led by text) wins the same way. Guards are misread the same way: `return 5 if n === 0` returns `5 if n === 0`
+    (/tmp/claude-1000/s/cm/g.ray: `f(0) === 5` fails). Design §… (2026-10-17, "A guard binds looser by declaration
+    order") kept the old kernel's rule for it: a rule led by a hole, then a word that leads statements of its own (`if`,
+    `//`), declared after the rule led by text that reads the same line, is read around it. Expression's `longer`/
+    `whole` don't have it. Needs the user: does that rule still hold next to 2026-10-29's order?
 
 ## Node.ray
 

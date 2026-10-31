@@ -279,8 +279,8 @@ const read_out = (it, input, regions, text, error) => {
 };
 // (the editor's image (Design: the entrypoint and what it includes read once): their reading kept, its memory's pages and
 // the runtime's globals, for each file read after it; none when Expression gives no way to read one more text, word 3856)
-// (ETHER_IMAGE=1 while the reading of a text given after it is checked)
-const PAGE = 65536, images = new Map(), IMAGE = process.env.ETHER_IMAGE === '1';
+// (ETHER_IMAGE=0: each file read after the entrypoint and its includes anew)
+const PAGE = 65536, images = new Map(), IMAGE = process.env.ETHER_IMAGE !== '0';
 const imaged = async (module, run) => {
   const { text } = tested([]), key = createHash('sha256').update(module).update(text).update(run).digest('hex');
   if (images.has(key)) return images.get(key);

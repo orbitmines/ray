@@ -134,6 +134,8 @@ export async function build() {
 const TESTING = '0\n';
 // (a whole-line comment as an empty line: each line where it is written)
 const emptied = (text) => text.split('\n').map((l) => (l.trimStart().startsWith('//') ? '' : l));
+// (and painted as a comment, where it is written)
+const left_out = (text) => text.split('\n').flatMap((l, line) => { const column = l.length - l.trimStart().length; return l.trimStart().startsWith('//') ? [{ style: 'comment', line, column, length: l.trimEnd().length - column }] : []; });
 // (the module that reads, once per revision and sources: kept beside the revision)
 export const tester = async () => {
   const program = reader() + TESTING, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), was = readFileSync(engine());
@@ -336,7 +338,7 @@ export const paints = async (file, text, run = EDITOR_RUN) => {
       return resolve(p.file ?? '') === resolve(file) ? { line: p.line - 1, column: p.column - 1, length: bytes.subarray(a, e).toString().length } : undefined;
     };
   }
-  const shown = painted.flatMap(({ style, at: s }) => { const p = s && place(s); return p ? [{ style, ...p }] : []; });
+  const shown = [...left_out(text), ...painted.flatMap(({ style, at: s }) => { const p = s && place(s); return p ? [{ style, ...p }] : []; })];
   // (what was said there, as severe as how its line is painted: `ERROR …` as an error, `WARN …` a warning, else an error)
   const severity = (p) => shown.filter((s) => s.line === p.line && SAYING.includes(s.style) && s.column <= p.column).sort((x, y) => y.column - x.column)[0]?.style ?? 'error';
   return { painted: shown, unread: unread.map(place).filter(Boolean), said: (said ?? []).flatMap(({ message, at: s }) => { const p = s && place(s); return p ? [{ message, ...p, severity: severity(p) }] : []; }), error };

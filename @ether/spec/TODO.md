@@ -160,6 +160,12 @@ its own reading its place, unread text recorded with reading going on.
     (/tmp/claude-1000/s/nt/rt_ntp2.ray): a write undone by the call's end no longer keeps it, and paints are copied out of
     a freed call (kept_out/made_again). Correct, but 2.9 → 3.9 s on the entrypoint, and x21 still keeps calls through
     live references. ray-98 is moving run state off nodes older than the call.
+  - *Evacuation* (2026-10-31, ray-4d, ray-98 agreed): a call whose answer, or one live write, is new keeps its whole
+    region. The fix is to copy out what those reach at the region's close and free the rest. A copier exists in scratch
+    (/tmp/claude-1000/s/ev/rt_ev9.ray: nodes, entries, indexes, lists, texts and their bytes with the copies table
+    remapped, closures, places, spans, most pattern kinds; it gives up on others). It corrupts once copies move back:
+    some runtime structures hold values across a call without a write barrier (the matcher's saved bindings, found by a
+    heap scan for pointers into the freed region, rt_evH.ray + scan.mjs). Those must be barriered or be roots first.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

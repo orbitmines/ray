@@ -695,6 +695,7 @@ function moved_keys(g, p) {
   }
   define(member(g, 37), 23, lv)
   epoch = epoch + 1
+  3996 <- ((load 3996) + 1)
   int(load (lp + 4))
 }
 function set_parser(f) {
@@ -1484,6 +1485,7 @@ function test_end(painted, reported) {
   free = f0
   if f0 <= (load 3920) {
     epoch = epoch + 1
+    3996 <- ((load 3996) + 1)
     3920 <- 0
   }
   r = alloc(8)
@@ -2222,7 +2224,7 @@ function keys_reading(l, t) {
     3912 <- c
   }
   s = c + (16 + ((((l / 8) * 31) and 1023) * 16))
-  if (((load s) != l) or ((load (s + 4)) != m)) or ((load (s + 8)) != epoch) {
+  if (((load s) != l) or ((load (s + 4)) != m)) or ((load (s + 8)) != (load 3996)) {
     if ((load c) + ((m * 8) + 8)) > 4194304 {
       zeroed(c + 16, 16384)
       c <- 16400
@@ -2241,7 +2243,7 @@ function keys_reading(l, t) {
     }
     s <- l
     (s + 4) <- m
-    (s + 8) <- epoch
+    (s + 8) <- (load 3996)
     (s + 12) <- a
     cache_key(l)
   }
@@ -2280,7 +2282,7 @@ function led_keys(l) {
     pcache <- 16400
   }
   s = pcache + (16 + ((((l / 8) * 31) and 1023) * 16))
-  if (((load s) == l) and ((load (s + 4)) == (load (l + 4)))) and ((load (s + 8)) == epoch) {
+  if (((load s) == l) and ((load (s + 4)) == (load (l + 4)))) and ((load (s + 8)) == (load 3996)) {
     return load (s + 12)
   }
   m = load (l + 4)
@@ -2315,7 +2317,7 @@ function led_keys(l) {
   s <- l
   (s + 4) <- m
   cache_key(l)
-  (s + 8) <- epoch
+  (s + 8) <- (load 3996)
   (s + 12) <- a
   a
 }
@@ -2838,6 +2840,7 @@ function isolated_value(o, v) {
       if free > (load s) {
         if (load s) <= (load 3920) {
           epoch = epoch + 1
+          3996 <- ((load 3996) + 1)
         }
         free = load s
       }
@@ -2853,6 +2856,7 @@ function isolated_close(o, v) {
   if ((load (s + 8)) == 0) and (noreclaim == 0) {
     free = load s
     epoch = epoch + 1
+    3996 <- ((load 3996) + 1)
   }
   0
 }
@@ -3362,6 +3366,9 @@ function matched(p, pos, k) {
         activen = load (s + 36)
         if ((load (s + 32)) == effects) and (noreclaim == 0) {
           free = load (s + 28)
+          if free <= (load 3920) {
+            3996 <- ((load 3996) + 1)
+          }
         }
         markf = load (s + 28)
         mode = 4
@@ -3528,6 +3535,9 @@ function matched(p, pos, k) {
     boundn = bn
     if (effects == ef) and (noreclaim == 0) {
       free = fr
+      if free <= (load 3920) {
+        3996 <- ((load 3996) + 1)
+      }
     }
   }
   r

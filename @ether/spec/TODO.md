@@ -118,21 +118,11 @@ its own reading its place, unread text recorded with reading going on.
   defined after it, until it is defined again at line 3528. Asserts run after that, so only top-level statements read in
   between are affected; prefix readings (cut before 3528) misread every test whose comment holds such a word.
 
-- **A reading keeps everything it allocates** (revision 57, the main wall): ~90% of the heap is unreachable at the
-  out-of-memory stop (ray-91's census), the runtime frees only a call answering a plain value. Revision 57 moved the parse
-  arena to 1 GB (it overlapped the heap at 512 MB and reclaim freed live memory); the heap has 1 GB until memory is let
-  go of. Revision 59 has the runtime half of Design §21.4: `level test_begin (painted) (reported)` / `level test_end
-  (painted) (reported)` around each test run undo the writes into older memory, make its new paints, said and unread
-  again, and let the rest go. Only the outermost test lets go (an assert inside `assert { … }` continues the block
-  itself). s460: same results, heap 453 → 270 MB; Expression calls them since revision 61. The whole file without its
-  loop tests then reads in 400 MB (710 before), 213 passed / 214 failed. With them it still stops out of memory (954 MB,
-  ~270M steps) inside a loop test that never ends (CC8, a reading bug, ray-c4).
-- **`Node &+= { … }` read at top level defines nothing** (revision 62, probes after the whole file): `Node.zprobe`,
-  `({ }).zprobe`, `true.zprobe` answer nothing. So Ray.ray's `==` does not exist: `true == true` is false (`===`
-  holds), and classes, lists (`Array.new` is None), enums and the boolean `==` tests fail. A rule whose head writes the
-  braces (`{on} &+! {`{`}{code}{`}`} => ((on).interior) &+= { {code} }`) works; `{on} &+ {code}` (the hole taking the
-  braces) does not. Revision 62 fixed the Node base inside tests (the top program's `this`); the braces cause is open
-  (ray-c4).
+- **Loop tests that never end** (`x = v` in a loop body does not assign, so CC8, CC11, RC2, CC14 loop for ever): since
+  revision 74 a test past its budget (60M steps, 128 MB, or the heap near its end) is let go and fails, and `--test`
+  reads to the end (237 passed / 171 failed). Memory per test (Design §21.4, revisions 59-74): tests let go of what they
+  made, unread no longer pins a test, names made in a test last; tests under 2 MB keep theirs (letting go bumps every
+  cache). The whole file without loops: 429 MB.
 - **The `Array &+= { … }` blocks read exponentially in their members** (statement 523 and line 3140): the definition key
   (`rule:`) reads the block's code as `(hole | String)[]`, asking the hole at each character and inside each nested `{`;
   a memo of those asks halves K=10..12 but K=14 still takes 129 s.
@@ -215,9 +205,13 @@ its own reading its place, unread text recorded with reading going on.
   values, or none, without a new list (`invoke0-2`, `call_member0-2`, `call1` in the runtime's loops), and revision 22
   keeps a parameter as a local where nothing writes it. Still wanted: a block's static known when written
   (`X := { static f … }`, X never given again) called as its function, `X` not looked up.
-- **Reading a statement asks every rule key through a closure** (Expression's `longest`/`defining`, ~25% of a
-  self-compile in revision 25): `among(aside, .)`, `among(definers, .)` and `defines(tx)` per key, at each node up the
-  `in` chain.
+- **Reading a statement asks every rule key through a closure** (Expression's `longest`/`defining`): since revisions
+  70-75 only the keys `keys_reading` leaves (a literal lead matching the text's first byte, every literal in the text)
+  are asked (whole file 142M → 65M steps). Still ~45% of an editor run (time-sampled, ~/.cache/ray-scratch/w9 tsamp3),
+  and `longer`/`read_by` read the text with the chosen key again (~20%).
+- **The editor reads the entrypoint and its includes again for every file** (~4.8 of ~6 s an edit, revision 74: Ray.ray
+  1.4 s, String 1.3, Number 0.9, Expression 0.6, Compiler 0.5): an image (revisions 76-78: `image_out`/`image_in`, Expression's
+  `level entry_read (read_text)`, the export `entry_given(text)`), the host's snapshot/restore (ray-6b) still to wire.
 
 ## Painting
 

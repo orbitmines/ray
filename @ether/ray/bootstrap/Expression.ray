@@ -44,7 +44,7 @@ Expression := class (
             valued := ((written.first == BOOTSTRAPPER.CAPTURE.first) || !((level cw_enclosed (written)) === true)) ? false : !((level holds_text (named) (BOOTSTRAPPER.CAPTURE.first)) === true)
             rule_lhs := valued ? named : written
             rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
-            rule_where := home_of(caller, level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? ((((caller.for_value === None) || (caller.for_value.rules === None)) ? caller.in : caller.for_value) ?? node)
+            rule_where := home_of(caller, level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? (place_of(caller) ?? node)
             rule_home := (valued ? defined_in(rule_where, rule_lhs) : None) ?? rule_where
             sink = Array.new
             head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))
@@ -293,7 +293,8 @@ Expression := class (
       // (who reads a hole: the program reading it once it entered a block, else what applied the rule)
       reader (hr, hb) => ((hr.in === None) || !(hr.in === hr.this)) ? hb : hr
       // (a hole read for code read in a value, `x.( … )`: read where it is written, what it defines the value's)
-      named_for (fc, fp, ft) => (((fc.in === None) || (fc.in.of === None)) || (fp.in === fc.in)) ? named_in(fp, ft) : for_value(fp, fc.in.of, ft)
+      named_for (fc, fp, ft) => in_value(fp, ft, ((((fc.in === None) || (fc.in.of === None)) || (fp.in === fc.in)) ? ((fp.in === None) ? None : fp.in.of) : fc.in.of))
+      in_value (ip, it, iv) => (iv === None) ? named_in(ip, it) : for_value(ip, iv, it)
       for_value (vp, vv, vt) => {
         was := vp.for_value
         vp.for_value = vv
@@ -350,7 +351,9 @@ Expression := class (
       written_by (wc, we) => (((we === None) || !((level cw_trimmed (we.value)).first == BOOTSTRAPPER.CAPTURE.first)) || (holder(wc, we) === None)) ? we : (outer_hole(holder(wc, we), between(level cw_trimmed (we.value))) ?? we)
       outer_hole (oh, ok) => (takes(oh.caller){.key == ok}#.first === None) ? None : written_by(oh.caller, takes(oh.caller){.key == ok}#.first)
       holder (oc, oe) => ((oe === None) || (oc === None)) ? None : (among(oc.bound ?? Array.new, oe) ? oc : holder(oc.caller, oe))
-      home_of (hc, he) => ((he === None) || (hc === None)) ? None : (among(hc.bound ?? Array.new, he) ? hc.caller.in : home_of(hc.caller, he))
+      home_of (hc, he) => ((he === None) || (hc === None)) ? None : (among(hc.bound ?? Array.new, he) ? place_of(hc.caller) : home_of(hc.caller, he))
+      // (where a program defines: in the value it reads code for, `x.( … )`, else where it is)
+      place_of (pc) => ((pc.for_value === None) || (pc.for_value.rules === None)) ? pc.in : pc.for_value
       // (the nearest node that defines a name itself)
       defined_in (dn, dt) => (dn === None) ? None : ((dn.rules.keys{!((. === dn.maker_key) || (. === dn.split_key)) && (dt ~= .)}#.count > 0) ? dn : defined_in(dn.in, dt))
       // (what is between a text's first character and its last)

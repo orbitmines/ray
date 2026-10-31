@@ -54,6 +54,7 @@ Expression := class (
             rule_style := Array.new
             rule_home.rules[[head]] := (caller) => {
               me := applied
+              (rule_own.applied = true) if !(rule_own.applied === true)
               me.bound = holes
               me.caller = caller
               me.in = Node(in: rule_body)
@@ -73,6 +74,7 @@ Expression := class (
             }
             rule_own := rule_home.rules.keys.last
             rule_own.written_head = rule_lhs
+            written_here.append(rule_own) if ((level tested_here (rule_lhs)) === true)
             (rule_own.named = true) if !((level holds_text (rule_lhs) (BOOTSTRAPPER.CAPTURE.first)) === true)
             // (the pairs its head writes, `({x})`, known to what is read after it; one holding `=>`, a rule that defines)
             level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE)
@@ -244,7 +246,18 @@ Expression := class (
           ran_later(lp) if ((level tested_here ((lp.bound.first).value)) === true)
         })
         later = Array.new
+        written_here{!(.applied === true)}#.for((wk) => abstract_ran(wk)) if ((level abstractly) === true)
+        written_here = Array.new
       }
+      // (the editor's reading (Design §17.1): each rule written in the file it reads and never applied, run as abstract
+      // interpretation, in memory of its own as a test is)
+      written_here := Array.new
+      abstract_ran (ak) => {
+        level test_begin (painted) (reported)
+        abstract_run(ak)
+        level test_end (painted) (reported)
+      }
+      abstract_run (ak) => None
       // (each test in memory of its own (Design §21.4): what it painted and said kept, the rest let go once it is done; what
       // it kept for afterwards run inside it)
       ran_later (lp) => {

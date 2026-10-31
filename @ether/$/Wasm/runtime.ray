@@ -547,15 +547,24 @@ function file_named(t) {
   0
 }
 function entry_read(f) {
-  3856 <- f
+  var b
+  b = alloc(16)
   kept()
+  b <- f
+  (b + 4) <- 0
+  (b + 8) <- 0
+  3856 <- b
   0
 }
 function entry_given(t) {
-  if (load 3856) == 0 {
+  var b
+  b = load 3856
+  if b == 0 {
     return 0
   }
-  call1(load 3856, t)
+  (b + 4) <- (load (t + 4))
+  (b + 8) <- (load (t + 8))
+  call1(load b, t)
 }
 function image_out() {
   var b
@@ -1068,6 +1077,12 @@ function origin_at(a) {
   while n < 64 {
     if (a >= 8388608) and (a < (8388608 + (load 4088))) {
       return a
+    }
+    b = load 3856
+    if b != 0 {
+      if (a >= (load (b + 4))) and (a < (load (b + 8))) {
+        return a
+      }
     }
     b = load 3864
     if b == 0 {

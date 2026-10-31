@@ -3123,7 +3123,7 @@ function block_closed(a, n) {
       f = f - 1
     }
     if f > q {
-      if (load8 (3584 + (load8 (f - 1)))) == 1 {
+      if pair_class(f - 1) == 1 {
         d = d + 1
       }
     }
@@ -3138,6 +3138,9 @@ function open_before(a, n) {
   q = a
   while q < n {
     t = load8 (3584 + (load8 q))
+    if t != 0 {
+      t = pair_class(q)
+    }
     if (t == 1) or (t == 2) {
       r = pair_end(q)
       if (r == 0) or (r > n) {
@@ -3151,6 +3154,7 @@ function open_before(a, n) {
   0
 }
 function matched(p, pos, k) {
+  var pc
   var start
   var base
   var om
@@ -3209,8 +3213,17 @@ function matched(p, pos, k) {
           n = (load (l + 8)) - (load (l + 4))
           if (pos + n) <= textend {
             if texteq(pos, load (l + 4), n) {
-              pos = pos + n
               mode = 1
+              if n != 0 {
+                if (load8 (3584 + (load8 pos))) != 0 {
+                  if pair_class(pos) == 0 {
+                    mode = 2
+                  }
+                }
+              }
+              if mode == 1 {
+                pos = pos + n
+              }
             }
           }
         } else {
@@ -3537,9 +3550,13 @@ function matched(p, pos, k) {
                   q = 6
                 }
               }
+              pc = load8 (3584 + (load8 n))
+              if pc != 0 {
+                pc = pair_class(n)
+              }
               if q == 5 {
-                if (((load (p + 12)) == 0) or ((load (p + 12)) == 3)) and ((load8 (3584 + (load8 n))) != 0) {
-                  if (load8 (3584 + (load8 n))) == 3 {
+                if (((load (p + 12)) == 0) or ((load (p + 12)) == 3)) and (pc != 0) {
+                  if pc == 3 {
                     q = 6
                   } else {
                     n = pair_end(n) - 1
@@ -3550,7 +3567,7 @@ function matched(p, pos, k) {
                 }
               }
               if q == 5 {
-                if ((load (p + 12)) == 1) and ((load8 (3584 + (load8 n))) == 2) {
+                if ((load (p + 12)) == 1) and (pc == 2) {
                   q = 6
                 }
               }
@@ -5692,7 +5709,7 @@ function anything_end(n) {
   if c == 10 {
     return 0
   }
-  t = load8 (3584 + c)
+  t = pair_class(n - 1)
   if t == 3 {
     return 0
   }
@@ -5744,13 +5761,32 @@ function pair_end(q) {
   }
   r
 }
+function pair_class(q) {
+  var n
+  var c
+  c = load8 (3584 + (load8 q))
+  if c == 0 {
+    return 0
+  }
+  if (load8 (q - 1)) != 92 {
+    return c
+  }
+  n = 1
+  while (q > (n + 1)) and ((load8 ((q - n) - 1)) == 92) {
+    n = n + 1
+  }
+  if (n % 2) == 1 {
+    return 0
+  }
+  c
+}
 function pair_ending(q) {
   var c
   var d
   var x
   var t
   c = load8 q
-  if (load8 (3584 + c)) == 2 {
+  if pair_class(q) == 2 {
     x = q + 1
     while x < textend {
       if ((load8 x) == 92) {
@@ -5768,6 +5804,9 @@ function pair_ending(q) {
   x = q
   while x < textend {
     t = load8 (3584 + (load8 x))
+    if t != 0 {
+      t = pair_class(x)
+    }
     if t == 2 {
       x = pair_end(x)
       if x == 0 {
@@ -5857,7 +5896,7 @@ function paired(t, cap) {
 }
 function string_end(n) {
   var t
-  t = load8 (3584 + (load8 (n - 1)))
+  t = pair_class(n - 1)
   if t == 3 {
     return 0
   }
@@ -5869,13 +5908,33 @@ function string_end(n) {
 function holds_outside(t, part) {
   var te
   var r
+  var h
   if tag(t) != 4 {
     return 8
+  }
+  h = 0
+  if ((load (t + 4)) >= 8388608) and ((load (t + 8)) <= (8388608 + (load 4088))) {
+    if (load 4000) == 0 {
+      4000 <- alloc(1572864)
+      kept()
+      zeroed(load 4000, 1572864)
+    }
+    h = (load 4000) + ((((((load (t + 4)) * 31) + ((load (t + 8)) * 7)) + (part / 8)) and 65535) * 24)
+    if (((load h) == (load (t + 4))) and ((load (h + 4)) == (load (t + 8)))) and (((load (h + 8)) == part) and ((load (h + 12)) == ((load 3884) + 1))) {
+      return load (h + 16)
+    }
   }
   te = textend
   textend = load (t + 8)
   r = holds_outside_in(t, part)
   textend = te
+  if h != 0 {
+    h <- (load (t + 4))
+    (h + 4) <- (load (t + 8))
+    (h + 8) <- part
+    (h + 12) <- ((load 3884) + 1)
+    (h + 16) <- r
+  }
   r
 }
 function holds_outside_in(t, part) {
@@ -5895,6 +5954,9 @@ function holds_outside_in(t, part) {
   d = 0
   while q < e {
     c = load8 (3584 + (load8 q))
+    if c != 0 {
+      c = pair_class(q)
+    }
     if c == 2 {
       r = pair_end(q)
       if r == 0 {

@@ -1415,6 +1415,13 @@ function test_end(painted, reported) {
   b = t
   f0 = load b
   3944 <- 0
+  if (load 3916) != 0 {
+    if (load 3860) != 0 {
+      if (load 3860) == (load (b + 12)) {
+        ((load 3860) + 4) <- (load (b + 16))
+      }
+    }
+  }
   3916 <- 0
   if ((load (b + 44)) != 0) or ((((load (t + 1056)) != 0) or (((load 3844) != 0) or (noreclaim != 0))) or ((free - f0) < 2097152)) {
     (t + 1048) <- 0
@@ -1949,7 +1956,7 @@ function last_with(l, kv, v) {
   var c
   var k
   var i
-  if tag(l) != 3 {
+  if (tag(l) != 3) or ((load 3916) != 0) {
     return 0
   }
   k = untag(kv)
@@ -1981,7 +1988,7 @@ function all_with(l, kv, v) {
   var r
   var n
   o = list()
-  if tag(l) != 3 {
+  if (tag(l) != 3) or ((load 3916) != 0) {
     return o
   }
   k = untag(kv)

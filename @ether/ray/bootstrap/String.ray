@@ -163,6 +163,8 @@ assert "a\tb".length == 3  // SE1 a tab escape is not one character
 assert "\x41" == "A"  // SE3 a hexadecimal escape is not its character
 assert "\q".length == 2  // SE16 an unknown escape is not kept as written
 assert "a\\b".length == 3  // SE5 an escaped backslash is not one character
+assert "a\"b".length == 3  // SE32 an escaped quote is not one character, or it closed the text
+assert "a\{b".length == 3  // SE33 an escaped brace is not one character, or it opened an interpolation
 
 
 // (String is made in the entrypoint, its core; what follows is the rest of it)

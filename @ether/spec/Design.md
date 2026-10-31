@@ -2494,6 +2494,12 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   own, marked with the test), so asking whether something is the test's own costs one read.
 - In a test, a node made before it is shadowed; what the test defines there again (`x := …` twice) is defined again in
   place among the test's own rules, not added again (a loop in a test grew a node by one rule a round).
+- A test that runs past its budget (60M steps, or 128 MB of its own, or the heap near its end) is let go: from there every
+  call answers nothing until the test is done, so it fails, and the reading goes on (a loop that never ends fails its
+  test, not the run). A test smaller than 2 MB keeps its memory (letting go of it costs every cache made since).
+- A statement cut by indentation inside a block it opened (a line written at its indent, `assert …` at column 0 inside
+  `X &+= {`) reads on to the line that closes the block. A block counts only brackets shaped as one: an opener ending
+  its line, a closer starting one (`<`, `>` are pairs too, so `a < b` would throw a count of every bracket off).
 - Built (`--build`): every rule made while the files were read has its body read at build (read once, at build), before
   what was put off runs; the built program says exactly what the interpreted one says.
 - Files are merged in path order, every file numbered every time (two files sharing a number lost the second's

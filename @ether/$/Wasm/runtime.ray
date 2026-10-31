@@ -3165,6 +3165,7 @@ function open_before(a, n) {
   0
 }
 function matched(p, pos, k) {
+  var spins
   var pc
   var start
   var base
@@ -3201,7 +3202,13 @@ function matched(p, pos, k) {
   markf = free
   mode = 0
   r = 0 - 1
+  spins = 0
   while mode != 3 {
+    spins = spins + 1
+    if spins > 200000000 {
+      3896 <- 1
+      mode = 3
+    }
     if mode == 0 {
       if (load p) != 6 {
         p = topattern(p)
@@ -3572,7 +3579,7 @@ function matched(p, pos, k) {
                 if continued_from(load (s + 8), n) == 0 {
                   q = 6
                 } else {
-                  if continued_from(n, n) == 0 {
+                  if block_closed(load (s + 8), n) > 0 {
                     q = 6
                   }
                 }
@@ -4836,6 +4843,27 @@ function continued_where_written(q) {
   textend = r
   b
 }
+function quote_open(a, n) {
+  var q
+  var r
+  q = a
+  while q < n {
+    if (load8 (3584 + (load8 q))) == 2 {
+      if pair_class(q) == 2 {
+        r = pair_end(q)
+        if (r == 0) or (r > n) {
+          return 1
+        }
+        q = r
+      } else {
+        q = q + 1
+      }
+    } else {
+      q = q + 1
+    }
+  }
+  0
+}
 function statement_end(pos, at) {
   var q
   var d
@@ -4859,7 +4887,9 @@ function statement_end(pos, at) {
       c = load8 (i + j)
     }
     if ((c != 10) and (j <= d)) and (((load8 (3584 + c)) != 3) and (comma_ended(at, q) == 0)) {
-      return q
+      if quote_open(at, q) == 0 {
+        return q
+      }
     }
     q = i
     while (q < textend) and ((load8 q) != 10) {

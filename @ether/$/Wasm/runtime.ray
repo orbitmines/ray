@@ -546,6 +546,82 @@ function file_named(t) {
   }
   0
 }
+function entry_read(f) {
+  3856 <- f
+  kept()
+  0
+}
+function entry_given(t) {
+  if (load 3856) == 0 {
+    return 0
+  }
+  call1(load 3856, t)
+}
+function image_out() {
+  var b
+  b = alloc(112)
+  kept()
+  b <- free
+  (b + 4) <- textend
+  (b + 8) <- boundn
+  (b + 12) <- bounds
+  (b + 16) <- names
+  (b + 20) <- activen
+  (b + 24) <- actives
+  (b + 28) <- markf
+  (b + 32) <- effects
+  (b + 36) <- syms
+  (b + 40) <- outb
+  (b + 44) <- outn
+  (b + 48) <- datab
+  (b + 52) <- datan
+  (b + 56) <- counter
+  (b + 60) <- asideb
+  (b + 64) <- asiden
+  (b + 68) <- takent
+  (b + 72) <- csyms
+  (b + 76) <- memo
+  (b + 80) <- epoch
+  (b + 84) <- wholly
+  (b + 88) <- noreclaim
+  (b + 92) <- parserhook
+  (b + 96) <- nomemo
+  (b + 100) <- pcache
+  (b + 104) <- isostack
+  (b + 108) <- isodepth
+  b
+}
+function image_in(b) {
+  free = load b
+  textend = load (b + 4)
+  boundn = load (b + 8)
+  bounds = load (b + 12)
+  names = load (b + 16)
+  activen = load (b + 20)
+  actives = load (b + 24)
+  markf = load (b + 28)
+  effects = load (b + 32)
+  syms = load (b + 36)
+  outb = load (b + 40)
+  outn = load (b + 44)
+  datab = load (b + 48)
+  datan = load (b + 52)
+  counter = load (b + 56)
+  asideb = load (b + 60)
+  asiden = load (b + 64)
+  takent = load (b + 68)
+  csyms = load (b + 72)
+  memo = load (b + 76)
+  epoch = load (b + 80)
+  wholly = load (b + 84)
+  noreclaim = load (b + 88)
+  parserhook = load (b + 92)
+  nomemo = load (b + 96)
+  pcache = load (b + 100)
+  isostack = load (b + 104)
+  isodepth = load (b + 108)
+  0
+}
 function input_part(i) {
   var a
   var e

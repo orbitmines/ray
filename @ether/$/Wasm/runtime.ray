@@ -3353,7 +3353,7 @@ function matched(p, pos, k) {
                                           p = l
                                           if tag(l) == 6 {
                                             if (load (l + 4)) == 5 {
-                                              p = pattern3(5, sequence(append(append(list(), load (l + 8)), pattern(23, 0, 0))), load (l + 12), load (l + 16))
+                                              p = pattern3(5, sequence(append(append(list(), pattern(23, 0, 2)), load (l + 8))), load (l + 12), load (l + 16))
                                             }
                                           }
                                         } else {
@@ -3386,12 +3386,27 @@ function matched(p, pos, k) {
                                                 mode = 1
                                               } else {
                                                 if kind == 23 {
-                                                  if pos == textend {
+                                                  if (load (p + 12)) == 2 {
+                                                    k = cell(load k, cell(pattern(23, pos, 1), load (k + 4)))
                                                     mode = 1
                                                   } else {
-                                                    if (load8 pos) == 10 {
-                                                      if open_before(start, pos) == 0 {
-                                                        mode = 1
+                                                    if pos == textend {
+                                                      mode = 1
+                                                    } else {
+                                                      if (load8 pos) == 10 {
+                                                        if open_before(start, pos) == 0 {
+                                                          n = start
+                                                          if (load (p + 12)) == 1 {
+                                                            n = load (p + 8)
+                                                          }
+                                                          if continued_from(n, pos) == 0 {
+                                                            mode = 1
+                                                          } else {
+                                                            if continued_from(pos, pos) == 0 {
+                                                              mode = 1
+                                                            }
+                                                          }
+                                                        }
                                                       }
                                                     }
                                                   }
@@ -3542,8 +3557,14 @@ function matched(p, pos, k) {
               q = 5
             } else {
               q = 5
-              if (((load8 n) == 10) and ((load (p + 12)) != 1)) and (comma_ended(load (s + 8), n) == 0) {
-                q = 6
+              if ((load8 n) == 10) and ((load (p + 12)) != 1) {
+                if continued_from(load (s + 8), n) == 0 {
+                  q = 6
+                } else {
+                  if continued_from(n, n) == 0 {
+                    q = 6
+                  }
+                }
               }
               if q == 5 {
                 if ((load (p + 12)) == 3) and (((load8 n) == 32) or ((load8 n) == 9)) {
@@ -4149,7 +4170,7 @@ function reads(p, t) {
   te = textend
   bn = boundn
   textend = load (t + 8)
-  r = matched(p, load (t + 4), cell(pattern(23, 0, 0), 0))
+  r = matched(p, load (t + 4), cell(pattern(23, load (t + 4), 1), 0))
   wholly = 12
   if r < 0 {
     boundn = bn
@@ -4608,7 +4629,7 @@ function read_again(item, f, args, u) {
       mark = boundn
       q = textend
       textend = e
-      r = matched(item, a, cell(pattern(23, 0, 0), 0))
+      r = matched(item, a, cell(pattern(23, a, 1), 0))
       textend = q
       v = 0
       if r > a {
@@ -4660,7 +4681,7 @@ function in_turn(item, f, args, pos) {
     }
     textend = se
     isolated_open()
-    r = matched(item, at, cell(pattern(23, 0, 0), 0))
+    r = matched(item, at, cell(pattern(23, at, 1), 0))
     textend = q
     if r <= at {
       isolated_value(0, 0)
@@ -4692,6 +4713,55 @@ function white_after(q) {
   }
   q
 }
+function indent_written(a) {
+  var o
+  var q
+  var lo
+  var te
+  var r
+  var b
+  o = origin_at(a)
+  if o < 0 {
+    return 0 - 1
+  }
+  lo = 8388608
+  te = 8388608 + (load 4088)
+  b = load 3856
+  if b != 0 {
+    if (o >= (load (b + 4))) and (o < (load (b + 8))) {
+      lo = load (b + 4)
+      te = load (b + 8)
+    }
+  }
+  q = o
+  while (q > lo) and ((load8 (q - 1)) != 10) {
+    q = q - 1
+  }
+  r = textend
+  textend = te
+  o = indent_at(q)
+  textend = r
+  o
+}
+function continued_from(a, n) {
+  var d
+  var j
+  if comma_ended(a, n) {
+    return 1
+  }
+  d = indent_written(a)
+  if d < 0 {
+    return 0
+  }
+  j = indent_at(n + 1)
+  if (n + 1 + j) >= textend {
+    return 0
+  }
+  if (load8 (n + 1 + j)) == 10 {
+    return 0
+  }
+  (j > d) or (pair_class(n + 1 + j) == 3)
+}
 function continued_at(n) {
   var q
   var d
@@ -4720,6 +4790,34 @@ function indent_at(q) {
     d = d + 1
   }
   d
+}
+function continued_where_written(q) {
+  var o
+  var te
+  var r
+  var b
+  if (q >= 8388608) and (q < (8388608 + (load 4088))) {
+    return 0
+  }
+  o = origin_at(q)
+  if (o < 0) or (o == q) {
+    return 0
+  }
+  if (load8 o) != 10 {
+    return 0
+  }
+  te = 8388608 + (load 4088)
+  b = load 3856
+  if b != 0 {
+    if (o >= (load (b + 4))) and (o < (load (b + 8))) {
+      te = load (b + 8)
+    }
+  }
+  r = textend
+  textend = te
+  b = continued_at(o)
+  textend = r
+  b
 }
 function statement_end(pos, at) {
   var q

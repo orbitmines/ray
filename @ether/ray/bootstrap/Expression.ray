@@ -244,13 +244,30 @@ Expression := class (
       same_label (sa, sb) => ((level kind_of (sa)) == `list`) ? (((level kind_of (sb)) == `list`) && (sa.first == sb.first)) : (sa == sb)
       later := Array.new
       afterwards := Place(`afterwards`, global)
-      run_later (rl) => {
+      // (everything read, what was kept run; but where the host runs it a step at a time (the editor, showing each test as it
+      // ends, `level stepped`), what runs here held for it)
+      run_later (rl) => ((level stepped) === true) ? held_later(0) : ran_all(0)
+      ran_all (ra) => {
         later.for((lp) => {
           ran_later(lp) if ((level tested_here ((lp.bound.first).value)) === true)
         })
         later = Array.new
         written_here{!(.applied === true)}#.for((wk) => abstract_ran(wk)) if ((level abstractly) === true)
         written_here = Array.new
+      }
+      held_later (hl) => {
+        later = later{(level tested_here ((.bound.first).value)) === true}#
+        (written_here = Array.new) if !((level abstractly) === true)
+      }
+      // (a step: the first test held run, or, none, the first rule written here never applied run abstractly)
+      stepped_on (so) => (later.count == 0) ? step_written(written_here) : step_later(later)
+      step_later (sl) => {
+        later = sl.rest
+        ran_later(sl.first)
+      }
+      step_written (sw) => {
+        written_here = sw.rest
+        abstract_ran(sw.first) if !(sw.first.applied === true)
       }
       // (the editor's reading (Design §17.1): each rule written in the file it reads and never applied, run as abstract
       // interpretation, in memory of its own as a test is)
@@ -316,10 +333,14 @@ Expression := class (
       noted(painted)
       noted(reported)
       // (the program the text is run by, and a text read after it as more of it, by the same program (the editor's file read
-      // on what the entrypoint already read))
+      // on what the entrypoint already read); no text, a step of what was held. It answers how many steps are held still)
       top := Program(in: global, this: global)
       read_text (rt) => {
-        named_in(top, rt)
+        (rt === None) ? stepped_on(0) : read_then_later(rt)
+        later.count + written_here.count
+      }
+      read_then_later (rr) => {
+        named_in(top, rr)
         run_later(0)
       }
       level entry_read (read_text)

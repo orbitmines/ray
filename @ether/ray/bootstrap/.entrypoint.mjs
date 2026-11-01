@@ -175,11 +175,25 @@ export const EDITOR_RUN = process.env.ETHER_RUN === 'full' ? 'full' : 'abstract'
 const B = 8388608;
 // (how a reading run ended: read to its end, out of memory, out of fuel, or what stopped it)
 const ended = (it, fuel, run) => { try { run(); } catch (e) { return it.i32[3924 >> 2] === 1 ? 'stopped: the reading ran out of memory' : fuel && it.i32[3896 >> 2] === 1 ? `stopped after ${fuel} steps of reading` : String(e?.message ?? e); } };
-const begun = (it, fuel, run, from) => { const { i32 } = it; i32[3896 >> 2] = fuel; i32[3900 >> 2] = run === 'abstract' ? 1 : 0; i32[3948 >> 2] = from; };
-export const painting = async (module, text, fuel = FUEL, run = 'full', from = -1) => {
-  const it = await instance(module), input = Buffer.from(text + '\0');
-  it.u8.set(input, B); it.i32[4088 >> 2] = input.length; begun(it, fuel, run, from < 0 ? 0 : B + from);
-  return read_out(it, input, [[B, 0, input.length]], text, ended(it, fuel, () => it.exports.main()));
+const begun = (it, fuel, run, from, step) => { const { i32 } = it; i32[3896 >> 2] = fuel; i32[3900 >> 2] = run === 'abstract' ? 1 : 0; i32[3948 >> 2] = from; i32[4080 >> 2] = step ? 1 : 0; };
+// (given `step`, what is kept for afterwards held, and run a step (a test) at a time: what is painted given to it once
+// everything is read, before any test runs, then as the tests end (at most every STEP_MS), until nothing is held or the
+// reading stops)
+const STEP_MS = Number(process.env.ETHER_STEP_MS ?? 250);
+const stepping = (it, fuel, step, out, error) => {
+  if (!step || error || !it.exports.entry_step) return error;
+  step(out(error));
+  let held = 1, last = Date.now();
+  while (held > 0 && !error) {
+    error = ended(it, fuel, () => { const v = it.exports.entry_step(); held = v & 1 ? v >> 1 : 0; });
+    if (held > 0 && !error && Date.now() - last >= STEP_MS) { step(out(error)); last = Date.now(); }
+  }
+  return error;
+};
+export const painting = async (module, text, fuel = FUEL, run = 'full', from = -1, step) => {
+  const it = await instance(module), input = Buffer.from(text + '\0'), out = (e) => read_out(it, input, [[B, 0, input.length]], text, e);
+  it.u8.set(input, B); it.i32[4088 >> 2] = input.length; begun(it, fuel, run, from < 0 ? 0 : B + from, step);
+  return out(stepping(it, fuel, step, out, ended(it, fuel, () => it.exports.main())));
 };
 // (what a run painted, read out of its memory: each place in the input, or in a text the host gave after it (`regions`:
 // each its address, where it is in `input`, its length))
@@ -299,15 +313,15 @@ const imaged = async (module, run) => {
   return image;
 };
 // (a file read after the image: its memory set back, then the text given to what Expression registered)
-const painted_after = async (module, image, own, fuel, run) => {
+const painted_after = async (module, image, own, fuel, run, step) => {
   const memory = new WebAssembly.Memory({ initial: PAGES, maximum: PAGES }), u8 = new Uint8Array(memory.buffer);
   for (const [p, bytes] of image.pages) u8.set(bytes, p * PAGE);
   const it = await instance(module, memory), X = it.exports, bytes = Buffer.from(own);
   X.image_in(image.at);
   const a = X.alloc(bytes.length + 8); it.u8.set(bytes, a);
-  begun(it, fuel, run, a);
-  const error = ended(it, fuel, () => X.entry_given(X.text(a, a + bytes.length)));
-  return read_out(it, Buffer.concat([image.input, bytes]), [[B, 0, image.input.length], [a, image.input.length, bytes.length]], image.text, error);
+  begun(it, fuel, run, a, step);
+  const out = (e) => read_out(it, Buffer.concat([image.input, bytes]), [[B, 0, image.input.length], [a, image.input.length, bytes.length]], image.text, e);
+  return out(stepping(it, fuel, step, out, ended(it, fuel, () => X.entry_given(X.text(a, a + bytes.length)))));
 };
 // (a place in the input, as where it is written)
 const located = ({ input, at }, [a]) => {
@@ -320,12 +334,13 @@ const SAYING = ['fatal', 'error', 'warn', 'info'];
 // (where the file begins in what is read, in bytes: its tests the only ones run (the editor's file, the first file given to
 // test, and after it); the entrypoint's own, everything)
 const edited = (input, at, file) => { const l = at.findIndex(([f]) => resolve(f) === resolve(file)); return l <= 0 ? -1 : Buffer.byteLength(input.split('\n').slice(0, l).join('\n')) + 1; };
-export const paints = async (file, text, run = EDITOR_RUN) => {
+// (given `step`, what is painted given to it as it goes: once read, then as its tests end)
+export const paints = async (file, text, run = EDITOR_RUN, step) => {
   const module = await tester(), own = !IMAGE || [bootstrap('.entrypoint.ray'), ...included()].includes(resolve(file)) ? null : await imaged(module, run);
-  let painted, unread, said, error, place;
+  let place, reading;
   if (own) {
     const lines = emptied(text).join('\n'), base = own.input.length, bytes = Buffer.from(lines);
-    ({ painted, unread, said, error } = await painted_after(module, own, lines, FUEL, run));
+    reading = (stepped) => painted_after(module, own, lines, FUEL, run, stepped);
     place = ([a, e]) => {
       if (a < base) return;
       const before = bytes.subarray(0, a - base).toString(), line = before.split('\n').length - 1;
@@ -333,16 +348,23 @@ export const paints = async (file, text, run = EDITOR_RUN) => {
     };
   } else {
     const { text: input, at } = tested([file], { [file]: text }), bytes = Buffer.from(input);
-    ({ painted, unread, said, error } = await painting(module, input, FUEL, run, edited(input, at, file)));
+    reading = (stepped) => painting(module, input, FUEL, run, edited(input, at, file), stepped);
+    // (each line's first byte, and whether it is the file's)
+    const starts = [0], ours = at.map(([f]) => resolve(f) === resolve(file));
+    for (let i = bytes.indexOf(10); i >= 0; i = bytes.indexOf(10, i + 1)) starts.push(i + 1);
     place = ([a, e]) => {
-      const p = located({ input: bytes, at }, [a]);
-      return resolve(p.file ?? '') === resolve(file) ? { line: p.line - 1, column: p.column - 1, length: bytes.subarray(a, e).toString().length } : undefined;
+      let lo = 0, hi = starts.length - 1;
+      while (lo < hi) { const m = (lo + hi + 1) >> 1; if (starts[m] <= a) lo = m; else hi = m - 1; }
+      return ours[lo] ? { line: at[lo][1] - 1, column: bytes.subarray(starts[lo], a).toString().length, length: bytes.subarray(a, e).toString().length } : undefined;
     };
   }
-  const shown = [...left_out(text), ...painted.flatMap(({ style, at: s }) => { const p = s && place(s); return p ? [{ style, ...p }] : []; })];
-  // (what was said there, as severe as how its line is painted: `ERROR …` as an error, `WARN …` a warning, else an error)
-  const severity = (p) => shown.filter((s) => s.line === p.line && SAYING.includes(s.style) && s.column <= p.column).sort((x, y) => y.column - x.column)[0]?.style ?? 'error';
-  return { painted: shown, unread: unread.map(place).filter(Boolean), said: (said ?? []).flatMap(({ message, at: s }) => { const p = s && place(s); return p ? [{ message, ...p, severity: severity(p) }] : []; }), error };
+  const shown_of = ({ painted, unread, said, error }) => {
+    const shown = [...left_out(text), ...painted.flatMap(({ style, at: s }) => { const p = s && place(s); return p ? [{ style, ...p }] : []; })];
+    // (what was said there, as severe as how its line is painted: `ERROR …` as an error, `WARN …` a warning, else an error)
+    const severity = (p) => shown.filter((s) => s.line === p.line && SAYING.includes(s.style) && s.column <= p.column).sort((x, y) => y.column - x.column)[0]?.style ?? 'error';
+    return { painted: shown, unread: unread.map(place).filter(Boolean), said: (said ?? []).flatMap(({ message, at: s }) => { const p = s && place(s); return p ? [{ message, ...p, severity: severity(p) }] : []; }), error };
+  };
+  return shown_of(await reading(step && ((r) => step(shown_of(r)))));
 };
 export async function test(files = []) {
   const t0 = Date.now(), { text, at } = tested(files), module = await tester();

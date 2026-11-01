@@ -15,7 +15,8 @@ if (!isMainThread && workerData?.lsp === 'reader') {
   const { statements, paints } = await import('./.entrypoint.mjs');
   const parse = await statements();
   parentPort.on('message', async ({ id, text, file }) => {
-    try { parentPort.postMessage(file ? { id, ...(await paints(file, text)) } : { id, statements: parse(blanked(text)) }); }
+    // (a file's paints given as it goes: once read, then as its tests end)
+    try { parentPort.postMessage(file ? { id, ...(await paints(file, text, undefined, (r) => parentPort.postMessage({ id, step: true, ...r }))) } : { id, statements: parse(blanked(text)) }); }
     catch (e) { parentPort.postMessage({ id, error: String(e?.stack ?? e) }); }
   });
   parentPort.postMessage({ ready: true });
@@ -24,8 +25,8 @@ if (!isMainThread && workerData?.lsp === 'reader') {
 // (how many readings a thread does before it is made again, and how long one may take)
 const READINGS = Number(process.env.ETHER_LSP_READINGS ?? 40), PATIENCE = Number(process.env.ETHER_LSP_PATIENCE ?? 20000);
 
-// The reader, from the server's side: a reading at a time, in order; the thread made again when it has read enough, read
-// nothing, failed, or takes too long.
+// The reader, from the server's side: a reading at a time, in order, what it gives as it goes to `step`; the thread made
+// again when it has read enough, read nothing, failed, or takes too long (between two steps).
 class Reader {
   constructor(log, stack) { this.log = log; this.stack = stack; this.queue = []; this.thread = undefined; this.readings = 0; this.busy = false; }
   async start() {
@@ -40,18 +41,19 @@ class Reader {
     return this.ready;
   }
   restart() { this.thread?.terminate(); this.thread = undefined; }
-  read(text, file) { return new Promise((resolve) => { this.queue.push({ text, file, resolve }); this.next(); }); }
+  read(text, file, step) { return new Promise((resolve) => { this.queue.push({ text, file, step, resolve }); this.next(); }); }
   async next() {
     if (this.busy || !this.queue.length) return;
     this.busy = true;
-    const { text, file, resolve } = this.queue.shift();
+    const { text, file, step, resolve } = this.queue.shift();
     let answer;
     try {
       if (!this.thread || this.readings >= READINGS) { this.restart(); await this.start(); }
       this.readings++;
       answer = await new Promise((done) => {
-        const timer = setTimeout(() => { done({ error: `not read in ${PATIENCE} ms` }); this.restart(); }, PATIENCE);
-        this.answered = (m) => { clearTimeout(timer); done(m); };
+        const late = () => setTimeout(() => { done({ error: `not read in ${PATIENCE} ms` }); this.restart(); }, PATIENCE);
+        let timer = late();
+        this.answered = (m) => { clearTimeout(timer); if (!m.step) return done(m); timer = late(); step?.(m); };
         this.failed = (e) => { clearTimeout(timer); done({ error: String(e?.message ?? e) }); };
         this.thread.postMessage({ id: this.readings, text, file });
       });
@@ -220,11 +222,16 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
     // (what the language itself paints in it, and what it does not read; the compiler's grammar only for its outline, when
     // that is asked for)
     const file = document.uri.startsWith('file:') ? fileURLToPath(document.uri) : `/${document.uri.replace(/[^\w.]+/g, '_')}.ray`;
-    const language = await reader.read(text, file);
+    // (each step shown as it comes: what it painted, its tests as they ended)
+    const language = await reader.read(text, file, (step) => { if (documents.get(document.uri)?.version === version) shown_as(document, text, version, step, [], t0); });
     if (documents.get(document.uri)?.version !== version) return;
     // (where the language painted nothing yet, its statements' heads by the compiler's grammar)
     const statements = language.painted?.length ? [] : (await reading(text)).statements;
     if (documents.get(document.uri)?.version !== version) return;
+    shown_as(document, text, version, language, statements, t0);
+  };
+  // (a document shown as what the language read in it: its paints, and as diagnostics what it said and did not read)
+  const shown_as = (document, text, version, language, statements, t0) => {
     const diagnostics = [];
     if (language.error) {
       log(`the language did not paint ${document.uri.split('/').pop()}: ${language.error.split('\n')[0]}`);
@@ -235,7 +242,7 @@ export async function serve({ env, STACK_MB = 512 } = {}) {
     for (const u of language.unread ?? []) diagnostics.push({ severity: DiagnosticSeverity.Error, range: { start: { line: u.line, character: u.column }, end: document.positionAt(document.offsetAt({ line: u.line, character: u.column }) + u.length) }, message: 'Nothing reads this.', source: 'ether' });
     read.set(document.uri, { version, text, statements, paints: language.painted ?? [] });
     connection.sendDiagnostics({ uri: document.uri, version, diagnostics });
-    log(`read ${document.uri.split('/').pop()} v${version}: ${language.painted?.length ?? 0} painted, ${language.unread?.length ?? 0} unread, in ${Date.now() - t0} ms`);
+    log(`${language.step ? 'reading' : 'read'} ${document.uri.split('/').pop()} v${version}: ${language.painted?.length ?? 0} painted, ${language.unread?.length ?? 0} unread, in ${Date.now() - t0} ms`);
     connection.languages.semanticTokens.refresh?.();
     connection.sendNotification('ether/theme', shown([document.uri]));
   };

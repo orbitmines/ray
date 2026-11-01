@@ -570,6 +570,15 @@ function entry_given(t) {
   textend = q
   r
 }
+// (a step of what the text given read held: what Expression registered given nothing)
+function entry_step() {
+  var b
+  b = load 3856
+  if b == 0 {
+    return 0
+  }
+  call1(load b, 0)
+}
 function image_out() {
   var b
   b = lasting_alloc(112)
@@ -3330,6 +3339,13 @@ function kind_of(v) {
     return text(t, o)
   }
   0
+}
+// (whether what is kept for afterwards is held for the host, which runs it a step at a time (`entry_step`): its word 4080)
+function stepped() {
+  if (load 4080) != 0 {
+    return 12
+  }
+  8
 }
 // (whether the reading runs abstractly, as the editor runs a file, or fully, as a test: the host's word 3900)
 function abstractly() {

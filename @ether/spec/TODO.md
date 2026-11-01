@@ -217,6 +217,13 @@ its own reading its place, unread text recorded with reading going on.
   life at once and overflows the stack on main (`{this}(…)` among them, which the calls Expression reads its own way).
   Needs the user: in a head, is a name that is defined still the hole it names? Probes ~/.cache/ray-scratch/r45/cl/f25-f34.ray,
   traces trh98c-h.txt.
+  Decided (the user, 2026-11-01): a hole's name shadows what it is outside, for the rule's scope. Tried
+  (~/.cache/ray-scratch/r45/st/x_shadow.ray: a hole not read as a place read again with named definitions set aside):
+  with `{this}` too, 64k statements run past their budget (`{this}{rest}`, entry:1133, matches after any value: the
+  `{this}`-led heads are calls', so it lands with calls). Without `{this}` (named only to try): --test 252/197/11, the
+  multi-line `--` (886/887) read, `Level.low.ranked`, HS9, SP5 pass; but 13% slower (hole-led heads `{value} -- {rest}`,
+  `{first} ; {rest}` tried at every statement), the tests in `assert { }` blocks painted on their condition (column 10),
+  and 3015's block and entry:26/89 lose.
 
 ## Node.ray
 

@@ -205,6 +205,18 @@ its own reading its place, unread text recorded with reading going on.
   runtime matcher's untyped hole grows shortest-first, so `{a} - {b}` on `x - y - z` binds `a` = `x` and groups right
   (trace ~/.cache/ray-scratch/r45/cl/trh1.txt; Number.ray PC5 wants left). Taking the longest left hole instead changes
   every rule led by a hole (`:=`, `? :`), so those that group right have to be declared right-to-left first.
+- **A head's hole that reads as nothing makes its rule dead** (found 2026-11-01 through multi-line `--`). The runtime makes
+  a head element that is nothing a pattern of kind 0, which never matches, so these rules never apply (none applied in a
+  `--test` run). What reads as nothing: (1) a name that is a member, `{rest}` (`rest => []`, entrypoint:872), `{first}`,
+  `{this}`: no `this` while a head is read; that kills `{value} -- {rest}`, `{value} ~~ {rest}`, `{first} ; {rest}`,
+  `{this}{rest}`, `compounds`/`chainable`'s `{operator} {rest}` and `{field: Name}: {rest}`. (`x -- y` on one line reads
+  through other rules; across lines nothing reads it, `cc := 5⏎  -- 3` unread.) (2) A name that starts with a declared
+  word: `{whole_by_of}` reads `whole` then `_by_of`, likewise `{first_list}`, `{first_given}`, `{declared_value}`,
+  `{typed_called}` (open: are names read only as whole words?). (3) A typed hole whose type is None until calls
+  (`{name: Name}`, `{digits: Decimal.String}`, `{fields: Header}`). Making (1) the hole of that name brings 80-odd rules to
+  life at once and overflows the stack on main (`{this}(…)` among them, which the calls Expression reads its own way).
+  Needs the user: in a head, is a name that is defined still the hole it names? Probes ~/.cache/ray-scratch/r45/cl/f25-f34.ray,
+  traces trh98c-h.txt.
 
 ## Node.ray
 

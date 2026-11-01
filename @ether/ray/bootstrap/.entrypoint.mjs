@@ -183,10 +183,12 @@ const STEP_MS = Number(process.env.ETHER_STEP_MS ?? 250);
 const stepping = (it, fuel, step, out, error) => {
   if (!step || error || !it.exports.entry_step) return error;
   step(out(error));
-  let held = 1, last = Date.now();
+  // (a step that painted and said nothing new is not given again: how many Expression's `painted` and `reported` hold)
+  const { i32 } = it, grown = () => [3968, 3972].map((w) => (i32[w >> 2] > 0 ? i32[(i32[w >> 2] >> 2) + 1] : 0)).join();
+  let held = 1, last = Date.now(), given = grown();
   while (held > 0 && !error) {
     error = ended(it, fuel, () => { const v = it.exports.entry_step(); held = v & 1 ? v >> 1 : 0; });
-    if (held > 0 && !error && Date.now() - last >= STEP_MS) { step(out(error)); last = Date.now(); }
+    if (held > 0 && !error && Date.now() - last >= STEP_MS && grown() !== given) { step(out(error)); last = Date.now(); given = grown(); }
   }
   return error;
 };

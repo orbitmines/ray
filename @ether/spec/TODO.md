@@ -177,8 +177,17 @@ its own reading its place, unread text recorded with reading going on.
     Measured (free at statement 3608, the include of Node.ray): 116 891 MB; evacuator ported onto 116
     (/tmp/claude-1000/s/ev/rt_ev7bz.ray, slots from 0 MB) 586 MB but 6x slower and still past 1.3 GB by 3615;
     success-reclaim in `matched` (rt_mr2) 834 MB, +5% steps. Of 6 GB allocated, 3 GB are matcher patterns (kind 9
-    sequence steps 1.17 GB, kind 21->10 repeat turns 1.25 GB). Next (ray-98, needs the user): a reading cache by
-    (rule, scope), reading a body once instead of per application.
+    sequence steps 1.17 GB, kind 21->10 repeat turns 1.25 GB; revision 118 makes a step one 12-byte cell and a
+    repeat's turn its choice record). No reading cache (user 2026-11-01: structural fixes, no caches).
+    Measured 2026-11-01 (ray-4d): of the 1304 MB the calls run ends with, a conservative trace from every root
+    reaches 101 MB, so it is the region allocator, not the data. In scratch (/tmp/claude-1000/s/gc, gc.ray +
+    mkgc.py): a sliding compaction of a kept region at its close, above 320 MB only (main never enters it):
+    live objects marked conservatively from the region's slots, its value, bounds, actives, the choice stack, the
+    test log and copies table since it opened, and the 3988 pair stack, through an allocation-start bitmap and a
+    no-scan bit on byte buffers; every word in [S, F] then moved to S + the live bytes below it (pointers, interior
+    pointers and text positions alike). Stress build (from 16 MB) paints the same as main. Found: 17 slot tables
+    overflowing (> 200) marked 4283 frames kept outright, so slots move to one stack (a frame's a segment of it);
+    compacting every close is 612 s on calls (0 statements cut), pacing by heap growth is next.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

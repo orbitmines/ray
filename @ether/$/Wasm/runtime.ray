@@ -3081,6 +3081,27 @@ function topattern(v) {
   }
   v
 }
+function rest_cell(l, i, next) {
+  var c
+  c = alloc(12)
+  c <- l
+  (c + 4) <- next
+  (c + 8) <- i
+  c
+}
+function recell(k, next) {
+  if (load (load k)) == 3 {
+    return rest_cell(load k, load (k + 8), next)
+  }
+  cell(load k, next)
+}
+function repeat_chosen(inner, least, d, pos, k) {
+  var s
+  s = chosen(4, inner, pos, k)
+  (s + 16) <- least
+  (s + 40) <- d
+  s
+}
 function cell(p, next) {
   var c
   c = alloc(8)
@@ -3511,7 +3532,7 @@ function matched(p, pos, k) {
           mode = 1
         } else {
           if (i + 1) < (load (l + 4)) {
-            k = cell(sequence_from(l, i + 1), k)
+            k = rest_cell(l, i + 1, k)
           }
           p = at(l, i)
           mode = 0
@@ -3551,7 +3572,7 @@ function matched(p, pos, k) {
               mode = 4
             } else {
               if kind == 10 {
-                chosen(4, p, pos, k)
+                repeat_chosen(load (p + 8), load (p + 12), load (p + 16), pos, k)
                 mode = 4
               } else {
                 if kind == 21 {
@@ -3560,8 +3581,8 @@ function matched(p, pos, k) {
                       mode = 1
                     }
                   } else {
-                    p = pattern3(10, load (p + 8), load (p + 12), load (p + 20))
-                    mode = 0
+                    repeat_chosen(load (p + 8), load (p + 12), load (p + 20), pos, k)
+                    mode = 4
                   }
                 } else {
                   if kind == 3 {
@@ -3570,7 +3591,7 @@ function matched(p, pos, k) {
                       mode = 1
                     } else {
                       if (load (l + 4)) > 1 {
-                        k = cell(sequence_from(l, 1), k)
+                        k = rest_cell(l, 1, k)
                       }
                       p = at(l, 0)
                       mode = 0
@@ -3612,7 +3633,7 @@ function matched(p, pos, k) {
                           } else {
                             if kind == 5 {
                               k = cell(pattern(22, boundn, 0), k)
-                              chosen(4, p, pos, k)
+                              repeat_chosen(load (p + 8), load (p + 12), load (p + 16), pos, k)
                               mode = 4
                             } else {
                               if kind == 8 {
@@ -3704,7 +3725,7 @@ function matched(p, pos, k) {
                                               } else {
                                                 if kind == 23 {
                                                   if (load (p + 12)) == 2 {
-                                                    k = cell(load k, cell(pattern(23, pos, 1), load (k + 4)))
+                                                    k = recell(k, cell(pattern(23, pos, 1), load (k + 4)))
                                                     mode = 1
                                                   } else {
                                                     if pos == textend {
@@ -3772,7 +3793,16 @@ function matched(p, pos, k) {
         mode = 3
       } else {
         p = load k
-        k = load (k + 4)
+        if (load p) == 3 {
+          i = load (k + 8)
+          k = load (k + 4)
+          if (i + 1) < (load (p + 4)) {
+            k = rest_cell(p, i + 1, k)
+          }
+          p = at(p, i)
+        } else {
+          k = load (k + 4)
+        }
         mode = 0
       }
     }
@@ -3944,7 +3974,7 @@ function matched(p, pos, k) {
         if q == 0 {
           q = 1
           (s + 20) <- 1
-          if ((load (p + 12)) <= 0) and ((load (p + 16)) == 0) {
+          if ((load (s + 16)) <= 0) and ((load (s + 40)) == 0) {
             pos = load (s + 8)
             mode = 1
             q = 9
@@ -3952,15 +3982,14 @@ function matched(p, pos, k) {
         }
         if q == 1 {
           (s + 20) <- 2
-          k = cell(pattern4(21, load (p + 8), (load (p + 12)) - 1, load (s + 8), load (p + 16)), k)
+          k = cell(pattern4(21, p, (load (s + 16)) - 1, load (s + 8), load (s + 40)), k)
           pos = load (s + 8)
-          p = load (p + 8)
           mode = 0
           q = 9
         }
         if q == 2 {
           3852 <- s
-          if ((load (p + 12)) <= 0) and ((load (p + 16)) != 0) {
+          if ((load (s + 16)) <= 0) and ((load (s + 40)) != 0) {
             pos = load (s + 8)
             mode = 1
           }

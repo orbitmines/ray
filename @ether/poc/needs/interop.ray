@@ -1,0 +1,19 @@
+// What the interop proof (`poc/interop`, at tag `machine-code-proof`: C and Python read into Ray, Rust and C written from
+// it) needs from the core library, each as one check. Run as `deflate.ray` is.
+
+assert `abc` == `ab`, `c`  // NE20 two texts are not joined (as Design.md §5.1 joins them)
+assert ((1 == 1) ? `yes` : `no`) == `yes`  // NE21 a choice does not give its first value when it holds
+assert (None ?? `kept`) == `kept`  // NE22 ?? does not fall back on nothing
+assert `f1` fits_pattern `^[a-z][0-9]$`  // NE23 a text is not matched against a pattern
+
+NeedsSum := {
+  {l} + {r} =>
+    `{l}`
+}
+assert (NeedsSum reads_text `a + b`) == `a`  // NE24 a block of rules does not read a text by its patterns
+
+NeedsCall := class (name: String, ` ( `, argument: String, ` )`) => { }
+assert (`f ( x )` as NeedsCall).argument == `x`  // NE25 a class written as a pattern does not read a text into its fields
+
+assert (0 - 3) + 5 == 2  // NE26 a number below zero is not kept
+assert ((2147483647 + 1) wrapped Int32) == (0 - 2147483648)  // NE27 a sum past 32 bits does not wrap as a machine's does

@@ -1,0 +1,16 @@
+// What the machine code proof (`$/x86`, `poc/machine`, at tag `machine-code-proof`: gcc's x86-64 read, printed, lifted and
+// compiled back) needs from the core library, each as one check. Run as `deflate.ray` is.
+
+assert `1011`.unsigned == 11  // NE40 bits written as text are not read as their number
+assert `abc`.reverse == `cba`  // NE41 a text is not turned around
+assert `10110011`.pieces(4) == [`1011`, `0011`]  // NE42 a text is not cut into pieces of a size
+assert 255.hexadecimal == `ff`  // NE43 a number is not written in base 16
+assert `0xfffffff8`.signed_hexadecimal(32) == (0 - 8)  // NE44 base 16 at a width is not read as a signed number
+assert 12.anded(10) == 8 && 12.ored(3) == 15 && 12.xored(10) == 6  // NE45 numbers are not combined bit by bit
+assert 3.shifted_left(2) == 12 && 12.shifted_right(2) == 3  // NE46 a number's bits are not shifted
+
+NeedsByte := class (low: <-Binary₄, high: <-Binary₄)
+assert (`00001111` as NeedsByte).high == 15  // NE47 a class header does not read bits into its fields
+
+NeedsGiven := class<width> (value: <-Binary₈)
+assert NeedsGiven<8>(3).value == 3  // NE48 a class is not made with what it is given

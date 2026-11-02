@@ -207,6 +207,12 @@ its own reading its place, unread text recorded with reading going on.
     `.holed === true` (a missing member on a list key answers a superposition once calls run). Whole file: 207M steps,
     19 s, then `String := class: Array { … }` (3333) grows the heap 233 -> 1290 MB: 2447 `(place) := value` (`x = v`
     in Array's loops), ~72K steps each, every statement of a body read again each time it runs.
+    User 2026-11-02: read bodies once (where the rule is written, holes as names, each application runs them). Started in
+    ~/.cache/ray-scratch/ro/Expression.ray: holes stay rules of each application's node, found at call time from the
+    running application (paints the same); kept state per rule written, not per head (a head written again shares its key),
+    flags `=== true`. Open: a kept statement runs with the program that read it, so `(external &)` in a kept body
+    answers the first application (`` `{text ^string}` => (external &).text `` kept: later backticks lose
+    `string.punctuation`). A statement has to take the program running it, where Statements are read and run.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

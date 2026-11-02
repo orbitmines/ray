@@ -581,12 +581,79 @@ function entry_given(t) {
 }
 // (a step of what the text given read held: what Expression registered given nothing)
 function entry_step() {
-  var b
-  b = load 3856
-  if b == 0 {
+  var l
+  var x
+  l = load 4044
+  if (l == 0) or ((load 4036) >= (load (l + 4))) {
+    return int(0)
+  }
+  x = at(l, load 4036)
+  4036 <- ((load 4036) + 1)
+  kept_run(x)
+  int((load (l + 4)) - (load 4036))
+}
+// (a program kept for afterwards, `external goto afterwards`: run once everything is read)
+function kept_later(p) {
+  append(load 4044, p)
+  p
+}
+// (what was kept run, each by `run` in memory of its own; first only those `tested` keeps; where the host runs them a step
+// at a time (word 4080), held for it)
+function run_kept(run, tested, painted, reported) {
+  var l
+  var i
+  var j
+  4048 <- run
+  4052 <- painted
+  4040 <- reported
+  l = load 4044
+  i = load 4036
+  j = i
+  while i < (load (l + 4)) {
+    if truthy(call1(tested, at(l, i))) {
+      ((load (l + 12)) + (j * 4)) <- at(l, i)
+      j = j + 1
+    }
+    i = i + 1
+  }
+  kept_count(l, j)
+  if (load 4080) != 0 {
     return 0
   }
-  call1(load b, 0)
+  while (load 4036) < (load (l + 4)) {
+    i = load 4036
+    4036 <- (i + 1)
+    kept_run(at(l, i))
+  }
+  0
+}
+function kept_count(l, n) {
+  if (l + 4) < (load 3944) {
+    logged(l + 4)
+  }
+  (l + 4) <- n
+  0
+}
+function kept_run(x) {
+  var o
+  var n
+  var i
+  test_begin(load 4052, load 4040)
+  o = load 4044
+  4044 <- list()
+  i = load 4036
+  4036 <- 0
+  call1(load 4048, x)
+  4036 <- i
+  n = load 4044
+  4044 <- o
+  i = 0
+  while i < (load (n + 4)) {
+    kept_run(at(n, i))
+    i = i + 1
+  }
+  test_end(load 4052, load 4040)
+  0
 }
 function image_out() {
   var b
@@ -2591,6 +2658,7 @@ function seeded(t) {
     epoch = 1
     actives = lasting_alloc(1048576)
     bounds = lasting_alloc(16777216)
+    4044 <- list()
   }
   append(csyms, t)
   0

@@ -208,7 +208,7 @@ Expression := class (
       // (a jump: to its label among those read, what runs next; to the host's `afterwards`, the rest kept for when everything
       // is read; to its `report`, said, then on (in a test, to its `erred`); else waiting for its label)
       settled (p) => {
-        later.append(p) if (p.at == afterwards)
+        (level kept_later (p)) if (p.at == afterwards)
         said(p) if (p.at == report)
         to := (p.at === None) ? p.waiting : labelled(p, p.done)
         forget(p) if !((p.at === None) || (to === None))
@@ -233,35 +233,15 @@ Expression := class (
       given (gc, gr, ga, gf) => (((gr == `goto`) || (gr == `label`)) && (ga === gf)) ? label_of(gc, ga.word) : ((gr == `include`) ? takes(gc){.key == ((ga.word.first == hole_opening) ? between(ga.word) : ga.word)}#.first : named_in(gc, ga.word))
       label_of (lp, lw) => (lw ~= BOOTSTRAPPER.CAPTURE.map{== \s}(String+)) ? [named_in(lp, lw)] : Place(lw, global)
       same_label (sa, sb) => ((level kind_of (sa)) == `list`) ? (((level kind_of (sb)) == `list`) && (sa.first == sb.first)) : (sa == sb)
-      later := Array.new
       afterwards := Place(`afterwards`, global)
-      // (everything read, the tests kept for afterwards run; where the host runs them a step at a time (the editor, showing
-      // each test as it ends, `level stepped`), held for it)
-      run_later (rl) => {
-        later = later{level tested_here ((.bound.first).value)}#
-        ran_all(later) if !(level stepped)
-      }
-      ran_all (ra) => {
-        later = Array.new
-        ra.for((lp) => ran_later(lp))
-      }
-      step (sl) => {
-        later = sl.rest
-        ran_later(sl.first)
-      }
-      // (each test in memory of its own (Design §21.4): what it painted and said kept, the rest let go once it is done; what
-      // it kept for afterwards run inside it)
+      // (everything read, the tests kept for afterwards run, each in memory of its own (Design §21.4), what it kept for
+      // afterwards run inside it; where the host runs them a step at a time, held for it)
+      run_later (rl) => level run_kept (ran_later) (tested_later) (painted) (reported)
+      tested_later (tl) => level tested_here ((tl.bound.first).value)
       ran_later (lp) => {
-        level test_begin (painted) (reported)
-        outer_later := later
-        later = Array.new
         testing = lp
         finished(go(gone_on(lp), lp.waiting ?? Array.new))
         testing = None
-        inner_later := later
-        later = outer_later
-        inner_later.for((ip) => ran_later(ip))
-        level test_end (painted) (reported)
       }
       // (what is said, `external goto report`: what the hole took and where, each in turn; the host reads them)
       report := Place(`report`, global)
@@ -309,14 +289,10 @@ Expression := class (
       noted(painted)
       noted(reported)
       // (the program the text is run by, and a text read after it as more of it, by the same program (the editor's file read
-      // on what the entrypoint already read); no text, a test held run. It answers how many are held still)
+      // on what the entrypoint already read)
       top := Program(in: global, this: global)
       read_text (rt) => {
-        (rt === None) ? ((later.count == 0) ? 0 : step(later)) : read_then_later(rt)
-        later.count
-      }
-      read_then_later (rr) => {
-        named_in(top, rr)
+        named_in(top, rt)
         run_later(0)
       }
       level entry_read (read_text)

@@ -236,7 +236,7 @@ Expression := class (
       afterwards := Place(`afterwards`, global)
       // (everything read, the tests kept for afterwards run, each in memory of its own (Design §21.4), what it kept for
       // afterwards run inside it; where the host runs them a step at a time, held for it)
-      run_later (rl) => level run_kept (ran_later) (tested_later) (painted) (reported)
+      run_later (rl) => level run_kept (ran_later) (tested_later)
       tested_later (tl) => level tested_here ((tl.bound.first).value)
       ran_later (lp) => {
         testing = lp
@@ -245,7 +245,7 @@ Expression := class (
       }
       // (what is said, `external goto report`: what the hole took and where, each in turn; the host reads them)
       report := Place(`report`, global)
-      reported := Array.new
+      reported := level reports
       testing := None
       said (sp) => {
         reported.append([takes(sp).first, bound_along(sp)])
@@ -285,9 +285,7 @@ Expression := class (
       defines (dt) => level holds_outside (dt) (separator)
       level closing (BOOTSTRAPPER.CAPTURE)
       // (what is painted, `external style`: each style, what it is shown on and what the holes took; the host reads them)
-      painted := Array.new
-      noted(painted)
-      noted(reported)
+      painted := level paints
       // (the program the text is run by, and a text read after it as more of it, by the same program (the editor's file read
       // on what the entrypoint already read)
       top := Program(in: global, this: global)

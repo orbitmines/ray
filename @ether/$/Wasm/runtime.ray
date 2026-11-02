@@ -599,13 +599,11 @@ function kept_later(p) {
 }
 // (what was kept run, each by `run` in memory of its own; first only those `tested` keeps; where the host runs them a step
 // at a time (word 4080), held for it)
-function run_kept(run, tested, painted, reported) {
+function run_kept(run, tested) {
   var l
   var i
   var j
   4048 <- run
-  4052 <- painted
-  4040 <- reported
   l = load 4044
   i = load 4036
   j = i
@@ -638,7 +636,7 @@ function kept_run(x) {
   var o
   var n
   var i
-  test_begin(load 4052, load 4040)
+  test_begin(load 3968, load 3972)
   o = load 4044
   4044 <- list()
   i = load 4036
@@ -652,8 +650,15 @@ function kept_run(x) {
     kept_run(at(n, i))
     i = i + 1
   }
-  test_end(load 4052, load 4040)
+  test_end(load 3968, load 3972)
   0
+}
+// (what is painted, `external style`, and what is said, `external goto report`: the host reads them (words 3968, 3972))
+function paints() {
+  load 3968
+}
+function reports() {
+  load 3972
 }
 function image_out() {
   var b
@@ -2189,17 +2194,6 @@ function select(l, f) {
   }
   o
 }
-function noted(v) {
-  var n
-  n = load 4084
-  if n < 2 {
-    (3968 + (n * 4)) <- v
-  } else {
-    (3968 + ((2 + ((n - 2) % 2)) * 4)) <- v
-  }
-  4084 <- n + 1
-  v
-}
 function zeroed(a, n) {
   var i
   i = 0
@@ -2659,6 +2653,9 @@ function seeded(t) {
     actives = lasting_alloc(1048576)
     bounds = lasting_alloc(16777216)
     4044 <- list()
+    3968 <- list()
+    3972 <- list()
+    4084 <- 2
   }
   append(csyms, t)
   0
@@ -3437,13 +3434,6 @@ function kind_of(v) {
     return text(t, o)
   }
   0
-}
-// (whether what is kept for afterwards is held for the host, which runs it a step at a time (`entry_step`): its word 4080)
-function stepped() {
-  if (load 4080) != 0 {
-    return 12
-  }
-  8
 }
 // (whether the reading runs abstractly, as the editor runs a file, or fully, as a test: the host's word 3900)
 function abstractly() {

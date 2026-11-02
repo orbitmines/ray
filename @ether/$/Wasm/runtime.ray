@@ -94,6 +94,15 @@ function cw_slice(t, x, v) {
   }
   text((load (t + 4)) + untag(x), (load (t + 4)) + untag(v))
 }
+function cw_inner(t) {
+  if tag(t) != 4 {
+    return 0
+  }
+  if ((load (t + 8)) - (load (t + 4))) < 2 {
+    return 0
+  }
+  text((load (t + 4)) + 1, (load (t + 8)) - 1)
+}
 function cw_chopped(t) {
   if tag(t) != 4 {
     return 0

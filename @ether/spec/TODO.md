@@ -310,6 +310,10 @@ its own reading its place, unread text recorded with reading going on.
   `level entry_read (read_text)`, the export `entry_given(text)`); the host reads each file after it by default since
   9994f8a8 (OS 0.2 s, Choice 0.47, Control 1.6, was 6-7 s; the image ~3 s once, ~356 MB). Paints equal the full run's but
   one extra `string.punctuation` in Control.ray (40:2).
+- **A numeral of 2^30 or more compiles to an invalid module** (2026-11-02, ray-09): `cw_numeral_value` answers a level
+  int (`2n + 1`, 31 bits), so `1588444896` wraps negative and `Low.sleb` writes a negative value as one byte ("expected 1
+  elements on the stack"). The runtime writes such numbers as products (`1021000000 * 2`). Wanted: `sleb` signed both
+  ways, and a numeral's value wider than a level int.
 
 ## Painting
 

@@ -200,6 +200,13 @@ its own reading its place, unread text recorded with reading going on.
     nests 845 deep and the choice stack overflows (trap in `chosen`; stopping the statement there did not unwind it).
     A frame per in_turn (compacted between statements) was correct once its survivors' pins marked the parent kept, but
     freed no more and took 2x the time: not kept. `kept_out` wrote past its 8 MB buffer (bounded now).
+    2026-11-02 later (ray-09, revisions 127-128): frames past 4000 deep are counted, not kept (10298 deep overran the
+    frame stack); a value kept twice the same is one copy (505527 kept appends, 19366 distinct). In the calls bundle
+    (~/.cache/ray-scratch/wtc), Array's `{written} =>` (entry 3103) runs again: a rule that is only a hole is the
+    reading node's own fallback (`caught` in `reading`, skipped by `longest`, `via_longest` and the split), and
+    `.holed === true` (a missing member on a list key answers a superposition once calls run). Whole file: 207M steps,
+    19 s, then `String := class: Array { … }` (3333) grows the heap 233 -> 1290 MB: 2447 `(place) := value` (`x = v`
+    in Array's loops), ~72K steps each, every statement of a body read again each time it runs.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

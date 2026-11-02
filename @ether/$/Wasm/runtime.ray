@@ -2991,7 +2991,7 @@ function kept_append(l, v) {
   }
   s = 0
   f0 = 0
-  while s < isodepth {
+  while s < framed() {
     if (f0 == 0) and (l < (load (isostack + (s * 12)))) {
       f0 = load (isostack + (s * 12))
     }
@@ -3185,10 +3185,16 @@ function kept() {
   }
   frames_kept()
 }
+function framed() {
+  if isodepth > 4000 {
+    return 4000
+  }
+  isodepth
+}
 function frames_kept() {
   var s
   effects = effects + 1
-  s = isodepth
+  s = framed()
   while s > 0 {
     (isostack + (((s - 1) * 12) + 8)) <- 2
     s = s - 1
@@ -3207,6 +3213,10 @@ function isolated_open() {
   }
   if (load 3876) == 0 {
     eager_caches()
+  }
+  if isodepth >= 4000 {
+    isodepth = isodepth + 1
+    return 0
   }
   s = isostack + (isodepth * 12)
   s <- free
@@ -3230,6 +3240,9 @@ function isolated_value(o, v) {
   var s
   var k
   isodepth = isodepth - 1
+  if isodepth >= 4000 {
+    return v
+  }
   s = isostack + (isodepth * 12)
   markf = load (s + 4)
   k = 0
@@ -3257,6 +3270,9 @@ function isolated_value(o, v) {
 function isolated_close(o, v) {
   var s
   isodepth = isodepth - 1
+  if isodepth >= 4000 {
+    return 0
+  }
   s = isostack + (isodepth * 12)
   markf = load (s + 4)
   if pins_gone(s) and (noreclaim == 0) {
@@ -3291,7 +3307,7 @@ function touched_by(x, w, v) {
   if x < markf {
     effects = effects + 1
     if (pointer(v) and (v < arena_base())) and (v >= (load isostack)) {
-      s = isodepth
+      s = framed()
       while s > 0 {
         if x < (load (isostack + ((s - 1) * 12))) {
           if v >= (load (isostack + ((s - 1) * 12))) {
@@ -3324,7 +3340,7 @@ function touched(x) {
   }
   if x < markf {
     effects = effects + 1
-    s = isodepth
+    s = framed()
     while s > 0 {
       if x < (load (isostack + ((s - 1) * 12))) {
         (isostack + (((s - 1) * 12) + 8)) <- 2
@@ -7079,7 +7095,7 @@ function pin_slot(d, w) {
   }
   g = load ((load 4056) + ((4096 * 1028) + 49152))
   t = load ((load 4056) + ((4096 * 1028) + 49156))
-  if t > slot_base(isodepth - 1) {
+  if t > slot_base(framed() - 1) {
     if (load (g + ((t - 1) * 4))) == w {
       f <- 1
       return 0

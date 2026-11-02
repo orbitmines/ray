@@ -2,6 +2,12 @@ function alloc(n) {
   var p
   p = free
   free = free + ((n + 7) / 8) * 8
+  if free > 536870912 {
+    alloc_marked(p)
+  }
+  p
+}
+function alloc_marked(p) {
   if free > arena_base() {
     if (p <= arena_base()) or (free > (1020000000 * 2)) {
       if (load 3924) == 0 {
@@ -9,8 +15,76 @@ function alloc(n) {
         unreachable_now()
       }
     }
+    return 0
+  }
+  if p >= 536870912 {
+    start_mark(p)
+  }
+  0
+}
+function start_mark(p) {
+  var c
+  c = p / 8
+  ((1021000000 * 2) + (c / 8)) <-8 ((load8 ((1021000000 * 2) + (c / 8))) or (1 << (c % 8)))
+  ((1033000000 * 2) + (c / 8)) <-8 ((load8 ((1033000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
+  0
+}
+function starts_cleared(a, e) {
+  var c
+  var k
+  if e <= 536870912 {
+    return 0
+  }
+  if a < 536870912 {
+    a = 536870912
+  }
+  c = a / 8
+  k = e / 8
+  while (c < k) and ((c % 32) != 0) {
+    ((1021000000 * 2) + (c / 8)) <-8 ((load8 ((1021000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
+    c = c + 1
+  }
+  while (c + 32) <= k {
+    ((1021000000 * 2) + (c / 8)) <- 0
+    c = c + 32
+  }
+  while c < k {
+    ((1021000000 * 2) + (c / 8)) <-8 ((load8 ((1021000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
+    c = c + 1
+  }
+  0
+}
+function alloc_bytes(n) {
+  var p
+  var c
+  p = alloc(n)
+  if (p >= 536870912) and (p < arena_base()) {
+    c = p / 8
+    ((1033000000 * 2) + (c / 8)) <-8 ((load8 ((1033000000 * 2) + (c / 8))) or (1 << (c % 8)))
   }
   p
+}
+function starts_set(p, e) {
+  var c
+  var b
+  var k
+  c = p / 8
+  k = e / 8
+  b = (1021000000 * 2) + (c / 8)
+  b <-8 ((load8 b) or (1 << (c % 8)))
+  ((1033000000 * 2) + (c / 8)) <-8 ((load8 ((1033000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
+  c = c + 1
+  while c < k {
+    if ((c % 8) == 0) and ((c + 8) <= k) {
+      ((1021000000 * 2) + (c / 8)) <-8 0
+      c = c + 8
+    } else {
+      b = (1021000000 * 2) + (c / 8)
+      b <-8 ((load8 b) and (255 - (1 << (c % 8))))
+      c = c + 1
+    }
+  }
+  0
 }
 function input() {
   text(8388608, 8388608 + (load 4088))
@@ -135,7 +209,7 @@ function cw_unescaped(t) {
   var g
   var e
   e = load (t + 8)
-  o = alloc((e - (load (t + 4))) + 8)
+  o = alloc_bytes((e - (load (t + 4))) + 8)
   v = o
   g = load (t + 4)
   while g < e {
@@ -1239,7 +1313,7 @@ function kept_out(w, v, f0, depth) {
     return w + 8
   }
   t = load v
-  if depth > 6 {
+  if (depth > 6) or (w > ((load 3940) + 8323072)) {
     w <- 0
     return w + 4
   }
@@ -1368,7 +1442,7 @@ function made_one(r) {
   }
   if op == 2 {
     n = load (p + 4)
-    v = alloc(n + 8)
+    v = alloc_bytes(n + 8)
     copy(v, p + 8, n)
     r <- (p + (8 + (((n + 3) / 4) * 4)))
     return text(v, v + n)
@@ -1573,6 +1647,7 @@ function test_end(painted, reported) {
   if free > f0 {
     zeroed(f0, free - f0)
   }
+  starts_cleared(f0, free)
   free = f0
   if f0 <= (load 3920) {
     epoch = epoch + 1
@@ -2965,115 +3040,6 @@ function kept_append(l, v) {
   markf = m
   l
 }
-function pin_slot(d, w) {
-  var f
-  var b
-  var c
-  f = isostack + ((d * 12) + 8)
-  if (load f) == 2 {
-    return 0
-  }
-  if w == 0 {
-    return 0
-  }
-  b = (load 4056) + (d * 1028)
-  c = load b
-  if c > 0 {
-    if (load (b + (c * 4))) == w {
-      f <- 1
-      return 0
-    }
-  }
-  if c >= 256 {
-    c = slots_compacted(d, b)
-    if c > 200 {
-      f <- 2
-      return 0
-    }
-  }
-  (b + ((c + 1) * 4)) <- w
-  b <- (c + 1)
-  f <- 1
-  0
-}
-function pins_gone(s) {
-  var b
-  var c
-  var i
-  var x
-  if ((load (s + 8)) != 1) or ((load s) < 536870912) {
-    return (load (s + 8)) == 0
-  }
-  b = (load 4056) + (((s - isostack) / 12) * 1028)
-  c = load b
-  i = 1
-  while i <= c {
-    x = load (load (b + (i * 4)))
-    if (x >= (load s)) and (x < free) {
-      return 0
-    }
-    i = i + 1
-  }
-  1
-}
-function pins_up(s) {
-  var d
-  var b
-  var c
-  var i
-  var w
-  var x
-  d = (s - isostack) / 12
-  if d == 0 {
-    return 0
-  }
-  if (load (s + 8)) == 2 {
-    (s - 4) <- 2
-    return 0
-  }
-  if (load s) < 536870912 {
-    if ((load (s + 8)) == 1) and ((load (s - 4)) == 0) {
-      (s - 4) <- 1
-    }
-    return 0
-  }
-  if (load (s + 8)) != 1 {
-    return 0
-  }
-  b = (load 4056) + (d * 1028)
-  c = load b
-  i = 1
-  while i <= c {
-    w = load (b + (i * 4))
-    if w < (load (s - 12)) {
-      x = load ((w / 4) * 4)
-      if (x >= (load s)) and (x < free) {
-        pin_slot(d - 1, w)
-      }
-    }
-    i = i + 1
-  }
-  0
-}
-function slots_compacted(d, b) {
-  var s
-  var i
-  var j
-  var x
-  s = isostack + (d * 12)
-  j = 0
-  i = 1
-  while i <= (load b) {
-    x = load (load (b + (i * 4)))
-    if (x >= (load s)) and (x < free) {
-      j = j + 1
-      (b + (j * 4)) <- (load (b + (i * 4)))
-    }
-    i = i + 1
-  }
-  b <- j
-  j
-}
 function eager_caches() {
   if isodepth > 0 {
     return 0
@@ -3235,7 +3201,9 @@ function isolated_open() {
     isostack = alloc(65536)
   }
   if (load 4056) == 0 {
-    4056 <- lasting_alloc(4096 * 1028)
+    4056 <- lasting_alloc((4096 * 1028) + 65536)
+    ((load 4056) + ((4096 * 1028) + 49152)) <- lasting_alloc(16777216 * 4)
+    ((load 4056) + ((4096 * 1028) + 49156)) <- 0
   }
   if (load 3876) == 0 {
     eager_caches()
@@ -3244,7 +3212,10 @@ function isolated_open() {
   s <- free
   (s + 4) <- markf
   (s + 8) <- 0
-  ((load 4056) + (isodepth * 1028)) <- 0
+  ((load 4056) + (isodepth * 1028)) <- (load ((load 4056) + ((4096 * 1028) + 49156)))
+  if free >= 536870912 {
+    gc_opened()
+  }
   isodepth = isodepth + 1
   markf = free
   0
@@ -3266,6 +3237,7 @@ function isolated_value(o, v) {
     if (pointer(v) == 0) or (v < (load s)) {
       k = 1
       if free > (load s) {
+        starts_cleared(load s, free)
         if (load s) <= (load 3920) {
           epoch = epoch + 1
           4004 <- 0
@@ -3277,6 +3249,7 @@ function isolated_value(o, v) {
     }
   }
   if k == 0 {
+    v = gc_close(s, v)
     pins_up(s)
   }
   v
@@ -3287,11 +3260,13 @@ function isolated_close(o, v) {
   s = isostack + (isodepth * 12)
   markf = load (s + 4)
   if pins_gone(s) and (noreclaim == 0) {
+    starts_cleared(load s, free)
     free = load s
     epoch = epoch + 1
     4004 <- 0
     3996 <- ((load 3996) + 1)
   } else {
+    gc_close(s, 0)
     pins_up(s)
   }
   0
@@ -3401,35 +3376,35 @@ function kind_of(v) {
   var t
   var o
   if v == 0 {
-    t = alloc(8)
+    t = alloc_bytes(8)
     o = put4(t, 110, 111, 116, 104)
     o = put4(o, 105, 110, 103, 0)
     return text(t, o)
   }
   if v == 8 {
-    t = alloc(8)
+    t = alloc_bytes(8)
     o = put4(t, 102, 97, 108, 115)
     o = put4(o, 101, 0, 0, 0)
     return text(t, o)
   }
   if v == 12 {
-    t = alloc(8)
+    t = alloc_bytes(8)
     o = put4(t, 116, 114, 117, 101)
     return text(t, o)
   }
   if (v and 1) == 1 {
-    t = alloc(8)
+    t = alloc_bytes(8)
     o = put4(t, 110, 117, 109, 98)
     o = put4(o, 101, 114, 0, 0)
     return text(t, o)
   }
   if tag(v) == 4 {
-    t = alloc(8)
+    t = alloc_bytes(8)
     o = put4(t, 116, 101, 120, 116)
     return text(t, o)
   }
   if tag(v) == 3 {
-    t = alloc(8)
+    t = alloc_bytes(8)
     o = put4(t, 108, 105, 115, 116)
     return text(t, o)
   }
@@ -4076,6 +4051,7 @@ function matched(p, pos, k) {
   if r < 0 {
     boundn = bn
     if (effects == ef) and (noreclaim == 0) {
+      starts_cleared(fr, free)
       free = fr
       if free <= (load 3920) {
         3996 <- ((load 3996) + 1)
@@ -4889,7 +4865,7 @@ function mapped_text(t, f, g) {
     }
     return sequence(l)
   }
-  o = alloc(((load (t + 8)) - (load (t + 4))) * 16 + 16)
+  o = alloc_bytes(((load (t + 8)) - (load (t + 4))) * 16 + 16)
   n = o
   q = load (t + 4)
   while q < (load (t + 8)) {
@@ -5722,7 +5698,7 @@ function written_symbols() {
   if ((load 3892) == takent) and ((load 3888) != 0) {
     return load 3888
   }
-  b = alloc(8192)
+  b = alloc_bytes(8192)
   zeroed(b, 8192)
   kept()
   a = load (takent + 4)
@@ -6171,7 +6147,7 @@ function spliced(t, cap, l) {
     return o
   }
   n = spliced_into(t, oa, oe, ce, l, 0)
-  o = alloc(n + 8)
+  o = alloc_bytes(n + 8)
   spliced_into(t, oa, oe, ce, l, o)
   text(o, o + n)
 }
@@ -6675,4 +6651,527 @@ function quoted_in(h, c) {
     }
   }
   c
+}
+function compactable(s) {
+  if (load (s + 8)) == 2 {
+    return 0
+  }
+  if (noreclaim != 0) or ((load 3844) != 0) {
+    return 0
+  }
+  if ((load s) < 536870912) or ((free < 805306368) or (free >= arena_base())) {
+    return 0
+  }
+  (free - (load s)) > 67108864
+}
+function bit_at(base, a) {
+  ((load8 (base + (a / 64))) / (1 << ((a / 8) % 8))) % 2
+}
+function start_of(x) {
+  var c
+  var b
+  var m
+  var lo
+  c = x / 8
+  lo = (load 4008) / 8
+  b = (1021000000 * 2) + (c / 8)
+  m = (load8 b) and ((2 << (c % 8)) - 1)
+  while (m == 0) and (c > lo) {
+    c = ((c / 8) * 8) - 1
+    b = (1021000000 * 2) + (c / 8)
+    m = load8 b
+  }
+  while (((m / (1 << (c % 8))) % 2) == 0) and (c > lo) {
+    c = c - 1
+  }
+  c * 8
+}
+function end_of(y) {
+  var c
+  var k
+  var b
+  c = (y / 8) + 1
+  k = (load 4012) / 8
+  while c < k {
+    b = load8 ((1021000000 * 2) + (c / 8))
+    if ((c % 8) == 0) and (b == 0) {
+      c = c + 8
+    } else {
+      if ((b / (1 << (c % 8))) % 2) == 1 {
+        return c * 8
+      }
+      c = c + 1
+    }
+  }
+  k * 8
+}
+function marked_at(y) {
+  ((load8 ((load 4016) + ((y / 64) - ((load 4008) / 64)))) / (1 << ((y / 8) % 8))) % 2
+}
+function gc_mark(x) {
+  var y
+  var b
+  if (x < (load 4008)) or (x >= (load 4012)) {
+    return 0
+  }
+  y = start_of(x)
+  b = (load 4016) + ((y / 64) - ((load 4008) / 64))
+  if (((load8 b) / (1 << ((y / 8) % 8))) % 2) == 1 {
+    return 0
+  }
+  b <-8 ((load8 b) or (1 << ((y / 8) % 8)))
+  if (load 4028) >= (load 4032) {
+    4052 <- 1
+    return 0
+  }
+  ((load 4024) + ((load 4028) * 4)) <- y
+  4028 <- ((load 4028) + 1)
+  0
+}
+function gc_reloc(x) {
+  var j
+  var c
+  var m
+  var n
+  var i
+  if x == (load 4012) {
+    return (load 4008) + (load 4040)
+  }
+  c = x / 8
+  j = (x / 64) - ((load 4008) / 64)
+  n = load ((load 4020) + (j * 4))
+  m = load8 ((load 4016) + j)
+  i = (c / 8) * 8
+  while i < c {
+    if ((m / (1 << (i % 8))) % 2) == 1 {
+      n = n + 8
+    }
+    i = i + 1
+  }
+  if ((m / (1 << (c % 8))) % 2) == 1 {
+    n = n + (x % 8)
+  }
+  (load 4008) + n
+}
+function gc_in(v) {
+  (v >= (load 4008)) and (v <= (load 4012))
+}
+function gc_value(v, fix) {
+  if fix == 0 {
+    gc_mark(v)
+    return v
+  }
+  if gc_in(v) {
+    return gc_reloc(v)
+  }
+  v
+}
+function gc_word(w, fix) {
+  var v
+  v = load w
+  if fix == 0 {
+    gc_mark(v)
+    return 0
+  }
+  if gc_in(v) {
+    w <- gc_reloc(v)
+  }
+  0
+}
+function gc_words(a, e, fix) {
+  while a < e {
+    gc_word(a, fix)
+    a = a + 4
+  }
+  0
+}
+function gc_first(w) {
+  var h
+  var b
+  b = (load 4024) + 16777216
+  h = ((w / 4) * 40503) and 2097151
+  while (load (b + (h * 4))) != 0 {
+    if (load (b + (h * 4))) == w {
+      return 0
+    }
+    h = (h + 1) and 2097151
+  }
+  (b + (h * 4)) <- w
+  1
+}
+function gc_index_of(w, fix) {
+  var x
+  if w < 65536 {
+    return 0
+  }
+  if ((load (w - 8)) != 1) and ((load (w - 8)) != 10) {
+    return 0
+  }
+  x = load (w + 8)
+  if (x < 65536) or ((x >= (load 4008)) and (x <= (load 4012))) {
+    return 0
+  }
+  gc_words(x + 8, (x + 8) + ((load x) * 8), fix)
+  0
+}
+function gc_roots(s, fix) {
+  var b
+  var c
+  var i
+  var j
+  var w
+  var t
+  var k
+  var r
+  var d
+  d = (s - isostack) / 12
+  if fix != 0 {
+    zeroed((load 4024) + 16777216, 8388608)
+  }
+  c = load ((load 4056) + ((4096 * 1028) + 49152))
+  j = load ((load 4056) + ((4096 * 1028) + 49156))
+  i = slot_base(d)
+  while i < j {
+    w = load (c + (i * 4))
+    if (w < (load 4008)) or (w >= (load 4012)) {
+      if (fix == 0) or gc_first(w) {
+        gc_word(w, fix)
+        gc_index_of(w, fix)
+      }
+    }
+    i = i + 1
+  }
+  gc_words(bounds, bounds + (boundn * 16), fix)
+  gc_words(actives + 8, (actives + 8) + (activen * 8), fix)
+  if (load 3848) != 0 {
+    gc_words(load 3848, load 3852, fix)
+  }
+  t = load 3932
+  if (t != 0) and ((load 3936) > 0) {
+    gc_words(t, t + 1072, fix)
+    k = load ((load 4056) + ((4096 * 1028) + (16384 + (d * 4))))
+    if k > (load (t + 1048)) {
+      k = 0
+    }
+    gc_words((load (t + 1044)) + (k * 8), (load (t + 1044)) + ((load (t + 1048)) * 8), fix)
+  }
+  b = load 3856
+  if b != 0 {
+    gc_words(b + 4, b + 12, fix)
+  }
+  b = load 3864
+  if b != 0 {
+    k = load ((load 4056) + ((4096 * 1028) + (d * 4)))
+    while k < (load 3868) {
+      r = b + (k * 12)
+      if (load (r + 8)) > 0 {
+        if fix == 0 {
+          gc_mark(load r)
+          gc_mark(((load r) + (load (r + 8))) - 1)
+          gc_mark(load (r + 4))
+          gc_mark(((load (r + 4)) + (load (r + 8))) - 1)
+        } else {
+          gc_word(r, 1)
+          gc_word(r + 4, 1)
+        }
+      }
+      k = k + 1
+    }
+  }
+  b = load 3988
+  if b != 0 {
+    i = 0
+    while i < (load b) {
+      gc_word(b + (12 + (i * 12)), fix)
+      i = i + 1
+    }
+  }
+  gc_word(4044, fix)
+  gc_word(4048, fix)
+  gc_word(4068, fix)
+  names = gc_value(names, fix)
+  bounds = gc_value(bounds, fix)
+  actives = gc_value(actives, fix)
+  syms = gc_value(syms, fix)
+  takent = gc_value(takent, fix)
+  csyms = gc_value(csyms, fix)
+  memo = gc_value(memo, fix)
+  pcache = gc_value(pcache, fix)
+  parserhook = gc_value(parserhook, fix)
+  datab = gc_value(datab, fix)
+  asideb = gc_value(asideb, fix)
+  0
+}
+function gc_low_clear() {
+  var i
+  var v
+  i = 3840
+  while i < 4008 {
+    v = load i
+    if (((v >= (load 4008)) and (v < (load 4012))) and ((i != 3920) and (i != 3872))) and (i != 4004) {
+      return 0
+    }
+    i = i + 4
+  }
+  if (load 3932) != 0 {
+    if ((load 3932) >= (load 4008)) and ((load 3932) < (load 4012)) {
+      return 0
+    }
+  }
+  1
+}
+function compacted(s, v) {
+  var S
+  var F
+  var m
+  var n
+  var y
+  var e
+  var c
+  var k
+  var live
+  var cur
+  var d
+  var ns
+  S = load s
+  F = free
+  if (isostack >= S) and (isostack < F) {
+    return v
+  }
+  m = F
+  n = ((((F / 64) - (S / 64)) + 16) / 8) * 8
+  if (((m + n) + (n * 4)) + 25165824) > (arena_base() - 4194304) {
+    return v
+  }
+  if ((load ((load 4056) + ((4096 * 1028) + 49156))) - slot_base((s - isostack) / 12)) > 1000000 {
+    return v
+  }
+  4008 <- S
+  4012 <- F
+  4016 <- m
+  4020 <- (m + n)
+  4024 <- ((m + n) + (n * 4))
+  4028 <- 0
+  4032 <- 4194304
+  4052 <- 0
+  if gc_low_clear() == 0 {
+    return v
+  }
+  zeroed(m, n)
+  gc_mark(v)
+  gc_roots(s, 0)
+  while ((load 4028) > 0) and ((load 4052) == 0) {
+    4028 <- ((load 4028) - 1)
+    y = load ((load 4024) + ((load 4028) * 4))
+    if bit_at(1033000000 * 2, y) == 0 {
+      gc_words(y, end_of(y), 0)
+    }
+  }
+  if (load 4052) != 0 {
+    return v
+  }
+  c = S / 8
+  k = F / 8
+  cur = 0
+  live = 0
+  (load 4020) <- 0
+  while c < k {
+    if (c % 8) == 0 {
+      ((load 4020) + (((c / 8) - (S / 64)) * 4)) <- live
+    }
+    if bit_at(1021000000 * 2, c * 8) {
+      cur = marked_at(c * 8)
+    }
+    if cur {
+      ((load 4016) + ((c / 8) - (S / 64))) <-8 ((load8 ((load 4016) + ((c / 8) - (S / 64)))) or (1 << (c % 8)))
+      live = live + 8
+    }
+    c = c + 1
+  }
+  if (k % 8) == 0 {
+    ((load 4020) + (((k / 8) - (S / 64)) * 4)) <- live
+  }
+  4040 <- live
+  y = S
+  while y < F {
+    e = end_of(y)
+    if marked_at(y) {
+      if bit_at(1033000000 * 2, y) == 0 {
+        gc_words(y, e, 1)
+      }
+    }
+    y = e
+  }
+  gc_roots(s, 1)
+  if gc_in(v) {
+    v = gc_reloc(v)
+  }
+  y = S
+  while y < F {
+    e = end_of(y)
+    if marked_at(y) {
+      d = gc_reloc(y)
+      ns = bit_at(1033000000 * 2, y)
+      if d != y {
+        copy(d, y, e - y)
+      }
+      starts_set(d, d + (e - y))
+      if ns {
+        ((1033000000 * 2) + (d / 64)) <-8 ((load8 ((1033000000 * 2) + (d / 64))) or (1 << ((d / 8) % 8)))
+      }
+    }
+    y = e
+  }
+  c = (S + live) / 8
+  while c < k {
+    if ((c % 8) == 0) and ((c + 8) <= k) {
+      ((1021000000 * 2) + (c / 8)) <-8 0
+      c = c + 8
+    } else {
+      ((1021000000 * 2) + (c / 8)) <-8 ((load8 ((1021000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
+      c = c + 1
+    }
+  }
+  free = S + live
+  epoch = epoch + 1
+  4004 <- 0
+  3996 <- ((load 3996) + 1)
+  3920 <- 0
+  if (load 3992) != 0 {
+    (load 3992) <- 0
+  }
+  3884 <- ((load 3884) + 2)
+  4076 <- ((load 4076) + 1)
+  4092 <- ((load 4092) + ((F - free) / 1024))
+  v
+}
+function gc_after(s) {
+  (load 4056) + ((4096 * 1028) + (32768 + (((s - isostack) / 12) * 4)))
+}
+function gc_close(s, v) {
+  var n
+  n = free - (load s)
+  if n > ((load gc_after(s)) * 2) {
+    if compactable(s) {
+      v = compacted(s, v)
+      if s > isostack {
+        if (free - (load (s - 12))) > (load gc_after(s - 12)) {
+          gc_after(s - 12) <- (free - (load (s - 12)))
+        }
+      }
+    }
+  }
+  v
+}
+function slot_base(d) {
+  load ((load 4056) + (d * 1028))
+}
+function pin_slot(d, w) {
+  var f
+  var t
+  var g
+  f = isostack + ((d * 12) + 8)
+  if (load f) == 2 {
+    return 0
+  }
+  if w == 0 {
+    return 0
+  }
+  g = load ((load 4056) + ((4096 * 1028) + 49152))
+  t = load ((load 4056) + ((4096 * 1028) + 49156))
+  if t > slot_base(isodepth - 1) {
+    if (load (g + ((t - 1) * 4))) == w {
+      f <- 1
+      return 0
+    }
+  }
+  if t >= 16777216 {
+    f <- 2
+    return 0
+  }
+  (g + (t * 4)) <- w
+  ((load 4056) + ((4096 * 1028) + 49156)) <- (t + 1)
+  f <- 1
+  0
+}
+function pins_gone(s) {
+  var g
+  var i
+  var t
+  var x
+  if ((load (s + 8)) != 1) or ((load s) < 536870912) {
+    return (load (s + 8)) == 0
+  }
+  g = load ((load 4056) + ((4096 * 1028) + 49152))
+  t = load ((load 4056) + ((4096 * 1028) + 49156))
+  i = slot_base((s - isostack) / 12)
+  while i < t {
+    x = load (load (g + (i * 4)))
+    if (x >= (load s)) and (x < free) {
+      return 0
+    }
+    i = i + 1
+  }
+  1
+}
+function pins_up(s) {
+  var d
+  var g
+  var i
+  var j
+  var t
+  var w
+  var x
+  var ps
+  var lo
+  d = (s - isostack) / 12
+  g = load ((load 4056) + ((4096 * 1028) + 49152))
+  t = load ((load 4056) + ((4096 * 1028) + 49156))
+  i = slot_base(d)
+  if d == 0 {
+    ((load 4056) + ((4096 * 1028) + 49156)) <- i
+    return 0
+  }
+  if (load (s + 8)) == 2 {
+    (s - 4) <- 2
+    ((load 4056) + ((4096 * 1028) + 49156)) <- i
+    return 0
+  }
+  if (load s) < 536870912 {
+    if ((load (s + 8)) == 1) and ((load (s - 4)) == 0) {
+      (s - 4) <- 1
+    }
+    ((load 4056) + ((4096 * 1028) + 49156)) <- i
+    return 0
+  }
+  ps = load (s - 12)
+  lo = load isostack
+  j = i
+  while i < t {
+    w = load (g + (i * 4))
+    if w < ps {
+      x = load w
+      if (x >= lo) and (x < free) {
+        (g + (j * 4)) <- w
+        j = j + 1
+        if x >= ps {
+          if (load (s - 4)) == 0 {
+            (s - 4) <- 1
+          }
+        }
+      }
+    }
+    i = i + 1
+  }
+  ((load 4056) + ((4096 * 1028) + 49156)) <- j
+  0
+}
+function gc_opened() {
+  ((load 4056) + ((4096 * 1028) + (isodepth * 4))) <- (load 3868)
+  ((load 4056) + ((4096 * 1028) + (16384 + (isodepth * 4)))) <- 0
+  if (load 3932) != 0 {
+    ((load 4056) + ((4096 * 1028) + (16384 + (isodepth * 4)))) <- (load ((load 3932) + 1048))
+  }
+  ((load 4056) + ((4096 * 1028) + (32768 + (isodepth * 4)))) <- 0
+  0
 }

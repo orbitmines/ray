@@ -276,10 +276,10 @@ Expression := class (
       named_in (program, text) => program.in.named_as(trimmed_or(level cw_trimmed (text), text), program)
       aside := Array.new
       among (list_of, one) => list_of{. === one}#.count > 0
-      // (what a definition is written with, the header's `=>`, outside every pair; the header's brackets a pair)
       // (the bracket a hole opens with, and whether a text holds one)
       hole_opening := BOOTSTRAPPER.CAPTURE.first
       has_hole (text) => level holds_text (text) (hole_opening)
+      // (what a definition is written with, the header's `=>`, outside every pair; the header's brackets a pair)
       separator := level separator_of (BOOTSTRAPPER.CAPTURES.text) (BOOTSTRAPPER.CAPTURE)
       defines (text) => level holds_outside (text) (separator)
       level closing (BOOTSTRAPPER.CAPTURE)

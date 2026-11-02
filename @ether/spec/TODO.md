@@ -115,6 +115,9 @@ its own reading its place, unread text recorded with reading going on.
 - **Whole-line comments before the comment rule** (entrypoint lines 2-9, before `// {comment} ^comment => { }` at 74)
   are read by nothing: the harness leaves them out, as the host does for the compiler's sources.
 
+- **A rule's head styles are caught in `sink` until the rule exists** (2026-11-02): `{x ^style}` is painted while
+  `head :=` is read, before `rule_own` is made, so `sink` stays (one list on the rule would need it anyway).
+
 - **A trailing comment holding an operator's word is read as code until line 3528** (`zc := true  // a while b` reads
   as `{body} while {condition}`): the trailing-comment rule (line 74, led by a hole) loses to every hole-led operator
   defined after it, until it is defined again at line 3528. Asserts run after that, so only top-level statements read in

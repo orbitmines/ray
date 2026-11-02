@@ -41,7 +41,7 @@ Expression := class (
             written := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
             // (a name written in a pair, `(x) := v`: x read as a value, declared again where something visible defines it)
             named := between(written)
-            valued := ((written.first == BOOTSTRAPPER.CAPTURE.first) || !(level cw_enclosed (written))) ? false : !(level holds_text (named) (BOOTSTRAPPER.CAPTURE.first))
+            valued := (!(written.first == BOOTSTRAPPER.CAPTURE.first) && (level cw_enclosed (written))) && !(level holds_text (named) (BOOTSTRAPPER.CAPTURE.first))
             rule_lhs := valued ? named : written
             rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
             rule_where := home_of(caller, level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? (place_of(caller) ?? node)
@@ -347,12 +347,12 @@ Expression := class (
       // (the nearest node that defines a name itself)
       defined_in (dn, dt) => (dn === None) ? None : ((dn.rules.keys{!((. === dn.maker_key) || (. === dn.split_key)) && (dt ~= .)}#.count > 0) ? dn : defined_in(dn.in, dt))
       // (what is between a text's first character and its last)
-      between (bt) => level cw_trimmed (level cw_span_of (level cw_slice (bt) (1) (2)) (level cw_chopped (bt)))
+      between (bt) => level cw_trimmed (level cw_inner (bt))
       // (a body written in the brackets holes are written in is the code inside them, its lines as written: from right after
       // the bracket)
       inside_of (it) => {
         code := level cw_trimmed (it)
-        ((code.first == BOOTSTRAPPER.CAPTURE.first) && (level cw_enclosed (code))) ? level cw_span_of (level cw_slice (code) (1) (2)) (between(code)) : code
+        ((code.first == BOOTSTRAPPER.CAPTURE.first) && (level cw_enclosed (code))) ? level cw_span_of (level cw_inner (code)) (between(code)) : code
       }
       // (the compiler's parser: a grammar's rules read in a node of their own, a word what nothing else there reads)
       parse_node_of (grammar_text) => {

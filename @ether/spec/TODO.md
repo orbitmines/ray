@@ -191,6 +191,15 @@ its own reading its place, unread text recorded with reading going on.
     pointers and text positions alike). Stress build (from 16 MB) paints the same as main. Found: 17 slot tables
     overflowing (> 200) marked 4283 frames kept outright, so slots move to one stack (a frame's a segment of it);
     compacting every close is 612 s on calls (0 statements cut), pacing by heap growth is next.
+    Landed 2026-11-02 (ray-09, revision 126, 3e29462b): above 512 MB a closing frame's region is compacted when it more
+    than doubled since its last (the parent's size recorded after), roots the low words 4044/4048/4068 too, one start
+    bit an allocation (cleared where `free` goes back). Main: --test, paints, p1, the fixpoint the same, speed level.
+    Calls (wtc) to the entrypoint's line 3603: 2.4 GB freed in 29 compactions, 159 s (142 s without), 1246203 paints and
+    162 reports against 1237967 and 169 (a test's 128 MB and 20M-step stops see the freed memory). Whole file: reading
+    goes past Ray.ray 67-661 (cut on memory without it) to Ray.ray 675 (`assert (…).( … & … )`), where in-turn reading
+    nests 845 deep and the choice stack overflows (trap in `chosen`; stopping the statement there did not unwind it).
+    A frame per in_turn (compacted between statements) was correct once its survivors' pins marked the parent kept, but
+    freed no more and took 2x the time: not kept. `kept_out` wrote past its 8 MB buffer (bounded now).
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

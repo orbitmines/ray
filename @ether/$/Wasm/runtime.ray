@@ -3025,9 +3025,13 @@ function kept_append(l, v) {
   (t + 1064) <- 0
   (t + 1072) <- 0
   w = kept_out(load 3940, v, f0, 0)
-  r = alloc(8)
-  r <- (load 3940)
-  c = made_again(r)
+  c = kept_same(load 3940, w)
+  if c == 0 {
+    r = alloc(8)
+    r <- (load 3940)
+    c = made_again(r)
+    kept_as(load 3940, w, c)
+  }
   append(l, c)
   if (load (t + 1064)) != 0 {
     zeroed(load (t + 1084), 131072)
@@ -3039,6 +3043,60 @@ function kept_append(l, v) {
   free = f
   markf = m
   l
+}
+function kept_slot(a, e) {
+  var h
+  var q
+  var k
+  var x
+  if (load 3788) == 0 {
+    3788 <- alloc(4194320)
+    zeroed(load 3788, 4194320)
+  }
+  h = 7
+  q = a
+  while q < e {
+    h = (h * 31) + (load q)
+    q = q + 4
+  }
+  if h == 0 {
+    h = 1
+  }
+  k = h and 262143
+  x = (load 3788) + (16 + (k * 16))
+  while ((load x) != 0) and (((load x) != h) or (((load (x + 12)) != (e - a)) or (texteq(load (x + 8), a, e - a) == 0))) {
+    k = (k + 1) and 262143
+    x = (load 3788) + (16 + (k * 16))
+  }
+  (load 3788) <- h
+  x
+}
+function kept_same(a, e) {
+  var x
+  x = kept_slot(a, e)
+  if (load x) == 0 {
+    return 0
+  }
+  load (x + 4)
+}
+function kept_as(a, e, c) {
+  var x
+  var b
+  x = kept_slot(a, e)
+  if (load x) != 0 {
+    return 0
+  }
+  if (load ((load 3788) + 4)) > 131072 {
+    return 0
+  }
+  b = alloc(e - a)
+  copy(b, a, e - a)
+  x <- (load (load 3788))
+  (x + 4) <- c
+  (x + 8) <- b
+  (x + 12) <- (e - a)
+  ((load 3788) + 4) <- ((load ((load 3788) + 4)) + 1)
+  0
 }
 function eager_caches() {
   if isodepth > 0 {

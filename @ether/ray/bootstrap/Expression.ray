@@ -85,8 +85,7 @@ Expression := class (
             // (what it is read on gives what is read on it: a node its rules, anything else its fields; one of the level's own
             // kinds of value, what the level says it is, `level kinds`)
             o := ((level kind_of (v)) === None) ? v : named_in(Program(in: kinds_of(caller)), level kind_of (v))
-            members(o).for((m) => on.rules[[m.key]] := (c) => m.value) if (o.rules === None)
-            ((o.rules === None) ? Array.new : o.rules.keys{!((. === o.maker_key) || (. === o.split_key))}#).for((e) => on.rules[[e.key]] := e.value)
+            (o.rules === None) ? members(o).for((m) => on.rules[[m.key]] := (c) => m.value) : o.rules.keys{!((. === o.maker_key) || (. === o.split_key))}#.for((e) => on.rules[[e.key]] := e.value)
             r := (rs: Statements(on) = rest)
             (r === None) ? None : run_by(r, Program(caller: caller, in: on, this: v))
           }
@@ -183,10 +182,7 @@ Expression := class (
         (p.at === None) ? go(p, [s]) : waits(p, s)
       }
       waits (p, s) => (!(p.at == afterwards) && label_is(p, s)) ? go(gone_on(p), [s]) : kept(p, s)
-      kept (p, s) => {
-        p.waiting = (p.waiting ?? Array.new).append(s)
-        p
-      }
+      kept (p, s) => p.waiting = (p.waiting ?? Array.new).append(s)
       go (p, ss) => {
         rounds := [ss]
         rounds.for((r) => rounds.append(settled(ran(p, r))) if !(rounds.last === None))
@@ -226,7 +222,7 @@ Expression := class (
       labelled (p, ls) => ls.empty ? None : (label_is(p, ls.first) ? ls.rest : labelled(p, ls.rest))
       label_is (p, s) => (s.rule == `label`) && same_label(label_of(Program(in: p.in), s.args.first.word), p.at)
       // (a body read to its end: a value gone to that no label in it is, `external goto {a}`, goes on after the jump)
-      finished (p) => (((p.at === None) || (p.at == afterwards)) || !((level kind_of (p.at)) == `list`)) ? p : go(gone_on(p), p.waiting ?? Array.new)
+      finished (p) => !((level kind_of (p.at)) == `list`) ? p : go(gone_on(p), p.waiting ?? Array.new)
       leaving (me, v) => {
         (me.caller.at = me.at) if !((me.at === None) || (me.at == afterwards))
         v
@@ -343,7 +339,7 @@ Expression := class (
       file_read (fp, fe) => ((fp === None) || ((level file_named (level cw_trimmed (fe.value))) === None)) ? None : named_in(fp.caller, level file_named (level cw_trimmed (fe.value)))
       // (the hole a hole's text names, `{x}`, further out, as far as one does)
       written_by (wc, we) => (((we === None) || !((level cw_trimmed (we.value)).first == BOOTSTRAPPER.CAPTURE.first)) || (holder(wc, we) === None)) ? we : (outer_hole(holder(wc, we), between(level cw_trimmed (we.value))) ?? we)
-      outer_hole (oh, ok) => (takes(oh.caller){.key == ok}#.first === None) ? None : written_by(oh.caller, takes(oh.caller){.key == ok}#.first)
+      outer_hole (oh, ok) => written_by(oh.caller, takes(oh.caller){.key == ok}#.first)
       holder (oc, oe) => ((oe === None) || (oc === None)) ? None : (among(oc.bound ?? Array.new, oe) ? oc : holder(oc.caller, oe))
       home_of (hc, he) => (holder(hc, he) === None) ? None : place_of(holder(hc, he).caller)
       // (where a program defines: in the value it reads code for, `x.( … )`, else where it is)

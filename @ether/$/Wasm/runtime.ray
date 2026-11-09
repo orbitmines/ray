@@ -2888,7 +2888,7 @@ function call(c, args, named) {
     return indirect(a, args, named, load ((load (c + 4)) + 4))
   }
   if tag(c) == 10 {
-    return indirect(c, args, named, load ((load (c + 12)) + 4))
+    return indirect(applied_again(c), args, named, load ((load (c + 12)) + 4))
   }
   if tag(c) == 8 {
     return builtin(load (c + 4), load (c + 8), args)
@@ -4249,6 +4249,27 @@ function gathered(sym, a, e, mark, inner) {
   bind(sym, a, e)
   (bounds + ((boundn - 1) * 16) + 12) <- v
   0
+}
+function applied_again(c) {
+  var a
+  var e
+  var t
+  var n
+  a = node(load (c + 4))
+  a <- 10
+  (a + 12) <- load (c + 12)
+  t = a + 8
+  e = load (c + 8)
+  while e != 0 {
+    n = alloc(12)
+    n <- 0
+    (n + 4) <- load (e + 4)
+    (n + 8) <- load (e + 8)
+    t <- n
+    t = n
+    e = load e
+  }
+  a
 }
 function application(e, mark) {
   var f

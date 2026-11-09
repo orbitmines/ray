@@ -213,6 +213,17 @@ its own reading its place, unread text recorded with reading going on.
     flags `=== true`. Open: a kept statement runs with the program that read it, so `(external &)` in a kept body
     answers the first application (`` `{text ^string}` => (external &).text `` kept: later backticks lose
     `string.punctuation`). A statement has to take the program running it, where Statements are read and run.
+    2026-11-09 (ray-09, revision 129): an application was the match's own frame (`me := applied`), so every run of one
+    matched statement wrote `caller`/`in`/`bound` into the same frame (and a test's memory wrote into main memory's).
+    The runtime now runs each call of a matched rule in a copy of its frame (`applied_again`): main the same, the calls
+    file 262726 paints and 53 cuts against 240278 and 66. Read-once on that (scratch ro/Expression_k2.ray, wtc): kept
+    after the first run when the body's own node holds no rule but its holes (the node read in, not `me.in` after
+    `external .`, which is the block's), a node's `statements` its first read (a hole's text read there wrote over them),
+    a kept run's hole found as the running application's own (nearest program up `caller` kept by the rule, its node's
+    rule asked). Main paints the same with every such body kept, but ~1% fewer steps; in the calls file barely fewer
+    (47.8M vs 49.6M to 3000) and the whole file reads less (237033 paints, 82 cuts): not landed. What costs is not the
+    body: it is a hole's text read where it is written each application (`value` in `:=` ~66K steps x 3057, `grouped`
+    3.1K x 35489). The calls file stops on memory inside `String := class: Array { … }` (3333) still.
 - **Included files** (2026-10-31, revision 72: host parts, runtime `file_named`, Expression's `include`). A line at column
   0 inside a block read since revision 71 (Number.ray's int32 tests). Still open:
   - *A trailing comment taken as a hole*: Node.ray's `` !{ }{forward}{ }{backward} `` reads `!(true)  // T2 …` with the

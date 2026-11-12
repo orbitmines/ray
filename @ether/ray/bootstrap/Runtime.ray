@@ -119,4 +119,61 @@ Runtime := {
   static field (name, inner) => Pattern(kind: named_field, a: name, b: inner)
   static ending => Pattern(kind: at_end)
   static anything => Pattern(kind: anything_at_all)
+
+  // Where a statement ends. The text read is the run's (up to its `textend`), a byte of it at a time (the back end's
+  // `byte`); a byte is of a class (the back end's `char_class`): 2 a quote, 3 a closing bracket. A statement read from
+  // pos ends, read on from at, at the end of the first line after which the next one, not blank, is indented no deeper
+  // than the statement's first line, starts with no closing bracket, does not follow a line ending with a comma, and
+  // leaves no quote open; else at the end of the text.
+  static statement_end (pos, at) => Runtime.ended_from(at, Runtime.line_end(at), Runtime.indent_at(Runtime.line_start(pos, at)))
+  static ended_from (at, from, depth) => {
+    q := from
+    while q < textend {
+      return q if Runtime.ends_there(at, q, depth, Runtime.indent_at(q + 1))
+      q = Runtime.line_end(q + 1)
+    }
+    textend
+  }
+  static ends_there (at, q, depth, indent) => Runtime.ends_before(at, q, Runtime.byte_or_line(q + 1 + indent), (indent <= depth))
+  static ends_before (at, q, c, shallow) => (c != 10) && shallow && (char_class(c) != 3) && (comma_ended(at, q) == 0) && (Runtime.quote_open(at, q) == 0)
+  static byte_or_line (q) => (q < textend) ? byte(q) : 10
+  static line_start (pos, from) => {
+    q := from
+    while (q > pos) && (byte(q - 1) != 10) {
+      q = q - 1
+    }
+    q
+  }
+  static line_end (from) => {
+    q := from
+    while (q < textend) && (byte(q) != 10) {
+      q = q + 1
+    }
+    q
+  }
+  static indent_at (from) => {
+    d := 0
+    while ((from + d) < textend) && ((byte(from + d) == 32) || (byte(from + d) == 9)) {
+      d = d + 1
+    }
+    d
+  }
+  static white_after (from) => {
+    q := from
+    while (q < textend) && white(byte(q)) {
+      q = q + 1
+    }
+    q
+  }
+  // (whether a quote opened from a is not closed before n)
+  static quote_open (a, n) => {
+    q := a
+    while q < n {
+      return 1 if Runtime.opens_quote(q) && ((pair_end(q) == 0) || (pair_end(q) > n))
+      q = Runtime.opens_quote(q) ? pair_end(q) : (q + 1)
+    }
+    0
+  }
+  static opens_quote (q) => (char_class(byte(q)) == 2) && (pair_class(q) == 2)
+  static quoted_around (a, n) => (pair_class(a - 1) == 2) && (pair_end(a - 1) > n)
 }

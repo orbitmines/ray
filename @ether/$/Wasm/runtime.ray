@@ -425,57 +425,6 @@ function out_base() {
 function out_length() {
   outn
 }
-function node(parent) {
-  var n
-  n = alloc(20)
-  n <- 1
-  (n + 4) <- parent
-  (n + 8) <- 0
-  (n + 12) <- 0
-  (n + 16) <- 0
-  if (parent == 0) and ((load 3904) == 0) {
-    3904 <- n
-  }
-  n
-}
-function origin_at(a) {
-  var b
-  var k
-  var r
-  var n
-  var f
-  n = 0
-  while n < 64 {
-    if (a >= 8388608) and (a < (8388608 + (load 4088))) {
-      return a
-    }
-    b = load 3856
-    if b != 0 {
-      if (a >= (load (b + 4))) and (a < (load (b + 8))) {
-        return a
-      }
-    }
-    b = load 3864
-    if b == 0 {
-      return 0 - 1
-    }
-    k = load 3868
-    f = 0
-    while (k > 0) and (f == 0) {
-      k = k - 1
-      r = b + (k * 12)
-      if (a >= (load r)) and (a < ((load r) + (load (r + 8)))) {
-        a = (load (r + 4)) + (a - (load r))
-        f = 1
-      }
-    }
-    if f == 0 {
-      return 0 - 1
-    }
-    n = n + 1
-  }
-  0 - 1
-}
 function shared_id(v) {
   var t
   var h
@@ -1163,13 +1112,6 @@ function eager_caches() {
   kept()
   0
 }
-function cell(p, next) {
-  var c
-  c = alloc(8)
-  c <- p
-  (c + 4) <- next
-  c
-}
 function kept() {
   var t
   t = load 3932
@@ -1523,106 +1465,8 @@ function over_budget(a, e) {
   }
   0
 }
-function indent_written(a) {
-  var o
-  var q
-  var lo
-  var te
-  var r
-  var b
-  o = origin_at(a)
-  if o < 0 {
-    return 0 - 1
-  }
-  lo = 8388608
-  te = 8388608 + (load 4088)
-  b = load 3856
-  if b != 0 {
-    if (o >= (load (b + 4))) and (o < (load (b + 8))) {
-      lo = load (b + 4)
-      te = load (b + 8)
-    }
-  }
-  q = o
-  while (q > lo) and ((load8 (q - 1)) != 10) {
-    q = q - 1
-  }
-  r = textend
-  textend = te
-  o = indent_at(q)
-  textend = r
-  o
-}
-function continued_where_written(q) {
-  var o
-  var te
-  var r
-  var b
-  if (q >= 8388608) and (q < (8388608 + (load 4088))) {
-    return 0
-  }
-  o = origin_at(q)
-  if (o < 0) or (o == q) {
-    return 0
-  }
-  if (load8 o) != 10 {
-    return 0
-  }
-  te = 8388608 + (load 4088)
-  b = load 3856
-  if b != 0 {
-    if (o >= (load (b + 4))) and (o < (load (b + 8))) {
-      te = load (b + 8)
-    }
-  }
-  r = textend
-  textend = te
-  b = continued_at(o)
-  textend = r
-  b
-}
-function saved(mark) {
-  var c
-  var n
-  n = (boundn - mark) * 16
-  if n <= 0 {
-    return 0
-  }
-  c = alloc(n + 8)
-  copy(c, bounds + (mark * 16), n)
-  c
-}
-function restored(c, mark, m) {
-  copy(bounds + (mark * 16), c, (m - mark) * 16)
-  boundn = m
-  0
-}
 function heap_used() {
   free
-}
-function shifted_left(a, b) {
-  int(untag(a) << untag(b))
-}
-function shifted_right(a, b) {
-  int(untag(a) >> untag(b))
-}
-function unequal(a, b) {
-  negated(equal(a, b))
-}
-function sized_after(m, v) {
-  cw_sized_from(m)
-}
-function aside_after(m, v) {
-  cw_aside_from(m)
-}
-function array_new(env, args, named) {
-  list()
-}
-function arrays() {
-  var n
-  n = node(0)
-  define(n, 56, getter(array_new, 0))
-  n
 }
 function m4(q, c0, c1, c2, c3) {
   if (load8 q) != c0 {
@@ -1660,10 +1504,6 @@ function put4(o, c0, c1, c2, c3) {
   }
   (o + 3) <-8 c3
   o + 4
-}
-function put_span(o, a, e) {
-  copy(o, a, e - a)
-  o + (e - a)
 }
 function second_symbol(n, e) {
   var x
@@ -1974,52 +1814,6 @@ function with_locals(f) {
   free = g
   markf = s
   r
-}
-function at_text(q, e, a, z) {
-  var i
-  if (q + (z - a)) > e {
-    return 0
-  }
-  i = 0
-  while (a + i) < z {
-    if (load8 (q + i)) != (load8 (a + i)) {
-      return 0
-    }
-    i = i + 1
-  }
-  1
-}
-function word_byte(c) {
-  ((c >= 97) and (c <= 122)) or (((c >= 65) and (c <= 90)) or (((c >= 48) and (c <= 57)) or (c == 95)))
-}
-function copied_from(o, s, n) {
-  var b
-  var k
-  var r
-  if (load 3864) == 0 {
-    3864 <- lasting_alloc(16777200)
-    3868 <- 0
-  }
-  b = load 3864
-  k = load 3868
-  if k > 0 {
-    r = b + ((k - 1) * 12)
-    if ((load r) + (load (r + 8))) == o {
-      if ((load (r + 4)) + (load (r + 8))) == s {
-        (r + 8) <- ((load (r + 8)) + n)
-        return 0
-      }
-    }
-  }
-  if k >= 1398100 {
-    return 0
-  }
-  r = b + (k * 12)
-  r <- o
-  (r + 4) <- s
-  (r + 8) <- n
-  3868 <- (k + 1)
-  0
 }
 function compactable(s) {
   if (load (s + 8)) == 2 {

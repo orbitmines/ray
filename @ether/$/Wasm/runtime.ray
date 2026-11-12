@@ -438,99 +438,6 @@ function node(parent) {
   }
   n
 }
-function own(n, sym) {
-  var e
-  var x
-  var k
-  var c
-  if (load n) == 1 {
-    x = load (n + 16)
-    if x != 0 {
-      c = (load x) - 1
-      k = (sym * 40503) and c
-      while (load (x + (8 + (k * 8)))) != 0 {
-        if (load (x + (8 + (k * 8)))) == sym {
-          return load (x + (12 + (k * 8)))
-        }
-        k = (k + 1) and c
-      }
-      return 0
-    }
-  }
-  k = 0
-  e = load (n + 8)
-  while e != 0 {
-    if (load (e + 4)) == sym {
-      if (k > 8) and ((load n) == 1) {
-        indexed(n)
-      }
-      return e
-    }
-    k = k + 1
-    e = load e
-  }
-  if (k > 8) and ((load n) == 1) {
-    indexed(n)
-  }
-  0
-}
-function indexed(n) {
-  var e
-  var k
-  var c
-  var x
-  k = 0
-  e = load (n + 8)
-  while e != 0 {
-    k = k + 1
-    e = load e
-  }
-  c = 16
-  while c < (k * 4) {
-    c = c * 2
-  }
-  x = alloc(8 + (c * 8))
-  zeroed(x, 8 + (c * 8))
-  x <- c
-  e = load (n + 8)
-  while e != 0 {
-    index_in(x, e)
-    e = load e
-  }
-  touched_by(n, n + 16, x)
-  if (n + 16) < (load 3944) {
-    logged(n + 16)
-  }
-  (n + 16) <- x
-  0
-}
-function index_in(x, e) {
-  var c
-  var k
-  var s
-  s = load (e + 4)
-  c = (load x) - 1
-  k = (s * 40503) and c
-  while (load (x + (8 + (k * 8)))) != 0 {
-    if (load (x + (8 + (k * 8)))) == s {
-      return 0
-    }
-    k = (k + 1) and c
-  }
-  if (x + (8 + (k * 8))) < (load 3944) {
-    logged(x + (8 + (k * 8)))
-  }
-  if (x + (12 + (k * 8))) < (load 3944) {
-    logged(x + (12 + (k * 8)))
-  }
-  if (x + 4) < (load 3944) {
-    logged(x + 4)
-  }
-  (x + (8 + (k * 8))) <- s
-  (x + (12 + (k * 8))) <- e
-  (x + 4) <- ((load (x + 4)) + 1)
-  0
-}
 function origin_at(a) {
   var b
   var k
@@ -1407,12 +1314,6 @@ function spun_out() {
   }
   0
 }
-function active_noted(p, pos) {
-  activen = activen + 1
-  (actives + (activen * 8)) <- p
-  ((actives + (activen * 8)) + 4) <- pos
-  0
-}
 function bound_at(i) {
   bounds + (i * 16)
 }
@@ -1420,18 +1321,6 @@ function freed_back(f) {
   free = f
   if free <= (load 3920) {
     3996 <- ((load 3996) + 1)
-  }
-  0
-}
-function noted_field(n, e) {
-  if (load n) == 1 {
-    if (load (n + 16)) != 0 {
-      if ((load ((load (n + 16)) + 4)) * 2) >= (load (load (n + 16))) {
-        indexed(n)
-      } else {
-        index_in(load (n + 16), e)
-      }
-    }
   }
   0
 }
@@ -1498,39 +1387,6 @@ function touched(x) {
       }
     }
   }
-  0
-}
-function chosen(kind, p, pos, k) {
-  var s
-  s = load 3852
-  if (s + 48) > ((load 3848) + 67108864) {
-    unreachable_now()
-  }
-  s <- kind
-  (s + 4) <- p
-  (s + 8) <- pos
-  (s + 12) <- k
-  (s + 16) <- 0
-  (s + 20) <- 0
-  (s + 24) <- boundn
-  (s + 28) <- free
-  (s + 32) <- effects
-  (s + 36) <- activen
-  3852 <- (s + 48)
-  markf = free
-  s
-}
-function undone_by(c, mark, m) {
-  var s
-  s = load 3852
-  if (s + 48) > ((load 3848) + 67108864) {
-    unreachable_now()
-  }
-  s <- 10
-  (s + 24) <- m
-  (s + 40) <- c
-  (s + 44) <- mark
-  3852 <- (s + 48)
   0
 }
 function unreachable_now() {

@@ -1941,6 +1941,126 @@ Built := {
     0
   }
 }
+// Turns (`level in_turn …`): the statements of a text read in turn by an item, each to where it ends (or where a block
+// opened in it closes), each read in a region of its own and given to a function as it is read; one not read is set
+// aside, and those are read again after (each one read now taken out, until none more is), one over its budget noted.
+Turns := {
+  static in_turn (item, f, args, pos) => Turns.turned(item, f, args, pos, turn_depth(), fuel_floor())
+  static turned (item, f, args, pos, d, floor) => {
+    turn_depth_set(d + 1)
+    u := Turns.aside_count()
+    at := Turns.in_order(item, f, args, pos)
+    read_again(item, f, args, u)
+    turn_depth_set(d)
+    fuel_floor_set(floor)
+    went_on()
+    at
+  }
+  static aside_count => (aside_or_none() == None) ? 0 : Texts.count_of(aside_or_none())
+  static in_order (item, f, args, pos) => {
+    at := pos
+    while (at < textend) && (stopped() == 0) {
+      at = Turns.statement_turn(item, f, args, pos, at)
+      return (0 - at) - 1 if at < 0
+    }
+    at
+  }
+  static statement_turn (item, f, args, pos, at) => {
+    mark := boundn
+    turn_begun()
+    q := textend
+    se := Turns.closed_or(pos, statement_end(pos, white_after(at)), at)
+    textend = se
+    isolated_open()
+    r := matched(item, at, cell(pattern(statement_ending, at, 1), 0))
+    textend = q
+    Turns.turned_by(f, args, at, se, r, mark)
+  }
+  static closed_or (pos, se, at) => Turns.closed_at_or(pos, se, block_closed(at, se))
+  static closed_at_or (pos, se, v) => (v > 0) ? statement_end(pos, v) : se
+  static turned_by (f, args, at, se, r, mark) => statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark))
+  static over_turn (at, se, mark) => {
+    isolated_value(0, 0)
+    boundn = mark
+    over_budget(at, se)
+    went_on()
+    se
+  }
+  static unread_turn (at, se, mark) => {
+    isolated_value(0, 0)
+    boundn = mark
+    (white_after(at) >= textend) ? ((0 - at) - 1) : Turns.put_aside(at, se)
+  }
+  static put_aside (at, se) => {
+    append(Turns.aside_list(), text(at, se))
+    se
+  }
+  static aside_list => (aside_or_none() == None) ? Turns.aside_made() : aside_or_none()
+  static aside_made => {
+    l := statements_aside()
+    frames_kept()
+    l
+  }
+  static read_turn (f, args, at, r, mark) => {
+    v := valued_from(mark)
+    boundn = mark
+    call(curried(f, append(list(), v)), args, 0)
+    isolated_value(0, 0)
+    Turns.over_after(at, r) if statement_over()
+    r
+  }
+  static over_after (a0, r) => {
+    over_budget(a0, r)
+    went_on()
+  }
+  static read_again (item, f, args, u) => {
+    changed := 1
+    while changed != 0 {
+      changed = (aside_or_none() == None) ? 0 : Turns.again_over(item, f, args, u, aside_or_none())
+    }
+    0
+  }
+  static again_over (item, f, args, u, l: List) => {
+    i := u
+    changed := 0
+    k := 0
+    while i < l.count {
+      k = Turns.again_one(item, f, args, l, i)
+      changed = changed | k
+      i = (k != 0) ? i : (i + 1)
+    }
+    changed
+  }
+  static again_one (item, f, args, l, i) => Turns.again_matched(f, args, l, i, boundn, Turns.again_match(item, at(l, i)))
+  static again_match (item, t: Text) => {
+    q := textend
+    textend = t.to
+    r := matched(item, t.from, cell(pattern(statement_ending, t.from, 1), 0))
+    textend = q
+    r
+  }
+  static again_matched (f, args, l, i, mark, r) => ((r > Built.text_from(at(l, i))) && (white_after(r) >= Turns.text_to(at(l, i)))) ? Turns.again_taken(f, args, l, i, mark) : Turns.again_left(mark)
+  static text_to (t: Text) => t.to
+  static again_left (mark) => {
+    boundn = mark
+    0
+  }
+  static again_taken (f, args, l, i, mark) => {
+    Turns.removed_at(l, i)
+    v := valued_from(mark)
+    boundn = mark
+    call(curried(f, append(list(), v)), args, 0)
+    1
+  }
+  static removed_at (l: List, i) => {
+    j := i
+    while (j + 1) < l.count {
+      word_put(Calls.items_of(l) + (j * 4), at(l, j + 1))
+      j = j + 1
+    }
+    l.count = l.count - 1
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

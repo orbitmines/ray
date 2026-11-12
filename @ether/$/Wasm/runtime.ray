@@ -163,6 +163,35 @@ function statements_aside() {
   }
   load 3860
 }
+function turn_depth() {
+  load 4072
+}
+function turn_depth_set(d) {
+  4072 <- d
+  0
+}
+function fuel_floor() {
+  load 4060
+}
+function fuel_floor_set(v) {
+  4060 <- v
+  0
+}
+function turn_begun() {
+  4060 <- ((load 3896) - 200000000)
+  if (load 3896) > 0 {
+    if (free > (arena_base() - 134217728)) and (free < arena_base()) {
+      stopped_statement()
+    }
+  }
+  0
+}
+function statement_over() {
+  (load 4064) != 0
+}
+function aside_or_none() {
+  load 3860
+}
 function char_class(c) {
   load8 (3584 + c)
 }

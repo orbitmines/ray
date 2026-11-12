@@ -2584,6 +2584,137 @@ Memory := {
     a >= arena_base()
   }
 }
+// Isolation: a frame of memory a call opens (where memory was taken up to, what was older then, whether something older was
+// written something of it), closed by letting all it took go when nothing older holds it, else by collecting it; the
+// caches made at once, and the choices' stack
+Isolation := {
+  static depth_most := 4000
+  static framed => (isodepth > depth_most) ? depth_most : isodepth
+  static frames_kept => {
+    s := framed()
+    effects = effects + 1
+    while s > 0 {
+      word_put(isostack + (((s - 1) * 12) + 8), 2)
+      s = s - 1
+    }
+    0
+  }
+  static isolated_open => {
+    Isolation.stack_made() if isostack == 0
+    Isolation.pins_made() if word_of(4056) == 0
+    eager_caches() if word_of(3876) == 0
+    return Isolation.frame_deeper() if isodepth >= depth_most
+    Isolation.frame_opened(isostack + (isodepth * 12))
+  }
+  static stack_made => {
+    isostack = alloc(65536)
+    0
+  }
+  static pins_made => {
+    word_put(4056, lasting_alloc((4096 * 1028) + 65536))
+    word_put(word_of(4056) + ((4096 * 1028) + 49152), lasting_alloc(16777216 * 4))
+    word_put(word_of(4056) + ((4096 * 1028) + 49156), 0)
+    0
+  }
+  static frame_deeper => {
+    isodepth = isodepth + 1
+    0
+  }
+  static frame_opened (s) => {
+    word_put(s, free)
+    word_put(s + 4, markf)
+    word_put(s + 8, 0)
+    word_put(word_of(4056) + (isodepth * 1028), word_of(word_of(4056) + ((4096 * 1028) + 49156)))
+    gc_opened() if free >= 536870912
+    isodepth = isodepth + 1
+    markf = free
+    0
+  }
+  static isolated_value (o, v) => {
+    isodepth = isodepth - 1
+    return v if isodepth >= depth_most
+    markf = word_of(isostack + ((isodepth * 12) + 4))
+    Isolation.value_closed(isostack + (isodepth * 12), v, pins_gone(isostack + (isodepth * 12)))
+  }
+  static value_closed (s, v, g) => (((g && (noreclaim == 0)) && (word_of(3844) == 0)) && ((pointer(v) == 0) || (v < word_of(s)))) ? Isolation.value_dropped(s, v) : Isolation.frame_collected(s, v)
+  static value_dropped (s, v) => {
+    Isolation.freed_to(word_of(s)) if free > word_of(s)
+    v
+  }
+  static freed_to (b) => {
+    starts_cleared(b, free)
+    Isolation.epoch_moved() if b <= word_of(3920)
+    free = b
+    0
+  }
+  static epoch_moved => {
+    epoch = epoch + 1
+    word_put(4004, 0)
+    word_put(3996, word_of(3996) + 1)
+    word_put(3920, 0)
+    0
+  }
+  static frame_collected (s, v) => {
+    w := gc_close(s, v)
+    pins_up(s)
+    w
+  }
+  static isolated_close (o, v) => {
+    isodepth = isodepth - 1
+    return 0 if isodepth >= depth_most
+    markf = word_of(isostack + ((isodepth * 12) + 4))
+    Isolation.frame_closed(isostack + (isodepth * 12), pins_gone(isostack + (isodepth * 12)))
+    0
+  }
+  static frame_closed (s, g) => (g && (noreclaim == 0)) ? Isolation.all_freed(s) : Isolation.frame_collected(s, 0)
+  static all_freed (s) => {
+    starts_cleared(word_of(s), free)
+    free = word_of(s)
+    epoch = epoch + 1
+    word_put(4004, 0)
+    word_put(3996, word_of(3996) + 1)
+    0
+  }
+  static eager_caches => {
+    return 0 if isodepth > 0
+    Isolation.pcache_made() if pcache == 0
+    word_put(3908, Isolation.zeroed_alloc(65536 * 20)) if word_of(3908) == 0
+    word_put(3880, Isolation.zeroed_alloc(1048576)) if word_of(3880) == 0
+    word_put(3876, Isolation.zeroed_alloc(word_of(4088) * 8)) if word_of(3876) == 0
+    kept()
+    0
+  }
+  static zeroed_alloc (n) => {
+    p := alloc(n)
+    zeroed(p, n)
+    p
+  }
+  static pcache_made => {
+    pcache = alloc(8388608)
+    word_put(pcache, 16400)
+    0
+  }
+  static choices_open => {
+    Isolation.choices_made() if word_of(3848) == 0
+    word_of(3852)
+  }
+  static choices_made => {
+    word_put(3848, lasting_alloc(67108864))
+    word_put(3852, word_of(3848))
+    0
+  }
+  static choices_top => word_of(3852)
+  static choices_set (t) => {
+    word_put(3852, t)
+    0
+  }
+  static stopped => word_of(3916) != 0
+  static spun_out => {
+    stopped_statement() if word_of(4072) > 0
+    word_put(3896, 1) if word_of(4072) <= 0
+    0
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

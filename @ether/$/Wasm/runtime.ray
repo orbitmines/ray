@@ -552,48 +552,6 @@ function parsed_kept(g, a, e) {
   (s + 12) <- l
   l
 }
-function statement_span(st) {
-  var s
-  var i
-  var c
-  s = member(st, 14)
-  if s == 0 {
-    return 0
-  }
-  s = load (s + 12)
-  i = 0
-  while (s != 0) and (i < (load (s + 4))) {
-    c = at(s, i)
-    if (load (c + 4)) == 28 {
-      return text(load (c + 8), load (c + 12))
-    }
-    i = i + 1
-  }
-  0
-}
-function separated(x) {
-  var e
-  if x == 0 {
-    return 0
-  }
-  e = load (x + 8)
-  while (e > (load (x + 4))) and white(load8 (e - 1)) {
-    e = e - 1
-  }
-  (e > (load (x + 4))) and ((load8 (e - 1)) == 44)
-}
-function continued_span(o, x) {
-  var p
-  if (load (o + 4)) == 0 {
-    return x
-  }
-  p = at(o, (load (o + 4)) - 1)
-  if (separated(p) == 0) or (x == 0) {
-    return x
-  }
-  (o + 4) <- ((load (o + 4)) - 1)
-  text(load (p + 4), load (x + 8))
-}
 function out_base() {
   outb
 }
@@ -1331,15 +1289,6 @@ function call1(f, x) {
   (load (l + 12)) <- x
   call(f, l, 0)
 }
-function column_of(e, k) {
-  if tag(e) != 3 {
-    return 0
-  }
-  if (load (e + 4)) <= k {
-    return 0
-  }
-  at(e, k)
-}
 function column_index(l, k) {
   var c
   var i
@@ -1494,38 +1443,6 @@ function all_with(l, kv, v) {
   }
   o
 }
-function first_where(l, f) {
-  var i
-  var x
-  if tag(l) != 3 {
-    return member2(select(l, f), 21)
-  }
-  i = 0
-  while i < (load (l + 4)) {
-    x = at(l, i)
-    if truthy(call1(f, x)) {
-      return x
-    }
-    i = i + 1
-  }
-  0
-}
-function last_where(l, f) {
-  var i
-  var x
-  if tag(l) != 3 {
-    return member2(select(l, f), 22)
-  }
-  i = (load (l + 4)) - 1
-  while i >= 0 {
-    x = at(l, i)
-    if truthy(call1(f, x)) {
-      return x
-    }
-    i = i - 1
-  }
-  0
-}
 function select(l, f) {
   var o
   var i
@@ -1561,17 +1478,6 @@ function place(t, ctx) {
   (p + 8) <- 0
   (p + 12) <- ctx
   p
-}
-function inside_word(n, a) {
-  if n <= a {
-    return 0
-  }
-  if word_byte(load8 (n - 1)) {
-    if word_byte(load8 n) {
-      return 1
-    }
-  }
-  0
 }
 function text_led_reading(ctx, n) {
   var h
@@ -2770,14 +2676,6 @@ function texts_equal(x, y) {
   }
   texteq(load (x + 4), load (y + 4), n)
 }
-function spaced(l, j) {
-  var g
-  if (j < 0) or (j >= (load (l + 4))) {
-    return 0
-  }
-  g = at(l, j)
-  ((load (g + 4)) != 1) and ((load (g + 4)) != 6)
-}
 function enclosed_holes(l) {
   var i
   var f
@@ -2821,50 +2719,6 @@ function enclosed_holes(l) {
     i = i + 1
   }
   0
-}
-function line_in(a, e) {
-  while a < e {
-    if (load8 a) == 10 {
-      return 1
-    }
-    a = a + 1
-  }
-  0
-}
-function gaps(l, a, e) {
-  var q
-  var s
-  var t
-  q = a
-  while q < e {
-    if chared(load8 q, 3) {
-      s = q
-      while (q < e) and chared(load8 q, 3) {
-        q = q + 1
-      }
-      t = 0
-      if (load (l + 4)) > 0 {
-        if (load ((at(l, (load (l + 4)) - 1)) + 4)) == 1 {
-          t = 4
-          if line_in(s, q) {
-            t = 2
-          }
-        }
-      }
-      if t > 0 {
-        append(l, greedy(either(append(append(list(), chars(1)), chars(t))), 1))
-      } else {
-        append(l, greedy(chars(1), 1))
-      }
-    } else {
-      s = q
-      while (q < e) and (chared(load8 q, 3) == 0) {
-        q = q + 1
-      }
-      append(l, literal(text(s, q)))
-    }
-  }
-  l
 }
 function selmethod(x, sym, f, args) {
   if sym == 38 {
@@ -3147,25 +3001,6 @@ function indent_written(a) {
   textend = r
   o
 }
-function continued_from(a, n) {
-  var d
-  var j
-  if comma_ended(a, n) {
-    return 1
-  }
-  d = indent_written(a)
-  if d < 0 {
-    return 0
-  }
-  j = indent_at(n + 1)
-  if (n + 1 + j) >= textend {
-    return 0
-  }
-  if (load8 (n + 1 + j)) == 10 {
-    return 0
-  }
-  (j > d) or (pair_class(n + 1 + j) == 3)
-}
 function continued_where_written(q) {
   var o
   var te
@@ -3323,20 +3158,6 @@ function put4(o, c0, c1, c2, c3) {
   }
   (o + 3) <-8 c3
   o + 4
-}
-function digits_at(q, e) {
-  var d
-  d = q
-  while d < e {
-    if (load8 d) < 48 {
-      return d
-    }
-    if (load8 d) > 57 {
-      return d
-    }
-    d = d + 1
-  }
-  d
 }
 function put_span(o, a, e) {
   copy(o, a, e - a)

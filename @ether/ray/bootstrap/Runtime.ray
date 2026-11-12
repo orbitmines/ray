@@ -176,4 +176,60 @@ Runtime := {
   }
   static opens_quote (q) => (char_class(byte(q)) == 2) && (pair_class(q) == 2)
   static quoted_around (a, n) => (pair_class(a - 1) == 2) && (pair_end(a - 1) > n)
+  // (whether the line through n goes on past its end: it ends with a comma, or the next line, not blank, is indented
+  // deeper or starts with a closing bracket)
+  static continued_at (n) => Runtime.continued_after(Runtime.text_line_start(n), n, Runtime.indent_at(n + 1))
+  static continued_after (q, n, j) => (comma_ended(q, n) != 0) || (((n + (1 + j)) < textend) && (byte(n + (1 + j)) != 10) && ((j > Runtime.indent_at(q)) || (char_class(byte(n + (1 + j))) == 3)))
+  static text_line_start (from) => {
+    q := from
+    while (q > 0) && (byte(q - 1) != 10) && (byte(q - 1) != 0) {
+      q = q - 1
+    }
+    q
+  }
+  static comma_ended (a, from) => {
+    n := from
+    while (n > a) && white(byte(n - 1)) {
+      n = n - 1
+    }
+    (n > a) && (byte(n - 1) == 44)
+  }
+
+  // Pairs: what a bracket or a quote opens, and where it is closed. A byte's class (1 an opening bracket, 2 a quote, 3 a
+  // closing one) holds unless an odd number of backslashes before it escapes it. Where a pair ends is kept by the back
+  // end once found (`pair_end`); found, a quote ends at the next of its byte not escaped, a bracket where as many have
+  // closed as opened in it, what is quoted in it passed over; never, at 0.
+  static pair_class (q) => ((char_class(byte(q)) == 0) || Runtime.escaped(q)) ? 0 : char_class(byte(q))
+  static escaped (q) => (Runtime.backslashes(q) % 2) == 1
+  static backslashes (q) => {
+    n := 0
+    while (q > (n + 1)) && (byte((q - n) - 1) == 92) {
+      n = n + 1
+    }
+    n
+  }
+  static pair_ending (q) => (pair_class(q) == 2) ? Runtime.quote_ending(q, byte(q)) : Runtime.bracket_ending(q)
+  static quote_ending (q, c) => {
+    x := q + 1
+    while x < textend {
+      return x + 1 if byte(x) == c
+      x = (byte(x) == 92) ? (x + 2) : (x + 1)
+    }
+    0
+  }
+  static bracket_ending (q) => {
+    depth := 0
+    x := q
+    while x < textend {
+      return 0 if (Runtime.class_at(x) == 2) && (pair_end(x) == 0)
+      depth = depth + Runtime.opened(Runtime.class_at(x))
+      return x + 1 if (Runtime.class_at(x) == 3) && (depth == 0)
+      x = (Runtime.class_at(x) == 2) ? pair_end(x) : (x + 1)
+    }
+    0
+  }
+  static class_at (x) => (char_class(byte(x)) == 0) ? 0 : pair_class(x)
+  static opened (t) => (t == 1) ? 1 : ((t == 3) ? (0 - 1) : 0)
+  // (where a string read up to n ends: in a pair opened just before n, where it closes; just after one closed, never)
+  static string_end (n) => (pair_class(n - 1) == 3) ? 0 : (((pair_class(n - 1) == 1) || (pair_class(n - 1) == 2)) ? pair_end(n - 1) : n)
 }

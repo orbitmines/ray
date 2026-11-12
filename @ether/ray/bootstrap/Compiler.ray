@@ -1619,6 +1619,75 @@ Members := {
     e
   }
 }
+// Calls (`level calls …`): a function called with none, one or two arguments (in the arguments shared for that, when
+// it is the language's own: a closure, curried or applied), a member called so (its own closure, else what it is);
+// those of a list a function picks; a member mapped (`map`, of a text or a structure); a place of a name; what a key
+// reads of a text (its length and whether it is wholly noted on it); a name's number and its text; an argument.
+Calls := {
+  static direct (c) => (c is Closure) || (c is Curried) || (c is Applied)
+  static items_of (l: List) => l.items
+  static args1 (a) => Calls.args_put(shared_args(3928, 1), a, 0, 1)
+  static args2 (a, b) => Calls.args_put(shared_args(3928, 2), a, b, 2)
+  static args_put (l, a, b, n) => {
+    word_put(Calls.items_of(l), a)
+    word_put(Calls.items_of(l) + 4, b) if n == 2
+    l
+  }
+  static invoke0 (c) => Calls.direct(c) ? call(c, shared_args(3928, 0), 0) : invoke(c, list(), 0)
+  static invoke1 (c, a) => Calls.direct(c) ? call(c, Calls.args1(a), 0) : invoke(c, append(list(), a), 0)
+  static invoke2 (c, a, b) => Calls.direct(c) ? call(c, Calls.args2(a, b), 0) : invoke(c, append(append(list(), a), b), 0)
+  static call1 (f, x) => Calls.direct(f) ? call(f, Calls.args1(x), 0) : call(f, append(list(), x), 0)
+  static call_member0 (x, sym) => Calls.closure_call0(x, sym, own_closure(x, sym))
+  static closure_call0 (x, sym, c: Closure) => (c != None) ? indirect(c.env, shared_args(3928, 0), 0, c.function) : invoke0(member2(x, sym))
+  static call_member1 (x, sym, a) => Calls.closure_call1(x, sym, a, own_closure(x, sym))
+  static closure_call1 (x, sym, a, c: Closure) => (c != None) ? indirect(c.env, Calls.args1(a), 0, c.function) : invoke1(member2(x, sym), a)
+  static call_member2 (x, sym, a, b) => Calls.closure_call2(x, sym, a, b, own_closure(x, sym))
+  static closure_call2 (x, sym, a, b, c: Closure) => (c != None) ? indirect(c.env, Calls.args2(a, b), 0, c.function) : invoke2(member2(x, sym), a, b)
+  static select (l: List, f) => {
+    o := list()
+    i := 0
+    while i < l.count {
+      append(o, at(l, i)) if truthy(call1(f, at(l, i)))
+      i = i + 1
+    }
+    o
+  }
+  static selmethod (x, sym, f, args) => (sym == Symbol.map) ? Calls.mapped_by(x, f, arg(args, 0)) : 0
+  static mapped_by (x, f, g) => (x is Text) ? mapped_text(x, f, g) : (((x is Node) && (member(x, Symbol.text) != None)) ? mapped_structure(x, f, g) : x)
+  static place (t, ctx) => Calls.place_made_of((t is Node) ? member(t, Symbol.text) : t, ctx)
+  static place_made_of (t, ctx) => Place(name: intern(t), kind: 0, given: ctx)
+  static readsv (p, t) => (p is Node) ? Calls.read_keyed(p, t, member(p, Symbol.key)) : reads(topattern(p), t)
+  static read_keyed (p, t, k) => (k == None) ? reads(topattern(p), t) : Calls.read_measured(p, t, k, reads(topattern(k), t))
+  static read_measured (p, t: Text, k, r) => {
+    Calls.read_put(p, t, k, r) if r != 0
+    r
+  }
+  static read_put (p, t: Text, k, r) => {
+    define(p, Symbol.length, int(((r - t.from) * 2) + Keys.led_by_text(topattern(k))))
+    define(p, Symbol.whole, wholly)
+  }
+  static name_text (sym) => (sym >= 1000000) ? at(names, sym - 1000000) : at(csyms, sym - 16)
+  static intern (t: Text) => Calls.intern_from(t, Calls.text_index(csyms, t))
+  static intern_from (t, i) => (i >= 0) ? (16 + i) : Calls.name_found(t, Calls.text_index(names, t))
+  static name_found (t, i) => (i >= 0) ? (1000000 + i) : Calls.name_added(t, Texts.count_of(names))
+  static name_added (t, i) => (logging() && (lasting_name(t) != 0)) ? (1000000 + i) : Calls.name_kept(t, i)
+  static name_kept (t, i) => {
+    kept() if logging()
+    append(names, t)
+    1000000 + i
+  }
+  static text_index (l: List, t: Text) => {
+    i := 0
+    while i < l.count {
+      return i if Texts.same_text(at(l, i), t)
+      i = i + 1
+    }
+    0 - 1
+  }
+  static with (n, sym, v) => Runtime.defined_as(n, sym, v)
+  static argn (args: List, named, i, sym) => (i < args.count) ? at(args, i) : ((named == None) ? None : value_of(own(named, sym)))
+  static arg (args: List, i) => (i < args.count) ? at(args, i) : None
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

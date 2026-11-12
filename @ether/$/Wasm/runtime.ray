@@ -154,6 +154,9 @@ function keys_touched(n) {
   }
   0
 }
+function logging() {
+  (load 3944) != 0
+}
 function char_class(c) {
   load8 (3584 + c)
 }

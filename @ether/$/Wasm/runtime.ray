@@ -177,6 +177,21 @@ function classes_changed() {
   3884 <- ((load 3884) + 1)
   0
 }
+function program_from() {
+  8388608
+}
+function program_length() {
+  load 4088
+}
+function classes_version() {
+  load 3884
+}
+function caches_reach() {
+  if free > (load 4004) {
+    4004 <- free
+  }
+  0
+}
 function char_class(c) {
   load8 (3584 + c)
 }

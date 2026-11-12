@@ -16,6 +16,10 @@ import { execFileSync } from 'node:child_process';
 import { Worker, isMainThread, workerData, parentPort } from 'node:worker_threads';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join, relative, resolve } from 'node:path';
+import { setFlagsFromString } from 'node:v8';
+// (small functions, as the runtime is written in, inlined where they are called: the host's own way of what an inlining
+// level of Compiler.ray would do; set before any module is compiled, for every thread)
+setFlagsFromString('--experimental-wasm-inlining');
 
 export const NAME = 'Ether';
 export const ALIASES = ['ray', 'orbitmines'];

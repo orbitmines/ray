@@ -1207,6 +1207,346 @@ Layout := {
     None
   }
 }
+// Indexes (`level indexed …`, removable: each a cache of what it answers): whether a text occurs in another (by the
+// bytes and byte pairs in it, and over the program's text or the text taken, an index of where each byte and pair is,
+// sorted, searched by halves); where a pair that opens at a place ends (`pair_end`, by place, the classes' version);
+// whether a part is held outside brackets (`holds_outside`); the entries by a column's value (`last_with`, `all_with`).
+Indexes := {
+  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : (((e - a) > 64) ? Indexes.occurs_long(l, a, e, Indexes.bytes_cached(a, e)) : Indexes.occurs_short(l, a, e))
+  static occurs_long (l: Text, a, e, b) => ((b != 0) && (Indexes.bytes_all(l, b) == 0)) ? 0 : (in_program(a, e) ? Indexes.occurs_based(Indexes.based_index(program_from(), program_from() + program_length(), 3960), program_length(), l, a, e) : (Indexes.in_taken(a, e, takent) ? Indexes.occurs_taken(l, a, e, takent) : Indexes.occurs_short(l, a, e)))
+  static in_taken (a, e, t: Text) => (t != 0) && (a >= t.from) && (e <= t.to)
+  static occurs_taken (l, a, e, t: Text) => Indexes.occurs_based(Indexes.based_index(t.from, t.to, 3952), t.to - t.from, l, a, e)
+  static occurs_short (l: Text, a, e) => Indexes.occurs_by(l, a, e, Indexes.bytes_in(a, e))
+  static occurs_by (l: Text, a, e, b) => (Indexes.bytes_all(l, b) == 0) ? 0 : (((l.to - l.from) == 1) ? 1 : ((Indexes.pairs_all(l, b) == 0) ? 0 : Indexes.found_at(l, a, e)))
+  static bit_off (b, f) => (byte(b + (f / 8)) & (1 << (f % 8))) == 0
+  static bit_set (b, f) => byte_put(b + (f / 8), byte(b + (f / 8)) | (1 << (f % 8)))
+  static pair_hash (q) => ((byte(q - 1) * 31) + byte(q)) & 4095
+  static bytes_all (l: Text, b) => {
+    i := 0
+    while i < (l.to - l.from) {
+      return 0 if Indexes.bit_off(b, byte(l.from + i))
+      i = i + 1
+    }
+    1
+  }
+  static pairs_all (l: Text, b) => {
+    i := 1
+    while i < (l.to - l.from) {
+      return 0 if Indexes.bit_off(b + 32, Indexes.pair_hash(l.from + i))
+      i = i + 1
+    }
+    1
+  }
+  static found_at (l: Text, a, e) => {
+    q := a
+    while (q + (l.to - l.from)) <= e {
+      return 1 if (byte(q) == byte(l.from)) && texteq(q, l.from, l.to - l.from)
+      q = q + 1
+    }
+    0
+  }
+  // (an index of a text: the count of each byte and each byte pair before it, then where each pair is, then each byte)
+  static occurs_based (x, nb, l: Text, a, e) => (Indexes.based_bytes(x, l, a, e) == 0) ? 0 : (((l.to - l.from) == 1) ? 1 : ((Indexes.based_pairs(x, x + (((257 + 4097) + nb) * 4), l, a, e) == 0) ? 0 : Indexes.based_found(x + (((257 + 4097) + nb) * 4), l, a, e, x)))
+  static based_bytes (x, l: Text, a, e) => {
+    i := 0
+    while i < (l.to - l.from) {
+      return 0 if Indexes.none_after(x + ((257 + 4097) * 4), word_of(x + (byte(l.from + i) * 4)), word_of(x + ((byte(l.from + i) + 1) * 4)), a, e)
+      i = i + 1
+    }
+    1
+  }
+  static none_after (p, lo, hi, a, e) => Indexes.none_from(p, Indexes.first_from(p, lo, hi, a), hi, e)
+  static none_from (p, j, hi, e) => (j >= hi) || (word_of(p + (j * 4)) >= e)
+  static based_pairs (x, g, l: Text, a, e) => {
+    i := 1
+    while i < (l.to - l.from) {
+      return 0 if Indexes.none_after(g, word_of(x + ((257 + Indexes.pair_hash(l.from + i)) * 4)), word_of(x + ((257 + (Indexes.pair_hash(l.from + i) + 1)) * 4)), a + 1, e)
+      i = i + 1
+    }
+    1
+  }
+  static based_found (g, l: Text, a, e, x) => Indexes.based_from(g, l, e, Indexes.first_from(g, word_of(x + ((257 + Indexes.pair_hash(l.from + 1)) * 4)), word_of(x + ((257 + (Indexes.pair_hash(l.from + 1) + 1)) * 4)), a + 1), word_of(x + ((257 + (Indexes.pair_hash(l.from + 1) + 1)) * 4)))
+  static based_from (g, l: Text, e, j, k) => {
+    i := j
+    while i < k {
+      return 0 if ((word_of(g + (i * 4)) - 1) + (l.to - l.from)) > e
+      return 1 if texteq(word_of(g + (i * 4)) - 1, l.from, l.to - l.from)
+      i = i + 1
+    }
+    0
+  }
+  static first_from (x, lo, hi, a) => {
+    l := lo
+    h := hi
+    m := 0
+    while l < h {
+      m = (l + h) / 2
+      l = (word_of(x + (m * 4)) < a) ? (m + 1) : l
+      h = (l == (m + 1)) ? h : m
+    }
+    l
+  }
+  static based_index (b0, e0, w) => ((word_of(w + 4) == b0) && (word_of(w) != 0)) ? word_of(w) : Indexes.index_built(b0, e0, w, Indexes.index_room(word_of(w), ((257 + 4097) + ((e0 - b0) * 2)) * 4))
+  static index_room (x, size) => ((x != 0) && (word_of(x - 8) >= size)) ? x : Indexes.index_made(size)
+  static index_made (size) => {
+    x := lasting_alloc(size + 8) + 8
+    word_put(x - 8, size)
+    x
+  }
+  static index_built (b0, e0, w, x) => {
+    t := alloc(4097 * 4)
+    zeroed(x, (257 + 4097) * 4)
+    Indexes.counted(x, b0, e0)
+    Indexes.summed(x, 0, 257)
+    Indexes.summed(x, 257, 4097)
+    Indexes.copied_words(t, x + (257 * 4), 4097)
+    Indexes.pairs_placed(x, t, b0, e0)
+    Indexes.copied_words(t, x, 256)
+    Indexes.bytes_placed(x, t, b0, e0)
+    word_put(w, x)
+    word_put(w + 4, b0)
+    x
+  }
+  static counted (x, b0, e0) => {
+    q := b0
+    while q < e0 {
+      Indexes.bumped(x + ((byte(q) + 1) * 4))
+      Indexes.bumped(x + ((257 + (Indexes.pair_hash(q) + 1)) * 4)) if q > b0
+      q = q + 1
+    }
+    0
+  }
+  static bumped (w) => word_put(w, word_of(w) + 1)
+  static summed (x, from, n) => {
+    i := 1
+    while i < n {
+      word_put(x + ((from + i) * 4), word_of(x + ((from + i) * 4)) + word_of(x + ((from + (i - 1)) * 4)))
+      i = i + 1
+    }
+    0
+  }
+  static copied_words (t, f, n) => {
+    i := 0
+    while i < n {
+      word_put(t + (i * 4), word_of(f + (i * 4)))
+      i = i + 1
+    }
+    0
+  }
+  static index_placed (base, slot, q) => {
+    word_put(base + (word_of(slot) * 4), q)
+    Indexes.bumped(slot)
+  }
+  static pairs_placed (x, t, b0, e0) => {
+    q := b0 + 1
+    while q < e0 {
+      Indexes.index_placed(x + (((257 + 4097) + (e0 - b0)) * 4), t + (Indexes.pair_hash(q) * 4), q)
+      q = q + 1
+    }
+    0
+  }
+  static bytes_placed (x, t, b0, e0) => {
+    q := b0
+    while q < e0 {
+      Indexes.index_placed(x + ((257 + 4097) * 4), t + (byte(q) * 4), q)
+      q = q + 1
+    }
+    0
+  }
+  // (the bytes and byte pairs in a text, as bits, kept by the text after the led keys' table)
+  static bytes_slot (a, e) => (pcache + (8388608 - (2048 * 560))) + (((((a * 31) + (e * 7)) / 4) & 2047) * 560)
+  static bytes_cached (a, e) => (pcache == 0) ? 0 : Indexes.bytes_kept(Indexes.bytes_slot(a, e), a, e)
+  static bytes_kept (s, a, e) => ((word_of(s) == a) && (word_of(s + 4) == e) && ((lasting_span(a, e) != 0) || (word_of(s + 8) == epoch))) ? (s + 16) : 0
+  static bytes_in (a, e) => Indexes.bytes_from(Indexes.bytes_slot_made(a, e), a, e)
+  static bytes_slot_made (a, e) => {
+    Caches.led_table()
+    Indexes.bytes_slot(a, e)
+  }
+  static bytes_from (s, a, e) => (Indexes.bytes_kept(s, a, e) != 0) ? (s + 16) : Indexes.bytes_made(s, a, e)
+  static bytes_made (s, a, e) => {
+    zeroed(s + 16, 544)
+    q := a
+    while q < e {
+      Indexes.bit_set(s + 16, byte(q))
+      Indexes.bit_set(s + 48, (q > a) ? Indexes.pair_hash(q) : byte(q))
+      q = q + 1
+    }
+    word_put(s, a)
+    word_put(s + 4, e)
+    cache_key(e)
+    word_put(s + 8, epoch)
+    caches_reach()
+    s + 16
+  }
+  static pair_end (q) => in_program(q, q + 1) ? Indexes.pair_direct(q, Indexes.pairs_direct() + ((q - program_from()) * 8)) : Indexes.pair_hashed(q, Indexes.pairs_hashed() + (((q * 7) & 65535) * 16))
+  static kept_cleared (w, n) => {
+    word_put(w, alloc(n))
+    kept()
+    zeroed(word_of(w), n)
+    kept()
+    word_of(w)
+  }
+  static pairs_hashed => (word_of(3880) == 0) ? Indexes.kept_cleared(3880, 1048576) : word_of(3880)
+  static pair_hashed (q, h) => ((word_of(h) == q) && (word_of(h + 8) == (classes_version() + 1)) && (word_of(h + 4) <= textend) && ((lasting_span(q, word_of(h + 4)) != 0) || (word_of(h + 12) == epoch))) ? word_of(h + 4) : Indexes.pair_hash_noted(q, h, pair_ending(q))
+  static pair_hash_noted (q, h, r) => {
+    Indexes.hash_noted(q, h, r) if r != 0
+    r
+  }
+  static hash_noted (q, h, r) => {
+    word_put(h, q)
+    word_put(h + 4, r)
+    word_put(h + 8, classes_version() + 1)
+    cache_key(r)
+    word_put(h + 12, epoch)
+    caches_reach()
+  }
+  static pairs_direct => (word_of(3876) == 0) ? Indexes.kept_cleared(3876, program_length() * 8) : word_of(3876)
+  static pair_direct (q, h) => ((word_of(h + 4) == (classes_version() + 1)) && (word_of(h) <= textend)) ? word_of(h) : Indexes.pair_direct_noted(h, pair_ending(q))
+  static pair_direct_noted (h, r) => {
+    Indexes.direct_noted(h, r) if r != 0
+    r
+  }
+  static direct_noted (h, r) => {
+    word_put(h, r)
+    word_put(h + 4, classes_version() + 1)
+  }
+  static holds_outside (t: Text, part) => (t is Text) ? Indexes.outside_held(t, part, Indexes.outside_slot(t, part)) : false
+  static outside_slot (t: Text, part) => in_program(t.from, t.to) ? Indexes.outside_hash(Indexes.outside_table(), t, part) : 0
+  static outside_table => (word_of(4000) == 0) ? Indexes.zeroed_lasting(4000, 1572864) : word_of(4000)
+  static zeroed_lasting (w, n) => {
+    word_put(w, lasting_alloc(n))
+    zeroed(word_of(w), n)
+    word_of(w)
+  }
+  static outside_hash (c, t: Text, part) => c + (((((t.from * 31) + (t.to * 7)) + (part / 8)) & 65535) * 24)
+  static outside_held (t: Text, part, h) => ((h != 0) && (word_of(h) == t.from) && (word_of(h + 4) == t.to) && (word_of(h + 8) == part) && (word_of(h + 12) == (classes_version() + 1))) ? word_of(h + 16) : Indexes.outside_noted(h, t, part, Indexes.outside_read(t, part, textend))
+  static outside_read (t: Text, part, te) => {
+    textend = t.to
+    r := holds_outside_in(t, part)
+    textend = te
+    r
+  }
+  static outside_noted (h, t, part, r) => {
+    Indexes.outside_put(h, t, part, r) if h != 0
+    r
+  }
+  static outside_put (h, t: Text, part, r) => {
+    word_put(h, t.from)
+    word_put(h + 4, t.to)
+    word_put(h + 8, part)
+    word_put(h + 12, classes_version() + 1)
+    word_put(h + 16, r)
+  }
+  // (a list's entries by the value in a column: a table of each value's last entry, each entry the one before of it)
+  static column_index (l: List, k) => Indexes.columns_filled(Indexes.columns_for(Indexes.columns_table(), l, k), l, k)
+  static columns_table => (word_of(3992) == 0) ? Indexes.columns_made() : word_of(3992)
+  static columns_made => {
+    c := lasting_alloc(16 + (2097152 + 4194304))
+    zeroed(c, 16 + 2097152)
+    word_put(3992, c)
+    c
+  }
+  static columns_for (c, l: List, k) => ((word_of(c) != l) || (word_of(c + 4) != k) || (l.count < word_of(c + 8))) ? Indexes.columns_reset(c, l, k) : c
+  static columns_reset (c, l, k) => {
+    zeroed(c + 16, 2097152)
+    word_put(c, l)
+    word_put(c + 4, k)
+    word_put(c + 8, 0)
+    word_put(c + 12, 0)
+    c
+  }
+  static columns_filled (c, l: List, k) => {
+    i := word_of(c + 8)
+    while (i < l.count) && (i < 1048576) {
+      Indexes.column_put(c, i, column_of(at(l, i), k))
+      i = i + 1
+    }
+    word_put(c + 8, i)
+    ((word_of(c + 12) >= 200000) || (i < l.count)) ? 0 : c
+  }
+  static column_slot (c, x) => {
+    h := ((x / 8) * 40503) & 262143
+    while (word_of(c + (16 + (h * 8))) != 0) && (word_of(c + (16 + (h * 8))) != x) {
+      h = (h + 1) & 262143
+    }
+    h
+  }
+  static column_put (c, i, x) => {
+    word_put(c + (2097168 + (i * 4)), 0)
+    Indexes.column_hashed(c, i, x, Indexes.column_slot(c, x)) if (x != 0) && (word_of(c + 12) < 200000)
+    0
+  }
+  static column_hashed (c, i, x, h) => {
+    word_put(c + 12, word_of(c + 12) + 1) if word_of(c + (16 + (h * 8))) == 0
+    word_put(c + (16 + (h * 8)), x)
+    word_put(c + (2097168 + (i * 4)), word_of(c + (20 + (h * 8))))
+    word_put(c + (20 + (h * 8)), i + 1)
+  }
+  static column_last (c, v) => {
+    h := ((v / 8) * 40503) & 262143
+    while word_of(c + (16 + (h * 8))) != 0 {
+      return word_of(c + (20 + (h * 8))) if word_of(c + (16 + (h * 8))) == v
+      h = (h + 1) & 262143
+    }
+    0
+  }
+  static column_back (l, m) => ((word_of(3992) != 0) && (l is List) && (word_of(word_of(3992)) == l) && (m <= word_of(word_of(3992) + 8))) ? Indexes.columns_back(word_of(3992), l, m) : 0
+  static columns_back (c, l: List, m) => {
+    i := word_of(c + 8) - 1
+    while i >= m {
+      Indexes.column_unput(c, i, column_of(at(l, i), word_of(c + 4)))
+      i = i - 1
+    }
+    word_put(c + 8, m)
+  }
+  static column_unput (c, i, x) => {
+    Indexes.column_undone(c, i, x, Indexes.column_slot(c, x)) if (x != 0) && (word_of(c + 12) < 200000)
+    0
+  }
+  static column_undone (c, i, x, h) => {
+    word_put(c + (20 + (h * 8)), word_of(c + (2097168 + (i * 4)))) if word_of(c + (16 + (h * 8))) == x
+    0
+  }
+  static last_with (l: List, kv, v) => (((l is List) == 0) || stopped()) ? 0 : Indexes.last_by(l, untag(kv), v, (v != 0) ? Indexes.column_index(l, untag(kv)) : 0)
+  static last_by (l: List, k, v, c) => (c == 0) ? Indexes.last_scanned(l, k, v) : Indexes.last_indexed(l, Indexes.column_last(c, v))
+  static last_scanned (l: List, k, v) => {
+    i := l.count - 1
+    while i >= 0 {
+      return at(l, i) if column_of(at(l, i), k) == v
+      i = i - 1
+    }
+    0
+  }
+  static last_indexed (l, i) => (i == 0) ? 0 : at(l, i - 1)
+  static all_with (l, kv, v) => Indexes.all_into(list(), l, kv, v)
+  static all_into (o, l: List, kv, v) => (((l is List) == 0) || stopped()) ? o : Indexes.all_by(o, l, untag(kv), v, (v != 0) ? Indexes.column_index(l, untag(kv)) : 0)
+  static all_by (o, l: List, k, v, c) => (c == 0) ? Indexes.all_scanned(o, l, k, v) : Indexes.all_indexed(o, l, c, Indexes.column_last(c, v))
+  static all_scanned (o, l: List, k, v) => {
+    i := 0
+    while i < l.count {
+      append(o, at(l, i)) if column_of(at(l, i), k) == v
+      i = i + 1
+    }
+    o
+  }
+  static all_indexed (o, l, c, last) => {
+    r := list()
+    i := last
+    while i != 0 {
+      append(r, at(l, i - 1))
+      i = word_of(c + (2097168 + ((i - 1) * 4)))
+    }
+    Indexes.reversed_into(o, r)
+  }
+  static reversed_into (o, r: List) => {
+    n := r.count - 1
+    while n >= 0 {
+      append(o, at(r, n))
+      n = n - 1
+    }
+    o
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

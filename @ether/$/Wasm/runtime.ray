@@ -1623,17 +1623,6 @@ function tag(v) {
   }
   0
 }
-function mapped(l, sym) {
-  var o
-  var i
-  o = list()
-  i = 0
-  while i < (load (l + 4)) {
-    append(o, member(at(l, i), sym))
-    i = i + 1
-  }
-  o
-}
 function setmember(x, sym, v) {
   var l
   var i
@@ -2011,17 +2000,6 @@ function zeroed(a, n) {
   }
   0
 }
-function each_value(l, f) {
-  var i
-  var o
-  o = list()
-  i = 0
-  while i < (load (l + 4)) {
-    append(o, call1(f, at(l, i)))
-    i = i + 1
-  }
-  o
-}
 function place(t, ctx) {
   var p
   if tag(t) == 1 {
@@ -2383,49 +2361,6 @@ function mapped_structure(n, f, g) {
   (o + 12) <- l
   o
 }
-function each(l, f) {
-  var i
-  i = 0
-  while i < (load (l + 4)) {
-    call1(f, at(l, i))
-    i = i + 1
-  }
-  l
-}
-function sorted(l, f) {
-  var o
-  var i
-  var j
-  var x
-  var kx
-  var m
-  o = list()
-  i = 0
-  while i < (load (l + 4)) {
-    append(o, at(l, i))
-    i = i + 1
-  }
-  i = 1
-  while i < (load (o + 4)) {
-    x = at(o, i)
-    kx = call1(f, x)
-    j = i - 1
-    m = 1
-    while m {
-      m = 0
-      if j >= 0 {
-        if call1(f, at(o, j)) > kx {
-          ((load (o + 12)) + ((j + 1) * 4)) <- at(o, j)
-          j = j - 1
-          m = 1
-        }
-      }
-    }
-    ((load (o + 12)) + ((j + 1) * 4)) <- x
-    i = i + 1
-  }
-  o
-}
 function readsv(p, t) {
   var r
   var k
@@ -2441,15 +2376,6 @@ function readsv(p, t) {
     }
   }
   reads(topattern(p), t)
-}
-function headpattern(t) {
-  if tag(t) == 6 {
-    return t
-  }
-  if tag(t) == 1 {
-    return topattern(t)
-  }
-  sequence(gaps(list(), load (t + 4), load (t + 8)))
 }
 function seeded(t) {
   if csyms == 0 {
@@ -2560,24 +2486,6 @@ function argn(args, named, i, sym) {
     return 0
   }
   load (e + 8)
-}
-function construct(c, args, named) {
-  var inst
-  var e
-  inst = node(load (c + 8))
-  define(inst, 16, inst)
-  if tag(named) == 1 {
-    e = load (named + 8)
-    while e != 0 {
-      define(inst, load (e + 4), load (e + 8))
-      e = load e
-    }
-    if (load (named + 12)) != 0 {
-      define(inst, 14, named)
-    }
-  }
-  indirect(inst, args, named, load (c + 4))
-  inst
 }
 function arg(args, i) {
   if i < (load (args + 4)) {
@@ -3237,55 +3145,6 @@ function span(sym, a, e, v) {
   (c + 12) <- e
   (c + 16) <- v
   c
-}
-function applied_again(c) {
-  var a
-  var e
-  var t
-  var n
-  a = node(load (c + 4))
-  a <- 10
-  (a + 12) <- load (c + 12)
-  t = a + 8
-  e = load (c + 8)
-  while e != 0 {
-    n = alloc(12)
-    n <- 0
-    (n + 4) <- load (e + 4)
-    (n + 8) <- load (e + 8)
-    t <- n
-    t = n
-    e = load e
-  }
-  a
-}
-function application(e, mark) {
-  var f
-  var a
-  var i
-  var b
-  f = member(e, 18)
-  a = node(load (f + 8))
-  a <- 10
-  define(a, 17, e)
-  i = mark
-  while i < boundn {
-    b = bounds + (i * 16)
-    if (load b) != 0 {
-      define(a, load b, boundvalue(i))
-    }
-    i = i + 1
-  }
-  (a + 12) <- f
-  a
-}
-function header(c, scope) {
-  var h
-  h = load (c + 12)
-  if h == 0 {
-    return anything()
-  }
-  indirect(scope, list(), 0, h)
 }
 function readtext(p, t) {
   var r
@@ -4398,33 +4257,6 @@ function cw_symbol_count() {
 }
 function cw_symbol_text(x) {
   at(syms, untag(x))
-}
-function joined(a, b) {
-  var o
-  var i
-  o = list()
-  i = 0
-  while i < (load (a + 4)) {
-    append(o, at(a, i))
-    i = i + 1
-  }
-  i = 0
-  while i < (load (b + 4)) {
-    append(o, at(b, i))
-    i = i + 1
-  }
-  o
-}
-function rest_of(l) {
-  var o
-  var i
-  o = list()
-  i = 1
-  while i < (load (l + 4)) {
-    append(o, at(l, i))
-    i = i + 1
-  }
-  o
 }
 function array_new(env, args, named) {
   list()

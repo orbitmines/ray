@@ -3117,6 +3117,141 @@ Collector := class {
   }
   static gc_log_length (t) => (t != 0) ? word_of(t + 1048) : 0
 }
+// Hooks: the reader's own words, each by its name: what is taken, the program's text, the pairs' classes, the caches'
+// reach, the statements set aside, a turn's depth and budget (a statement let go when it runs past it, or near the
+// heap's end), the log, what is painted and said
+Hooks := class {
+  static input => text(8388608, 8388608 + word_of(4088))
+  static arena_base => 650000000 * 2
+  static program_from => 8388608
+  static program_length => word_of(4088)
+  static in_program (a, e) => (a >= 8388608) && (e <= (8388608 + word_of(4088)))
+  static taken_reset => word_put(3872, 0)
+  static taken_set (x) => word_put(3872, x)
+  static taken_entry => word_of(3872)
+  static keys_moved => {
+    Hooks.keys_reset()
+    word_put(3996, word_of(3996) + 1)
+  }
+  static keys_reset => {
+    epoch = epoch + 1
+    word_put(4004, 0)
+  }
+  static caches_reach => {
+    word_put(4004, free) if free > word_of(4004)
+    0
+  }
+  static keys_touched (n) => {
+    Hooks.keys_reset() if (n < word_of(4004)) || (n >= arena_base())
+    0
+  }
+  static class_put (c, k) => byte_put(3584 + c, k)
+  static char_class (c) => byte(3584 + c)
+  static classes_changed => word_put(3884, word_of(3884) + 1)
+  static classes_version => word_of(3884)
+  static white (c) => (c == 32) || (c == 10) || (c == 9) || (c == 13)
+  static logging => word_of(3944) != 0
+  static word_logged (w, v) => {
+    logged(w) if w < word_of(3944)
+    word_put(w, v)
+  }
+  static statements_aside => {
+    word_put(3860, list()) if word_of(3860) == 0
+    word_of(3860)
+  }
+  static aside_or_none => word_of(3860)
+  static choices_end => word_of(3848) + 67108864
+  static turn_depth => word_of(4072)
+  static turn_depth_set (d) => word_put(4072, d)
+  static fuel_floor => word_of(4060)
+  static fuel_floor_set (v) => word_put(4060, v)
+  static turn_begun => {
+    word_put(4060, word_of(3896) - 200000000)
+    stopped_statement() if (word_of(3896) > 0) && Hooks.near_end()
+    0
+  }
+  static near_end => (free > (arena_base() - 134217728)) && (free < arena_base())
+  static statement_over => word_of(4064) != 0
+  static fueled => {
+    word_put(3916, 1) if logging() && Hooks.log_over()
+    Hooks.fuel_spent() if word_of(3896) > 0
+    0
+  }
+  static log_over => ((free - word_of(3944)) > 134217728) || (free > (arena_base() - 67108864)) || ((word_of(word_of(3932) + 48) - word_of(3896)) > 20000000)
+  static fuel_spent => {
+    unreachable_now() if word_of(3896) == 1
+    stopped_statement() if (word_of(3896) < word_of(4060)) || Hooks.near_end()
+    word_put(3896, word_of(3896) - 1)
+  }
+  static stopped_statement => {
+    Hooks.stop_raised() if word_of(3916) == 0
+    0
+  }
+  static stop_raised => {
+    word_put(3916, 1)
+    word_put(4064, 1)
+  }
+  static went_on => {
+    Hooks.stop_lowered() if word_of(4064) != 0
+    0
+  }
+  static stop_lowered => {
+    word_put(3916, 0)
+    word_put(4064, 0)
+  }
+  // (a statement past its budget, noted where what is noted lasts)
+  static over_budget (a, e) => (free < arena_base()) ? Hooks.lasting_over(a, e, free, markf) : Hooks.over_listed(a, e)
+  static lasting_over (a, e, f, m) => {
+    word_put(3840, arena_base() + 4194304) if word_of(3840) == 0
+    free = word_of(3840)
+    markf = free
+    Hooks.over_listed(a, e)
+    word_put(3840, free)
+    free = f
+    markf = m
+    0
+  }
+  static over_listed (a, e) => {
+    word_put(3844, word_of(3844) + 1)
+    word_put(4068, list()) if word_of(4068) == 0
+    append(word_of(4068), text(a, e))
+    word_put(3844, word_of(3844) - 1)
+  }
+  // (whether the reading runs abstractly, as the editor runs a file (the host's word 3900); whether a test written at t
+  // runs: every one, but when the editor runs a file only those written in it, from where the host says it begins)
+  static abstractly => (word_of(3900) != 0) ? 12 : 8
+  static tested_here (t) => ((word_of(3948) == 0) || (tag(t) != 4)) ? 12 : ((origin_at(word_of(t + 4)) < word_of(3948)) ? 8 : 12)
+  static paints => word_of(3968)
+  static reports => word_of(3972)
+  static outbyte (b) => {
+    outb = (outb == 0) ? lasting_alloc(16777216) : outb
+    byte_put(outb + outn, b)
+    outn = outn + 1
+    0
+  }
+  static out_base => outb
+  static out_length => outn
+  static pointer (v) => ((v & 1) == 0) && (v >= 65536)
+  static tag (v) => pointer(v) ? word_of(v) : 0
+  static copy (to, from, n) => ((((to | from) | n) & 3) == 0) ? Hooks.words_copied(to, from, n) : Hooks.bytes_copied(to, from, n)
+  static words_copied (to, from, n) => {
+    i := 0
+    while i < n {
+      word_put(to + i, word_of(from + i))
+      i = i + 4
+    }
+    to
+  }
+  static bytes_copied (to, from, n) => {
+    i := 0
+    while i < n {
+      byte_put(to + i, byte(from + i))
+      i = i + 1
+    }
+    to
+  }
+  static unreachable_now => word_of(0 - 8)
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

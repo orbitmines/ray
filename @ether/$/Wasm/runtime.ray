@@ -1,6 +1,3 @@
-function input() {
-  text(8388608, 8388608 + (load 4088))
-}
 function byte(q) {
   load8 q
 }
@@ -8,123 +5,11 @@ function byte_put(q, c) {
   q <-8 c
   0
 }
-function taken_reset() {
-  3872 <- 0
-  0
-}
-function taken_set(x) {
-  3872 <- x
-  0
-}
-function taken_entry() {
-  load 3872
-}
 function word_of(a) {
   load a
 }
 function word_put(a, v) {
   a <- v
-  0
-}
-function in_program(a, e) {
-  (a >= 8388608) and (e <= (8388608 + (load 4088)))
-}
-function keys_moved() {
-  epoch = epoch + 1
-  4004 <- 0
-  3996 <- ((load 3996) + 1)
-  0
-}
-function class_put(c, k) {
-  (3584 + c) <-8 k
-  0
-}
-function classes_changed() {
-  3884 <- ((load 3884) + 1)
-  0
-}
-function program_from() {
-  8388608
-}
-function program_length() {
-  load 4088
-}
-function classes_version() {
-  load 3884
-}
-function caches_reach() {
-  if free > (load 4004) {
-    4004 <- free
-  }
-  0
-}
-function keys_touched(n) {
-  if (n < (load 4004)) or (n >= arena_base()) {
-    epoch = epoch + 1
-    4004 <- 0
-  }
-  0
-}
-function logging() {
-  (load 3944) != 0
-}
-function statements_aside() {
-  if (load 3860) == 0 {
-    3860 <- list()
-  }
-  load 3860
-}
-function turn_depth() {
-  load 4072
-}
-function turn_depth_set(d) {
-  4072 <- d
-  0
-}
-function fuel_floor() {
-  load 4060
-}
-function fuel_floor_set(v) {
-  4060 <- v
-  0
-}
-function turn_begun() {
-  4060 <- ((load 3896) - 200000000)
-  if (load 3896) > 0 {
-    if (free > (arena_base() - 134217728)) and (free < arena_base()) {
-      stopped_statement()
-    }
-  }
-  0
-}
-function statement_over() {
-  (load 4064) != 0
-}
-function aside_or_none() {
-  load 3860
-}
-function choices_end() {
-  (load 3848) + 67108864
-}
-function word_logged(w, v) {
-  if w < (load 3944) {
-    logged(w)
-  }
-  w <- v
-  0
-}
-function char_class(c) {
-  load8 (3584 + c)
-}
-function white(c) {
-  (c == 32) or ((c == 10) or ((c == 9) or (c == 13)))
-}
-function outbyte(b) {
-  if outb == 0 {
-    outb = lasting_alloc(16777216)
-  }
-  (outb + outn) <-8 b
-  outn = outn + 1
   0
 }
 function entry_step() {
@@ -201,12 +86,6 @@ function kept_run(x) {
   0
 }
 // (what is painted, `external style`, and what is said, `external goto report`: the host reads them (words 3968, 3972))
-function paints() {
-  load 3968
-}
-function reports() {
-  load 3972
-}
 function image_out() {
   var b
   b = lasting_alloc(112)
@@ -271,9 +150,6 @@ function image_in(b) {
   isodepth = load (b + 108)
   0
 }
-function arena_base() {
-  650000000 * 2
-}
 function parsed_kept(g, a, e) {
   var s
   var o
@@ -316,12 +192,6 @@ function parsed_kept(g, a, e) {
   (s + 8) <- e
   (s + 12) <- l
   l
-}
-function out_base() {
-  outb
-}
-function out_length() {
-  outn
 }
 function shared_id(v) {
   var t
@@ -708,31 +578,6 @@ function test_end(painted, reported) {
   }
   0
 }
-function copy(to, from, n) {
-  var i
-  i = 0
-  if (((to or from) or n) and 3) == 0 {
-    while i < n {
-      (to + i) <- (load (from + i))
-      i = i + 4
-    }
-    return to
-  }
-  while i < n {
-    (to + i) <-8 (load8 (from + i))
-    i = i + 1
-  }
-  to
-}
-function pointer(v) {
-  ((v and 1) == 0) and (v >= 65536)
-}
-function tag(v) {
-  if pointer(v) {
-    return load v
-  }
-  0
-}
 function shared_args(w, n) {
   var l
   var f
@@ -806,73 +651,6 @@ function lasting_name(t) {
   3944 <- f
   1
 }
-function kept_append(l, v) {
-  var s
-  var f0
-  var t
-  var w
-  var r
-  var f
-  var m
-  var c
-  if (isodepth == 0) or (pointer(v) == 0) {
-    return append(l, v)
-  }
-  s = 0
-  f0 = 0
-  while s < framed() {
-    if (f0 == 0) and (l < (load (isostack + (s * 12)))) {
-      f0 = load (isostack + (s * 12))
-    }
-    s = s + 1
-  }
-  if (((f0 == 0) or (v < f0)) or (v >= arena_base())) or (free >= arena_base()) {
-    return append(l, v)
-  }
-  if (load 3840) == 0 {
-    3840 <- (arena_base() + 4194304)
-  }
-  f = free
-  m = markf
-  free = load 3840
-  markf = free
-  3844 <- ((load 3844) + 1)
-  t = load 3932
-  if t == 0 {
-    t = alloc(1088)
-    zeroed(t, 1088)
-    (t + 1044) <- alloc(16000000)
-    (t + 1060) <- alloc(32000)
-    (t + 1068) <- alloc(32000)
-    (t + 1076) <- alloc(1048576)
-    (t + 1080) <- 0
-    (t + 1084) <- alloc(131072)
-    zeroed(load (t + 1084), 131072)
-    3940 <- alloc(8388608)
-    3932 <- t
-  }
-  (t + 1064) <- 0
-  (t + 1072) <- 0
-  w = kept_out(load 3940, v, f0, 0)
-  c = kept_same(load 3940, w)
-  if c == 0 {
-    r = alloc(8)
-    r <- (load 3940)
-    c = made_again(r)
-    kept_as(load 3940, w, c)
-  }
-  append(l, c)
-  if (load (t + 1064)) != 0 {
-    zeroed(load (t + 1084), 131072)
-  }
-  (t + 1064) <- 0
-  (t + 1072) <- 0
-  3844 <- ((load 3844) - 1)
-  3840 <- free
-  free = f
-  markf = m
-  l
-}
 function kept_slot(a, e) {
   var h
   var q
@@ -927,9 +705,6 @@ function kept_as(a, e, c) {
   ((load 3788) + 4) <- ((load ((load 3788) + 4)) + 1)
   0
 }
-function unreachable_now() {
-  load (0 - 8)
-}
 function kind_of(v) {
   var t
   var o
@@ -969,104 +744,6 @@ function kind_of(v) {
   0
 }
 // (whether the reading runs abstractly, as the editor runs a file, or fully, as a test: the host's word 3900)
-function abstractly() {
-  if (load 3900) != 0 {
-    return 12
-  }
-  8
-}
-// (whether a test written at t runs: every test, but when the editor runs a file only those written in it, from where the
-// host says it begins (its word 3948, an address in the input))
-function tested_here(t) {
-  if (load 3948) == 0 {
-    return 12
-  }
-  if tag(t) != 4 {
-    return 12
-  }
-  if origin_at(load (t + 4)) < (load 3948) {
-    return 8
-  }
-  12
-}
-function fueled() {
-  if (load 3944) != 0 {
-    if (((free - (load 3944)) > 134217728) or (free > (arena_base() - 67108864))) or (((load ((load 3932) + 48)) - (load 3896)) > 20000000) {
-      3916 <- 1
-    }
-  }
-  if (load 3896) > 0 {
-    if (load 3896) == 1 {
-      unreachable_now()
-    }
-    if (load 3896) < (load 4060) {
-      stopped_statement()
-    }
-    if (free > (arena_base() - 134217728)) and (free < arena_base()) {
-      stopped_statement()
-    }
-    3896 <- ((load 3896) - 1)
-  }
-  0
-}
-function bindings() {
-  var n
-  var i
-  var b
-  n = node(0)
-  i = 0
-  while i < boundn {
-    b = bounds + (i * 12)
-    define(n, load b, text(load (b + 4), load (b + 8)))
-    i = i + 1
-  }
-  n
-}
-function stopped_statement() {
-  if (load 3916) == 0 {
-    3916 <- 1
-    4064 <- 1
-  }
-  0
-}
-function went_on() {
-  if (load 4064) != 0 {
-    3916 <- 0
-    4064 <- 0
-  }
-  0
-}
-function over_budget(a, e) {
-  var f
-  var m
-  var l
-  if (load 3840) == 0 {
-    3840 <- (arena_base() + 4194304)
-  }
-  f = free
-  m = markf
-  if free < arena_base() {
-    free = load 3840
-    markf = free
-  }
-  3844 <- ((load 3844) + 1)
-  l = load 4068
-  if l == 0 {
-    l = list()
-    4068 <- l
-  }
-  append(l, text(a, e))
-  3844 <- ((load 3844) - 1)
-  if f < arena_base() {
-    3840 <- free
-    free = f
-    markf = m
-  }
-  0
-}
-function heap_used() {
-  free
-}
 function m4(q, c0, c1, c2, c3) {
   if (load8 q) != c0 {
     return 0

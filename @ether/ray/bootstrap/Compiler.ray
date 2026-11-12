@@ -1817,6 +1817,130 @@ Matching := {
     word_put(h + 16, l)
   }
 }
+// Built (`level built …`): a node's text read again as a pattern (its gaps and words, each key a field of what it
+// holds: a pattern, a text read with, else anything), the holes in it told how they end (inside a pair of literals,
+// beside one); the lines of a statement set aside to be read again, up to one no more indented; cells of a pattern
+// read; a choice of repeating; bytes compared and classed; where anything read up to a place ends; not.
+Built := {
+  static rebuilt (n: Node) => Built.rebuilt_from(n, member(n, Symbol.text), n.keys, list())
+  static rebuilt_from (n, t: Text, s: List, l) => {
+    pos := t.from
+    i := 0
+    while i < s.count {
+      pos = Built.span_rebuilt(n, l, at(s, i), pos)
+      i = i + 1
+    }
+    gaps(l, pos, t.to) if t.to > pos
+    enclosed_holes(l)
+    sequence(l)
+  }
+  static span_rebuilt (n, l, c: Spanned, pos) => {
+    gaps(l, pos, c.from) if c.from > pos
+    append(l, ((c.value is Place) || (c is Marked)) ? topattern(c.value) : Built.field_rebuilt(c.name, Built.with_read(n, c.name, member(n, c.name))))
+    c.to
+  }
+  static with_read (n, sym, v) => (v is Text) ? read_with(n, sym, v) : v
+  static field_rebuilt (sym, v) => field(sym, (v is Pattern) ? v : (((v is Node) && (member(v, Symbol.text) != None)) ? pattern(reread, v, 0) : anything()))
+  static texts_equal (x, y) => Texts.same_text(x, y)
+  static enclosed_holes (l: List) => {
+    i := 0
+    while i < l.count {
+      Built.hole_enclosed(l, i, at(l, i))
+      i = i + 1
+    }
+    0
+  }
+  static hole_enclosed (l: List, i, f: Pattern) => {
+    Built.hole_between(l, i, f.b, Built.literal_at(l, i - 1), Built.literal_at(l, i + 1)) if f.kind == named_field
+    0
+  }
+  static literal_at (l: List, j) => ((j >= 0) && (j < l.count) && Layout.is_literal(at(l, j))) ? at(l, j) : 0
+  static hole_between (l, i, h: Pattern, a, b) => {
+    Built.hole_closed_by(l, i, h, a, b) if (h is Pattern) && (h.kind == hole)
+    0
+  }
+  static hole_closed_by (l, i, h, a, b) => ((a != 0) && (b != 0)) ? Built.hole_inside(h, a, b) : Built.hole_beside(l, i, h, a, b)
+  static hole_inside (h: Pattern, a: Pattern, b: Pattern) => {
+    h.b = 1
+    h.c = byte(Built.text_from(b.a))
+    Built.ended_by(h, 2) if texts_equal(a.a, b.a)
+    0
+  }
+  static text_from (t: Text) => t.from
+  static ended_by (h: Pattern, k) => {
+    h.b = k
+    0
+  }
+  static hole_beside (l, i, h: Pattern, a, b) => {
+    Built.ended_by(h, 3) if ((a != 0) && (spaced(l, i - 2) == 0)) || ((b != 0) && (spaced(l, i + 2) == 0))
+    0
+  }
+  static with_code (a, b) => a
+  static under (b: Node, env) => {
+    b.in = env
+    b
+  }
+  static staged (f) => pattern(typed_by, f, 0)
+  static unread_until (pos, at) => (Built.white_past(at) >= textend) ? at : Built.unread_from(at, Pairs.line_end_from(at), Built.indent_of(Built.line_begun(pos, at)))
+  static white_past (q) => {
+    r := q
+    while (r < textend) && white(byte(r)) {
+      r = r + 1
+    }
+    r
+  }
+  static line_begun (pos, at) => {
+    q := at
+    while (q > pos) && (byte(q - 1) != 10) {
+      q = q - 1
+    }
+    q
+  }
+  static indent_of (q) => Pairs.spaces_past(q) - q
+  static unread_from (at, end, d) => {
+    q := end
+    while q < textend {
+      return Built.aside_to(at, q, q + 1) if Built.dedented(q + 1, d)
+      q = Pairs.line_end_from(q + 1)
+    }
+    Built.aside_to(at, q, q)
+  }
+  static dedented (i, d) => (Pairs.spaces_past(i) < textend) && (byte(Pairs.spaces_past(i)) != 10) && ((Pairs.spaces_past(i) - i) <= d)
+  static aside_to (at, q, r) => {
+    l := statements_aside()
+    frames_kept()
+    append(l, text(at, q))
+    r
+  }
+  static rest_cell (l, i, next) => Rest(list: l, next: next, index: i)
+  static recell (k: Rest, next) => (k.list is List) ? rest_cell(k.list, k.index, next) : cell(k.list, next)
+  static repeat_chosen (inner, least, d, pos, k) => Built.choice_given(chosen(4, inner, pos, k), least, d)
+  static choice_given (s: Choice, least, d) => {
+    s.a = least
+    s.c = d
+    s
+  }
+  static chared (c, k) => (k == 1) ? ((c == 32) || (c == 9)) : (((k == 2) || (k == 4)) ? (c == 10) : ((k == 3) ? white(c) : 1))
+  static texteq (a, b, n) => {
+    i := 0
+    while i < n {
+      return 0 if byte(a + i) != byte(b + i)
+      i = i + 1
+    }
+    1
+  }
+  static anything_end (n) => (byte(n - 1) == 10) ? 0 : Built.end_by_class(n, pair_class(n - 1))
+  static end_by_class (n, t) => (t == 3) ? 0 : (((t == 1) || (t == 2)) ? pair_end(n - 1) : n)
+  static negated (v) => truthy(v) ? false : true
+  static param_of (ps, n, a, e) => {
+    i := 0
+    while i < n {
+      return 1 if ((word_of(ps + ((i * 8) + 4)) - word_of(ps + (i * 8))) == (e - a)) && texteq(word_of(ps + (i * 8)), a, e - a)
+      i = i + 1
+    }
+    0
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

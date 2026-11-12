@@ -157,6 +157,12 @@ function keys_touched(n) {
 function logging() {
   (load 3944) != 0
 }
+function statements_aside() {
+  if (load 3860) == 0 {
+    3860 <- list()
+  }
+  load 3860
+}
 function char_class(c) {
   load8 (3584 + c)
 }

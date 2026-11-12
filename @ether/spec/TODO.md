@@ -318,6 +318,9 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   Not yet: with/with_locals, statements in turn (`in_turn`, `read_again`), splices, keys and led rules, conversions,
   the cw_* helpers, memory, entry/IO, tests and paints. These do not fit in the 205 lines left: the caches and memory
   go to Compiler.ray levels (lowered from a section given as input part 3 with Runtime.ray), cw_* into Compiler.ray.
+- **Compiler.ray's own levels** (`Texts`, `Output`: the cw_* helpers) are written before `Lowered :=` and given with
+  Runtime.ray as input part 3 (`.entrypoint.mjs` `lowered_input`); runtime.ray is at 5300 lines. Low reads no `if` as
+  an operand (`q + (c ? 2 : 1)` became `unreachable`): write `c ? q + 2 : q + 1`.
 - **Lowered pitfalls, more**: `x = v if c` reads as `x = (v if c)` (write `x = c ? v : x`); in the debug printer the
   symbol numbers differ (High.program seeds them first); a kind with many fields must be `aside` or Low has no type.
 - **A lowering feature takes a revision before Runtime.ray can use it**: revision N's runtime is lowered by revision

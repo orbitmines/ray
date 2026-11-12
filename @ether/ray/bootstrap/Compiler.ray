@@ -337,7 +337,17 @@ Lowered := {
   static noted_twice (sn, seen, twice) => ((level cw_index_of (Lowered.functions) (sn)) === None) ? None : (((level cw_index_of (seen) (sn)) === None) ? seen.append(sn) : twice.append(sn))
   static override_one (st, sn, twice, left, kept) => (((level cw_index_of (twice) (sn)) === None) || !((level cw_index_of (left) (sn)) === None)) ? kept.append(st) : left.append(sn)
   // (what `Runtime := { … }` holds, each `static …` in it)
-  static members_of (ms) => Compiled.statements_of(Compiled.inner_of(Compiled.trimmed(Lowered.parsed(Compiled.statements_of(ms).first).def_value)))
+  // (what each section, `X := { … }`, holds, each `static …` in it: Runtime.ray's, and Compiler.ray's own levels; a
+  // function of a section is called by its name, `X.f(…)`)
+  static sections := Array.new
+  static members_of (ms) => Lowered.members_in(Compiled.statements_of(ms), Array.new)
+  static members_in (ml, mo) => ml.empty ? mo : Lowered.members_in(ml.rest, mo.joined(Lowered.section(ml.first)))
+  static section (st) => (Lowered.kind(st) == `def_name`) ? Lowered.section_named(Compiled.trimmed(Lowered.parsed(st).def_name), Lowered.parsed(st).def_value) : Array.new
+  static section_named (sn, sv) => {
+    Lowered.sections.append(sn)
+    Compiled.statements_of(Compiled.inner_of(Compiled.trimmed(sv)))
+  }
+  static is_section (sn) => !((level cw_index_of (Lowered.sections) (sn)) === None)
   // (a kind, `X := (tag, a: T, b)`, or a constant, `X := 0`, noted before any function is written)
   static declared (dm) => (Lowered.kind(dm) == `def_name`) ? Lowered.declared_as(Compiled.trimmed(Lowered.parsed(dm).def_name), Compiled.trimmed(Lowered.parsed(dm).def_value)) : None
   static declared_as (dn, dv) => Compiled.bracketed(dv) ? Lowered.kind_declared(dn, Compiled.parts(Compiled.inner_of(dv))) : Lowered.constants.append([dn, dv])
@@ -458,7 +468,7 @@ Lowered := {
   static local_in (le, ln) => le.empty ? false : ((le.first.first == ln) ? true : Lowered.local_in(le.rest, ln))
   // (`Runtime.x`: x, a function or constant of it; `Symbol.x`, the number the name x is known by; else a field, read
   // where the value's kind holds it)
-  static member (mf, mn, me) => (Compiled.trimmed(mf) == `Runtime`) ? Lowered.leaf(mn, Array.new) : ((Compiled.trimmed(mf) == `Symbol`) ? High.number(level cw_symbol_of (mn)) : Lowered.field_read(mf, mn, me))
+  static member (mf, mn, me) => Lowered.is_section(Compiled.trimmed(mf)) ? Lowered.leaf(mn, Array.new) : ((Compiled.trimmed(mf) == `Symbol`) ? High.number(level cw_symbol_of (mn)) : Lowered.field_read(mf, mn, me))
   static field_read (rf, rn, re) => {
     Lowered.w("(load ")
     Lowered.field_at(rf, rn, re)
@@ -508,7 +518,7 @@ Lowered := {
   }
   static place (pp, pe) => (Lowered.kind(pp) == `member_from`) ? Lowered.field_at(Lowered.parsed(pp).member_from, Compiled.trimmed(Lowered.parsed(pp).member_name), pe) : Lowered.word_at(Lowered.parsed(pp).indexed_of, Lowered.parsed(pp).index_at, pe)
   // (a call: a kind made, its fields given by name, the rest none; a function of the runtime, given what it is given)
-  static call (cn, ca, ce) => Lowered.call_named(((Lowered.kind(cn) == `member_from`) && (Compiled.trimmed(Lowered.parsed(cn).member_from) == `Runtime`)) ? Compiled.trimmed(Lowered.parsed(cn).member_name) : cn, ((Compiled.trimmed(ca)).count == 0) ? Array.new : Compiled.parts(ca), ce)
+  static call (cn, ca, ce) => Lowered.call_named(((Lowered.kind(cn) == `member_from`) && Lowered.is_section(Compiled.trimmed(Lowered.parsed(cn).member_from))) ? Compiled.trimmed(Lowered.parsed(cn).member_name) : cn, ((Compiled.trimmed(ca)).count == 0) ? Array.new : Compiled.parts(ca), ce)
   static call_named (cn, cp, ce) => (cn == `Words`) ? Lowered.room_for(cp.first, ce) : ((Lowered.named(cn) === None) ? Lowered.applied(cn, cp, ce) : Lowered.made(Lowered.named(cn), cp, ce))
   // (`Words(n)`: room for n words, of the memory a run manages)
   static room_for (wn, we) => {

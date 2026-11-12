@@ -2715,6 +2715,408 @@ Isolation := class {
     0
   }
 }
+// Collector: a frame's memory, when it took much and something older may hold it, compacted: what is reached from the
+// roots (the pins older memory holds, what is bound, active, chosen, logged, copied, kept) marked, each live value moved
+// down over what is not, and every word that held one moved with it
+Collector := class {
+  static young_below := 536870912
+  static pins_area => word_of(4056) + (4096 * 1028)
+  static compactable (s) => {
+    return 0 if word_of(s + 8) == 2
+    return 0 if word_of(3936) != 0
+    return 0 if (noreclaim != 0) || (word_of(3844) != 0)
+    return 0 if (word_of(s) < young_below) || ((free < 805306368) || (free >= arena_base()))
+    (free - word_of(s)) > 67108864
+  }
+  static start_of (x) => Collector.gc_start_back(x / 8, word_of(4008) / 8, Collector.gc_starts_from(x / 8))
+  static gc_starts_from (c) => byte(Heap.starts_map() + (c / 8)) & ((2 << (c % 8)) - 1)
+  static gc_start_back (c0, lo, m0) => {
+    c := c0
+    m := m0
+    while (m == 0) && (c > lo) {
+      c = ((c / 8) * 8) - 1
+      m = byte(Heap.starts_map() + (c / 8))
+    }
+    while (((m / (1 << (c % 8))) % 2) == 0) && (c > lo) {
+      c = c - 1
+    }
+    c * 8
+  }
+  static end_of (y) => {
+    c := (y / 8) + 1
+    k := word_of(4012) / 8
+    while (c < k) && (Heap.bit_at(Heap.starts_map(), c * 8) == 0) {
+      c = Collector.gc_past(c)
+    }
+    (c < k) ? (c * 8) : (k * 8)
+  }
+  static gc_past (c) => (((c % 8) == 0) && (byte(Heap.starts_map() + (c / 8)) == 0)) ? (c + 8) : (c + 1)
+  static gc_mark (x) => {
+    return 0 if (x < word_of(4008)) || (x >= word_of(4012))
+    Collector.gc_marked(start_of(x), word_of(4016) + ((start_of(x) / 64) - (word_of(4008) / 64)))
+  }
+  static gc_marked (y, b) => {
+    return 0 if ((byte(b) / (1 << ((y / 8) % 8))) % 2) == 1
+    byte_put(b, byte(b) | (1 << ((y / 8) % 8)))
+    return Collector.gc_marks_full() if word_of(4028) >= word_of(4032)
+    word_put(word_of(4024) + (word_of(4028) * 4), y)
+    word_put(4028, word_of(4028) + 1)
+    0
+  }
+  static gc_marks_full => {
+    word_put(4052, 1)
+    0
+  }
+  static gc_reloc (x) => (x == word_of(4012)) ? (word_of(4008) + word_of(4040)) : (word_of(4008) + Collector.gc_reloc_in(x / 8, (x / 64) - (word_of(4008) / 64), x))
+  static gc_reloc_in (c, j, x) => {
+    n := word_of(word_of(4020) + (j * 4))
+    m := byte(word_of(4016) + j)
+    i := (c / 8) * 8
+    while i < c {
+      n = n + (((m / (1 << (i % 8))) % 2) * 8)
+      i = i + 1
+    }
+    n + (((m / (1 << (c % 8))) % 2) * (x % 8))
+  }
+  static gc_in (v) => (v >= word_of(4008)) && (v <= word_of(4012))
+  static gc_value (v, fix) => (fix == 0) ? Collector.gc_marked_value(v) : (gc_in(v) ? gc_reloc(v) : v)
+  static gc_marked_value (v) => {
+    gc_mark(v)
+    v
+  }
+  static gc_word (w, fix) => (fix == 0) ? gc_mark(word_of(w)) : Collector.gc_word_moved(w, word_of(w))
+  static gc_word_moved (w, v) => {
+    word_put(w, gc_reloc(v)) if gc_in(v)
+    0
+  }
+  static gc_words (a0, e, fix) => {
+    a := a0
+    while a < e {
+      gc_word(a, fix)
+      a = a + 4
+    }
+    0
+  }
+  static gc_first (w) => Collector.gc_first_in(word_of(4024) + 16777216, ((w / 4) * 40503) & 2097151, w)
+  static gc_first_in (b, h0, w) => {
+    h := h0
+    while (word_of(b + (h * 4)) != 0) && (word_of(b + (h * 4)) != w) {
+      h = (h + 1) & 2097151
+    }
+    return 0 if (word_of(b + (h * 4)) == w) && (w != 0)
+    word_put(b + (h * 4), w)
+    1
+  }
+  static gc_index_of (w, fix) => {
+    return 0 if w < 65536
+    return 0 if (word_of(w - 8) != 1) && (word_of(w - 8) != 10)
+    Collector.gc_index_words(word_of(w + 8), fix)
+  }
+  static gc_index_words (x, fix) => {
+    return 0 if (x < 65536) || ((x >= word_of(4008)) && (x <= word_of(4012)))
+    gc_words(x + 8, (x + 8) + (word_of(x) * 8), fix)
+    0
+  }
+  static gc_roots (s, fix) => {
+    d := (s - isostack) / 12
+    Collector.gc_firsts_cleared() if fix != 0
+    Collector.gc_pins_rooted(slot_base(d), fix)
+    gc_words(bounds, bounds + (boundn * 16), fix)
+    gc_words(actives + 8, (actives + 8) + (activen * 8), fix)
+    gc_words(word_of(3848), word_of(3852), fix) if word_of(3848) != 0
+    Collector.gc_log_rooted(word_of(3932), d, fix) if (word_of(3932) != 0) && (word_of(3936) > 0)
+    gc_words(word_of(3856) + 4, word_of(3856) + 12, fix) if word_of(3856) != 0
+    Collector.gc_copies_rooted(word_of(3864), word_of(Collector.pins_area() + (d * 4)), fix) if word_of(3864) != 0
+    Collector.gc_slots_rooted(word_of(3988), fix) if word_of(3988) != 0
+    gc_word(4044, fix)
+    gc_word(4048, fix)
+    gc_word(4068, fix)
+    gc_word(3860, fix)
+    gc_word(3968, fix)
+    gc_word(3972, fix)
+    names = gc_value(names, fix)
+    bounds = gc_value(bounds, fix)
+    actives = gc_value(actives, fix)
+    syms = gc_value(syms, fix)
+    takent = gc_value(takent, fix)
+    csyms = gc_value(csyms, fix)
+    memo = gc_value(memo, fix)
+    pcache = gc_value(pcache, fix)
+    parserhook = gc_value(parserhook, fix)
+    datab = gc_value(datab, fix)
+    asideb = gc_value(asideb, fix)
+    0
+  }
+  static gc_firsts_cleared => {
+    zeroed(word_of(4024) + 16777216, 8388608)
+    0
+  }
+  static gc_pins_rooted (i0, fix) => {
+    c := word_of(Collector.pins_area() + 49152)
+    j := word_of(Collector.pins_area() + 49156)
+    i := i0
+    while i < j {
+      Collector.gc_pin_rooted(word_of(c + (i * 4)), fix)
+      i = i + 1
+    }
+    0
+  }
+  static gc_pin_rooted (w, fix) => {
+    return 0 if (w >= word_of(4008)) && (w < word_of(4012))
+    Collector.gc_root_word(w, fix) if (fix == 0) || gc_first(w)
+    0
+  }
+  static gc_root_word (w, fix) => {
+    gc_word(w, fix)
+    gc_index_of(w, fix)
+    0
+  }
+  static gc_log_rooted (t, d, fix) => {
+    gc_words(t, t + 1072, fix)
+    Collector.gc_log_from(t, Collector.gc_log_mark(word_of(Collector.pins_area() + (16384 + (d * 4))), word_of(t + 1048)), fix)
+  }
+  static gc_log_mark (k, n) => (k > n) ? 0 : k
+  static gc_log_from (t, k, fix) => {
+    gc_words(word_of(t + 1044) + (k * 8), word_of(t + 1044) + (word_of(t + 1048) * 8), fix)
+    0
+  }
+  static gc_copies_rooted (b, k0, fix) => {
+    k := k0
+    while k < word_of(3868) {
+      Collector.gc_copy_rooted(b + (k * 12), fix) if word_of(b + ((k * 12) + 8)) > 0
+      k = k + 1
+    }
+    0
+  }
+  static gc_copy_rooted (r, fix) => (fix == 0) ? Collector.gc_copy_marked(r) : Collector.gc_copy_moved(r)
+  static gc_copy_marked (r) => {
+    gc_mark(word_of(r))
+    gc_mark((word_of(r) + word_of(r + 8)) - 1)
+    gc_mark(word_of(r + 4))
+    gc_mark((word_of(r + 4) + word_of(r + 8)) - 1)
+    0
+  }
+  static gc_copy_moved (r) => {
+    gc_word(r, 1)
+    gc_word(r + 4, 1)
+    0
+  }
+  static gc_slots_rooted (b, fix) => {
+    i := 0
+    while i < word_of(b) {
+      gc_word(b + (12 + (i * 12)), fix)
+      i = i + 1
+    }
+    0
+  }
+  static gc_low_clear => {
+    i := 3840
+    while (i < 4008) && (Collector.gc_low_held(i) == 0) {
+      i = i + 4
+    }
+    return 0 if i < 4008
+    return 0 if (word_of(3932) != 0) && ((word_of(3932) >= word_of(4008)) && (word_of(3932) < word_of(4012)))
+    1
+  }
+  static gc_low_held (i) => ((word_of(i) >= word_of(4008)) && (word_of(i) < word_of(4012))) && (((i != 3920) && (i != 3872)) && (i != 4004))
+  static compacted (s, v) => Collector.gc_compacted_in(s, v, word_of(s), free)
+  static gc_compacted_in (s, v, base, top) => {
+    return v if (isostack >= base) && (isostack < top)
+    return v if Collector.gc_compacting_over(s, base, top)
+    Collector.gc_compaction_set(base, top, Collector.gc_map_size(base, top))
+    return v if gc_low_clear() == 0
+    zeroed(top, Collector.gc_map_size(base, top))
+    gc_mark(v)
+    gc_roots(s, 0)
+    Collector.gc_marks_traced()
+    return v if word_of(4052) != 0
+    Collector.gc_compacted_marked(s, v, base, top, Collector.gc_live_counted(base, top))
+  }
+  static gc_map_size (base, top) => ((((top / 64) - (base / 64)) + 16) / 8) * 8
+  static gc_compacting_over (s, base, top) => ((((top + Collector.gc_map_size(base, top)) + (Collector.gc_map_size(base, top) * 4)) + 25165824) > (arena_base() - 4194304)) || ((word_of(Collector.pins_area() + 49156) - slot_base((s - isostack) / 12)) > 1000000)
+  static gc_compaction_set (base, top, n) => {
+    word_put(4008, base)
+    word_put(4012, top)
+    word_put(4016, top)
+    word_put(4020, top + n)
+    word_put(4024, (top + n) + (n * 4))
+    word_put(4028, 0)
+    word_put(4032, 4194304)
+    word_put(4052, 0)
+    0
+  }
+  static gc_marks_traced => {
+    while (word_of(4028) > 0) && (word_of(4052) == 0) {
+      Collector.gc_mark_traced()
+    }
+    0
+  }
+  static gc_mark_traced => {
+    word_put(4028, word_of(4028) - 1)
+    Collector.gc_traced(word_of(word_of(4024) + (word_of(4028) * 4)))
+  }
+  static gc_traced (y) => {
+    gc_words(y, end_of(y), 0) if Heap.bit_at(Heap.bytes_map(), y) == 0
+    0
+  }
+  static gc_live_counted (base, top) => {
+    c := base / 8
+    k := top / 8
+    cur := 0
+    live := 0
+    word_put(word_of(4020), 0)
+    while c < k {
+      word_put(word_of(4020) + (((c / 8) - (base / 64)) * 4), live) if (c % 8) == 0
+      cur = Collector.gc_current(c, cur)
+      live = live + Collector.gc_live_marked(c, cur)
+      c = c + 1
+    }
+    word_put(word_of(4020) + (((k / 8) - (base / 64)) * 4), live) if (k % 8) == 0
+    word_put(4040, live)
+    live
+  }
+  static gc_current (c, cur) => (Heap.bit_at(Heap.starts_map(), c * 8) != 0) ? Heap.marked_at(c * 8) : cur
+  static gc_live_marked (c, cur) => {
+    Collector.gc_live_bit(word_of(4016) + ((c / 8) - (word_of(4008) / 64)), c) if cur != 0
+    cur * 8
+  }
+  static gc_live_bit (b, c) => {
+    byte_put(b, byte(b) | (1 << (c % 8)))
+    0
+  }
+  static gc_compacted_marked (s, v, base, top, live) => {
+    Collector.gc_marked_fixed(base, top)
+    gc_roots(s, 1)
+    Collector.gc_compacted_moved(base, top, live, gc_value(v, 1))
+  }
+  static gc_marked_fixed (base, top) => {
+    y := base
+    while y < top {
+      y = Collector.gc_fixed(y, end_of(y))
+    }
+    0
+  }
+  static gc_fixed (y, e) => {
+    gc_words(y, e, 1) if (Heap.marked_at(y) != 0) && (Heap.bit_at(Heap.bytes_map(), y) == 0)
+    e
+  }
+  static gc_compacted_moved (base, top, live, v) => {
+    Collector.gc_moved_all(base, top)
+    Collector.gc_starts_left((base + live) / 8, top / 8)
+    free = base + live
+    epoch = epoch + 1
+    word_put(4004, 0)
+    word_put(3996, word_of(3996) + 1)
+    word_put(3920, 0)
+    word_put(word_of(3992), 0) if word_of(3992) != 0
+    word_put(3884, word_of(3884) + 2)
+    word_put(4076, word_of(4076) + 1)
+    word_put(4092, word_of(4092) + ((top - free) / 1024))
+    v
+  }
+  static gc_moved_all (base, top) => {
+    y := base
+    while y < top {
+      y = Collector.gc_moved(y, end_of(y))
+    }
+    0
+  }
+  static gc_moved (y, e) => {
+    Collector.gc_moved_to(y, e, gc_reloc(y), Heap.bit_at(Heap.bytes_map(), y)) if Heap.marked_at(y) != 0
+    e
+  }
+  static gc_moved_to (y, e, d, ns) => {
+    copy(d, y, e - y) if d != y
+    starts_set(d, d + (e - y))
+    Heap.bit_raised(Heap.bytes_map(), d / 8) if ns != 0
+    0
+  }
+  static gc_starts_left (c0, k) => {
+    c := c0
+    while c < k {
+      c = Heap.start_cleared_from(c, k)
+    }
+    0
+  }
+  static gc_after (s) => Collector.pins_area() + (32768 + (((s - isostack) / 12) * 4))
+  static gc_close (s, v) => (((free - word_of(s)) > (word_of(gc_after(s)) * 2)) && compactable(s)) ? Collector.gc_closed_compacted(s, compacted(s, v)) : v
+  static gc_closed_compacted (s, v) => {
+    Collector.gc_after_raised(s - 12) if s > isostack
+    v
+  }
+  static gc_after_raised (p) => {
+    word_put(gc_after(p), free - word_of(p)) if (free - word_of(p)) > word_of(gc_after(p))
+    0
+  }
+  static slot_base (d) => word_of(word_of(4056) + (d * 1028))
+  static pin_slot (d, w) => Collector.gc_pinned(isostack + ((d * 12) + 8), w, word_of(Collector.pins_area() + 49152), word_of(Collector.pins_area() + 49156))
+  static gc_pinned (f, w, g, t) => {
+    return 0 if word_of(f) == 2
+    return 0 if w == 0
+    return Collector.gc_flagged(f, 1) if (t > slot_base(framed() - 1)) && (word_of(g + ((t - 1) * 4)) == w)
+    return Collector.gc_flagged(f, 2) if t >= 16777216
+    word_put(g + (t * 4), w)
+    word_put(Collector.pins_area() + 49156, t + 1)
+    Collector.gc_flagged(f, 1)
+  }
+  static gc_flagged (f, k) => {
+    word_put(f, k)
+    0
+  }
+  static pins_gone (s) => ((word_of(s + 8) != 1) || (word_of(s) < young_below)) ? (word_of(s + 8) == 0) : Collector.gc_none_pinned(s, word_of(Collector.pins_area() + 49152), word_of(Collector.pins_area() + 49156))
+  static gc_none_pinned (s, g, t) => {
+    i := slot_base((s - isostack) / 12)
+    while (i < t) && (Collector.gc_pin_inside(s, word_of(word_of(g + (i * 4)))) == 0) {
+      i = i + 1
+    }
+    i >= t
+  }
+  static gc_pin_inside (s, x) => (x >= word_of(s)) && (x < free)
+  static pins_up (s) => Collector.gc_pins_kept(s, (s - isostack) / 12, slot_base((s - isostack) / 12))
+  static gc_pins_kept (s, d, i) => {
+    return Collector.gc_pins_to(i) if d == 0
+    return Collector.gc_pins_spilled(s, i) if word_of(s + 8) == 2
+    return Collector.gc_pins_young(s, i) if word_of(s) < young_below
+    Collector.gc_pins_to(Collector.gc_pins_moved(s, i, word_of(Collector.pins_area() + 49156)))
+  }
+  static gc_pins_to (j) => {
+    word_put(Collector.pins_area() + 49156, j)
+    0
+  }
+  static gc_pins_spilled (s, i) => {
+    word_put(s - 4, 2)
+    Collector.gc_pins_to(i)
+  }
+  static gc_pins_young (s, i) => {
+    word_put(s - 4, 1) if (word_of(s + 8) == 1) && (word_of(s - 4) == 0)
+    Collector.gc_pins_to(i)
+  }
+  static gc_pins_moved (s, i0, t) => {
+    g := word_of(Collector.pins_area() + 49152)
+    ps := word_of(s - 12)
+    lo := word_of(isostack)
+    i := i0
+    j := i0
+    while i < t {
+      j = Collector.gc_pin_moved(s, g, j, word_of(g + (i * 4)), ps, lo)
+      i = i + 1
+    }
+    j
+  }
+  static gc_pin_moved (s, g, j, w, ps, lo) => ((w < ps) && ((word_of(w) >= lo) && (word_of(w) < free))) ? Collector.gc_pin_kept(s, g, j, w, ps) : j
+  static gc_pin_kept (s, g, j, w, ps) => {
+    word_put(g + (j * 4), w)
+    word_put(s - 4, 1) if (word_of(w) >= ps) && (word_of(s - 4) == 0)
+    j + 1
+  }
+  static gc_opened => {
+    word_put(Collector.pins_area() + (isodepth * 4), word_of(3868))
+    word_put(Collector.pins_area() + (16384 + (isodepth * 4)), Collector.gc_log_length(word_of(3932)))
+    word_put(Collector.pins_area() + (32768 + (isodepth * 4)), 0)
+    0
+  }
+  static gc_log_length (t) => (t != 0) ? word_of(t + 1048) : 0
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

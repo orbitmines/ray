@@ -357,8 +357,12 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   go, but CF20, GR1/3/6/7, the OP block and Caches stop reading (they relied on `:`); a bracket closed only by its own
   partner (from the pairs log): `<` then closes at an `=>`'s `>`; nested (an other closing leaves it open): `(… => …)`
   never closes. Open: how a byte that is both an operator and a bracket (`<`, `>`, `+`) is told from one, for a
-  bracket's end as for a block (§ blocks count brackets shaped as one). Until then `Collector := class` is left unread
-  by the tests (one error) and kept out of the commit.
+  bracket's end as for a block (§ blocks count brackets shaped as one). User's choice: the shape rule (a bracket a rule
+  taught, written as an operator — ` < `, `=>`, `<= `, `->` — is none; a byte glued to a word teaches no pair). Built
+  and parked (it compiles, its fixpoint holds): with it, a closure called with nothing, `(() => { … })()` (the class
+  rule's body), no longer reads (it read because its `(` closed at the `=>`'s `>`), so every class fails; and the rules
+  that relied on `:` closing. To be done with the restatement of matching in Runtime.ray, the language's files fixed
+  with it. Until then `Collector := class` is read by the tests as unread (one error).
 - **Lowered pitfalls, later**: a constant (`static x := v`) is put in place only when `v` is one token: `(1021000000
   * 2)` stays a bare name, which Low takes for a global or function it does not have (write a no-argument static,
   `static x => 1021000000 * 2`, called `X.x()`); a number past 2^30 is not a literal Low writes (`1021000000 * 2`, as the

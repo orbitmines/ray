@@ -1103,6 +1103,110 @@ Pairs := {
     f
   }
 }
+// Layout (`level layout …`): a statement's span (its `statement` key), one continued from the one before it (that one
+// ends with a comma), whether a line goes on into the next (more indented, or a closing); a text's gaps (white) and
+// words as a pattern; digits, a word's inside, a line end in a text; a column of an entry; the first or last where.
+Layout := {
+  static statement_span (st) => Layout.span_in(member(st, 14))
+  static span_in (s: Node) => (s == None) ? None : Layout.statement_in(s.keys)
+  static statement_in (l: List) => {
+    i := 0
+    while (l != None) && (i < l.count) {
+      return Layout.span_text(at(l, i)) if Layout.is_statement(at(l, i))
+      i = i + 1
+    }
+    None
+  }
+  static is_statement (c: Spanned) => c.name == Symbol.statement
+  static span_text (c: Spanned) => text(c.from, c.to)
+  static continued_span (o: List, x) => (o.count == 0) ? x : Layout.span_joined(o, at(o, o.count - 1), x)
+  static span_joined (o: List, p: Text, x: Text) => ((Layout.separated(p) == 0) || (x == None)) ? x : Layout.joined_span(o, p, x)
+  static joined_span (o: List, p: Text, x: Text) => {
+    o.count = o.count - 1
+    text(p.from, x.to)
+  }
+  static separated (x: Text) => (x == None) ? 0 : Layout.comma_last(x, Layout.white_back(x.from, x.to))
+  static comma_last (x: Text, e) => (e > x.from) && (byte(e - 1) == 44)
+  static white_back (a, e) => {
+    q := e
+    while (q > a) && white(byte(q - 1)) {
+      q = q - 1
+    }
+    q
+  }
+  static continued_from (a, n) => (comma_ended(a, n) != 0) ? 1 : Layout.continued_by(n, indent_written(a))
+  static continued_by (n, d) => (d < 0) ? 0 : Layout.indented_past(n, d, indent_at(n + 1))
+  static indented_past (n, d, j) => (((n + 1 + j) >= textend) || (byte(n + 1 + j) == 10)) ? 0 : ((j > d) || (pair_class(n + 1 + j) == 3))
+  static spaced (l: List, j) => ((j < 0) || (j >= l.count)) ? 0 : Layout.not_literal(at(l, j))
+  static not_literal (g: Pattern) => (g.kind != literally) && (g.kind != named_field)
+  static gaps (l, a, e) => {
+    q := a
+    while q < e {
+      q = (chared(byte(q), 3) != 0) ? Layout.gap_added(l, q, Layout.spaces_run(q, e)) : Layout.word_added(l, q, Layout.word_run(q, e))
+    }
+    l
+  }
+  static spaces_run (q, e) => {
+    r := q
+    while (r < e) && (chared(byte(r), 3) != 0) {
+      r = r + 1
+    }
+    r
+  }
+  static word_run (q, e) => {
+    r := q
+    while (r < e) && (chared(byte(r), 3) == 0) {
+      r = r + 1
+    }
+    r
+  }
+  static gap_added (l, s, q) => {
+    append(l, Layout.gap_pattern(Layout.gap_kind(l, s, q)))
+    q
+  }
+  static gap_kind (l: List, s, q) => ((l.count > 0) && Layout.is_literal(at(l, l.count - 1))) ? ((Layout.line_in(s, q) != 0) ? 2 : 4) : 0
+  static is_literal (p: Pattern) => p.kind == literally
+  static gap_pattern (t) => (t > 0) ? greedy(either(append(append(list(), chars(1)), chars(t))), 1) : greedy(chars(1), 1)
+  static word_added (l, s, q) => {
+    append(l, literal(text(s, q)))
+    q
+  }
+  static digits_at (q, e) => {
+    d := q
+    while (d < e) && (byte(d) >= 48) && (byte(d) <= 57) {
+      d = d + 1
+    }
+    d
+  }
+  static inside_word (n, a) => (n > a) && (word_byte(byte(n - 1)) != 0) && (word_byte(byte(n)) != 0)
+  static line_in (a, e) => {
+    q := a
+    while q < e {
+      return 1 if byte(q) == 10
+      q = q + 1
+    }
+    0
+  }
+  static column_of (e: List, k) => ((e is List) && (e.count > k)) ? at(e, k) : None
+  static first_where (l: List, f) => (l is List) ? Layout.first_in(l, f) : member2(select(l, f), Symbol.first)
+  static first_in (l: List, f) => {
+    i := 0
+    while i < l.count {
+      return at(l, i) if truthy(call1(f, at(l, i)))
+      i = i + 1
+    }
+    None
+  }
+  static last_where (l: List, f) => (l is List) ? Layout.last_in(l, f) : member2(select(l, f), Symbol.last)
+  static last_in (l: List, f) => {
+    i := l.count - 1
+    while i >= 0 {
+      return at(l, i) if truthy(call1(f, at(l, i)))
+      i = i - 1
+    }
+    None
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

@@ -4655,12 +4655,6 @@ function enclosed_holes(l) {
   }
   0
 }
-function comma_ended(a, n) {
-  while (n > a) and white(load8 (n - 1)) {
-    n = n - 1
-  }
-  (n > a) and ((load8 (n - 1)) == 44)
-}
 function line_in(a, e) {
   while a < e {
     if (load8 a) == 10 {
@@ -5123,27 +5117,6 @@ function continued_from(a, n) {
     return 0
   }
   (j > d) or (pair_class(n + 1 + j) == 3)
-}
-function continued_at(n) {
-  var q
-  var d
-  var j
-  q = n
-  while (q > 0) and (((load8 (q - 1)) != 10) and ((load8 (q - 1)) != 0)) {
-    q = q - 1
-  }
-  d = indent_at(q)
-  j = indent_at(n + 1)
-  if comma_ended(q, n) {
-    return 1
-  }
-  if (n + 1 + j) >= textend {
-    return 0
-  }
-  if (load8 (n + 1 + j)) == 10 {
-    return 0
-  }
-  (j > d) or ((load8 (3584 + (load8 (n + 1 + j)))) == 3)
 }
 function continued_where_written(q) {
   var o
@@ -6155,72 +6128,6 @@ function pair_end(q) {
   }
   r
 }
-function pair_class(q) {
-  var n
-  var c
-  c = load8 (3584 + (load8 q))
-  if c == 0 {
-    return 0
-  }
-  if (load8 (q - 1)) != 92 {
-    return c
-  }
-  n = 1
-  while (q > (n + 1)) and ((load8 ((q - n) - 1)) == 92) {
-    n = n + 1
-  }
-  if (n % 2) == 1 {
-    return 0
-  }
-  c
-}
-function pair_ending(q) {
-  var c
-  var d
-  var x
-  var t
-  c = load8 q
-  if pair_class(q) == 2 {
-    x = q + 1
-    while x < textend {
-      if ((load8 x) == 92) {
-        x = x + 1
-      } else {
-        if (load8 x) == c {
-          return x + 1
-        }
-      }
-      x = x + 1
-    }
-    return 0
-  }
-  d = 0
-  x = q
-  while x < textend {
-    t = load8 (3584 + (load8 x))
-    if t != 0 {
-      t = pair_class(x)
-    }
-    if t == 2 {
-      x = pair_end(x)
-      if x == 0 {
-        return 0
-      }
-    } else {
-      if t == 1 {
-        d = d + 1
-      }
-      if t == 3 {
-        d = d - 1
-        if d == 0 {
-          return x + 1
-        }
-      }
-      x = x + 1
-    }
-  }
-  0
-}
 function pair_set(c, k, home) {
   var b
   var n
@@ -6328,17 +6235,6 @@ function paired(t, cap, home) {
     }
   }
   0
-}
-function string_end(n) {
-  var t
-  t = pair_class(n - 1)
-  if t == 3 {
-    return 0
-  }
-  if (t == 1) or (t == 2) {
-    return pair_end(n - 1)
-  }
-  n
 }
 function holds_outside(t, part) {
   var te

@@ -277,7 +277,7 @@ Expression := class (
       // (a hole's value in its body, `{x}` read there: read once, by who reads it)
       hole_value (hole, program, applier) => held(hole, () => named_for(program, reader(program, applier), hole.value))
       // (a hole read for code read in a value, `x.( … )`: read where it is written, what it defines the value's)
-      named_for (program, by, text) => in_value(by, text, ((program.in?.of === None) || (by.in === program.in)) ? by.in?.of : program.in.of)
+      named_for (program, by, text) => in_value(by, text, (((program.in === None) || (program.in.of === None)) || (by.in === program.in)) ? ((by.in === None) ? None : by.in.of) : program.in.of)
       in_value (program, text, held_value) => (held_value === None) ? named_in(program, text) : for_value(program, held_value, text)
       for_value (program, held_value, text) => {
         was := program.for_value
@@ -287,7 +287,7 @@ Expression := class (
         r
       }
       made_on (made, program) => {
-        (made.parts = [program.receiver]) if !(program.receiver?.rules === None)
+        (made.parts = [program.receiver]) if !((program.receiver === None) || (program.receiver.rules === None))
         program.receiver = None
         made
       }
@@ -347,7 +347,7 @@ Expression := class (
       holder (program, hole) => ((hole === None) || (program === None)) ? None : (among(program.bound ?? Array.new, hole) ? program : holder(program.caller, hole))
       home_of (program, hole) => (holder(program, hole) === None) ? None : place_of(holder(program, hole).caller)
       // (where a program defines: in the value it reads code for, `x.( … )`, else where it is)
-      place_of (program) => (program.for_value?.rules === None) ? value_read_in(program.in) : program.for_value
+      place_of (program) => ((program.for_value === None) || (program.for_value.rules === None)) ? value_read_in(program.in) : program.for_value
       // (a node a value is read on in, `x.( … )`: what it defines is that value's)
       value_read_in (place) => ((place === None) || ((place.of === None) || (place.of.rules === None))) ? place : place.of
       // (the nearest node that defines a name itself)

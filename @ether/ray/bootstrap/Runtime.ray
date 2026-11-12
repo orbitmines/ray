@@ -711,7 +711,6 @@ Runtime := {
   static Curried := (9, function, value)
   static Applied := (10, in, fields, rule, index)
   static placed := 50
-  static noted_by := 51
   static members_listed := 52
   static bound (id, x) => Builtin(id: id, self: x)
   static curried (f, v) => Curried(function: f, value: v)
@@ -741,7 +740,7 @@ Runtime := {
   static invoke (c, args, named) => ((c is Builtin) && Runtime.list_changed(c)) ? Runtime.builtin_list(c, arg(args, 0)) : call(c, args, named)
   static list_changed (b: Builtin) => (b.id == Symbol.joined) || (b.id == Symbol.append)
   static builtin_list (b: Builtin, v) => (b.id == Symbol.joined) ? joined(b.self, v) : append(b.self, v)
-  static builtin (id, x, args) => (id == Symbol.sort) ? sorted(x, arg(args, 0)) : ((id == Symbol.for) ? each(x, arg(args, 0)) : ((id == Symbol.map) ? each_value(x, arg(args, 0)) : ((id == placed) ? place(arg(args, 0), arg(args, 1)) : ((id == noted_by) ? noted(arg(args, 0)) : ((id == members_listed) ? members_of(arg(args, 0)) : None)))))
+  static builtin (id, x, args) => (id == Symbol.sort) ? sorted(x, arg(args, 0)) : ((id == Symbol.for) ? each(x, arg(args, 0)) : ((id == Symbol.map) ? each_value(x, arg(args, 0)) : ((id == placed) ? place(arg(args, 0), arg(args, 1)) : ((id == members_listed) ? members_of(arg(args, 0)) : None))))
   static call (c, args, named) => {
     fueled()
     stopped() ? None : Runtime.called(c, args, named)

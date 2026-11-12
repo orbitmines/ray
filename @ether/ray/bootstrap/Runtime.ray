@@ -73,6 +73,61 @@ Runtime := {
     list.items = items
     list.room = room
   }
+  // (lists of lists: all but the first, one after another, each given to a function, what it answers of each, a member
+  // of each, sorted by what it answers (equal ones kept in order))
+  static rest_of (l) => Runtime.appended_from(list(), l, 1)
+  static joined (a, b) => Runtime.appended_from(Runtime.appended_from(list(), a, 0), b, 0)
+  static appended_from (o: List, l: List, from) => {
+    i := from
+    while i < l.count {
+      append(o, l.items[i])
+      i = i + 1
+    }
+    o
+  }
+  static each (l: List, f) => {
+    i := 0
+    while i < l.count {
+      call1(f, l.items[i])
+      i = i + 1
+    }
+    l
+  }
+  static each_value (l: List, f) => {
+    o := list()
+    i := 0
+    while i < l.count {
+      append(o, call1(f, l.items[i]))
+      i = i + 1
+    }
+    o
+  }
+  static mapped (l: List, name) => {
+    o := list()
+    i := 0
+    while i < l.count {
+      append(o, member(l.items[i], name))
+      i = i + 1
+    }
+    o
+  }
+  static sorted (l, f) => Runtime.sorted_in(Runtime.appended_from(list(), l, 0), f)
+  static sorted_in (o: List, f) => {
+    i := 1
+    while i < o.count {
+      Runtime.inserted(o, f, o.items[i], call1(f, o.items[i]), i - 1)
+      i = i + 1
+    }
+    o
+  }
+  static inserted (o: List, f, x, kx, from) => {
+    j := from
+    while (j >= 0) && (call1(f, o.items[j]) > kx) {
+      o.items[j + 1] = o.items[j]
+      j = j - 1
+    }
+    o.items[j + 1] = x
+  }
   static moved (to: Words, from: Words, count) => {
     i := 0
     while i < count {
@@ -699,4 +754,42 @@ Runtime := {
   static applied_called (c, f: Closure, args, named) => indirect(applied_again(c), args, named, f.function)
   static builtin_called (b: Builtin, args) => builtin(b.id, b.self, args)
   static closure_called (c: Closure, args, named) => (isodepth > 4000) ? indirect(c.env, args, named, c.function) : isolated_value(isolated_open(), indirect(c.env, args, named, c.function))
+  // (a class constructing: a node in its scope, itself its `this`, given what is named, its body run in it; its header,
+  // the pattern it is read by, else anything; a rule's reading applied again, its fields copied)
+  static construct (c: Class, args, named) => Runtime.instance_run(c, Runtime.instance_named(Runtime.itself(node(c.env)), named), args, named)
+  static itself (n) => Runtime.defined_as(n, Symbol.this, n)
+  static instance_named (inst, named) => {
+    Runtime.names_given(inst, named) if named is Node
+    inst
+  }
+  static names_given (inst, named: Node) => {
+    Runtime.fields_given(inst, named.fields)
+    define(inst, 14, named) if named.keys != None
+  }
+  static fields_given (inst, from: Field) => {
+    f := from
+    while f != None {
+      define(inst, f.name, f.value)
+      f = f.next
+    }
+  }
+  static instance_run (c: Class, inst, args, named) => {
+    indirect(inst, args, named, c.function)
+    inst
+  }
+  static header (c: Class, scope) => (c.header == None) ? anything() : indirect(scope, list(), 0, c.header)
+  static headpattern (t: Text) => (t is Pattern) ? t : ((t is Node) ? topattern(t) : sequence(gaps(list(), t.from, t.to)))
+  static applied_again (c: Applied) => Applied(in: c.in, fields: Runtime.copied_fields(c.fields), rule: c.rule)
+  static copied_fields (f: Field) => (f === None) ? None : Field(next: Runtime.copied_fields(f.next), name: f.name, value: f.value)
+  static application (e, mark) => Runtime.application_of(e, mark, member(e, Symbol.value))
+  static application_of (e, mark, f: Closure) => Runtime.named_bounds(Runtime.defined_as(Applied(in: f.env, rule: f), Symbol.key, e), mark)
+  static named_bounds (a, mark) => {
+    i := mark
+    while i < boundn {
+      Runtime.bound_defined(a, bound_at(i), i)
+      i = i + 1
+    }
+    a
+  }
+  static bound_defined (a, b: Bound, i) => define(a, b.hole, Runtime.boundvalue(i)) if b.hole != 0
 }

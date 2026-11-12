@@ -270,6 +270,27 @@ its own reading its place, unread text recorded with reading going on.
   `{first} ; {rest}` tried at every statement), the tests in `assert { }` blocks painted on their condition (column 10),
   and 3015's block and entry:26/89 lose.
 
+- **Found 2026-11-12, getting bootstrap/ to pass non-vacuously** (probe ladder in ~/.cache/ray-probe/ladder.ray):
+  - *Chained `?.` in compiled code*: Compiled.ray's grammar reads `a.b?.c` as one member named `b?.c` (always None).
+    Three such chains made Expression's `for_value` dead (8bb95e6a rewrote them). The grammar needs the fix; until then
+    Expression.ray and runtime.ray must not chain `?.`.
+  - *Numerals read as Places*: nothing defines `1` before Number.ray's `{digits: Decimal.String} ^number` reads (and that
+    hole's type is None until calls), so number tests pass vacuously (see "An undeclared name passes an assert").
+  - *level.ray's requests are unanswered by the compiled engine*: `global`'s `external` answers `.`, `&`, `goto`, `label`,
+    `style`, `include`, `rule`, `shown` only; `level member_named` (23 uses), `member_given` (13), `unset`, `names`,
+    `admits` … answer None. The direction (user 2026-11-12): the entrypoint's own definitions, not engine answers.
+  - *Components* (c432bb9f): `external . v` makes what it is read in made of v; bare, a node made of the receiver;
+    `x &+ { … }` reads the block in x (entry rule `{on} &+ {`{`}{code}{`}`}`).
+  - *Calls, not landed* (scratch ~/.cache/ray-probe/Expression.lazy): `{this}`-led methods kept per node in a rules node
+    of their own (`led`, keyed by the rest, from `rule_lhs as (led: …(`this`), led_after: String+)`), the split's node
+    finding them through the value's parts (`led_from`), lone-hole rules (`{written}`) out of component lookups (Array's
+    `{written} =>` otherwise reads itself). Copying them into the split's node (the old scratch's `on.rules[[e.led_rest]]`)
+    filled the 2 GB within 20M steps; found lazily it costs the same as kept apart, so the cost is calls running:
+    `(() => { … })()` now runs each class's body (~800 applications a class, 43 classes and 231 constructions by
+    Ray.ray:975). Measured (mem.mjs, heap_used and the furthest paint): without calls Ray.ray:975 at 5M steps, 235 MB;
+    with, 20M steps, ~1 GB (~50 MB per 1M steps); `--test` does not finish in 600 s. The memory wall of "Memory once
+    calls run" above, reached again.
+
 ## Node.ray
 
 - **The error handlers read members bare** (`diagnostics`, `diagnostics.last`, `diagnostics.some(.fatal)`, line 68–84):

@@ -90,51 +90,6 @@ function starts_set(p, e) {
 function input() {
   text(8388608, 8388608 + (load 4088))
 }
-function applied_of(x) {
-  while (x != 0) and ((load x) != 10) {
-    x = load (x + 4)
-  }
-  x
-}
-function members_of(x) {
-  var l
-  var e
-  l = list()
-  if (tag(x) != 1) and (tag(x) != 10) {
-    return l
-  }
-  e = load (x + 8)
-  while e != 0 {
-    if (load (e + 4)) != 17 {
-      if (load (e + 4)) != 47 {
-        append(l, entry(name_text(load (e + 4)), load (e + 8)))
-      }
-    }
-    e = load e
-  }
-  l
-}
-function holes_of(x) {
-  var l
-  var e
-  while (x != 0) and ((load x) != 10) {
-    x = load (x + 4)
-  }
-  l = list()
-  if x == 0 {
-    return l
-  }
-  e = load (x + 8)
-  while e != 0 {
-    if (load (e + 4)) != 17 {
-      if (load (e + 4)) != 47 {
-        append(l, entry(name_text(load (e + 4)), load (e + 8)))
-      }
-    }
-    e = load e
-  }
-  l
-}
 function byte(q) {
   load8 q
 }
@@ -468,32 +423,6 @@ function input_part(i) {
     k = k + 1
   }
   text(a, k)
-}
-function catch_all(p) {
-  p = topattern(p)
-  if tag(p) != 6 {
-    return 0
-  }
-  if (load (p + 4)) == 6 {
-    return 1
-  }
-  if (load (p + 4)) == 3 {
-    if (load ((load (p + 8)) + 4)) == 1 {
-      return (load (at(load (p + 8), 0) + 4)) == 6
-    }
-  }
-  0
-}
-function set_parser(f) {
-  parserhook = f
-  kept()
-  0
-}
-function grammar_of(t) {
-  var g
-  g = node(0)
-  define(g, 32, t)
-  g
 }
 function parsed_statements(g, t) {
   var l
@@ -1152,67 +1081,6 @@ function tag(v) {
     return load v
   }
   0
-}
-function setmember(x, sym, v) {
-  var l
-  var i
-  var p
-  if (tag(x) == 1) or (tag(x) == 10) {
-    if v == x {
-      v = copied(x)
-    }
-    define(x, sym, v)
-  }
-  if tag(x) == 6 {
-    if (load (x + 4)) == 3 {
-      l = load (x + 8)
-      i = 0
-      while i < (load (l + 4)) {
-        p = at(l, i)
-        if tag(p) == 6 {
-          if ((load (p + 4)) == 6) and ((load (p + 8)) == sym) {
-            touched_by(p, p + 12, v)
-            if (p + 12) < (load 3944) {
-              logged(p + 12)
-            }
-            (p + 12) <- v
-          }
-        }
-        i = i + 1
-      }
-    }
-  }
-  v
-}
-function maybe(x, sym) {
-  if x == 0 {
-    return 0
-  }
-  member(x, sym)
-}
-function orelse(a, b) {
-  if truthy(a) {
-    return a
-  }
-  b
-}
-function entry(p, v) {
-  var e
-  e = node(0)
-  define(e, 17, p)
-  define(e, 18, v)
-  e
-}
-function keyed(n, p, v) {
-  var e
-  if (n < (load 4004)) or (n >= arena_base()) {
-    epoch = epoch + 1
-    4004 <- 0
-    4004 <- 0
-  }
-  e = entry(p, v)
-  append(keys(n), e)
-  e
 }
 function shared_args(w, n) {
   var l

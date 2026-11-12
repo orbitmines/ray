@@ -341,7 +341,15 @@ Lowered := {
   // (a kind, `X := (tag, a: T, b)`, or a constant, `X := 0`, noted before any function is written)
   static declared (dm) => (Lowered.kind(dm) == `def_name`) ? Lowered.declared_as(Compiled.trimmed(Lowered.parsed(dm).def_name), Compiled.trimmed(Lowered.parsed(dm).def_value)) : None
   static declared_as (dn, dv) => Compiled.bracketed(dv) ? Lowered.kind_declared(dn, Compiled.parts(Compiled.inner_of(dv))) : Lowered.constants.append([dn, dv])
-  static kind_declared (kn, kp) => ((level cw_numeral_value (kp.first)) === None) ? Lowered.kinds.append([kn, None, kp.map((f) => Lowered.field_of(f))]) : Lowered.kinds.append([kn, kp.first, kp.rest.map((f) => Lowered.field_of(f))])
+  // (a kind the back end holds aside, `X := (aside, …)`, apart from memory a run manages: written as it is)
+  static aside := Array.new
+  static kind_declared (kn, kp) => (Compiled.trimmed(kp.first) == `aside`) ? Lowered.set_aside(kn, kp.rest) : Lowered.kind_tagged(kn, kp)
+  static set_aside (an, ap) => {
+    Lowered.aside.append(an)
+    Lowered.kind_tagged(an, ap)
+  }
+  static managed_kind (mk) => (mk === None) || ((level cw_index_of (Lowered.aside) (mk)) === None)
+  static kind_tagged (kn, kp) => ((level cw_numeral_value (kp.first)) === None) ? Lowered.kinds.append([kn, None, kp.map((f) => Lowered.field_of(f))]) : Lowered.kinds.append([kn, kp.first, kp.rest.map((f) => Lowered.field_of(f))])
   static field_of (ff) => (Lowered.kind(ff) == `field_name`) ? [Compiled.trimmed(Lowered.parsed(ff).field_name), Compiled.trimmed(Lowered.parsed(ff).field_type)] : [Compiled.trimmed(ff), None]
   // (a kind made, `Node_made(…)` (names are told apart without their case): as many words as it has fields, and its tag;
   // each field given, by position)
@@ -481,7 +489,7 @@ Lowered := {
   static word_set (wh, wp, wv, we) => {
     Lowered.place(wp, we)
     Lowered.w(" <- ")
-    Lowered.managed ? Lowered.written(wh, wp, wv, we) : Lowered.expression(wv, we)
+    (Lowered.managed && Lowered.managed_kind(Lowered.type_of(wh, we))) ? Lowered.written(wh, wp, wv, we) : Lowered.expression(wv, we)
   }
   static local_set (lp, lv, le) => {
     Lowered.expression(lp, le)

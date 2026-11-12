@@ -3138,6 +3138,47 @@ function written(x, w, v) {
   }
   v
 }
+function stopped() {
+  (load 3916) != 0
+}
+function choices_open() {
+  if (load 3848) == 0 {
+    3848 <- lasting_alloc(67108864)
+    3852 <- (load 3848)
+  }
+  load 3852
+}
+function choices_top() {
+  load 3852
+}
+function choices_set(t) {
+  3852 <- t
+  0
+}
+function spun_out() {
+  if (load 4072) > 0 {
+    stopped_statement()
+  } else {
+    3896 <- 1
+  }
+  0
+}
+function active_noted(p, pos) {
+  activen = activen + 1
+  (actives + (activen * 8)) <- p
+  ((actives + (activen * 8)) + 4) <- pos
+  0
+}
+function bound_at(i) {
+  bounds + (i * 16)
+}
+function freed_back(f) {
+  free = f
+  if free <= (load 3920) {
+    3996 <- ((load 3996) + 1)
+  }
+  0
+}
 function noted_field(n, e) {
   if (load n) == 1 {
     if (load (n + 16)) != 0 {

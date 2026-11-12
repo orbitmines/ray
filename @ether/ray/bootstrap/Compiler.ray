@@ -1688,6 +1688,135 @@ Calls := {
   static argn (args: List, named, i, sym) => (i < args.count) ? at(args, i) : ((named == None) ? None : value_of(own(named, sym)))
   static arg (args: List, i) => (i < args.count) ? at(args, i) : None
 }
+// Matching (`level reads …`): how far a pattern reads a text (wholly, to a statement's end, else as far as it does;
+// none when a literal of it is not in the text); holes bound; a span; a text read as a type; what a node's keys read a
+// text wholly as; the last of a list; what a node reads with (`with`); whether a closure reads at a place now; what the
+// rules around a context led by the text at a place read there (the rules' lead bytes first), and the two caches of it.
+Matching := {
+  static reads (p, t) => Matching.reads_text(p, (t is Node) ? member(t, Symbol.text) : t)
+  static reads_text (p, t: Text) => ((t is Text) && (literals_in(p, t.from, t.to) != 0)) ? Matching.reads_in(p, t, textend, boundn) : Readings.not_whole()
+  static reads_in (p, t: Text, te, bn) => {
+    textend = t.to
+    r := matched(p, t.from, cell(pattern(statement_ending, t.from, 1), 0))
+    wholly = true
+    r = (r < 0) ? Matching.read_partly(p, t, bn) : r
+    textend = te
+    boundn = bn
+    (r < 0) ? 0 : r
+  }
+  static read_partly (p, t: Text, bn) => {
+    boundn = bn
+    wholly = false
+    matched(p, t.from, 0)
+  }
+  static bind (sym, a, e) => {
+    Matching.bound_put(bound_at(boundn), sym, a, e)
+    boundn = boundn + 1
+    0
+  }
+  static bound_put (b: Bound, sym, a, e) => {
+    b.hole = sym
+    b.start = a
+    b.end = e
+    b.held = 0
+  }
+  static bindv (sym, v) => {
+    bind(sym, 0, 0)
+    Matching.held_put(bound_at(boundn - 1), v)
+  }
+  static held_put (b: Bound, v) => {
+    b.held = v
+    0
+  }
+  static span (sym, a, e, v) => Spanned(name: sym, from: a, to: e, value: v)
+  static typed (t, v) => ((v is Text) && ((t is Pattern) || (t is Class))) ? readtext(astype(t, 0), v) : v
+  static extended (x, c: Closure) => {
+    indirect(x, list(), 0, c.function)
+    x
+  }
+  static index (n, k: Text) => (k is Text) ? Matching.key_read_whole(keys(n), k) : None
+  static key_read_whole (l: List, k: Text) => {
+    i := 0
+    while i < l.count {
+      return member(at(l, i), Symbol.value) if reads(topattern(member(at(l, i), Symbol.key)), k) == k.to
+      i = i + 1
+    }
+    None
+  }
+  static last (l: List) => (l.count == 0) ? None : at(l, l.count - 1)
+  static read_with (n, sym, v) => Matching.with_in(Matching.reread_of(member(n, 15)), sym, v)
+  static reread_of (s: Pattern) => ((s is Pattern) && (s.kind == reread)) ? s.a : s
+  static with_in (s, sym, v) => (s is Node) ? Matching.with_found(member(s, sym), v) : v
+  static with_found (t, v) => ((t is Pattern) || ((t is Node) && (member(t, Symbol.text) != None))) ? t : v
+  static reading_at (c, pos) => {
+    i := 1
+    while i <= activen {
+      return 1 if (word_of(actives + (i * 8)) == c) && (word_of(actives + ((i * 8) + 4)) == pos)
+      i = i + 1
+    }
+    0
+  }
+  static text_led_read (ctx, n) => Matching.led_read_from(ctx, n, boundn, (n < textend) ? byte(n) : (0 - 2))
+  static led_read_from (ctx, n, m, c) => {
+    x := ctx
+    r := 0
+    while x is Node {
+      r = Matching.led_in_rules(member(x, Symbol.rules), n, m, c)
+      return r if r > n
+      x = member(x, Symbol.in)
+    }
+    0
+  }
+  static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, led_keys(rules.keys), n, m, c)
+  static led_tried (l, a, n, m, c) => {
+    i := 0
+    r := 0
+    while i < word_of(a) {
+      r = ((word_of(a + (8 + (i * 8))) < 0) || (word_of(a + (8 + (i * 8))) == c)) ? Matching.led_matched(Matching.led_pattern_of(l, word_of(a + (4 + (i * 8)))), n, m) : 0
+      return r if r > n
+      i = i + 1
+    }
+    0
+  }
+  static led_pattern_of (l, p) => (p < 0) ? topattern(member(at(l, (0 - p) - 1), Symbol.key)) : p
+  static led_matched (p, n, m) => {
+    r := matched(p, n, 0)
+    boundn = m
+    r
+  }
+  static text_led_reading (ctx, n) => (nomemo != 0) ? text_led_read(ctx, n) : Matching.memo_read(ctx, n, memo + (((((n * 31) + ctx) + (textend * 7)) & 65535) * 16))
+  static memo_read (ctx, n, h) => ((word_of(h) == n) && (word_of(h + 4) == ctx) && (word_of(h + 8) == textend) && (word_of(h + 12) == epoch)) ? word_of((memo + 1048576) + ((h - memo) / 4)) : Matching.memo_noted(ctx, n, h, text_led_read(ctx, n))
+  static memo_noted (ctx, n, h, r) => {
+    word_put(h, n)
+    word_put(h + 4, ctx)
+    word_put(h + 8, textend)
+    cache_key(n)
+    cache_key(ctx)
+    cache_key(textend)
+    word_put(h + 12, epoch)
+    caches_reach()
+    word_put((memo + 1048576) + ((h - memo) / 4), r)
+    r
+  }
+  static reading_of (p, pos) => Matching.reading_in(p, pos, Matching.readings_table() + ((((((p / 4) * 31) + (pos * 7)) + (textend * 13)) & 65535) * 20))
+  static readings_table => (word_of(3908) == 0) ? Indexes.kept_cleared(3908, 65536 * 20) : word_of(3908)
+  static reading_in (p: Pattern, pos, h) => ((word_of(h) == p) && (word_of(h + 4) == pos) && (word_of(h + 8) == textend) && (word_of(h + 12) == epoch)) ? word_of(h + 16) : Matching.reading_noted(p, pos, h, call(p.a, append(list(), text(pos, textend)), 0))
+  static reading_noted (p, pos, h, l) => {
+    Matching.reading_put(p, pos, h, l) if (lasting_span(pos, textend) != 0) && (l is Node) && (l < arena_base()) && (l < markf)
+    l
+  }
+  static reading_put (p, pos, h, l) => {
+    word_put(h, p)
+    word_put(h + 4, pos)
+    word_put(h + 8, textend)
+    cache_key(p)
+    cache_key(pos)
+    cache_key(textend)
+    word_put(h + 12, epoch)
+    caches_reach()
+    word_put(h + 16, l)
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

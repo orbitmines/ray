@@ -66,6 +66,9 @@ export const uncommented = (text) => text.split('\n').filter((l) => !l.trimStart
 const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'ex := (level input_part 0) as Expression\n'; return t.slice(0, t.indexOf(end) + end.length); };
 // (Compiler.ray's part the compiler is itself written with: from `Lowered :=` on, what writes Runtime.ray for the back end)
 const lowering = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.indexOf('\nLowered := {\n') + 1); };
+// (and Compiler.ray's own levels, written for the back end after Runtime.ray: from `Texts :=` up to `Lowered :=`)
+const levels = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.indexOf('\nTexts := {\n') + 1, t.indexOf('\nLowered := {\n') + 1); };
+export const lowered_input = () => readFileSync(bootstrap('Runtime.ray'), 'utf8') + '\n' + levels();
 export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray', 'High.ray'].map((f) => readFileSync(wasm(f), 'utf8')), lowering(), readFileSync(wasm('compile.ray'), 'utf8')].join(''));
 
 // (a revision, given a program: its input the header Expression reads first, the program and the runtime (each without
@@ -75,7 +78,7 @@ export const instance = async (module, memory = new WebAssembly.Memory({ initial
   const { instance } = await WebAssembly.instantiate(module, { m: { memory } });
   return { exports: instance.exports, memory, u8: new Uint8Array(memory.buffer), i32: new Int32Array(memory.buffer) };
 };
-export const given = (it, program, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), written = readFileSync(bootstrap('Runtime.ray'), 'utf8')) => {
+export const given = (it, program, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), written = lowered_input()) => {
   const input = Buffer.from([readFileSync(wasm('header.ray'), 'utf8'), uncommented(program), uncommented(runtime), uncommented(written)].join('\0'));
   it.u8.set(input, 8388608); it.i32[4088 >> 2] = input.length;
 };

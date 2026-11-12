@@ -299,6 +299,275 @@ external member (global) (`O`) ((O === None) ? Compiler.scope_of(Compiler.defaul
 | => superposed_edge
 // (and `,` alone (`{inline: ,}`): the edge that links values)
 , => composed_edge
+// What the compiler asks of the texts it reads (`level cw_…`), and how it writes out what it compiles: written for the
+// back end as Runtime.ray is (`Lowered`, given these after it), each named as asked.
+Texts := {
+  static trimmed_text (from, to) => {
+    a := from
+    e := to
+    while (a < e) && white(byte(a)) {
+      a = a + 1
+    }
+    while (e > a) && white(byte(e - 1)) {
+      e = e - 1
+    }
+    text(a, e)
+  }
+  static cw_trimmed (t: Text) => (t is Text) ? Texts.trimmed_text(t.from, t.to) : t
+  static cw_slice (t: Text, x, v) => ((t is Text) && ((t.from + untag(v)) <= t.to)) ? text(t.from + untag(x), t.from + untag(v)) : None
+  static cw_inner (t: Text) => ((t is Text) && ((t.to - t.from) >= 2)) ? text(t.from + 1, t.to - 1) : None
+  static cw_chopped (t: Text) => ((t is Text) && (t.to > t.from)) ? text(t.from, t.to - 1) : None
+  static cw_span_of (t: Text, x: Text) => ((t is Text) && (x is Text)) ? text(t.from, x.to) : None
+  static cw_starts (t: Text, x: Text) => (((t.to - t.from) >= (x.to - x.from)) && texteq(t.from, x.from, x.to - x.from)) ? true : false
+  // (a text with its escapes read: `\n` a line end, `\t` a tab, else what is escaped)
+  static cw_unescaped (t: Text) => Texts.unescaped_to(t, alloc_bytes((t.to - t.from) + 8))
+  static unescaped_to (t: Text, o) => {
+    v := o
+    g := t.from
+    while g < t.to {
+      byte_put(v, Texts.escaped_byte(t, g))
+      g = g + Texts.escape_width(t, g)
+      v = v + 1
+    }
+    text(o, v)
+  }
+  static escape_width (t: Text, g) => ((byte(g) == 92) && ((g + 1) < t.to)) ? 2 : 1
+  static escaped_byte (t: Text, g) => (Texts.escape_width(t, g) == 1) ? byte(g) : Texts.escape_of(byte(g + 1))
+  static escape_of (c) => (c == 110) ? 10 : ((c == 116) ? 9 : c)
+  // (whether a text, trimmed, is one bracket's: opened at its start, closed only at its end, what is quoted passed over)
+  static cw_enclosed (t: Text) => Texts.enclosed_in(Texts.trimmed_text(t.from, t.to))
+  static enclosed_in (u: Text) => (((u.to - u.from) >= 2) && (opener(byte(u.from)) != 0) && Texts.closed_last(u.from, u.to)) ? true : false
+  static closed_last (a, e) => {
+    d := 0
+    q := a
+    while q < e {
+      d = d + Texts.depth_change(byte(q))
+      return 0 if (closer(byte(q)) != 0) && (d == 0) && ((q + 1) < e)
+      q = Texts.quote_byte(byte(q)) ? Texts.quote_skipped(q + 1, e, byte(q)) : q
+      q = q + 1
+    }
+    closer(byte(e - 1)) != 0
+  }
+  static depth_change (c) => (opener(c) != 0) ? 1 : ((closer(c) != 0) ? (0 - 1) : 0)
+  static quote_byte (c) => (c == 34) || (c == 96)
+  static quote_skipped (from, e, c) => {
+    q := from
+    while (q < e) && (byte(q) != c) {
+      q = ((byte(q) == 92) && (c == 34)) ? (q + 2) : (q + 1)
+    }
+    q
+  }
+  // (the parts of a text apart by its commas, not those in brackets, quotes or comments; each trimmed)
+  static cw_parts (t: Text) => Texts.parts_in(list(), t.to, partstart(t.from, t.to))
+  static parts_in (l: List, e, from) => {
+    d := 0
+    p := from
+    q := from
+    c := 0
+    split := 0
+    while q < e {
+      c = (Texts.comment_end(q, e) != q) ? 10 : byte(q)
+      q = Texts.comment_end(q, e)
+      q = (c == 96) ? Texts.backtick_end(q + 1, e) : q
+      d = (c == 96) ? d : (d + Texts.depth_change(c))
+      split = (c == 44) && (d == 0)
+      append(l, Texts.trimmed_text(p, q)) if split
+      p = split ? partstart(q + 1, e) : p
+      q = split ? (p - 1) : q
+      q = q + 1
+    }
+    Texts.last_part(l, Texts.trimmed_text(p, e)) if p < e
+    l
+  }
+  static comment_end (q, e) => (((q + 1) < e) && (byte(q) == 47) && (byte(q + 1) == 47)) ? Texts.line_ended(q, e) : q
+  static line_ended (from, e) => {
+    q := from
+    while (q < e) && (byte(q) != 10) {
+      q = q + 1
+    }
+    q
+  }
+  static backtick_end (from, e) => {
+    q := from
+    while (q < e) && (byte(q) != 96) {
+      q = q + 1
+    }
+    q
+  }
+  static last_part (l, c: Text) => append(l, c) if c.to > c.from
+  // (the number a text writes, in decimals or after `0x` in hexadecimals; none, when it writes none)
+  static cw_numeral_value (t: Text) => Texts.numeral_in(Texts.trimmed_text(t.from, t.to))
+  static numeral_in (u: Text) => (u.from >= u.to) ? None : ((((u.to - u.from) >= 3) && (byte(u.from) == 48) && ((byte(u.from + 1) == 120) || (byte(u.from + 1) == 88))) ? Texts.digits_from(u.from + 2, u.to, 16) : Texts.digits_from(u.from, u.to, 10))
+  static digits_from (from, to, base) => {
+    h := 0
+    a := from
+    while a < to {
+      return None if Texts.digit(byte(a), base) < 0
+      h = (h * base) + Texts.digit(byte(a), base)
+      a = a + 1
+    }
+    int(h)
+  }
+  static digit (c, base) => ((c >= 48) && (c <= 57)) ? (c - 48) : ((base == 16) ? (((c >= 97) && (c <= 102)) ? (c - 87) : (((c >= 65) && (c <= 70)) ? (c - 55) : (0 - 1))) : (0 - 1))
+  // (where a text is in a list, by what it writes; and the number a name is known by, a new one the next)
+  static cw_index_of (l: List, t: Text) => {
+    i := 0
+    while i < l.count {
+      return int(i) if Texts.same_text(l.items[i], t)
+      i = i + 1
+    }
+    None
+  }
+  static same_text (x: Text, t: Text) => (x is Text) && ((x.to - x.from) == (t.to - t.from)) && texteq(x.from, t.from, t.to - t.from)
+  static cw_symbol_of (t) => Texts.symbol_in(Texts.symbols(), t)
+  static symbols => (syms == 0) ? Texts.symbols_made() : syms
+  static symbols_made => {
+    syms = list()
+    kept()
+    syms
+  }
+  static symbol_in (s: List, t: Text) => {
+    i := 0
+    while i < s.count {
+      return int(i + 16) if Texts.same_text(s.items[i], t)
+      i = i + 1
+    }
+    append(s, t)
+    int(i + 16)
+  }
+  static cw_symbol_count => int((syms == 0) ? 0 : Texts.count_of(syms))
+  static count_of (l: List) => l.count
+  static cw_symbol_text (x) => at(syms, untag(x))
+  // (the name of a node's first field the program gave it, not one every node has)
+  static cw_first_member (x: Node) => ((x is Node) || (x is Applied)) ? Texts.first_named(x.fields) : None
+  static first_named (from: Field) => {
+    f := from
+    named := None
+    while f != None {
+      named = Texts.plain_name(f.name) ? f : named
+      f = f.next
+    }
+    Texts.name_of(named)
+  }
+  static plain_name (n) => (n != Symbol.key) && (n != Symbol.this) && (n != Symbol.caller) && (n != Symbol.in)
+  static name_of (f: Field) => (f === None) ? None : name_text(f.name)
+  // (a text's statements, as a grammar reads them: each, or the text each is)
+  static cw_statements_in (g, t) => mapped(parsed_statements(g, t), Symbol.statement)
+  static cw_statement_texts (g, t) => Texts.statement_texts(parsed_statements(g, t), list())
+  static statement_texts (l: List, o) => {
+    i := 0
+    while i < l.count {
+      append(o, continued_span(o, statement_span(l.items[i])))
+      i = i + 1
+    }
+    o
+  }
+}
+// (what is written out, a byte at a time (the back end's `outbyte`, after `outb`, `outn` of them): a value, a number in
+// decimals, a size before what it counts (as many bytes as it takes, seven bits each), data apart, written last, and a
+// part set aside, written later)
+Output := {
+  static cw_write (b) => outbyte(untag(b))
+  static cw_write_value (v: Text) => (v is Text) ? Output.bytes_written(v.from, v.to - v.from) : outbyte(untag(v))
+  static cw_written_at => int(outn)
+  static cw_counted => {
+    counter = counter + 1
+    int(counter - 1)
+  }
+  static cw_write_number (x) => Output.number_written((untag(x) < 0) ? 0 : untag(x))
+  static number_written (n) => {
+    d := 1
+    while (n / d) >= 10 {
+      d = d * 10
+    }
+    while d > 0 {
+      outbyte(48 + ((n / d) % 10))
+      d = d / 10
+    }
+    0
+  }
+  static bytes_written (from, n) => {
+    j := 0
+    while j < n {
+      outbyte(byte(from + j))
+      j = j + 1
+    }
+    0
+  }
+  static leb_written (n) => {
+    v := n
+    while v >= 128 {
+      outbyte((v & 127) | 128)
+      v = v >> 7
+    }
+    outbyte(v)
+  }
+  static leb_length (n) => {
+    k := 1
+    v := n >> 7
+    while v != 0 {
+      k = k + 1
+      v = v >> 7
+    }
+    k
+  }
+  static cw_sized_from (x) => Output.sized(untag(x), outn - untag(x), Output.leb_length(outn - untag(x)))
+  static sized (m, n, k) => {
+    j := outn - 1
+    while j >= m {
+      byte_put(outb + (j + k), byte(outb + j))
+      j = j - 1
+    }
+    v := n
+    i := 0
+    while i < k {
+      byte_put(outb + (m + i), ((i + 1) < k) ? ((v & 127) | 128) : (v & 127))
+      v = v >> 7
+      i = i + 1
+    }
+    outn = outn + k
+    int(outn)
+  }
+  static cw_datum (t: Text) => {
+    datab = (datab == 0) ? lasting_alloc(4194304) : datab
+    from := datan
+    j := t.from
+    while j < t.to {
+      byte_put(datab + datan, byte(j))
+      datan = datan + 1
+      j = j + 1
+    }
+    int(from)
+  }
+  static cw_data_out => {
+    Output.leb_written(datan)
+    Output.bytes_written(datab, datan)
+  }
+  static cw_aside_from (x) => {
+    asideb = (asideb == 0) ? lasting_alloc(4194304) : asideb
+    j := untag(x)
+    while j < outn {
+      byte_put(asideb + asiden, byte(outb + j))
+      asiden = asiden + 1
+      j = j + 1
+    }
+    outn = untag(x)
+    0
+  }
+  static cw_aside_out => {
+    Output.bytes_written(asideb, asiden)
+    asiden = 0
+    0
+  }
+  static cw_taken => (takent == 0) ? Output.taken_from(alloc(outn + 8)) : takent
+  static taken_from (c) => {
+    copy(c, outb, outn)
+    takent = text(c, c + outn)
+    kept()
+    outn = 0
+    takent
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

@@ -138,6 +138,10 @@ function holes_of(x) {
 function byte(q) {
   load8 q
 }
+function byte_put(q, c) {
+  q <-8 c
+  0
+}
 function char_class(c) {
   load8 (3584 + c)
 }

@@ -274,19 +274,6 @@ function image_in(b) {
 function arena_base() {
   650000000 * 2
 }
-function lasting_span(a, e) {
-  if e <= (8388608 + ((((load 4088) + 7) / 8) * 8)) {
-    return 1
-  }
-  if takent != 0 {
-    if a >= (load (takent + 4)) {
-      if e <= (load (takent + 8)) {
-        return 1
-      }
-    }
-  }
-  a >= arena_base()
-}
 function parsed_kept(g, a, e) {
   var s
   var o
@@ -546,25 +533,6 @@ function made_one(r) {
   r <- (p + 4)
   0
 }
-function logged(a) {
-  var t
-  var u
-  var n
-  if a < 8388608 {
-    return 0
-  }
-  t = load 3932
-  n = load (t + 1048)
-  if n >= 2000000 {
-    (t + 1056) <- 1
-    return 0
-  }
-  u = (load (t + 1044)) + (n * 8)
-  u <- a
-  (u + 4) <- (load a)
-  (t + 1048) <- (n + 1)
-  0
-}
 function test_begin(painted, reported) {
   var d
   var t
@@ -797,15 +765,6 @@ function shared_args(w, n) {
   (l + 4) <- n
   l
 }
-function zeroed(a, n) {
-  var i
-  i = 0
-  while i < n {
-    (a + i) <- 0
-    i = i + 4
-  }
-  0
-}
 function seeded(t) {
   if csyms == 0 {
     csyms = list()
@@ -821,19 +780,6 @@ function seeded(t) {
     4084 <- 2
   }
   append(csyms, t)
-  0
-}
-function roomy(l, k) {
-  var d
-  var c
-  c = load (l + 4)
-  if ((load (l + 8)) - c) < k {
-    touched_by(l, l + 12, free)
-    d = alloc((c + k) * 8)
-    copy(d, load (l + 12), c * 4)
-    (l + 12) <- d
-    (l + 8) <- ((c + k) * 2)
-  }
   0
 }
 function lasting_name(t) {
@@ -859,25 +805,6 @@ function lasting_name(t) {
   append(names, x)
   3944 <- f
   1
-}
-function lasting_alloc(n) {
-  var f
-  var m
-  var p
-  if free >= arena_base() {
-    return alloc(n)
-  }
-  if (load 3840) == 0 {
-    3840 <- (arena_base() + 4194304)
-  }
-  f = free
-  m = markf
-  free = load 3840
-  p = alloc(n)
-  3840 <- free
-  free = f
-  markf = m
-  p
 }
 function kept_append(l, v) {
   var s
@@ -1119,13 +1046,6 @@ function isolated_close(o, v) {
   }
   0
 }
-function written(x, w, v) {
-  touched_by(x, w, v)
-  if w < (load 3944) {
-    logged(w)
-  }
-  v
-}
 function stopped() {
   (load 3916) != 0
 }
@@ -1148,72 +1068,6 @@ function spun_out() {
     stopped_statement()
   } else {
     3896 <- 1
-  }
-  0
-}
-function bound_at(i) {
-  bounds + (i * 16)
-}
-function freed_back(f) {
-  free = f
-  if free <= (load 3920) {
-    3996 <- ((load 3996) + 1)
-  }
-  0
-}
-function touched_by(x, w, v) {
-  var s
-  if x >= arena_base() {
-    if (load 3844) == 0 {
-      kept()
-      return 0
-    }
-  }
-  if x < markf {
-    effects = effects + 1
-    if (pointer(v) and (v < arena_base())) and (v >= (load isostack)) {
-      s = framed()
-      while s > 0 {
-        if x < (load (isostack + ((s - 1) * 12))) {
-          if v >= (load (isostack + ((s - 1) * 12))) {
-            if (load (isostack + ((s - 1) * 12))) < 536870912 {
-              if (load (isostack + (((s - 1) * 12) + 8))) == 0 {
-                (isostack + (((s - 1) * 12) + 8)) <- 1
-              }
-            } else {
-              pin_slot(s - 1, w)
-            }
-            s = 0
-          } else {
-            s = s - 1
-          }
-        } else {
-          s = 0
-        }
-      }
-    }
-  }
-  0
-}
-function touched(x) {
-  var s
-  if x >= arena_base() {
-    if (load 3844) == 0 {
-      kept()
-      return 0
-    }
-  }
-  if x < markf {
-    effects = effects + 1
-    s = framed()
-    while s > 0 {
-      if x < (load (isostack + ((s - 1) * 12))) {
-        (isostack + (((s - 1) * 12) + 8)) <- 2
-        s = s - 1
-      } else {
-        s = 0
-      }
-    }
   }
   0
 }

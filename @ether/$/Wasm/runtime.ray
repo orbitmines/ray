@@ -198,24 +198,6 @@ function char_class(c) {
 function white(c) {
   (c == 32) or ((c == 10) or ((c == 9) or (c == 13)))
 }
-function partstart(p, e) {
-  var go
-  go = 1
-  while (p < e) and (go != 0) {
-    go = 0
-    if white(load8 p) {
-      p = p + 1
-      go = 1
-    }
-    if ((go == 0) and ((p + 1) < e)) and (((load8 p) == 47) and ((load8 (p + 1)) == 47)) {
-      while (p < e) and ((load8 p) != 10) {
-        p = p + 1
-      }
-      go = 1
-    }
-  }
-  p
-}
 function outbyte(b) {
   if outb == 0 {
     outb = lasting_alloc(16777216)
@@ -224,74 +206,6 @@ function outbyte(b) {
   outn = outn + 1
   0
 }
-function file_named(t) {
-  var a
-  var e
-  var s
-  var m
-  var k
-  var r
-  if tag(t) != 4 {
-    return 0
-  }
-  s = load (t + 4)
-  m = load (t + 8)
-  while (s < m) and white(load8 s) {
-    s = s + 1
-  }
-  while (m > s) and white(load8 (m - 1)) {
-    m = m - 1
-  }
-  a = 8388608
-  e = 8388608 + (load 4088)
-  while (a < e) and ((load8 a) != 0) {
-    a = a + 1
-  }
-  a = a + 1
-  while a < e {
-    k = a
-    while ((k < e) and ((load8 k) != 10)) and ((load8 k) != 0) {
-      k = k + 1
-    }
-    r = k
-    while (r < e) and ((load8 r) != 0) {
-      r = r + 1
-    }
-    if (k < e) and ((load8 k) == 10) {
-      if ((k - a) == (m - s)) and texteq(a, s, m - s) {
-        return text(k + 1, r)
-      }
-    }
-    a = r + 1
-  }
-  0
-}
-function entry_read(f) {
-  var b
-  b = lasting_alloc(16)
-  b <- f
-  (b + 4) <- 0
-  (b + 8) <- 0
-  3856 <- b
-  0
-}
-function entry_given(t) {
-  var b
-  var q
-  var r
-  b = load 3856
-  if b == 0 {
-    return 0
-  }
-  (b + 4) <- (load (t + 4))
-  (b + 8) <- (load (t + 8))
-  q = textend
-  textend = load (t + 8)
-  r = call1(load b, t)
-  textend = q
-  r
-}
-// (a step of what the text given read held: what Expression registered given nothing)
 function entry_step() {
   var l
   var x
@@ -435,46 +349,6 @@ function image_in(b) {
   isostack = load (b + 104)
   isodepth = load (b + 108)
   0
-}
-function input_part(i) {
-  var a
-  var e
-  var k
-  a = 8388608
-  e = 8388608 + (load 4088)
-  k = untag(i)
-  while k > 0 {
-    while (a < e) and ((load8 a) != 0) {
-      a = a + 1
-    }
-    a = a + 1
-    k = k - 1
-  }
-  k = a
-  while (k < e) and ((load8 k) != 0) {
-    k = k + 1
-  }
-  text(a, k)
-}
-function parsed_statements(g, t) {
-  var l
-  if tag(g) == 4 {
-    g = grammar_of(g)
-  }
-  if tag(t) != 4 {
-    return list()
-  }
-  t = cw_trimmed(t)
-  if (load (t + 8)) == (load (t + 4)) {
-    return list()
-  }
-  if lasting_span(load (t + 4), load (t + 8)) {
-    return parsed_kept(g, load (t + 4), load (t + 8))
-  }
-  l = list()
-  append(l, g)
-  append(l, t)
-  call(parserhook, l, 0)
 }
 function arena_base() {
   650000000 * 2

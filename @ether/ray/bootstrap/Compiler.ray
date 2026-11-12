@@ -2061,6 +2061,83 @@ Turns := {
     l.count = l.count - 1
   }
 }
+// Entry (`level entry …`): the input is parts, each ended by a zero byte (the program, the runtime, then files, each
+// its name, a line end, and what it holds); where a part's text begins (past white and `//` lines); a file by its name;
+// the i-th part; the entry's reader, given a text to read; the statements of a text, as a grammar reads them.
+Entry := {
+  static Reader := (aside, reader, from, to)
+  static entered_at := 3856
+  static partstart (p, e) => {
+    q := p
+    while (q < e) && (white(byte(q)) || Entry.comment_at(q, e)) {
+      q = white(byte(q)) ? (q + 1) : Entry.to_line_end(q, e)
+    }
+    q
+  }
+  static comment_at (q, e) => ((q + 1) < e) && (byte(q) == 47) && (byte(q + 1) == 47)
+  static to_line_end (q, e) => {
+    k := q
+    while (k < e) && (byte(k) != 10) {
+      k = k + 1
+    }
+    k
+  }
+  static zero_from (a, e) => {
+    q := a
+    while (q < e) && (byte(q) != 0) {
+      q = q + 1
+    }
+    q
+  }
+  static file_named (t: Text) => (t is Text) ? Entry.file_in(Texts.trimmed_text(t.from, t.to), Entry.zero_from(program_from(), program_from() + program_length()) + 1, program_from() + program_length()) : None
+  static file_in (n: Text, a, e) => {
+    q := a
+    while q < e {
+      return text(Entry.name_end(q, e) + 1, Entry.zero_from(q, e)) if Entry.names_file(n, q, Entry.name_end(q, e), e)
+      q = Entry.zero_from(q, e) + 1
+    }
+    None
+  }
+  static name_end (q, e) => {
+    k := q
+    while (k < e) && (byte(k) != 10) && (byte(k) != 0) {
+      k = k + 1
+    }
+    k
+  }
+  static names_file (n: Text, a, k, e) => (k < e) && (byte(k) == 10) && ((k - a) == (n.to - n.from)) && texteq(a, n.from, n.to - n.from)
+  static input_part (i) => Entry.part_text(Entry.part_from(program_from(), program_from() + program_length(), untag(i)), program_from() + program_length())
+  static part_from (a, e, k) => {
+    q := a
+    n := k
+    while n > 0 {
+      q = Entry.zero_from(q, e) + 1
+      n = n - 1
+    }
+    q
+  }
+  static part_text (a, e) => text(a, Entry.zero_from(a, e))
+  static entry_read (f) => Entry.reader_made(lasting_alloc(16), f)
+  static reader_made (b: Reader, f) => {
+    b.reader = f
+    b.from = 0
+    b.to = 0
+    word_put(entered_at, b)
+    0
+  }
+  static entry_given (t: Text) => (word_of(entered_at) == 0) ? 0 : Entry.entry_called(word_of(entered_at), t, textend)
+  static entry_called (b: Reader, t: Text, q) => {
+    b.from = t.from
+    b.to = t.to
+    textend = t.to
+    r := call1(b.reader, t)
+    textend = q
+    r
+  }
+  static parsed_statements (g, t) => Entry.parsed_in((g is Text) ? grammar_of(g) : g, t)
+  static parsed_in (g, t) => (t is Text) ? Entry.parsed_trimmed(g, cw_trimmed(t)) : list()
+  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : ((lasting_span(t.from, t.to) != 0) ? parsed_kept(g, t.from, t.to) : call(parserhook, append(append(list(), g), t), 0))
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

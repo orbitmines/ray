@@ -456,8 +456,9 @@ Lowered := {
     Lowered.w(nl)
   }
   static local_in (le, ln) => le.empty ? false : ((le.first.first == ln) ? true : Lowered.local_in(le.rest, ln))
-  // (`Runtime.x`: x, a function or constant of it; else a field, read where the value's kind holds it)
-  static member (mf, mn, me) => (Compiled.trimmed(mf) == `Runtime`) ? Lowered.leaf(mn, Array.new) : Lowered.field_read(mf, mn, me)
+  // (`Runtime.x`: x, a function or constant of it; `Symbol.x`, the number the name x is known by; else a field, read
+  // where the value's kind holds it)
+  static member (mf, mn, me) => (Compiled.trimmed(mf) == `Runtime`) ? Lowered.leaf(mn, Array.new) : ((Compiled.trimmed(mf) == `Symbol`) ? High.number(level cw_symbol_of (mn)) : Lowered.field_read(mf, mn, me))
   static field_read (rf, rn, re) => {
     Lowered.w("(load ")
     Lowered.field_at(rf, rn, re)

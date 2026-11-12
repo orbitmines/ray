@@ -3346,6 +3346,25 @@ function isolated_close(o, v) {
   }
   0
 }
+function written(x, w, v) {
+  touched_by(x, w, v)
+  if w < (load 3944) {
+    logged(w)
+  }
+  v
+}
+function noted_field(n, e) {
+  if (load n) == 1 {
+    if (load (n + 16)) != 0 {
+      if ((load ((load (n + 16)) + 4)) * 2) >= (load (load (n + 16))) {
+        indexed(n)
+      } else {
+        index_in(load (n + 16), e)
+      }
+    }
+  }
+  0
+}
 function stored(n, w, v) {
   if v >= arena_base() {
     if n < markf {

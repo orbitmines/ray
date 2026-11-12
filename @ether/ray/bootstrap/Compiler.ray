@@ -397,7 +397,7 @@ Lowered := {
     Lowered.w(fn)
     Lowered.w("(")
     Lowered.joined_names(fp.map((p) => p.first))
-    Lowered.w(") {\n")
+    Lowered.w(") {\n  ")
     Lowered.body(fb, fp)
     Lowered.w("\n}\n")
   }
@@ -407,17 +407,17 @@ Lowered := {
   static statement (sf, sr, se) => (Lowered.kind(sf) == `def_name`) ? Lowered.local(Compiled.trimmed(Lowered.parsed(sf).def_name), None, Lowered.parsed(sf).def_value, sr, se) : ((Lowered.kind(sf) == `typed_name`) ? Lowered.local(Compiled.trimmed(Lowered.parsed(sf).typed_name), Compiled.trimmed(Lowered.parsed(sf).typed_type), Lowered.parsed(sf).typed_value, sr, se) : Lowered.statement_then(sf, sr, se))
   static statement_then (sf, sr, se) => {
     Lowered.expression(sf, se)
-    Lowered.w("\n")
+    Lowered.w("\n  ")
     Lowered.statements(sr, se) if !sr.empty
   }
   static local (ln, lt, lv, lr, le) => {
     Lowered.w("var ")
     Lowered.named_local(ln)
-    Lowered.w("\n")
+    Lowered.w("\n  ")
     Lowered.named_local(ln)
     Lowered.w(" = ")
     Lowered.expression(lv, le)
-    Lowered.w("\n")
+    Lowered.w("\n  ")
     Lowered.statements(lr, [[ln, lt ?? Lowered.type_of(lv, le)]].joined(le))
   }
   // (the kind of what an expression answers, where it says: a parameter's or local's, a field's, a kind made)
@@ -436,9 +436,11 @@ Lowered := {
   static shaped (st, sk, sp, se) => (sk == `leaf`) ? (Compiled.bracketed(st) ? Lowered.grouped(Compiled.inner_of(st), se) : (Compiled.braced(st) ? Lowered.body(st, se) : Lowered.leaf(st, se))) : ((sk == `member_from`) ? Lowered.member(sp.member_from, Compiled.trimmed(sp.member_name), se) : ((sk == `indexed_of`) ? Lowered.indexed(sp.indexed_of, sp.index_at, se) : ((sk == `call_of`) ? Lowered.call(Compiled.trimmed(sp.call_of), sp.call_arguments, se) : ((sk == `called_of`) ? Lowered.call(Compiled.trimmed(sp.called_of), "", se) : Lowered.shaped_ops(st, sk, sp, se)))))
   static shaped_ops (st, sk, sp, se) => (sk == `group_code`) ? Lowered.grouped(sp.group_code, se) : ((sk == `choice_if`) ? Lowered.choice(sp.choice_if, sp.choice_yes, sp.choice_no, se) : ((sk == `equal_left`) ? Lowered.op(sp.equal_left, "==", sp.equal_right, se) : ((sk == `same_left`) ? Lowered.op(sp.same_left, "==", sp.same_right, se) : ((sk == `ne_left`) ? Lowered.op(sp.ne_left, "!=", sp.ne_right, se) : ((sk == `add_left`) ? Lowered.op(sp.add_left, "+", sp.add_right, se) : ((sk == `sub_left`) ? Lowered.op(sp.sub_left, "-", sp.sub_right, se) : ((sk == `mul_left`) ? Lowered.op(sp.mul_left, "*", sp.mul_right, se) : Lowered.shaped_more(st, sk, sp, se))))))))
   static shaped_more (st, sk, sp, se) => (sk == `div_left`) ? Lowered.op(sp.div_left, "/", sp.div_right, se) : ((sk == `rem_left`) ? Lowered.op(sp.rem_left, "%", sp.rem_right, se) : ((sk == `lt_left`) ? Lowered.op(sp.lt_left, "<", sp.lt_right, se) : ((sk == `gt_left`) ? Lowered.op(sp.gt_left, ">", sp.gt_right, se) : ((sk == `le_left`) ? Lowered.op(sp.le_left, "<=", sp.le_right, se) : ((sk == `ge_left`) ? Lowered.op(sp.ge_left, ">=", sp.ge_right, se) : ((sk == `shl_left`) ? Lowered.op(sp.shl_left, "<<", sp.shl_right, se) : ((sk == `shr_left`) ? Lowered.op(sp.shr_left, ">>", sp.shr_right, se) : Lowered.shaped_logic(st, sk, sp, se))))))))
-  static shaped_logic (st, sk, sp, se) => (sk == `land_left`) ? Lowered.choice(sp.land_left, sp.land_right, `0`, se) : ((sk == `lor_left`) ? Lowered.choice(sp.lor_left, `1`, sp.lor_right, se) : ((sk == `not_of`) ? Lowered.op(sp.not_of, "==", `0`, se) : ((sk == `is_left`) ? Lowered.is(sp.is_left, Compiled.trimmed(sp.is_type), se) : ((sk == `set_place`) ? Lowered.set(sp.set_place, sp.set_value, se) : ((sk == `if_value`) ? Lowered.when(sp.if_condition, sp.if_value, se) : Lowered.passed(st, sk, sp, se))))))
+  static shaped_logic (st, sk, sp, se) => (sk == `and_left`) ? Lowered.op(sp.and_left, "and", sp.and_right, se) : ((sk == `alt_left`) ? Lowered.op(sp.alt_left, "or", sp.alt_right, se) : Lowered.shaped_logic_more(st, sk, sp, se))
+  static shaped_logic_more (st, sk, sp, se) => (sk == `land_left`) ? Lowered.choice(sp.land_left, sp.land_right, `0`, se) : ((sk == `lor_left`) ? Lowered.choice(sp.lor_left, `1`, sp.lor_right, se) : ((sk == `not_of`) ? Lowered.op(sp.not_of, "==", `0`, se) : ((sk == `is_left`) ? Lowered.is(sp.is_left, Compiled.trimmed(sp.is_type), se) : ((sk == `set_place`) ? Lowered.set(sp.set_place, sp.set_value, se) : ((sk == `if_value`) ? Lowered.when(sp.if_condition, sp.if_value, se) : Lowered.passed(st, sk, sp, se))))))
   // (the back end's own forms, `while`, `return`, `load`, `x <- v`: as they are, what they hold lowered)
-  static passed (pt, pk, pp, pe) => (pk == `while_condition`) ? Lowered.looped(pp.while_condition, pp.while_block, pe) : ((pk == `return_value`) ? Lowered.prefixed("return ", pp.return_value, pe) : ((pk == `load_at`) ? Lowered.prefixed("load ", pp.load_at, pe) : ((pk == `store_at`) ? Lowered.op(pp.store_at, "<-", pp.store_value, pe) : (Compiled.braced(pt) ? Lowered.body(pt, pe) : High.unknown(pk)))))
+  static passed (pt, pk, pp, pe) => (pk == `while_condition`) ? Lowered.looped(pp.while_condition, pp.while_block, pe) : ((pk == `return_value`) ? Lowered.prefixed("return ", pp.return_value, pe) : ((pk == `load_at`) ? Lowered.loaded("load", pp.load_at, pe) : ((pk == `store_at`) ? Lowered.op(pp.store_at, "<-", pp.store_value, pe) : Lowered.passed_bytes(pt, pk, pp, pe))))
+  static passed_bytes (pt, pk, pp, pe) => (pk == `load8_at`) ? Lowered.loaded("load8", pp.load8_at, pe) : ((pk == `store8_at`) ? Lowered.op(pp.store8_at, "<-8", pp.store8_value, pe) : (Compiled.braced(pt) ? Lowered.body(pt, pe) : High.unknown(pk)))
   static leaf (lt, le) => Lowered.local_in(le, lt) ? Lowered.named_local(lt) : ((Lowered.named_in(Lowered.constants, lt) === None) ? Lowered.w(lt) : Lowered.w(Lowered.named_in(Lowered.constants, lt).last))
   // (a parameter's or local's name, `the_x`: apart from any function's, which the back end reads alike whatever the case)
   static named_local (nl) => {
@@ -449,33 +451,62 @@ Lowered := {
   // (`Runtime.x`: x, a function or constant of it; else a field, read where the value's kind holds it)
   static member (mf, mn, me) => (Compiled.trimmed(mf) == `Runtime`) ? Lowered.leaf(mn, Array.new) : Lowered.field_read(mf, mn, me)
   static field_read (rf, rn, re) => {
-    Lowered.w("(load (")
-    Lowered.expression(rf, re)
-    Lowered.w(" + ")
-    High.number(Lowered.offset(Lowered.field_holder(Lowered.type_of(rf, re), rn), rn))
-    Lowered.w("))")
+    Lowered.w("(load ")
+    Lowered.field_at(rf, rn, re)
+    Lowered.w(")")
   }
   static indexed (xf, xi, xe) => {
-    Lowered.w("(load (")
-    Lowered.expression(xf, xe)
-    Lowered.w(" + (")
-    Lowered.expression(xi, xe)
-    Lowered.w(" * 4)))")
+    Lowered.w("(load ")
+    Lowered.word_at(xf, xi, xe)
+    Lowered.w(")")
   }
-  // (a field given: written where the value's kind holds it; a local given, given)
-  static set (sp, sv, se) => (Lowered.kind(sp) == `member_from`) ? Lowered.field_set(Lowered.parsed(sp).member_from, Compiled.trimmed(Lowered.parsed(sp).member_name), sv, se) : Lowered.op(sp, "=", sv, se)
-  static field_set (ff, fn, fv, fe) => {
-    Lowered.w("((")
+  static field_at (ff, fn, fe) => {
+    Lowered.w("(")
     Lowered.expression(ff, fe)
     Lowered.w(" + ")
     High.number(Lowered.offset(Lowered.field_holder(Lowered.type_of(ff, fe), fn), fn))
-    Lowered.w(") <- ")
-    Lowered.expression(fv, fe)
     Lowered.w(")")
   }
+  static word_at (xf, xi, xe) => {
+    Lowered.w("(")
+    Lowered.expression(xf, xe)
+    Lowered.w(" + (")
+    Lowered.expression(xi, xe)
+    Lowered.w(" * 4))")
+  }
+  // (a field or a word given: written where it is held; a local given, given. In memory a run manages (`managed`, a
+  // level), what is written goes by the back end's `written`, told what holds the word, where it is, and what)
+  static managed := true
+  static set (sp, sv, se) => (Lowered.kind(sp) == `member_from`) ? Lowered.word_set(Lowered.parsed(sp).member_from, sp, sv, se) : ((Lowered.kind(sp) == `indexed_of`) ? Lowered.word_set(Lowered.parsed(sp).indexed_of, sp, sv, se) : Lowered.local_set(sp, sv, se))
+  static word_set (wh, wp, wv, we) => {
+    Lowered.place(wp, we)
+    Lowered.w(" <- ")
+    Lowered.managed ? Lowered.written(wh, wp, wv, we) : Lowered.expression(wv, we)
+  }
+  static local_set (lp, lv, le) => {
+    Lowered.expression(lp, le)
+    Lowered.w(" = ")
+    Lowered.expression(lv, le)
+  }
+  static written (wh, wp, wv, we) => {
+    Lowered.w("written(")
+    Lowered.expression(wh, we)
+    Lowered.w(", ")
+    Lowered.place(wp, we)
+    Lowered.w(", ")
+    Lowered.expression(wv, we)
+    Lowered.w(")")
+  }
+  static place (pp, pe) => (Lowered.kind(pp) == `member_from`) ? Lowered.field_at(Lowered.parsed(pp).member_from, Compiled.trimmed(Lowered.parsed(pp).member_name), pe) : Lowered.word_at(Lowered.parsed(pp).indexed_of, Lowered.parsed(pp).index_at, pe)
   // (a call: a kind made, its fields given by name, the rest none; a function of the runtime, given what it is given)
   static call (cn, ca, ce) => Lowered.call_named(((Lowered.kind(cn) == `member_from`) && (Compiled.trimmed(Lowered.parsed(cn).member_from) == `Runtime`)) ? Compiled.trimmed(Lowered.parsed(cn).member_name) : cn, ((Compiled.trimmed(ca)).count == 0) ? Array.new : Compiled.parts(ca), ce)
-  static call_named (cn, cp, ce) => (Lowered.named(cn) === None) ? Lowered.applied(cn, cp, ce) : Lowered.made(Lowered.named(cn), cp, ce)
+  static call_named (cn, cp, ce) => (cn == `Words`) ? Lowered.room_for(cp.first, ce) : ((Lowered.named(cn) === None) ? Lowered.applied(cn, cp, ce) : Lowered.made(Lowered.named(cn), cp, ce))
+  // (`Words(n)`: room for n words, of the memory a run manages)
+  static room_for (wn, we) => {
+    Lowered.w("alloc((")
+    Lowered.expression(wn, we)
+    Lowered.w(" * 4))")
+  }
   static applied (an, ap, ae) => {
     Lowered.w(an)
     Lowered.w("(")
@@ -522,25 +553,32 @@ Lowered := {
   static choice (ci, cy, cn, ce) => {
     Lowered.w("if (")
     Lowered.expression(ci, ce)
-    Lowered.w(") {\n")
+    Lowered.w(") {\n  ")
     Lowered.expression(cy, ce)
-    Lowered.w("\n} else {\n")
+    Lowered.w("\n  } else {\n  ")
     Lowered.expression(cn, ce)
-    Lowered.w("\n}")
+    Lowered.w("\n  }")
   }
   static when (wc, wv, we) => {
     Lowered.w("if (")
     Lowered.expression(wc, we)
-    Lowered.w(") {\n")
+    Lowered.w(") {\n  ")
     Lowered.expression(wv, we)
-    Lowered.w("\n}")
+    Lowered.w("\n  }")
   }
   static looped (lc, lb, le) => {
     Lowered.w("while (")
     Lowered.expression(lc, le)
-    Lowered.w(") {\n")
-    Lowered.body(lb, le)
-    Lowered.w("\n}")
+    Lowered.w(") {\n  ")
+    Lowered.statements(Compiled.statements_of(lb), le)
+    Lowered.w("\n  }")
+  }
+  static loaded (lw, lv, le) => {
+    Lowered.w("(")
+    Lowered.w(lw)
+    Lowered.w(" ")
+    Lowered.expression(lv, le)
+    Lowered.w(")")
   }
   static prefixed (pw, pv, pe) => {
     Lowered.w(pw)

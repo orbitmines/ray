@@ -32,15 +32,18 @@ Runtime := {
   // given; and its fields indexed by name, once it holds many.
   static Node := (1, in: Node, fields: Field, keys: List, index)
   static Field := (next: Field, name, value)
-  // (what it holds by that name, or what it is in holds; none anywhere, nothing)
-  static lookup (node: Node, name) => (node === None) ? None : Runtime.held(own(node, name), node, name)
-  static held (field: Field, node: Node, name) => (field === None) ? Runtime.lookup(node.in, name) : field.value
-
+  // (the field of a name: its own, or what it is in has; none anywhere, nothing. What it holds by a name is its own field
+  // of it, `own`)
+  static found (node: Node, name) => (node === None) ? None : Runtime.found_in(own(node, name), node, name)
+  static found_in (field: Field, node: Node, name) => (field === None) ? Runtime.found(node.in, name) : field
+  static lookup (node: Node, name) => Runtime.value_of(Runtime.found(node, name))
+  static value_of (field: Field) => (field === None) ? None : field.value
+  // (a name given a value in the node itself: a field of it added, the latest, unless it has one; or where it is found,
+  // else in the node. A level may note each field added: Compiler.ray's index of a node's fields, `noted_field`)
   // A list: how many it holds, how many it has room for, and what it holds, one word each.
   static List := (3, count, room, items: Words)
   static list => List()
   static at (list: List, index) => list.items[index]
-
   // A function as a value: what it runs, the node it was written in, and how it is called (0 as it is, 1 read as a value:
   // a getter); a class, the same, its header in place of how it is called.
   static Closure := (2, function, env, called)

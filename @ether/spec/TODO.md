@@ -321,6 +321,16 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
 - **Compiler.ray's own levels** (`Texts`, `Output`: the cw_* helpers) are written before `Lowered :=` and given with
   Runtime.ray as input part 3 (`.entrypoint.mjs` `lowered_input`); runtime.ray is at 5300 lines. Low reads no `if` as
   an operand (`q + (c ? 2 : 1)` became `unreachable`): write `c ? q + 2 : q + 1`.
+- **More levels** (after `Output`): `Splices` (spliced, spliced_entry, take_named, holds_text, separator_of, copied),
+  `Readings` (equal, readtext, mapped_text, mapped_structure), `Keys` (a key's pattern, its lead, literals in a text,
+  moved_keys, keys_version), `Caches` (keys_reading, keys_read, led_keys: translated as they were, removable; without
+  them `--test` is about 30% slower), `Pairs` (paired, pair_set, unpaired, closing, open_before, block_closed). Back-end
+  hooks they use: `word_of`, `word_put`, `in_program`, `keys_moved`, `class_put`, `classes_changed`, `taken_*`.
+  Left in runtime.ray: in_turn/read_again, occurs/based_index, pair_end's cache, memory, entry/IO, tests and paints,
+  with_locals.
+- **Reading a call statement fails before some lines** (revision 136, `--test` on a file of them): `f(g(r), g(r + 4))`
+  followed by `h()` on the next line is unread (`f(g(r), 4)` reads); `A.into(t, cap, oe, l, o)` followed by
+  `text(o, o + n)` is unread (followed by `o` it reads) when `into` takes five parameters, two typed.
 - **Lowered pitfalls, more**: `x = v if c` reads as `x = (v if c)` (write `x = c ? v : x`); in the debug printer the
   symbol numbers differ (High.program seeds them first); a kind with many fields must be `aside` or Low has no type.
 - **A lowering feature takes a revision before Runtime.ray can use it**: revision N's runtime is lowered by revision

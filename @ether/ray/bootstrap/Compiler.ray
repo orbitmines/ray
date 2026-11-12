@@ -597,11 +597,8 @@ Splices := {
   }
   static spliced (t: Text, cap: Text, l) => ((t is Text) && (cap is Text) && (l is List) && Splices.capture_ok(cap, Splices.opening_end_at(cap.from, cap.to))) ? Splices.spliced_as(t, cap, Splices.opening_end_at(cap.from, cap.to), l, Splices.spliced_whole(t, cap, Splices.opening_end_at(cap.from, cap.to), l)) : t
   static spliced_as (t, cap, oe, l, whole) => (whole != None) ? whole : Splices.spliced_out(t, cap, oe, l, Splices.spliced_into(t, cap, oe, l, 0))
-  static spliced_out (t, cap, oe, l, n) => Splices.spliced_written(t, cap, oe, l, n, alloc_bytes(n + 8))
-  static spliced_written (t, cap, oe, l, n, o) => {
-    Splices.spliced_into(t, cap, oe, l, o)
-    text(o, o + n)
-  }
+  static spliced_out (t, cap, oe, l, n) => Splices.spliced_written(t, cap, oe, l, alloc_bytes(n + 8))
+  static spliced_written (t, cap, oe, l, o) => text(o, o + Splices.spliced_into(t, cap, oe, l, o))
   // (how long the text is with each name taken, written to out unless it is 0)
   static spliced_into (t: Text, cap: Text, oe, l, out) => {
     n := 0
@@ -977,6 +974,133 @@ Caches := {
     word_put(a + (4 + (k * 8)), e)
     word_put(a + (8 + (k * 8)), Keys.lead_byte(p))
     k + 1
+  }
+}
+// Pairs (`level paired …`): which bytes pair, learned from a capture's uses (`open close`, the bytes just around each,
+// neither white nor of a word: the same both a quote, else an opening and a closing bracket), each noted with where
+// it was learned so it can be forgotten again (`unpaired`); whether a pair is open before a place; where a block,
+// opened at the end of a line, is closed by a line beginning with a closing.
+Pairs := {
+  static pairs_at := 3988
+  static paired (t: Text, cap: Text, home) => ((t is Text) && (cap is Text)) ? Pairs.paired_by(t, cap, Splices.opening_end_at(cap.from, cap.to), home) : None
+  static paired_by (t: Text, cap: Text, oe, home) => ((oe == cap.from) || ((oe + 1) >= cap.to)) ? None : Pairs.paired_in(t, cap, oe, home)
+  static paired_in (t: Text, cap: Text, oe, home) => {
+    q := t.from
+    while q < t.to {
+      q = (at_text(q, t.to, cap.from, oe) != 0) ? Pairs.pair_at(t, cap, oe, home, q, Splices.found_from(q + (oe - cap.from), t.to, oe + 1, cap.to)) : (q + 1)
+    }
+    None
+  }
+  static pair_at (t: Text, cap: Text, oe, home, q, r) => (r >= t.to) ? t.to : Pairs.pair_after(t, cap, home, q, r + (cap.to - (oe + 1)))
+  static pair_after (t: Text, cap: Text, home, q, r) => {
+    Pairs.pair_between(cap, home, Pairs.before_byte(t, cap, q), Pairs.after_byte(t, cap, r)) if (q > t.from) && (r < t.to)
+    r
+  }
+  static before_byte (t: Text, cap: Text, q) => ((byte(q - 1) == byte(cap.to - 1)) && ((q - 4) >= t.from)) ? Pairs.quoted_in(q - 4, byte(q - 1)) : byte(q - 1)
+  static after_byte (t: Text, cap: Text, r) => ((byte(r) == byte(cap.from)) && ((r + 4) <= t.to)) ? Pairs.quoted_in(r, byte(r)) : byte(r)
+  // (a quoted byte, `'x'`, around a capture: the byte quoted)
+  static quoted_in (h, c) => ((byte(h + 1) == byte(h + 3)) && (char_class(byte(h + 1)) == 2)) ? byte(h + 2) : c
+  static pair_between (cap: Text, home, b, c) => {
+    Pairs.pair_classed(home, b, c) if (white(b) == 0) && (white(c) == 0) && (word_byte(b) == 0) && (word_byte(c) == 0) && (b != byte(cap.to - 1)) && (c != byte(cap.from))
+    0
+  }
+  static pair_classed (home, b, c) => (b == c) ? Pairs.pair_set(b, 2, home) : (((char_class(b) == 0) && (char_class(c) == 0)) ? Pairs.both_set(b, c, home) : 0)
+  static both_set (b, c, home) => {
+    Pairs.pair_set(b, 1, home)
+    Pairs.pair_set(c, 3, home)
+  }
+  static pair_set (c, k, home) => {
+    Pairs.class_noted(Pairs.pairs_log(), c, home)
+    class_put(c, k)
+    classes_changed()
+  }
+  static pairs_log => (word_of(pairs_at) == 0) ? Pairs.log_made() : word_of(pairs_at)
+  static log_made => {
+    b := lasting_alloc(65536)
+    word_put(b, 0)
+    word_put(pairs_at, b)
+    b
+  }
+  static class_noted (b, c, home) => {
+    Pairs.class_logged(b, word_of(b), c, home) if word_of(b) < 5460
+    0
+  }
+  static class_logged (b, n, c, home) => {
+    word_put(b + (4 + (n * 12)), c)
+    word_put(b + (8 + (n * 12)), char_class(c))
+    word_put(b + (12 + (n * 12)), home)
+    word_put(b, n + 1)
+  }
+  static unpaired (home) => (word_of(pairs_at) == 0) ? 0 : Pairs.unpaired_in(word_of(pairs_at), home)
+  static unpaired_in (b, home) => {
+    n := word_of(b)
+    while (n > 0) && (word_of(b + (12 + ((n - 1) * 12))) == home) {
+      Pairs.class_restored(b + (4 + ((n - 1) * 12)))
+      n = n - 1
+    }
+    word_put(b, n)
+    0
+  }
+  static class_restored (r) => Pairs.class_back(word_of(r), word_of(r + 4))
+  static class_back (c, k) => {
+    class_put(c, k)
+    classes_changed()
+  }
+  // (a capture's opening an opening bracket, unless it is of a class already, and its closing's last byte a closing)
+  static closing (cap: Text) => (cap is Text) ? Pairs.closing_by(cap, Splices.opening_end_at(cap.from, cap.to)) : 0
+  static closing_by (cap: Text, oe) => {
+    Pairs.closing_set(cap) if (oe > cap.from) && ((oe + 1) < cap.to)
+    0
+  }
+  static closing_set (cap: Text) => {
+    class_put(byte(cap.from), 1) if char_class(byte(cap.from)) == 0
+    class_put(byte(cap.to - 1), 3)
+  }
+  static opener (c) => (c == 40) || (c == 91) || (c == 123)
+  static closer (c) => (c == 41) || (c == 93) || (c == 125)
+  static open_before (a, n) => {
+    q := a
+    while q < n {
+      q = Pairs.past_pair(q, n, Runtime.class_at(q))
+    }
+    (q > n) ? 1 : 0
+  }
+  static past_pair (q, n, k) => ((k == 1) || (k == 2)) ? Pairs.pair_within(pair_end(q), n) : (q + 1)
+  static pair_within (r, n) => ((r == 0) || (r > n)) ? (n + 1) : r
+  static block_closed (a, n) => {
+    d := 0
+    q := a
+    while q < textend {
+      return 0 if (q >= n) && (d <= 0)
+      return Pairs.spaces_past(q) + 1 if Pairs.closed_here(Pairs.spaces_past(q), d, n)
+      d = Pairs.opened_after(q, Pairs.line_end_from(Pairs.spaces_past(q)), Pairs.closed_at(Pairs.spaces_past(q), d))
+      q = Pairs.line_end_from(Pairs.spaces_past(q)) + 1
+    }
+    0
+  }
+  static closed_at (f, d) => ((f < textend) && (char_class(byte(f)) == 3)) ? (d - 1) : d
+  static closed_here (f, d, n) => (f >= n) && (f < textend) && (char_class(byte(f)) == 3) && ((d - 1) == 0)
+  static opened_after (q, l, d) => ((Pairs.spaces_back(q, l) > q) && (pair_class(Pairs.spaces_back(q, l) - 1) == 1)) ? (d + 1) : d
+  static spaces_past (q) => {
+    f := q
+    while (f < textend) && ((byte(f) == 32) || (byte(f) == 9)) {
+      f = f + 1
+    }
+    f
+  }
+  static line_end_from (f) => {
+    l := f
+    while (l < textend) && (byte(l) != 10) {
+      l = l + 1
+    }
+    l
+  }
+  static spaces_back (q, l) => {
+    f := l
+    while (f > q) && ((byte(f - 1) == 32) || (byte(f - 1) == 9)) {
+      f = f - 1
+    }
+    f
   }
 }
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after

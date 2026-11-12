@@ -169,6 +169,14 @@ function keys_moved() {
   3996 <- ((load 3996) + 1)
   0
 }
+function class_put(c, k) {
+  (3584 + c) <-8 k
+  0
+}
+function classes_changed() {
+  3884 <- ((load 3884) + 1)
+  0
+}
 function char_class(c) {
   load8 (3584 + c)
 }

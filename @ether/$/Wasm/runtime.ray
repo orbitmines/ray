@@ -135,6 +135,12 @@ function holes_of(x) {
   }
   l
 }
+function byte(q) {
+  load8 q
+}
+function char_class(c) {
+  load8 (3584 + c)
+}
 function white(c) {
   (c == 32) or ((c == 10) or ((c == 9) or (c == 13)))
 }

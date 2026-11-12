@@ -439,7 +439,7 @@ Lowered := {
   static shaped_logic (st, sk, sp, se) => (sk == `and_left`) ? Lowered.op(sp.and_left, "and", sp.and_right, se) : ((sk == `alt_left`) ? Lowered.op(sp.alt_left, "or", sp.alt_right, se) : Lowered.shaped_logic_more(st, sk, sp, se))
   static shaped_logic_more (st, sk, sp, se) => (sk == `land_left`) ? Lowered.choice(sp.land_left, sp.land_right, `0`, se) : ((sk == `lor_left`) ? Lowered.choice(sp.lor_left, `1`, sp.lor_right, se) : ((sk == `not_of`) ? Lowered.op(sp.not_of, "==", `0`, se) : ((sk == `is_left`) ? Lowered.is(sp.is_left, Compiled.trimmed(sp.is_type), se) : ((sk == `set_place`) ? Lowered.set(sp.set_place, sp.set_value, se) : ((sk == `if_value`) ? Lowered.when(sp.if_condition, sp.if_value, se) : Lowered.passed(st, sk, sp, se))))))
   // (the back end's own forms, `while`, `return`, `load`, `x <- v`: as they are, what they hold lowered)
-  static passed (pt, pk, pp, pe) => (pk == `while_condition`) ? Lowered.looped(pp.while_condition, pp.while_block, pe) : ((pk == `return_value`) ? Lowered.prefixed("return ", pp.return_value, pe) : ((pk == `load_at`) ? Lowered.loaded("load", pp.load_at, pe) : ((pk == `store_at`) ? Lowered.op(pp.store_at, "<-", pp.store_value, pe) : Lowered.passed_bytes(pt, pk, pp, pe))))
+  static passed (pt, pk, pp, pe) => (pk == `while_condition`) ? Lowered.looped(pp.while_condition, pp.while_block, pe) : ((pk == `return_value`) ? Lowered.returned(pp.return_value, pe) : ((pk == `load_at`) ? Lowered.loaded("load", pp.load_at, pe) : ((pk == `store_at`) ? Lowered.op(pp.store_at, "<-", pp.store_value, pe) : Lowered.passed_bytes(pt, pk, pp, pe))))
   static passed_bytes (pt, pk, pp, pe) => (pk == `load8_at`) ? Lowered.loaded("load8", pp.load8_at, pe) : ((pk == `store8_at`) ? Lowered.op(pp.store8_at, "<-8", pp.store8_value, pe) : (Compiled.braced(pt) ? Lowered.body(pt, pe) : High.unknown(pk)))
   static leaf (lt, le) => Lowered.local_in(le, lt) ? Lowered.named_local(lt) : ((Lowered.named_in(Lowered.constants, lt) === None) ? Lowered.w(lt) : Lowered.w(Lowered.named_in(Lowered.constants, lt).last))
   // (a parameter's or local's name, `the_x`: apart from any function's, which the back end reads alike whatever the case)
@@ -571,6 +571,15 @@ Lowered := {
     Lowered.expression(lc, le)
     Lowered.w(") {\n  ")
     Lowered.statements(Compiled.statements_of(lb), le)
+    Lowered.w("\n  }")
+  }
+  // (`return v if c`: returned only if c)
+  static returned (rv, re) => (Lowered.kind(rv) == `if_value`) ? Lowered.returned_if(Lowered.parsed(rv).if_condition, Lowered.parsed(rv).if_value, re) : Lowered.prefixed("return ", rv, re)
+  static returned_if (rc, rv, re) => {
+    Lowered.w("if (")
+    Lowered.expression(rc, re)
+    Lowered.w(") {\n  return ")
+    Lowered.expression(rv, re)
     Lowered.w("\n  }")
   }
   static loaded (lw, lv, le) => {

@@ -321,13 +321,25 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
 - **Compiler.ray's own levels** (`Texts`, `Output`: the cw_* helpers) are written before `Lowered :=` and given with
   Runtime.ray as input part 3 (`.entrypoint.mjs` `lowered_input`); runtime.ray is at 5300 lines. Low reads no `if` as
   an operand (`q + (c ? 2 : 1)` became `unreachable`): write `c ? q + 2 : q + 1`.
-- **More levels** (after `Output`): `Splices` (spliced, spliced_entry, take_named, holds_text, separator_of, copied),
-  `Readings` (equal, readtext, mapped_text, mapped_structure), `Keys` (a key's pattern, its lead, literals in a text,
-  moved_keys, keys_version), `Caches` (keys_reading, keys_read, led_keys: translated as they were, removable; without
-  them `--test` is about 30% slower), `Pairs` (paired, pair_set, unpaired, closing, open_before, block_closed). Back-end
-  hooks they use: `word_of`, `word_put`, `in_program`, `keys_moved`, `class_put`, `classes_changed`, `taken_*`.
-  Left in runtime.ray: in_turn/read_again, occurs/based_index, pair_end's cache, memory, entry/IO, tests and paints,
-  with_locals.
+- **More levels** (after `Output`, each `X := { … }` before `Lowered :=`): `Splices`, `Readings` (equal, readtext,
+  mapped_*), `Keys` (a key's pattern and lead, literals in a text, moved_keys, keys_version), `Caches` (keys_reading,
+  keys_read, led_keys; removable: without them `--test` is about 30% slower), `Pairs` (paired, unpaired, closing,
+  open_before, block_closed), `Layout` (statement spans, continuation, gaps, columns, first/last where), `Indexes`
+  (occurs and its byte-pair index, pair_end, holds_outside, the column index: removable caches), `Members`, `Calls`
+  (invoke/call_member 0–2, select, place, readsv, intern, args), `Matching` (reads, bind, index, read_with, the rules led
+  by text and their memos), `Built` (rebuilt, enclosed_holes, unread_until, cells, texteq), `Turns` (in_turn,
+  read_again), `Entry` (input parts, file_named, the entry's reader, parsed_statements). They reach the back end only
+  through named hooks in runtime.ray (`word_of`, `word_put`, `in_program`, `program_from`, `program_length`,
+  `classes_version`, `classes_changed`, `class_put`, `caches_reach`, `keys_moved`, `keys_touched`, `logging`,
+  `statements_aside`, `aside_or_none`, `turn_depth(_set)`, `fuel_floor(_set)`, `turn_begun`, `statement_over`,
+  `taken_*`), and a few addresses named as constants in the level (`leads_at` …). runtime.ray is at 2686 lines: memory
+  (regions, compaction, pins, isolation, the log), images, tests, `with_locals`, symbol scanning, `kind_of`, `own`'s
+  field index, the choice stack.
+- **Speed**: `.entrypoint.mjs` turns on V8's wasm inlining (`--experimental-wasm-inlining`): the runtime is many small
+  functions, and it halves a test run. A test run reads every bootstrap file (Compiler.ray included), so each level
+  added costs reading time: about 15 ms a line, but it jumps unevenly (two halves of a section cost far less in two
+  sections than in one, and which statics share a section changes it by 20 s): likely the direct-mapped caches
+  (`memo`, `reading_of`, keys) colliding by text position. `--test` 52→67 s, `--test-all` 28→43 s over these levels.
 - **Reading a call statement fails before some lines** (revision 136, `--test` on a file of them): `f(g(r), g(r + 4))`
   followed by `h()` on the next line is unread (`f(g(r), 4)` reads); `A.into(t, cap, oe, l, o)` followed by
   `text(o, o + n)` is unread (followed by `o` it reads) when `into` takes five parameters, two typed.

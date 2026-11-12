@@ -299,3 +299,251 @@ external member (global) (`O`) ((O === None) ? Compiler.scope_of(Compiler.defaul
 | => superposed_edge
 // (and `,` alone (`{inline: ,}`): the edge that links values)
 , => composed_edge
+// Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
+// its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
+// it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,
+// unless Runtime.ray writes one of its name.)
+Lowered := {
+  // (each kind, `[name, tag, fields]`, each field `[name, type]`; each constant, `[name, value]`; each function's name)
+  static kinds := Array.new
+  static constants := Array.new
+  static functions := Array.new
+  static w (lw) => level write lw
+  static kind (lk) => Compiled.kind_of(High.parsed_one(lk))
+  static parsed (lp) => High.parsed_one(lp)
+  // (the runtime: the old one first, where it was (a name nothing defines is read as the first function: $/Wasm/runtime.ray's
+  // `builtin` calls `noted`), then what Runtime.ray writes; of two of a name, the old one is left out, `overridden`)
+  static runtime (lr_source, lr_old) => {
+    lr_members := Lowered.members_of(lr_source)
+    lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.declared(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
+    lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.named_function(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
+    Lowered.w(lr_old)
+    Lowered.w("\n")
+    Lowered.kinds.for((k) => Lowered.constructor(k))
+    lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.defined(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
+  }
+  static named_function (nf) => (Lowered.kind(nf) == `rule_head`) ? Lowered.functions.append(Lowered.function_name(Compiled.trimmed(Lowered.parsed(nf).rule_head))) : None
+  static function_name (fh) => (Compiled.kind_of(Compiled.head_parsed(fh).first) == `applied_name`) ? Compiled.trimmed(Compiled.head_parsed(fh).first.applied_name) : fh
+  // (the functions of a module, but of a name Runtime.ray writes and the old one too, the first: the old one)
+  static overridden (os) => {
+    o_seen := Array.new
+    o_twice := Array.new
+    os.for((st) => Lowered.noted_twice(Compiled.trimmed(Low.name_of(st)), o_seen, o_twice))
+    o_left := Array.new
+    o_kept := Array.new
+    os.for((st) => Lowered.override_one(st, Compiled.trimmed(Low.name_of(st)), o_twice, o_left, o_kept))
+    o_kept
+  }
+  static noted_twice (sn, seen, twice) => ((level cw_index_of (Lowered.functions) (sn)) === None) ? None : (((level cw_index_of (seen) (sn)) === None) ? seen.append(sn) : twice.append(sn))
+  static override_one (st, sn, twice, left, kept) => (((level cw_index_of (twice) (sn)) === None) || !((level cw_index_of (left) (sn)) === None)) ? kept.append(st) : left.append(sn)
+  // (what `Runtime := { … }` holds, each `static …` in it)
+  static members_of (ms) => Compiled.statements_of(Compiled.inner_of(Compiled.trimmed(Lowered.parsed(Compiled.statements_of(ms).first).def_value)))
+  // (a kind, `X := (tag, a: T, b)`, or a constant, `X := 0`, noted before any function is written)
+  static declared (dm) => (Lowered.kind(dm) == `def_name`) ? Lowered.declared_as(Compiled.trimmed(Lowered.parsed(dm).def_name), Compiled.trimmed(Lowered.parsed(dm).def_value)) : None
+  static declared_as (dn, dv) => Compiled.bracketed(dv) ? Lowered.kind_declared(dn, Compiled.parts(Compiled.inner_of(dv))) : Lowered.constants.append([dn, dv])
+  static kind_declared (kn, kp) => ((level cw_numeral_value (kp.first)) === None) ? Lowered.kinds.append([kn, None, kp.map((f) => Lowered.field_of(f))]) : Lowered.kinds.append([kn, kp.first, kp.rest.map((f) => Lowered.field_of(f))])
+  static field_of (ff) => (Lowered.kind(ff) == `field_name`) ? [Compiled.trimmed(Lowered.parsed(ff).field_name), Compiled.trimmed(Lowered.parsed(ff).field_type)] : [Compiled.trimmed(ff), None]
+  // (a kind made, `Node_made(…)` (names are told apart without their case): as many words as it has fields, and its tag;
+  // each field given, by position)
+  static constructor (ck) => {
+    Lowered.w("function ")
+    Lowered.w(ck.first)
+    Lowered.w("_made(")
+    Lowered.given_names(ck.last)
+    Lowered.w(") {\n  var x\n  x = alloc(")
+    High.number(Lowered.words(ck) * 4)
+    Lowered.w(")\n")
+    Lowered.tag_written(ck)
+    ck.last.for((f) => Lowered.field_given(ck, f.first))
+    Lowered.w("  x\n}\n")
+  }
+  static tag_written (tk) => (tk.rest.first === None) ? None : Lowered.tag_put(tk.rest.first)
+  static tag_put (tv) => {
+    Lowered.w("  x <- ")
+    Lowered.w(tv)
+    Lowered.w("\n")
+  }
+  static field_given (gk, gf) => {
+    Lowered.w("  (x + ")
+    High.number(Lowered.offset(gk, gf))
+    Lowered.w(") <- given_")
+    Lowered.w(gf)
+    Lowered.w("\n")
+  }
+  // (each field's parameter, `given_x`: apart from any word the back end's code reads otherwise, `in`)
+  static given_names (gl) => gl.empty ? None : Lowered.given_rest(gl.first.first, gl.rest)
+  static given_rest (gf, gr) => {
+    Lowered.w("given_")
+    Lowered.w(gf)
+    Lowered.w(", ") if !gr.empty
+    Lowered.given_names(gr)
+  }
+  static words (wk) => (wk.rest.first === None) ? wk.last.count : wk.last.count + 1
+  static offset (ok, of) => (Lowered.field_index(ok.last, of, 0) + ((ok.rest.first === None) ? 0 : 1)) * 4
+  static field_index (fl, fn, fi) => fl.empty ? None : ((fl.first.first == fn) ? fi : Lowered.field_index(fl.rest, fn, fi + 1))
+  static joined_names (jn) => jn.empty ? None : Lowered.joined_rest(jn.first, jn.rest)
+  static joined_rest (jf, jr) => {
+    Lowered.named_local(jf)
+    Lowered.w(", ") if !jr.empty
+    Lowered.joined_names(jr)
+  }
+  static named (nk) => Lowered.named_in(Lowered.kinds, nk)
+  static named_in (nl, nn) => nl.empty ? None : ((nl.first.first == nn) ? nl.first : Lowered.named_in(nl.rest, nn))
+  // (a function, `f (a: T, b) => …`, written with its parameters, each of its kind if it has one)
+  static defined (fm) => (Lowered.kind(fm) == `rule_head`) ? Lowered.function(Compiled.trimmed(Lowered.parsed(fm).rule_head), Lowered.parsed(fm).rule_body) : None
+  static function (fh, fb) => (Compiled.kind_of(Compiled.head_parsed(fh).first) == `applied_name`) ? Lowered.function_as(Compiled.trimmed(Compiled.head_parsed(fh).first.applied_name), Compiled.parts(Compiled.head_parsed(fh).first.applied_params).map((p) => Lowered.field_of(p)), fb) : Lowered.function_as(Compiled.trimmed(fh), Array.new, fb)
+  static function_as (fn, fp, fb) => {
+    Lowered.w("function ")
+    Lowered.w(fn)
+    Lowered.w("(")
+    Lowered.joined_names(fp.map((p) => p.first))
+    Lowered.w(") {\n")
+    Lowered.body(fb, fp)
+    Lowered.w("\n}\n")
+  }
+  // (a body: a block's statements in turn, each local known to those after it with its kind; else one expression)
+  static body (bb, be) => Compiled.braced(Compiled.trimmed(bb)) ? Lowered.statements(Compiled.statements_of(Compiled.inner_of(Compiled.trimmed(bb))), be) : Lowered.expression(bb, be)
+  static statements (ss, se) => ss.empty ? Lowered.w("0") : Lowered.statement(ss.first, ss.rest, se)
+  static statement (sf, sr, se) => (Lowered.kind(sf) == `def_name`) ? Lowered.local(Compiled.trimmed(Lowered.parsed(sf).def_name), None, Lowered.parsed(sf).def_value, sr, se) : ((Lowered.kind(sf) == `typed_name`) ? Lowered.local(Compiled.trimmed(Lowered.parsed(sf).typed_name), Compiled.trimmed(Lowered.parsed(sf).typed_type), Lowered.parsed(sf).typed_value, sr, se) : Lowered.statement_then(sf, sr, se))
+  static statement_then (sf, sr, se) => {
+    Lowered.expression(sf, se)
+    Lowered.w("\n")
+    Lowered.statements(sr, se) if !sr.empty
+  }
+  static local (ln, lt, lv, lr, le) => {
+    Lowered.w("var ")
+    Lowered.named_local(ln)
+    Lowered.w("\n")
+    Lowered.named_local(ln)
+    Lowered.w(" = ")
+    Lowered.expression(lv, le)
+    Lowered.w("\n")
+    Lowered.statements(lr, [[ln, lt ?? Lowered.type_of(lv, le)]].joined(le))
+  }
+  // (the kind of what an expression answers, where it says: a parameter's or local's, a field's, a kind made)
+  static type_of (tx, te) => Lowered.type_shaped(Compiled.trimmed(tx), Lowered.kind(tx), Lowered.parsed(tx), te)
+  static type_shaped (tt, tk, tp, te) => (tk == `leaf`) ? Lowered.type_in(te, tt) : ((tk == `member_from`) ? Lowered.field_type(Lowered.type_of(tp.member_from, te), Compiled.trimmed(tp.member_name)) : ((tk == `call_of`) ? Lowered.made_type(Compiled.trimmed(tp.call_of)) : ((tk == `called_of`) ? Lowered.made_type(Compiled.trimmed(tp.called_of)) : ((tk == `group_code`) ? Lowered.type_of(tp.group_code, te) : None))))
+  static made_type (mt) => (Lowered.named(mt) === None) ? None : mt
+  static type_in (te, tn) => te.empty ? None : ((te.first.first == tn) ? te.first.last : Lowered.type_in(te.rest, tn))
+  static field_type (ft_kind, ft_name) => (Lowered.field_holder(ft_kind, ft_name) === None) ? None : Lowered.field_named(Lowered.field_holder(ft_kind, ft_name).last, ft_name).last
+  static field_named (fl, fn) => fl.empty ? None : ((fl.first.first == fn) ? fl.first : Lowered.field_named(fl.rest, fn))
+  // (the kind a field is read in: the one the value is, else the only kind with a field of that name)
+  static field_holder (hk, hn) => (hk === None) ? Lowered.only_holder(Lowered.holders(Lowered.kinds, hn)) : Lowered.named(hk)
+  static holders (hl, hn) => hl.empty ? Array.new : ((Lowered.field_named(hl.first.last, hn) === None) ? Lowered.holders(hl.rest, hn) : Lowered.holders(hl.rest, hn).append(hl.first))
+  static only_holder (oh) => (oh.count == 1) ? oh.first : None
+  // (an expression, by its shape)
+  static expression (ex, ee) => Lowered.shaped(Compiled.trimmed(ex), Lowered.kind(ex), Lowered.parsed(ex), ee)
+  static shaped (st, sk, sp, se) => (sk == `leaf`) ? (Compiled.bracketed(st) ? Lowered.grouped(Compiled.inner_of(st), se) : (Compiled.braced(st) ? Lowered.body(st, se) : Lowered.leaf(st, se))) : ((sk == `member_from`) ? Lowered.member(sp.member_from, Compiled.trimmed(sp.member_name), se) : ((sk == `indexed_of`) ? Lowered.indexed(sp.indexed_of, sp.index_at, se) : ((sk == `call_of`) ? Lowered.call(Compiled.trimmed(sp.call_of), sp.call_arguments, se) : ((sk == `called_of`) ? Lowered.call(Compiled.trimmed(sp.called_of), "", se) : Lowered.shaped_ops(st, sk, sp, se)))))
+  static shaped_ops (st, sk, sp, se) => (sk == `group_code`) ? Lowered.grouped(sp.group_code, se) : ((sk == `choice_if`) ? Lowered.choice(sp.choice_if, sp.choice_yes, sp.choice_no, se) : ((sk == `equal_left`) ? Lowered.op(sp.equal_left, "==", sp.equal_right, se) : ((sk == `same_left`) ? Lowered.op(sp.same_left, "==", sp.same_right, se) : ((sk == `ne_left`) ? Lowered.op(sp.ne_left, "!=", sp.ne_right, se) : ((sk == `add_left`) ? Lowered.op(sp.add_left, "+", sp.add_right, se) : ((sk == `sub_left`) ? Lowered.op(sp.sub_left, "-", sp.sub_right, se) : ((sk == `mul_left`) ? Lowered.op(sp.mul_left, "*", sp.mul_right, se) : Lowered.shaped_more(st, sk, sp, se))))))))
+  static shaped_more (st, sk, sp, se) => (sk == `div_left`) ? Lowered.op(sp.div_left, "/", sp.div_right, se) : ((sk == `rem_left`) ? Lowered.op(sp.rem_left, "%", sp.rem_right, se) : ((sk == `lt_left`) ? Lowered.op(sp.lt_left, "<", sp.lt_right, se) : ((sk == `gt_left`) ? Lowered.op(sp.gt_left, ">", sp.gt_right, se) : ((sk == `le_left`) ? Lowered.op(sp.le_left, "<=", sp.le_right, se) : ((sk == `ge_left`) ? Lowered.op(sp.ge_left, ">=", sp.ge_right, se) : ((sk == `shl_left`) ? Lowered.op(sp.shl_left, "<<", sp.shl_right, se) : ((sk == `shr_left`) ? Lowered.op(sp.shr_left, ">>", sp.shr_right, se) : Lowered.shaped_logic(st, sk, sp, se))))))))
+  static shaped_logic (st, sk, sp, se) => (sk == `land_left`) ? Lowered.choice(sp.land_left, sp.land_right, `0`, se) : ((sk == `lor_left`) ? Lowered.choice(sp.lor_left, `1`, sp.lor_right, se) : ((sk == `not_of`) ? Lowered.op(sp.not_of, "==", `0`, se) : ((sk == `is_left`) ? Lowered.is(sp.is_left, Compiled.trimmed(sp.is_type), se) : ((sk == `set_place`) ? Lowered.set(sp.set_place, sp.set_value, se) : ((sk == `if_value`) ? Lowered.when(sp.if_condition, sp.if_value, se) : Lowered.passed(st, sk, sp, se))))))
+  // (the back end's own forms, `while`, `return`, `load`, `x <- v`: as they are, what they hold lowered)
+  static passed (pt, pk, pp, pe) => (pk == `while_condition`) ? Lowered.looped(pp.while_condition, pp.while_block, pe) : ((pk == `return_value`) ? Lowered.prefixed("return ", pp.return_value, pe) : ((pk == `load_at`) ? Lowered.prefixed("load ", pp.load_at, pe) : ((pk == `store_at`) ? Lowered.op(pp.store_at, "<-", pp.store_value, pe) : (Compiled.braced(pt) ? Lowered.body(pt, pe) : High.unknown(pk)))))
+  static leaf (lt, le) => Lowered.local_in(le, lt) ? Lowered.named_local(lt) : ((Lowered.named_in(Lowered.constants, lt) === None) ? Lowered.w(lt) : Lowered.w(Lowered.named_in(Lowered.constants, lt).last))
+  // (a parameter's or local's name, `the_x`: apart from any function's, which the back end reads alike whatever the case)
+  static named_local (nl) => {
+    Lowered.w("the_")
+    Lowered.w(nl)
+  }
+  static local_in (le, ln) => le.empty ? false : ((le.first.first == ln) ? true : Lowered.local_in(le.rest, ln))
+  // (`Runtime.x`: x, a function or constant of it; else a field, read where the value's kind holds it)
+  static member (mf, mn, me) => (Compiled.trimmed(mf) == `Runtime`) ? Lowered.leaf(mn, Array.new) : Lowered.field_read(mf, mn, me)
+  static field_read (rf, rn, re) => {
+    Lowered.w("(load (")
+    Lowered.expression(rf, re)
+    Lowered.w(" + ")
+    High.number(Lowered.offset(Lowered.field_holder(Lowered.type_of(rf, re), rn), rn))
+    Lowered.w("))")
+  }
+  static indexed (xf, xi, xe) => {
+    Lowered.w("(load (")
+    Lowered.expression(xf, xe)
+    Lowered.w(" + (")
+    Lowered.expression(xi, xe)
+    Lowered.w(" * 4)))")
+  }
+  // (a field given: written where the value's kind holds it; a local given, given)
+  static set (sp, sv, se) => (Lowered.kind(sp) == `member_from`) ? Lowered.field_set(Lowered.parsed(sp).member_from, Compiled.trimmed(Lowered.parsed(sp).member_name), sv, se) : Lowered.op(sp, "=", sv, se)
+  static field_set (ff, fn, fv, fe) => {
+    Lowered.w("((")
+    Lowered.expression(ff, fe)
+    Lowered.w(" + ")
+    High.number(Lowered.offset(Lowered.field_holder(Lowered.type_of(ff, fe), fn), fn))
+    Lowered.w(") <- ")
+    Lowered.expression(fv, fe)
+    Lowered.w(")")
+  }
+  // (a call: a kind made, its fields given by name, the rest none; a function of the runtime, given what it is given)
+  static call (cn, ca, ce) => Lowered.call_named(((Lowered.kind(cn) == `member_from`) && (Compiled.trimmed(Lowered.parsed(cn).member_from) == `Runtime`)) ? Compiled.trimmed(Lowered.parsed(cn).member_name) : cn, ((Compiled.trimmed(ca)).count == 0) ? Array.new : Compiled.parts(ca), ce)
+  static call_named (cn, cp, ce) => (Lowered.named(cn) === None) ? Lowered.applied(cn, cp, ce) : Lowered.made(Lowered.named(cn), cp, ce)
+  static applied (an, ap, ae) => {
+    Lowered.w(an)
+    Lowered.w("(")
+    Lowered.arguments(ap, ae)
+    Lowered.w(")")
+  }
+  static arguments (aa, ae) => aa.empty ? None : Lowered.argument(aa.first, aa.rest, ae)
+  static argument (af, ar, ae) => {
+    Lowered.expression(af, ae)
+    Lowered.w(", ") if !ar.empty
+    Lowered.arguments(ar, ae)
+  }
+  static made (mk, mp, me) => {
+    Lowered.w(mk.first)
+    Lowered.w("_made(")
+    Lowered.given_fields(mk.last, mp, me)
+    Lowered.w(")")
+  }
+  static given_fields (gf, gp, ge) => gf.empty ? None : Lowered.given_field(gf.first.first, gf.rest, gp, ge)
+  static given_field (gn, gr, gp, ge) => {
+    Lowered.given_value(Lowered.given_named(gp, gn), ge)
+    Lowered.w(", ") if !gr.empty
+    Lowered.given_fields(gr, gp, ge)
+  }
+  static given_named (gp, gn) => gp.empty ? None : (((Lowered.kind(gp.first) == `field_name`) && (Compiled.trimmed(Lowered.parsed(gp.first).field_name) == gn)) ? gp.first : Lowered.given_named(gp.rest, gn))
+  static given_value (gv, ge) => (gv === None) ? Lowered.w("0") : Lowered.expression(Lowered.parsed(gv).field_type, ge)
+  static is (iv, ik, ie) => {
+    Lowered.w("(tag(")
+    Lowered.expression(iv, ie)
+    Lowered.w(") == ")
+    Lowered.w(Lowered.named(ik).rest.first)
+    Lowered.w(")")
+  }
+  static op (ol, oo, orr, oe) => {
+    Lowered.w("(")
+    Lowered.expression(ol, oe)
+    Lowered.w(" ")
+    Lowered.w(oo)
+    Lowered.w(" ")
+    Lowered.expression(orr, oe)
+    Lowered.w(")")
+  }
+  static grouped (gc, ge) => (Compiled.statements_of(gc).count == 1) ? Lowered.expression(gc, ge) : Lowered.body(Compiled.trimmed(gc), ge)
+  static choice (ci, cy, cn, ce) => {
+    Lowered.w("if ")
+    Lowered.expression(ci, ce)
+    Lowered.w(" {\n")
+    Lowered.expression(cy, ce)
+    Lowered.w("\n} else {\n")
+    Lowered.expression(cn, ce)
+    Lowered.w("\n}")
+  }
+  static when (wc, wv, we) => {
+    Lowered.w("if ")
+    Lowered.expression(wc, we)
+    Lowered.w(" {\n")
+    Lowered.expression(wv, we)
+    Lowered.w("\n}")
+  }
+  static looped (lc, lb, le) => {
+    Lowered.w("while ")
+    Lowered.expression(lc, le)
+    Lowered.w(" {\n")
+    Lowered.body(lb, le)
+    Lowered.w("\n}")
+  }
+  static prefixed (pw, pv, pe) => {
+    Lowered.w(pw)
+    Lowered.expression(pv, pe)
+  }
+}

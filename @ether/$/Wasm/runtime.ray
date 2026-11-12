@@ -899,7 +899,7 @@ function parsed_statements(g, t) {
   call(parserhook, l, 0)
 }
 function arena_base() {
-  750000000 * 2
+  650000000 * 2
 }
 function lasting_span(a, e) {
   if e <= (8388608 + ((((load 4088) + 7) / 8) * 8)) {

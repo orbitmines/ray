@@ -23,7 +23,7 @@ High := {
   static kind (kt) => Compiled.kind_of(High.parsed_one(kt))
   static program (pr_text, pr_runtime, pr_pages) => {
     Compiled.parts(`this, key, value, length, count, first, last, keys, sort, for, body, statements, statement, rest, empty, reading, text, caller, at, node, in, rules, map, \s, \n, String, ⊣, None, true, false, \n\n, input, holes, Place, noted, applied, members, whole, joined, append, new, Array`).for((s) => level cw_symbol_of (s))
-    High.w(pr_runtime)
+    Lowered.runtime(level input_part 3, pr_runtime)
     High.w("\nfunction main() {\n  var scope\n  free = 8388608 + (((load 4088) + 7) / 8) * 8\n  names = list()\n  symtab()\n  scope = node(0)\n  define(scope, 57, arrays())\n")
     Compiled.statements_of(pr_text).for((st) => High.statement_isolated(st))
     High.w("\n}\n")

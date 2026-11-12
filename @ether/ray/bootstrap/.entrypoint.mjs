@@ -64,7 +64,9 @@ export const engine = () => bootstrap(`.entrypoint.${revision()}.wasm`);
 export const PAGES = 32000;
 export const uncommented = (text) => text.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
 const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'ex := (level input_part 0) as Expression\n'; return t.slice(0, t.indexOf(end) + end.length); };
-export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray', 'High.ray', 'compile.ray'].map((f) => readFileSync(wasm(f), 'utf8'))].join(''));
+// (Compiler.ray's part the compiler is itself written with: from `Lowered :=` on, what writes Runtime.ray for the back end)
+const lowering = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.indexOf('\nLowered := {\n') + 1); };
+export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray', 'High.ray'].map((f) => readFileSync(wasm(f), 'utf8')), lowering(), readFileSync(wasm('compile.ray'), 'utf8')].join(''));
 
 // (a revision, given a program: its input the header Expression reads first, the program and the runtime (each without
 // its lines that are only a comment), apart by a 0;
@@ -73,8 +75,8 @@ export const instance = async (module, memory = new WebAssembly.Memory({ initial
   const { instance } = await WebAssembly.instantiate(module, { m: { memory } });
   return { exports: instance.exports, memory, u8: new Uint8Array(memory.buffer), i32: new Int32Array(memory.buffer) };
 };
-export const given = (it, program, runtime = readFileSync(wasm('runtime.ray'), 'utf8')) => {
-  const input = Buffer.from([readFileSync(wasm('header.ray'), 'utf8'), uncommented(program), uncommented(runtime)].join('\0'));
+export const given = (it, program, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), written = readFileSync(bootstrap('Runtime.ray'), 'utf8')) => {
+  const input = Buffer.from([readFileSync(wasm('header.ray'), 'utf8'), uncommented(program), uncommented(runtime), uncommented(written)].join('\0'));
   it.u8.set(input, 8388608); it.i32[4088 >> 2] = input.length;
 };
 export const compiled = async (module, program) => {
@@ -139,7 +141,7 @@ const left_out = (text) => text.split('\n').flatMap((l, line) => { const column 
 // (the module that reads, once per revision and sources: kept beside the revision)
 export const tester = async () => {
   const program = reader() + TESTING, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), was = readFileSync(engine());
-  const key = createHash('sha256').update(was).update(program).update(runtime).update(readFileSync(wasm('header.ray'))).digest('hex').slice(0, 12);
+  const key = createHash('sha256').update(was).update(program).update(runtime).update(readFileSync(bootstrap('Runtime.ray'))).update(readFileSync(bootstrap('Compiler.ray'))).update(readFileSync(wasm('header.ray'))).digest('hex').slice(0, 12);
   const name = `.entrypoint.${revision()}.test.${key}.wasm`;
   if (existsSync(bootstrap(name))) return readFileSync(bootstrap(name));
   const module = await compiled(was, program);

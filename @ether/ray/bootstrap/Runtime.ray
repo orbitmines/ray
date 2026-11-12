@@ -10,6 +10,23 @@ Runtime := {
   static None := 0
   static false := 8
   static true := 12
+  // (a yes or no of the back end's, as the language's; and whether a value is not nothing nor false)
+  static boolean (c) => c ? true : false
+  static truthy (v) => (v != None) && (v != false)
+  static same (a, b) => Runtime.boolean(a === b)
+
+  // A number, held as twice itself and one: apart from where any value of a kind is (an even word).
+  static int (n) => (n + n) + 1
+  static untag (v) => v >> 1
+  static plus (a, b) => (a + b) - 1
+  static minus (a, b) => (a - b) + 1
+  static times (a, b) => Runtime.int(Runtime.untag(a) * Runtime.untag(b))
+  static quotient (a, b) => Runtime.int(Runtime.untag(a) / Runtime.untag(b))
+  static remainder (a, b) => Runtime.int(Runtime.untag(a) % Runtime.untag(b))
+  static less (a, b) => Runtime.boolean(a < b)
+  static greater (a, b) => Runtime.boolean(a > b)
+  static less_equal (a, b) => Runtime.boolean(a <= b)
+  static greater_equal (a, b) => Runtime.boolean(a >= b)
 
   // A node: what it is in, which is asked what it does not hold; its fields, the latest first; its keys, in the order
   // given; and its fields indexed by name, once it holds many.
@@ -23,4 +40,13 @@ Runtime := {
   static List := (3, count, room, items: Words)
   static list => List()
   static at (list: List, index) => list.items[index]
+
+  // A function as a value: what it runs, the node it was written in, and how it is called (0 as it is, 1 read as a value:
+  // a getter); a class, the same, its header in place of how it is called.
+  static Closure := (2, function, env, called)
+  static closure (f, env) => Closure(function: f, env: env)
+  static getter (f, env) => Closure(function: f, env: env, called: 1)
+  static Class := (5, function, env, header)
+  static classv (f, env) => Class(function: f, env: env)
+  static classh (f, env, h) => Class(function: f, env: env, header: h)
 }

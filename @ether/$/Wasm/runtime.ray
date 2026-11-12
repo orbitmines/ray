@@ -195,12 +195,6 @@ function outbyte(b) {
   outn = outn + 1
   0
 }
-function negated(v) {
-  if truthy(v) {
-    return 8
-  }
-  12
-}
 function file_named(t) {
   var a
   var e
@@ -1349,59 +1343,12 @@ function eager_caches() {
   kept()
   0
 }
-function rest_cell(l, i, next) {
-  var c
-  c = alloc(12)
-  c <- l
-  (c + 4) <- next
-  (c + 8) <- i
-  c
-}
-function recell(k, next) {
-  if (load (load k)) == 3 {
-    return rest_cell(load k, load (k + 8), next)
-  }
-  cell(load k, next)
-}
-function repeat_chosen(inner, least, d, pos, k) {
-  var s
-  s = chosen(4, inner, pos, k)
-  (s + 16) <- least
-  (s + 40) <- d
-  s
-}
 function cell(p, next) {
   var c
   c = alloc(8)
   c <- p
   (c + 4) <- next
   c
-}
-function chared(c, k) {
-  if k == 1 {
-    return (c == 32) or (c == 9)
-  }
-  if k == 2 {
-    return c == 10
-  }
-  if k == 3 {
-    return (c == 32) or ((c == 9) or ((c == 10) or (c == 13)))
-  }
-  if k == 4 {
-    return c == 10
-  }
-  1
-}
-function texteq(a, b, n) {
-  var i
-  i = 0
-  while i < n {
-    if (load8 (a + i)) != (load8 (b + i)) {
-      return 0
-    }
-    i = i + 1
-  }
-  1
 }
 function kept() {
   var t
@@ -1765,117 +1712,6 @@ function bindings() {
   }
   n
 }
-function rebuilt(n) {
-  var t
-  var l
-  var s
-  var i
-  var c
-  var pos
-  var v
-  t = member(n, 32)
-  l = list()
-  s = load (n + 12)
-  pos = load (t + 4)
-  i = 0
-  while i < (load (s + 4)) {
-    c = at(s, i)
-    if (load (c + 8)) > pos {
-      gaps(l, pos, load (c + 8))
-    }
-    v = load (c + 16)
-    if (tag(v) == 12) or ((load c) == 13) {
-      append(l, topattern(v))
-    } else {
-    v = member(n, load (c + 4))
-    if tag(v) == 4 {
-      v = read_with(n, load (c + 4), v)
-    }
-    if tag(v) == 6 {
-      append(l, field(load (c + 4), v))
-    } else {
-      if (tag(v) == 1) and (member(v, 32) != 0) {
-        append(l, field(load (c + 4), pattern(18, v, 0)))
-      } else {
-        append(l, field(load (c + 4), anything()))
-      }
-    }
-    }
-    pos = load (c + 12)
-    i = i + 1
-  }
-  if (load (t + 8)) > pos {
-    gaps(l, pos, load (t + 8))
-  }
-  enclosed_holes(l)
-  sequence(l)
-}
-function texts_equal(x, y) {
-  var n
-  n = (load (x + 8)) - (load (x + 4))
-  if n != ((load (y + 8)) - (load (y + 4))) {
-    return 0
-  }
-  texteq(load (x + 4), load (y + 4), n)
-}
-function enclosed_holes(l) {
-  var i
-  var f
-  var a
-  var b
-  var n
-  n = load (l + 4)
-  i = 0
-  while i < n {
-    f = at(l, i)
-    if (load (f + 4)) == 6 {
-      a = 0
-      b = 0
-      if i > 0 {
-        a = at(l, i - 1)
-        if (load (a + 4)) != 1 {
-          a = 0
-        }
-      }
-      if (i + 1) < n {
-        b = at(l, i + 1)
-        if (load (b + 4)) != 1 {
-          b = 0
-        }
-      }
-      f = load (f + 12)
-      if (tag(f) == 6) and ((load (f + 4)) == 28) {
-        if (a != 0) and (b != 0) {
-          (f + 12) <- 1
-          (f + 16) <- load8 (load ((load (b + 8)) + 4))
-          if texts_equal(load (a + 8), load (b + 8)) {
-            (f + 12) <- 2
-          }
-        } else {
-          if ((a != 0) and (spaced(l, i - 2) == 0)) or ((b != 0) and (spaced(l, i + 2) == 0)) {
-            (f + 12) <- 3
-          }
-        }
-      }
-    }
-    i = i + 1
-  }
-  0
-}
-function with_code(a, b) {
-  a
-}
-function under(b, env) {
-  touched_by(b, b + 4, env)
-  if (b + 4) < (load 3944) {
-    logged(b + 4)
-  }
-  (b + 4) <- env
-  b
-}
-function staged(f) {
-  pattern(17, f, 0)
-}
 function read_again(item, f, args, u) {
   var l
   var i
@@ -2112,56 +1948,6 @@ function continued_where_written(q) {
   textend = r
   b
 }
-function unread_until(pos, at) {
-  var q
-  var i
-  var j
-  var d
-  q = at
-  while (q < textend) and white(load8 q) {
-    q = q + 1
-  }
-  if q >= textend {
-    return at
-  }
-  q = at
-  while (q > pos) and ((load8 (q - 1)) != 10) {
-    q = q - 1
-  }
-  d = 0
-  while ((q + d) < textend) and (((load8 (q + d)) == 32) or ((load8 (q + d)) == 9)) {
-    d = d + 1
-  }
-  q = at
-  while (q < textend) and ((load8 q) != 10) {
-    q = q + 1
-  }
-  while q < textend {
-    i = q + 1
-    j = 0
-    while ((i + j) < textend) and (((load8 (i + j)) == 32) or ((load8 (i + j)) == 9)) {
-      j = j + 1
-    }
-    if ((i + j) < textend) and (((load8 (i + j)) != 10) and (j <= d)) {
-      if (load (3860)) == 0 {
-        3860 <- list()
-      }
-      frames_kept()
-      append(load 3860, text(at, q))
-      return i
-    }
-    q = i
-    while (q < textend) and ((load8 q) != 10) {
-      q = q + 1
-    }
-  }
-  if (load (3860)) == 0 {
-    3860 <- list()
-  }
-  frames_kept()
-  append(load 3860, text(at, q))
-  q
-}
 function saved(mark) {
   var c
   var n
@@ -2245,19 +2031,6 @@ function put4(o, c0, c1, c2, c3) {
 function put_span(o, a, e) {
   copy(o, a, e - a)
   o + (e - a)
-}
-function param_of(ps, n, a, e) {
-  var i
-  i = 0
-  while i < n {
-    if ((load (ps + ((i * 8) + 4))) - (load (ps + (i * 8)))) == (e - a) {
-      if texteq(load (ps + (i * 8)), a, e - a) {
-        return 1
-      }
-    }
-    i = i + 1
-  }
-  0
 }
 function second_symbol(n, e) {
   var x
@@ -2614,22 +2387,6 @@ function copied_from(o, s, n) {
   (r + 8) <- n
   3868 <- (k + 1)
   0
-}
-function anything_end(n) {
-  var c
-  var t
-  c = load8 (n - 1)
-  if c == 10 {
-    return 0
-  }
-  t = pair_class(n - 1)
-  if t == 3 {
-    return 0
-  }
-  if (t == 1) or (t == 2) {
-    return pair_end(n - 1)
-  }
-  n
 }
 function compactable(s) {
   if (load (s + 8)) == 2 {

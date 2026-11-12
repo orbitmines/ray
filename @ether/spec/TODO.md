@@ -345,6 +345,20 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   `text(o, o + n)` is unread (followed by `o` it reads) when `into` takes five parameters, two typed.
   A whole section can be unread too (its `{` reported), by which statics share it: `bytes_at`, `word_byte`,
   `put_span`, `saved` together in `Basics` were, each alone was not, and moved into `Texts` they read.
+  Why (2026-11-12): the pairs a rule's text teaches (the bytes either side of a capture) include `+` and `:`, from
+  String.ray's `U+{codepoint: Hexadecimal.String}: Char` (the `+` is of the word `U+`, the `:` the return type's). From
+  then on `+` opens and `:` closes, and a bracket's end (`bracket_ending`) counts every kind as one: `(a < 0)` stays
+  open past its `)` (the `<`), `g(w + 1)` past its `)` (the `+`), each closed by whatever closing comes next (a `:` a
+  line later, the `>` of an `=>`). A hole jumping to that end reads across statements: inside a block, a forward call
+  with a `+` in its arguments (`f(x + 1, …)` before `f`) had the next definition's body read as statements of the block,
+  its loop run with nothing bound (`Collector`'s `gc_first`, the reading out of memory). What reads today partly
+  reads by accident: `:` closing balances the `<` before it (Caches' `(a < 0) && …`), and some tests depend on it.
+  Tried: not pairing a byte written onto a word (`U+`), so `+`/`:` are no pair: the Collector reads, 6 unread errors
+  go, but CF20, GR1/3/6/7, the OP block and Caches stop reading (they relied on `:`); a bracket closed only by its own
+  partner (from the pairs log): `<` then closes at an `=>`'s `>`; nested (an other closing leaves it open): `(… => …)`
+  never closes. Open: how a byte that is both an operator and a bracket (`<`, `>`, `+`) is told from one, for a
+  bracket's end as for a block (§ blocks count brackets shaped as one). Until then `Collector := class` is left unread
+  by the tests (one error) and kept out of the commit.
 - **Lowered pitfalls, later**: a constant (`static x := v`) is put in place only when `v` is one token: `(1021000000
   * 2)` stays a bare name, which Low takes for a global or function it does not have (write a no-argument static,
   `static x => 1021000000 * 2`, called `X.x()`); a number past 2^30 is not a literal Low writes (`1021000000 * 2`, as the

@@ -1002,6 +1002,9 @@ function fueled() {
     if (load 3896) < (load 4060) {
       stopped_statement()
     }
+    if (free > (arena_base() - 134217728)) and (free < arena_base()) {
+      stopped_statement()
+    }
     3896 <- ((load 3896) - 1)
   }
   0

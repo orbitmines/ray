@@ -645,4 +645,58 @@ Runtime := {
     s.b = 2
     Runtime.read_to(n)
   }
+
+  // Members and calls. A member of a value, by the number its name is known by: of a node, or of what a rule read, its
+  // own field of it (a getter's, what that answers), else its keys; of a list, how many it holds, its first, its last,
+  // whether it is empty, its rest, its sort, for, map, joined and append (bound to it), else that member of each; of a
+  // text, its length, its first byte, its last, its rest, whether it is empty. A call runs a closure in a frame of its
+  // own (`isolated_open`, the memory level's), its node given what is called with it; a curried function with its
+  // value as `this`; a pattern with a function, read by it; a class, constructing.
+  static Builtin := (8, id, self)
+  static Curried := (9, function, value)
+  static Applied := (10, in, fields, rule, index)
+  static placed := 50
+  static noted_by := 51
+  static members_listed := 52
+  static bound (id, x) => Builtin(id: id, self: x)
+  static curried (f, v) => Curried(function: f, value: v)
+  static curried_value (c: Curried) => (c is Curried) ? c.value : list()
+  static isgetter (v: Closure) => (v is Closure) && (v.called == 1)
+  static got (v) => Runtime.isgetter(v) ? call(v, list(), 0) : v
+  static get (scope, name) => Runtime.got(lookup(scope, name))
+  static keys (n: Node) => (n.keys === None) ? Runtime.keys_made(n) : n.keys
+  static keys_made (n: Node) => {
+    n.keys = list()
+    n.keys
+  }
+  static member (x, name) => ((x is Node) || (x is Applied)) ? Runtime.node_member(x, name, own(x, name)) : ((x is List) ? Runtime.list_member(x, name) : (((x is Text) && ((name == Symbol.count) || (name == Symbol.length))) ? Runtime.text_length(x) : None))
+  static node_member (x, name, f: Field) => (f === None) ? ((name == Symbol.keys) ? keys(x) : None) : Runtime.got(f.value)
+  static list_member (l: List, name) => (name == Symbol.count) ? int(l.count) : ((name == Symbol.first) ? Runtime.at_or_none(l, 0) : ((name == Symbol.last) ? Runtime.at_or_none(l, l.count - 1) : ((name == Symbol.empty) ? same(l.count, 0) : Runtime.list_bound(l, name))))
+  static at_or_none (l: List, i) => (l.count == 0) ? None : l.items[i]
+  static list_bound (l, name) => ((name == Symbol.sort) || (name == Symbol.for) || (name == Symbol.map)) ? bound(name, l) : mapped(l, name)
+  static text_length (t: Text) => int(t.to - t.from)
+  static member2 (x, name) => ((x is Text) && ((name == Symbol.first) || (name == Symbol.last) || (name == Symbol.rest) || (name == Symbol.empty))) ? Runtime.text_member(x, name) : (((x is List) && ((name == Symbol.rest) || (name == Symbol.joined) || (name == Symbol.append))) ? Runtime.list_member2(x, name) : member(x, name))
+  static text_member (t: Text, name) => (name == Symbol.empty) ? boolean(t.from == t.to) : ((name == Symbol.rest) ? ((t.from == t.to) ? text(t.from, t.to) : text(t.from + 1, t.to)) : ((t.from == t.to) ? None : ((name == Symbol.first) ? text(t.from, t.from + 1) : text(t.to - 1, t.to))))
+  static list_member2 (l, name) => (name == Symbol.rest) ? rest_of(l) : bound(name, l)
+  static own_closure (x, name) => (x is Node) ? Runtime.closure_of(own(x, name)) : None
+  static closure_of (f: Field) => ((f != None) && Runtime.plain_closure(f.value)) ? f.value : None
+  static plain_closure (c: Closure) => (c is Closure) && (c.called == 0)
+  static call_member (x, name, args, named) => Runtime.member_called(Runtime.own_closure(x, name), x, name, args, named)
+  static member_called (c: Closure, x, name, args, named) => (c === None) ? invoke(member2(x, name), args, named) : indirect(c.env, args, named, c.function)
+  static invoke (c, args, named) => ((c is Builtin) && Runtime.list_changed(c)) ? Runtime.builtin_list(c, arg(args, 0)) : call(c, args, named)
+  static list_changed (b: Builtin) => (b.id == Symbol.joined) || (b.id == Symbol.append)
+  static builtin_list (b: Builtin, v) => (b.id == Symbol.joined) ? joined(b.self, v) : append(b.self, v)
+  static builtin (id, x, args) => (id == Symbol.sort) ? sorted(x, arg(args, 0)) : ((id == Symbol.for) ? each(x, arg(args, 0)) : ((id == Symbol.map) ? each_value(x, arg(args, 0)) : ((id == placed) ? place(arg(args, 0), arg(args, 1)) : ((id == noted_by) ? noted(arg(args, 0)) : ((id == members_listed) ? members_of(arg(args, 0)) : None)))))
+  static call (c, args, named) => {
+    fueled()
+    stopped() ? None : Runtime.called(c, args, named)
+  }
+  static called (c, args, named) => (c is Pattern) ? Runtime.pattern_called(c, args) : ((c is Curried) ? Runtime.curried_called(c, Runtime.curried_function(c), args, named) : ((c is Applied) ? Runtime.applied_called(c, Runtime.applied_rule(c), args, named) : ((c is Builtin) ? Runtime.builtin_called(c, args) : ((c is Class) ? construct(c, args, named) : ((c is Closure) ? Runtime.closure_called(c, args, named) : None)))))
+  static pattern_called (p: Pattern, args) => (p.kind == with_function) ? Pattern(kind: functioned, a: p, b: args) : None
+  static curried_function (c: Curried) => c.function
+  static curried_called (c: Curried, f: Closure, args, named) => indirect(Runtime.defined_as(node(f.env), Symbol.this, c.value), args, named, f.function)
+  static applied_rule (c: Applied) => c.rule
+  static applied_called (c, f: Closure, args, named) => indirect(applied_again(c), args, named, f.function)
+  static builtin_called (b: Builtin, args) => builtin(b.id, b.self, args)
+  static closure_called (c: Closure, args, named) => (isodepth > 4000) ? indirect(c.env, args, named, c.function) : isolated_value(isolated_open(), indirect(c.env, args, named, c.function))
 }

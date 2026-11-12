@@ -33,6 +33,8 @@ Expression := class (
       Node := class (in?: Node, of?: Node) => {
         // (itself, as its rules' bodies name it: `this` there is what a statement calls them on)
         node := this
+        // (what it is made of, its components: the last added first, read after its own rules and before what it is in)
+        parts := Array.new
         rules := {
           [rule: GRAMMAR_RULE.LHS] := (caller) => {
             // (as the holes that wrote it took it, defined where they are used; each hole shown as its head says, `{x ^style}`)
@@ -58,6 +60,7 @@ Expression := class (
               me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => parameter_read(hole, applied, hole_value(hole, c, caller)))
               me.in.written_keys.for((hk) => hk.named = true)
               me.this = caller.this
+              me.receiver = caller.receiver
               me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
               (rule_own.styled_as ?? Array.new).for((rs) => painted.append([rs.first, [rule_lhs, me.input], [me.bound]]))
               // (its body read and run in turn where it runs, the rule set aside while it is read: a rule never reads itself)
@@ -84,9 +87,9 @@ Expression := class (
             // (what it is read on gives what is read on it: a node its rules, anything else its fields; one of the level's own
             // kinds of value, what the level says it is, `level kinds`)
             o := ((level kind_of (v)) === None) ? v : named_in(Program(in: kinds_of(caller)), level kind_of (v))
-            (o.rules === None) ? members(o).for((m) => on.rules[[m.key]] := (c) => m.value) : o.written_keys.for((e) => on.rules[[e.key]] := e.value)
+            (o.rules === None) ? members(o).for((m) => on.rules[[m.key]] := (c) => m.value) : (on.parts = [o])
             r := (rs: Statements(on) = rest)
-            (r === None) ? None : run_by(r, Program(caller: caller, in: on, this: v))
+            (r === None) ? None : run_by(r, Program(caller: caller, in: on, this: v, receiver: v))
           }
         }
         // (a name read inside its own reading is its place)
@@ -106,14 +109,20 @@ Expression := class (
         split_key := rules.keys.last
         maker_key := rules.keys.first
         // (its rules but the two every node has, the one that makes rules and the split)
-        written_keys => rules.keys{!((. === maker_key) || (. === split_key))}#
+        written_keys => parts_written(parts).joined(rules.keys{!((. === maker_key) || (. === split_key))}#)
+        parts_written (ps) => ps.empty ? Array.new : parts_written(ps.rest).joined(ps.first.written_keys)
         // (a definition, `=>` outside pairs: the latest rule that defines, else the rule that makes rules; none set aside)
         // (what reads it here, but a name, `x`, read at its start, when what it is in reads it all, `x = v`)
         whole (text) => nearer(text, made(text, defines(text)))
-        nearer (text, near) => (near === None) ? in?.whole(text) : ((near.named && !(text == near.key)) ? fuller(text, near, in?.whole(text)) : near)
+        nearer (text, near) => (near === None) ? (parts_whole(parts, text) ?? in?.whole(text)) : ((near.named && !(text == near.key)) ? fuller(text, near, in?.whole(text)) : near)
+        // (in its components: each one's own rules, then what it is made of in turn, not what it is in)
+        own_whole (text) => longest(text, false) ?? parts_whole(parts, text)
+        parts_whole (ps, text) => ps.empty ? None : (ps.first.own_whole(text) ?? parts_whole(ps.rest, text))
         fuller (text, near, far) => (text == far?.key) ? far : near
         made (text, defining_text) => (((rules.keys.first === maker_key) && defining_text) && (text ~= maker_key)) ? (defining(text) ?? maker_key) : longest(text, defining_text)
-        prefix (text) => longest(text, defines(text)) ?? in?.prefix(text)
+        prefix (text) => longest(text, defines(text)) ?? (parts_prefix(parts, text) ?? in?.prefix(text))
+        own_prefix (text) => longest(text, false) ?? parts_prefix(parts, text)
+        parts_prefix (ps, text) => ps.empty ? None : (ps.first.own_prefix(text) ?? parts_prefix(ps.rest, text))
         defining (text) => (level keys_reading (rules.keys) (text)){.defines && (!among(aside, .) && (text ~= .))}#.sort(.length).last ?? in?.defining(text)
         longest (text, defining_text) => (level keys_reading (rules.keys) (text)){!(. === split_key) && ((defining_text || !((. === maker_key) || .defines)) && (!among(aside, .) && (text ~= .)))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
@@ -122,14 +131,18 @@ Expression := class (
         // (the split, when it reads more of the text than the key does, read again: what was read since may have been another
         // text)
         prefer_split (text, found) => (text ~= split_key) && ((found === None) || (split_key.length > ((text ~= found) ? found.length : 0)))
-        keys => (in === None) ? rules.keys : (rules.keys | in.keys)
+        keys => (in === None) ? own_keys : (own_keys | in.keys)
+        own_keys => parts.empty ? rules.keys : rules.keys.joined(parts_written(parts))
       }
       // A program running: what applied it, where it is.
-      Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node, for_value?: Node) => { }
+      // (`receiver`: what a method was read on, until a node of its own is made of it)
+      Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node, for_value?: Node, receiver?: Node) => { }
       Argument := class (\s+, word: String) => { }
       global := Node({
         rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => {
-          `.` => (caller.this = (caller.in = Node(in: caller.in)))
+          // (`external . v`: v one of the components of what it is read in, the last added first, answered; bare, a node of its
+          // own in what it is read in, made of what a method was read on, its receiver)
+          `.` (made_of) => (made_of.first === None) ? (caller.this = (caller.in = made_on(Node(in: caller.in), caller))) : composed(place_of(caller), made_of.first)
           `&` => caller
           `goto` (to) => (caller.at = to.first) if (to.rest.empty || to.rest.first)
           `label` (to) => to.first
@@ -273,6 +286,18 @@ Expression := class (
         program.for_value = was
         r
       }
+      made_on (made, program) => {
+        (made.parts = [program.receiver]) if !(program.receiver?.rules === None)
+        program.receiver = None
+        made
+      }
+      // (never made of what is made of it: what it sees would go round without end)
+      composed (into, part) => {
+        (into.parts = [part].joined(into.parts)) if !((part.rules === None) || ((into.rules === None) || made_of_deep(part, into)))
+        part
+      }
+      made_of_deep (part, whole) => (part === whole) || parts_reach(part.parts, whole)
+      parts_reach (ps, whole) => ps.empty ? false : (made_of_deep(ps.first, whole) || parts_reach(ps.rest, whole))
       named_in (program, text) => program.in.named_as(trimmed_or(level cw_trimmed (text), text), program)
       aside := Array.new
       among (list_of, one) => list_of{. === one}#.count > 0
@@ -322,7 +347,9 @@ Expression := class (
       holder (program, hole) => ((hole === None) || (program === None)) ? None : (among(program.bound ?? Array.new, hole) ? program : holder(program.caller, hole))
       home_of (program, hole) => (holder(program, hole) === None) ? None : place_of(holder(program, hole).caller)
       // (where a program defines: in the value it reads code for, `x.( … )`, else where it is)
-      place_of (program) => (program.for_value?.rules === None) ? program.in : program.for_value
+      place_of (program) => (program.for_value?.rules === None) ? value_read_in(program.in) : program.for_value
+      // (a node a value is read on in, `x.( … )`: what it defines is that value's)
+      value_read_in (place) => ((place === None) || ((place.of === None) || (place.of.rules === None))) ? place : place.of
       // (the nearest node that defines a name itself)
       defined_in (place, text) => (place === None) ? None : ((place.written_keys{text ~= .}#.count > 0) ? place : defined_in(place.in, text))
       // (what is between a text's first character and its last)

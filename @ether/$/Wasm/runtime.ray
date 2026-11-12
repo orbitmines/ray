@@ -142,6 +142,17 @@ function byte_put(q, c) {
   q <-8 c
   0
 }
+function taken_reset() {
+  3872 <- 0
+  0
+}
+function taken_set(x) {
+  3872 <- x
+  0
+}
+function taken_entry() {
+  load 3872
+}
 function char_class(c) {
   load8 (3584 + c)
 }

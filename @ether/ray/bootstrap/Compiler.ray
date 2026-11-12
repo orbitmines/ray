@@ -568,6 +568,150 @@ Output := {
     takent
   }
 }
+// Splices (`level spliced …`): a capture, `open close` (what opens, a space, what closes), in a text: what is between an
+// open and a close (or a doubled open and a doubled close) is a name, taken from a list of entries (each a key and a
+// value, `take_named`: the value, trimmed, itself a capture of a name taken further on, that), and written in its place.
+Splices := {
+  static Taken := (entry, past)
+  static opening_end_at (from, to) => {
+    oe := from
+    while (oe < to) && (byte(oe) != 32) {
+      oe = oe + 1
+    }
+    oe
+  }
+  static capture_ok (cap: Text, oe) => ((oe - cap.from) != 0) && ((oe + 1) < cap.to)
+  static found_from (from, e, a, z) => {
+    q := from
+    while (q < e) && (at_text(q, e, a, z) == 0) {
+      q = q + 1
+    }
+    q
+  }
+  static trimmed_of (v: Text) => Texts.trimmed_text(v.from, v.to)
+  static spliced_entry (t: Text, cap: Text, l) => ((t is Text) && (cap is Text) && (l is List) && Splices.capture_ok(cap, Splices.opening_end_at(cap.from, cap.to))) ? Splices.entry_taken(t, cap, Splices.opening_end_at(cap.from, cap.to), l) : None
+  static entry_taken (t, cap, oe, l) => {
+    taken_reset()
+    Splices.spliced_into(t, cap, oe, l, 0)
+    taken_entry()
+  }
+  static spliced (t: Text, cap: Text, l) => ((t is Text) && (cap is Text) && (l is List) && Splices.capture_ok(cap, Splices.opening_end_at(cap.from, cap.to))) ? Splices.spliced_as(t, cap, Splices.opening_end_at(cap.from, cap.to), l, Splices.spliced_whole(t, cap, Splices.opening_end_at(cap.from, cap.to), l)) : t
+  static spliced_as (t, cap, oe, l, whole) => (whole != None) ? whole : Splices.spliced_out(t, cap, oe, l, Splices.spliced_into(t, cap, oe, l, 0))
+  static spliced_out (t, cap, oe, l, n) => Splices.spliced_written(t, cap, oe, l, n, alloc_bytes(n + 8))
+  static spliced_written (t, cap, oe, l, n, o) => {
+    Splices.spliced_into(t, cap, oe, l, o)
+    text(o, o + n)
+  }
+  // (how long the text is with each name taken, written to out unless it is 0)
+  static spliced_into (t: Text, cap: Text, oe, l, out) => {
+    n := 0
+    q := t.from
+    m := None
+    while q < t.to {
+      m = (at_text(q, t.to, cap.from, oe) != 0) ? Splices.match_at(q, t.to, cap, oe, l) : None
+      n = (m === None) ? Splices.byte_copied(out, n, q) : Splices.taken_copied(out, n, m)
+      q = (m === None) ? (q + 1) : Splices.past_of(m)
+    }
+    n
+  }
+  static past_of (m: Taken) => m.past
+  static match_at (q, e, cap: Text, oe, l) => Splices.single_or(Splices.doubled_at(q, e, cap, oe, l), q, e, cap, oe, l)
+  static doubled_at (q, e, cap: Text, oe, l) => (at_text(q + (oe - cap.from), e, cap.from, oe) != 0) ? Splices.doubled_found(q + ((oe - cap.from) * 2), Splices.found_from(q + ((oe - cap.from) * 2), e, oe + 1, cap.to), e, cap, oe, l) : None
+  static doubled_found (s, r, e, cap: Text, oe, l) => ((r < e) && (at_text(r + (cap.to - (oe + 1)), e, oe + 1, cap.to) != 0)) ? Splices.taken_or_none(take_named(s, r, l, cap.from, oe, cap.to), r + ((cap.to - (oe + 1)) * 2)) : None
+  static single_or (m, q, e, cap: Text, oe, l) => (m === None) ? Splices.single_found(q + (oe - cap.from), Splices.found_from(q + (oe - cap.from), e, oe + 1, cap.to), e, cap, oe, l) : m
+  static single_found (s, r, e, cap: Text, oe, l) => (r < e) ? Splices.taken_or_none(take_named(s, r, l, cap.from, oe, cap.to), r + (cap.to - (oe + 1))) : None
+  static taken_or_none (x, past) => (x == 0) ? None : Taken(entry: x, past: past)
+  static taken_copied (out, n, m: Taken) => Splices.copied_in(out, n, Splices.trimmed_of(m.entry))
+  static copied_in (out, n, u: Text) => {
+    Splices.copy_out(out + n, u.from, u.to - u.from) if out != 0
+    n + (u.to - u.from)
+  }
+  static copy_out (o, s, k) => {
+    copy(o, s, k)
+    copied_from(o, s, k)
+  }
+  static byte_copied (out, n, q) => {
+    Splices.byte_out(out + n, q) if out != 0
+    n + 1
+  }
+  static byte_out (o, q) => {
+    byte_put(o, byte(q))
+    copied_from(o, q, 1)
+  }
+  // (a text that is one capture whole: its name taken, trimmed)
+  static spliced_whole (t: Text, cap: Text, oe, l) => ((at_text(t.from, t.to, cap.from, oe) != 0) && ((t.to - (cap.to - (oe + 1))) >= (t.from + (oe - cap.from))) && (at_text(t.to - (cap.to - (oe + 1)), t.to, oe + 1, cap.to) != 0)) ? Splices.whole_taken(Splices.whole_or_single(Splices.whole_doubled(t, cap, oe, l), t, cap, oe, l)) : None
+  static whole_doubled (t: Text, cap: Text, oe, l) => ((at_text(t.from + (oe - cap.from), t.to, cap.from, oe) != 0) && ((t.to - ((cap.to - (oe + 1)) * 2)) >= (t.from + ((oe - cap.from) * 2))) && (at_text(t.to - ((cap.to - (oe + 1)) * 2), t.to, oe + 1, cap.to) != 0)) ? take_named(t.from + ((oe - cap.from) * 2), t.to - ((cap.to - (oe + 1)) * 2), l, cap.from, oe, cap.to) : 0
+  static whole_or_single (x, t: Text, cap: Text, oe, l) => (x != 0) ? x : take_named(t.from + (oe - cap.from), t.to - (cap.to - (oe + 1)), l, cap.from, oe, cap.to)
+  static whole_taken (x) => (x == 0) ? None : Splices.trimmed_of(x)
+  // (a name, all of word bytes, taken from the list's entries from the i-th on: the first with that key; its value
+  // itself one capture whole, the name in it taken from those after; the first entry taken noted)
+  static take_named (na, ne, l, oa, oe, ce) => Splices.take_named_from(na, ne, l, 0, oa, ce)
+  static take_named_from (na, ne, l, from, oa, ce) => ((na >= ne) || (Splices.word_only(na, ne) == 0)) ? None : Splices.named_in(na, ne, l, from, oa, ce)
+  static word_only (a, e) => {
+    q := a
+    while q < e {
+      return 0 if word_byte(byte(q)) == 0
+      q = q + 1
+    }
+    1
+  }
+  static named_in (na, ne, l: List, from, oa, ce) => {
+    i := from
+    while i < l.count {
+      return Splices.named_value(at(l, i), l, i, oa, ce) if Splices.names(at(l, i), na, ne)
+      i = i + 1
+    }
+    None
+  }
+  static names (x, na, ne) => (x is Node) && Splices.key_is(member(x, Symbol.key), member(x, Symbol.value), na, ne)
+  static key_is (k: Text, v: Text, na, ne) => (k is Text) && (v is Text) && ((k.to - k.from) == (ne - na)) && texteq(k.from, na, ne - na)
+  static named_value (x, l, i, oa, ce) => Splices.aliased_or(Splices.alias_in(Splices.trimmed_of(member(x, Symbol.value)), l, i, oa, Splices.opening_end_at(oa, ce), ce), x)
+  static alias_in (u: Text, l, i, oa, oe, ce) => ((at_text(u.from, u.to, oa, oe) != 0) && (at_text(u.to - (ce - (oe + 1)), u.to, oe + 1, ce) != 0)) ? Splices.take_named_from(u.from + (oe - oa), u.to - (ce - (oe + 1)), l, i + 1, oa, ce) : None
+  static aliased_or (r, x) => (r != None) ? r : Splices.first_taken(x)
+  static first_taken (x) => {
+    taken_set(x) if taken_entry() == 0
+    member(x, Symbol.value)
+  }
+  // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
+  static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Splices.held_in(t.from, t.to, part) != 0)) ? true : false
+  static held_in (a, e, part: Text) => {
+    q := a
+    while q < e {
+      return 1 if at_text(q, e, part.from, part.to) != 0
+      q = q + 1
+    }
+    0
+  }
+  static holds_outside_in (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from)) ? Splices.outside_in(t.from, t.to, part) : false
+  static outside_in (a, e, part: Text) => {
+    q := a
+    while q < e {
+      return false if ((Runtime.class_at(q) == 2) && (pair_end(q) == 0)) || ((Runtime.class_at(q) != 2) && (byte(q) == 10) && (continued_at(q) == 0))
+      return true if (Runtime.class_at(q) != 2) && (at_text(q, e, part.from, part.to) != 0)
+      return false if (Runtime.class_at(q) == 1) && ((pair_end(q) == 0) || (pair_end(q) > e))
+      q = ((Runtime.class_at(q) == 1) || (Runtime.class_at(q) == 2)) ? pair_end(q) : (q + 1)
+    }
+    false
+  }
+  // (what separates the captures in a text: from the end of the first close to the next open, trimmed)
+  static separator_of (t: Text, cap: Text) => ((t is Text) && (cap is Text)) ? Splices.separator_in(t, cap.from, Splices.opening_end_at(cap.from, cap.to), cap.to) : None
+  static separator_in (t: Text, oa, oe, ce) => Splices.separator_from(t, Splices.found_from(t.from, t.to, oe + 1, ce), oa, oe, ce)
+  static separator_from (t: Text, q, oa, oe, ce) => (q >= t.to) ? None : Texts.trimmed_text(q + (ce - (oe + 1)), Splices.found_from(q + (ce - (oe + 1)), t.to, oa, oe))
+  static place_name (p: Place) => (p is Place) ? name_text(p.name) : None
+  static copied (x: Node) => Splices.copy_of(node(x.in), x)
+  static copy_of (n: Node, x: Node) => {
+    f := x.fields
+    while f != None {
+      f = Splices.field_copied(n, f)
+    }
+    n.keys = x.keys
+    n
+  }
+  static field_copied (n, f: Field) => {
+    define(n, f.name, f.value)
+    f.next
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

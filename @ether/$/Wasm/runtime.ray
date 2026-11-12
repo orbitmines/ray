@@ -18,6 +18,7 @@ function alloc_marked(p) {
     return 0
   }
   if p >= 536870912 {
+    starts_cleared(p + 8, free)
     start_mark(p)
   }
   0
@@ -6751,6 +6752,9 @@ function compactable(s) {
   if (load (s + 8)) == 2 {
     return 0
   }
+  if (load 3936) != 0 {
+    return 0
+  }
   if (noreclaim != 0) or ((load 3844) != 0) {
     return 0
   }
@@ -6984,6 +6988,9 @@ function gc_roots(s, fix) {
   gc_word(4044, fix)
   gc_word(4048, fix)
   gc_word(4068, fix)
+  gc_word(3860, fix)
+  gc_word(3968, fix)
+  gc_word(3972, fix)
   names = gc_value(names, fix)
   bounds = gc_value(bounds, fix)
   actives = gc_value(actives, fix)

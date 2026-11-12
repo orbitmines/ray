@@ -483,6 +483,78 @@ Runtime := {
     rmode = read_on
   }
 
+  // (what the holes bound from a mark hold: those without a name, the one, else all as a list; with names, a node of
+  // them, its keys each where it was read, `named_from`; a field read up to here bound to that, or to what it read)
+  static boundvalue (i) => Runtime.bound_value(bound_at(i))
+  static bound_value (b: Bound) => (b.held != 0) ? b.held : text(b.start, b.end)
+  static unnamed (b: Bound) => (b.hole == 0) ? 1 : 0
+  static unnamed_count (mark) => {
+    n := 0
+    i := mark
+    while i < boundn {
+      n = n + Runtime.unnamed(bound_at(i))
+      i = i + 1
+    }
+    n
+  }
+  static unnamed_value (mark) => {
+    v := 0
+    i := mark
+    while i < boundn {
+      v = Runtime.held_if_unnamed(bound_at(i), v)
+      i = i + 1
+    }
+    v
+  }
+  static held_if_unnamed (b: Bound, v) => (b.hole == 0) ? b.held : v
+  static valued_from (mark) => (Runtime.unnamed_count(mark) == 1) ? Runtime.unnamed_value(mark) : Runtime.bound_values(mark)
+  static listing (mark) => (Runtime.unnamed_count(mark) == (boundn - mark)) && (boundn > mark)
+  static named_from (mark) => Runtime.named_into(node(0), list(), mark)
+  static named_into (n: Node, keys: List, mark) => {
+    i := mark
+    while i < boundn {
+      Runtime.named_one(n, keys, bound_at(i), i)
+      i = i + 1
+    }
+    n.keys = keys
+    n
+  }
+  static named_one (n, keys, b: Bound, i) => Runtime.name_bound(n, keys, b, Runtime.boundvalue(i)) if b.hole != 0
+  static name_bound (n, keys, b: Bound, v) => {
+    define(n, b.hole, v)
+    append(keys, span(b.hole, b.start, b.end, v))
+  }
+  static gathered (name, a, e, mark, inner) => Runtime.gathered_as(name, a, e, mark, (Runtime.unnamed_count(mark) < (boundn - mark)) ? Runtime.defined_as(Runtime.defined_as(named_from(mark), 32, text(a, e)), 15, inner) : ((Runtime.unnamed_count(mark) == 0) ? text(a, e) : valued_from(mark)))
+  static gathered_as (name, a, e, mark, v) => {
+    boundn = mark
+    bind(name, a, e)
+    Runtime.held_as(bound_at(boundn - 1), v)
+  }
+  static held_as (b: Bound, v) => {
+    b.held = v
+  }
+  // (whether another way of an either reads further from there)
+  static read_by_another (l: List, i, pos) => {
+    j := 0
+    m := boundn
+    while j < l.count {
+      return 1 if (j != i) && Runtime.read_further(l.items[j], pos, m)
+      j = j + 1
+    }
+    0
+  }
+  static read_further (p, pos, m) => Runtime.bound_back(matched(p, pos, 0), m) > pos
+  static bound_back (r, m) => {
+    boundn = m
+    r
+  }
+  // (a value read as a pattern: a place, a field of its kind, or a hole; a node made of what was read, read again; a text,
+  // literally; a list, in sequence; a class, by its header)
+  static Place := (12, name, kind, given)
+  static topattern (v) => (v is Pattern) ? v : ((v is Place) ? Runtime.place_pattern(v) : (((v is Node) && (member(v, 32) != 0)) ? rebuilt(v) : ((v is Text) ? literal(v) : ((v is List) ? sequence(v) : v))))
+  static place_pattern (v: Place) => (v.kind != 0) ? field(v.name, astype(v.kind, 0)) : field(v.name, Pattern(kind: hole, a: v.given))
+  static astype (v, scope) => (v is Class) ? Pattern(kind: class_header, a: v, b: scope) : topattern(v)
+
   // (failed: back to the latest choice, what was bound after it undone; none left, the reading fails)
   static backtracked => Runtime.back_to(Runtime.undone_until(choices_top()))
   static undone_until (top) => {

@@ -301,7 +301,7 @@ external member (global) (`O`) ((O === None) ? Compiler.scope_of(Compiler.defaul
 , => composed_edge
 // What the compiler asks of the texts it reads (`level cw_…`), and how it writes out what it compiles: written for the
 // back end as Runtime.ray is (`Lowered`, given these after it), each named as asked.
-Texts := {
+Texts := class {
   static trimmed_text (from, to) => {
     a := from
     e := to
@@ -476,7 +476,7 @@ Texts := {
 // (what is written out, a byte at a time (the back end's `outbyte`, after `outb`, `outn` of them): a value, a number in
 // decimals, a size before what it counts (as many bytes as it takes, seven bits each), data apart, written last, and a
 // part set aside, written later)
-Output := {
+Output := class {
   static cw_write (b) => outbyte(untag(b))
   static cw_write_value (v: Text) => (v is Text) ? Output.bytes_written(v.from, v.to - v.from) : outbyte(untag(v))
   static cw_written_at => int(outn)
@@ -581,7 +581,7 @@ Output := {
 // Splices (`level spliced …`): a capture, `open close` (what opens, a space, what closes), in a text: what is between an
 // open and a close (or a doubled open and a doubled close) is a name, taken from a list of entries (each a key and a
 // value, `take_named`: the value, trimmed, itself a capture of a name taken further on, that), and written in its place.
-Splices := {
+Splices := class {
   static Taken := (entry, past)
   static opening_end_at (from, to) => {
     oe := from
@@ -722,7 +722,7 @@ Splices := {
 // Readings (`level read …`): whether two values are the same (a text read wholly by a pattern is); a text read by a
 // pattern, to what its holes bound (`readtext`); a text, or a node's structure, with what a function picks mapped by
 // another (or to a value; into a pattern, a byte picked held by it).
-Readings := {
+Readings := class {
   static Spanned := (11, name, from, to, value)
   static Marked := (13, name, from, to, value)
   static equal (a, b) => ((a == b) || Readings.same_place(a, b)) ? true : ((b is Pattern) ? Readings.reads_whole(a, b) : (((b is Text) && Texts.same_text(a, b)) ? true : false))
@@ -805,7 +805,7 @@ Readings := {
 // Keys (`level keys …`): a key's pattern (its `key`, else it), whether it is led by text (begins with a literal) and by
 // what byte, whether a pattern's literals all occur in a text; the rules moved from one node to another (all but the
 // first two, and those catching all, `moved_keys`); how many rules there are around a context (`keys_version`).
-Keys := {
+Keys := class {
   static key_pattern (x) => Keys.noted_key(topattern(((x is Node) && (member(x, Symbol.key) != None)) ? member(x, Symbol.key) : x))
   static noted_key (p) => {
     cache_key(p)
@@ -859,7 +859,7 @@ Keys := {
 // (`keys_reading`, by the list, its length and the rules' epoch); of those, the ones read in a text of the program (by
 // where it is too); the ones led by text in a node's rules (`led_keys`). Each a table of slots and a room after them,
 // cleared once full.
-Caches := {
+Caches := class {
   static leads_at := 3912
   static reads_at := 3984
   static epoch_at := 3996
@@ -990,7 +990,7 @@ Caches := {
 // neither white nor of a word: the same both a quote, else an opening and a closing bracket), each noted with where
 // it was learned so it can be forgotten again (`unpaired`); whether a pair is open before a place; where a block,
 // opened at the end of a line, is closed by a line beginning with a closing.
-Pairs := {
+Pairs := class {
   static pairs_at := 3988
   static paired (t: Text, cap: Text, home) => ((t is Text) && (cap is Text)) ? Pairs.paired_by(t, cap, Splices.opening_end_at(cap.from, cap.to), home) : None
   static paired_by (t: Text, cap: Text, oe, home) => ((oe == cap.from) || ((oe + 1) >= cap.to)) ? None : Pairs.paired_in(t, cap, oe, home)
@@ -1116,7 +1116,7 @@ Pairs := {
 // Layout (`level layout …`): a statement's span (its `statement` key), one continued from the one before it (that one
 // ends with a comma), whether a line goes on into the next (more indented, or a closing); a text's gaps (white) and
 // words as a pattern; digits, a word's inside, a line end in a text; a column of an entry; the first or last where.
-Layout := {
+Layout := class {
   static statement_span (st) => Layout.span_in(member(st, 14))
   static span_in (s: Node) => (s == None) ? None : Layout.statement_in(s.keys)
   static statement_in (l: List) => {
@@ -1221,7 +1221,7 @@ Layout := {
 // bytes and byte pairs in it, and over the program's text or the text taken, an index of where each byte and pair is,
 // sorted, searched by halves); where a pair that opens at a place ends (`pair_end`, by place, the classes' version);
 // whether a part is held outside brackets (`holds_outside`); the entries by a column's value (`last_with`, `all_with`).
-Indexes := {
+Indexes := class {
   static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : (((e - a) > 64) ? Indexes.occurs_long(l, a, e, Indexes.bytes_cached(a, e)) : Indexes.occurs_short(l, a, e))
   static occurs_long (l: Text, a, e, b) => ((b != 0) && (Indexes.bytes_all(l, b) == 0)) ? 0 : (in_program(a, e) ? Indexes.occurs_based(Indexes.based_index(program_from(), program_from() + program_length(), 3960), program_length(), l, a, e) : (Indexes.in_taken(a, e, takent) ? Indexes.occurs_taken(l, a, e, takent) : Indexes.occurs_short(l, a, e)))
   static in_taken (a, e, t: Text) => (t != 0) && (a >= t.from) && (e <= t.to)
@@ -1561,7 +1561,7 @@ Indexes := {
 // holes hold, as entries of a name and a value (but its key and input); whether a pattern catches all (a field, or a
 // sequence of one); a member set, in a node (itself, copied) and in a pattern's fields of that name; an entry; a key
 // added to a node's rules (the rules' epoch moved on where it is read from).
-Members := {
+Members := class {
   static applied_of (x) => {
     a := x
     while (a != None) && ((a is Applied) == 0) {
@@ -1633,7 +1633,7 @@ Members := {
 // it is the language's own: a closure, curried or applied), a member called so (its own closure, else what it is);
 // those of a list a function picks; a member mapped (`map`, of a text or a structure); a place of a name; what a key
 // reads of a text (its length and whether it is wholly noted on it); a name's number and its text; an argument.
-Calls := {
+Calls := class {
   static direct (c) => (c is Closure) || (c is Curried) || (c is Applied)
   static items_of (l: List) => l.items
   static args1 (a) => Calls.args_put(shared_args(3928, 1), a, 0, 1)
@@ -1702,7 +1702,7 @@ Calls := {
 // none when a literal of it is not in the text); holes bound; a span; a text read as a type; what a node's keys read a
 // text wholly as; the last of a list; what a node reads with (`with`); whether a closure reads at a place now; what the
 // rules around a context led by the text at a place read there (the rules' lead bytes first), and the two caches of it.
-Matching := {
+Matching := class {
   static reads (p, t) => Matching.reads_text(p, (t is Node) ? member(t, Symbol.text) : t)
   static reads_text (p, t: Text) => ((t is Text) && (literals_in(p, t.from, t.to) != 0)) ? Matching.reads_in(p, t, textend, boundn) : Readings.not_whole()
   static reads_in (p, t: Text, te, bn) => {
@@ -1831,7 +1831,7 @@ Matching := {
 // holds: a pattern, a text read with, else anything), the holes in it told how they end (inside a pair of literals,
 // beside one); the lines of a statement set aside to be read again, up to one no more indented; cells of a pattern
 // read; a choice of repeating; bytes compared and classed; where anything read up to a place ends; not.
-Built := {
+Built := class {
   static rebuilt (n: Node) => Built.rebuilt_from(n, member(n, Symbol.text), n.keys, list())
   static rebuilt_from (n, t: Text, s: List, l) => {
     pos := t.from
@@ -1954,7 +1954,7 @@ Built := {
 // Turns (`level in_turn …`): the statements of a text read in turn by an item, each to where it ends (or where a block
 // opened in it closes), each read in a region of its own and given to a function as it is read; one not read is set
 // aside, and those are read again after (each one read now taken out, until none more is), one over its budget noted.
-Turns := {
+Turns := class {
   static in_turn (item, f, args, pos) => Turns.turned(item, f, args, pos, turn_depth(), fuel_floor())
   static turned (item, f, args, pos, d, floor) => {
     turn_depth_set(d + 1)
@@ -2074,7 +2074,7 @@ Turns := {
 // Entry (`level entry …`): the input is parts, each ended by a zero byte (the program, the runtime, then files, each
 // its name, a line end, and what it holds); where a part's text begins (past white and `//` lines); a file by its name;
 // the i-th part; the entry's reader, given a text to read; the statements of a text, as a grammar reads them.
-Entry := {
+Entry := class {
   static Reader := (aside, reader, from, to)
   static entered_at := 3856
   static partstart (p, e) => {
@@ -2151,7 +2151,7 @@ Entry := {
 // ChoiceStack (`level choices …`): a choice of how to go on reading, at the top of the stack of them (what kind, what
 // pattern, where, what comes after, and how far holes were bound, memory taken, effects and actives were then); one
 // that undoes, when gone back to, what a choice did.
-ChoiceStack := {
+ChoiceStack := class {
   static chosen (kind, p, pos, k) => ChoiceStack.choice_made(ChoiceStack.choice_room(), kind, p, pos, k)
   static choice_room => {
     s := choices_top()
@@ -2191,7 +2191,7 @@ ChoiceStack := {
 }
 // FieldIndex (`level indexed fields …`, removable): a node of more than 8 fields indexed by name, a table of each
 // name's field (by the name's number, probing on), grown at half full; a field looked for in it, else in the list.
-FieldIndex := {
+FieldIndex := class {
   static own (n: Node, sym) => ((n is Node) && (n.index != None)) ? FieldIndex.indexed_field(n.index, sym) : FieldIndex.listed_field(n, sym)
   static slot_of (x, sym) => {
     c := word_of(x) - 1
@@ -2260,7 +2260,7 @@ FieldIndex := {
 }
 // Basics (`level basics …`): a node (the first made without a parent noted as the root), a cell; bytes put; holes bound saved and restored; shifts; not equal; what is sized or set aside after a
 // mark; arrays (`Array.new`).
-Basics := {
+Basics := class {
   static node (parent) => Basics.root_noted(Node(in: parent, fields: 0, keys: 0, index: 0), parent)
   static root_noted (n, parent) => {
     word_put(3904, n) if (parent == 0) && (word_of(3904) == 0)
@@ -2292,7 +2292,7 @@ Basics := {
 // Origins (`level origins …`): where a text copied was copied from (a log of copies, each where to, from where and
 // how long, one run on extending the last); the byte a byte was first written as (in the program, or in the entry's
 // text); the indent of the line it was written on; whether that line goes on.
-Origins := {
+Origins := class {
   static Copy := (aside, to, from, length)
   static copies_at := 3864
   static copies_count_at := 3868
@@ -2371,7 +2371,7 @@ Origins := {
 // Heap (`level memory …`, removable: without it, memory is only taken): what is taken past a mark has where each
 // value starts noted (a bit a word, `starts_map`), and which of them hold bytes only (`bytes_map`); the arena (past
 // `arena_base`) is not; taking past it stops. Kept: what is made now outlives the region it is made in.
-Heap := {
+Heap := class {
   static marked_from := 536870912
   static starts_map => 1021000000 * 2
   static bytes_map => 1033000000 * 2
@@ -2463,7 +2463,7 @@ Heap := {
 }
 // Memory: what a write touches (the effects a turn counts, a frame's isolation that a younger value reached), what is
 // logged to be undone, and memory taken to last (past the arena's start, where nothing is freed back)
-Memory := {
+Memory := class {
   static isolated_from := 536870912
   static written (x, w, v) => {
     touched_by(x, w, v)
@@ -2587,7 +2587,7 @@ Memory := {
 // Isolation: a frame of memory a call opens (where memory was taken up to, what was older then, whether something older was
 // written something of it), closed by letting all it took go when nothing older holds it, else by collecting it; the
 // caches made at once, and the choices' stack
-Isolation := {
+Isolation := class {
   static depth_most := 4000
   static framed => (isodepth > depth_most) ? depth_most : isodepth
   static frames_kept => {

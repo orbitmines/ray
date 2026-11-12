@@ -1887,39 +1887,6 @@ function text_led_read(ctx, n) {
   }
   0
 }
-function mapped_structure(n, f, g) {
-  var o
-  var s
-  var l
-  var i
-  var c
-  var d
-  var v
-  o = copied(n)
-  s = load (n + 12)
-  l = list()
-  i = 0
-  while i < (load (s + 4)) {
-    c = at(s, i)
-    v = load (c + 16)
-    if truthy(call1(f, v)) {
-      if tag(g) == 2 {
-        v = call1(g, v)
-      } else {
-        v = g
-      }
-      define(o, load (c + 4), v)
-      d = span(load (c + 4), load (c + 8), load (c + 12), v)
-      d <- 13
-    } else {
-      d = span(load (c + 4), load (c + 8), load (c + 12), v)
-    }
-    append(l, d)
-    i = i + 1
-  }
-  (o + 12) <- l
-  o
-}
 function readsv(p, t) {
   var r
   var k
@@ -2705,60 +2672,6 @@ function span(sym, a, e, v) {
   (c + 16) <- v
   c
 }
-function readtext(p, t) {
-  var r
-  var i
-  var b
-  var nv
-  var v
-  var te
-  var bn
-  if tag(t) == 1 {
-    t = member(t, 32)
-  }
-  if tag(t) != 4 {
-    wholly = 8
-    return 0
-  }
-  te = textend
-  bn = boundn
-  textend = load (t + 8)
-  r = matched(sequence(append(append(list(), topattern(p)), ending())), load (t + 4), 0)
-  textend = te
-  if r < 0 {
-    boundn = bn
-    return 0
-  }
-  nv = 0
-  i = bn
-  while i < boundn {
-    b = bounds + (i * 16)
-    if (load b) == 0 {
-      nv = nv + 1
-    }
-    i = i + 1
-  }
-  v = valued_from(bn)
-  if nv == 0 {
-    v = t
-    i = bn
-    while i < boundn {
-      if (load (bounds + (i * 16))) != 0 {
-        v = named_from(bn)
-        define(v, 32, t)
-        i = boundn
-      }
-      i = i + 1
-    }
-  }
-  boundn = bn
-  if tag(p) == 6 {
-    if (load (p + 4)) == 16 {
-      return curried(load (p + 12), v)
-    }
-  }
-  v
-}
 function typed(t, v) {
   if tag(v) == 4 {
     if (tag(t) == 6) or (tag(t) == 5) {
@@ -3291,86 +3204,6 @@ function gaps(l, a, e) {
     }
   }
   l
-}
-function equal(a, b) {
-  var n
-  if a == b {
-    return 12
-  }
-  if (tag(a) == 12) and (tag(b) == 12) {
-    if (load (a + 4)) == (load (b + 4)) {
-      return 12
-    }
-  }
-  if tag(b) == 6 {
-    if tag(a) == 4 {
-      if reads(b, a) == (load (a + 8)) {
-        return 12
-      }
-    }
-    return 8
-  }
-  if (tag(a) == 4) and (tag(b) == 4) {
-    n = (load (a + 8)) - (load (a + 4))
-    if n == ((load (b + 8)) - (load (b + 4))) {
-      if texteq(load (a + 4), load (b + 4), n) {
-        return 12
-      }
-    }
-  }
-  8
-}
-function mapped_text(t, f, g) {
-  var o
-  var q
-  var c
-  var r
-  var n
-  var l
-  var s
-  if (tag(g) == 2) or (tag(g) == 6) {
-    l = list()
-    q = load (t + 4)
-    s = q
-    while q < (load (t + 8)) {
-      c = text(q, q + 1)
-      if truthy(call1(f, c)) {
-        if q > s {
-          append(l, literal(text(s, q)))
-        }
-        if tag(g) == 2 {
-          append(l, pattern(27, g, c))
-        } else {
-          append(l, g)
-        }
-        s = q + 1
-      }
-      q = q + 1
-    }
-    if q > s {
-      append(l, literal(text(s, q)))
-    }
-    return sequence(l)
-  }
-  o = alloc_bytes(((load (t + 8)) - (load (t + 4))) * 16 + 16)
-  n = o
-  q = load (t + 4)
-  while q < (load (t + 8)) {
-    c = text(q, q + 1)
-    if truthy(call1(f, c)) {
-      r = g
-      if tag(r) == 2 {
-        r = call1(r, c)
-      }
-      copy(n, load (r + 4), (load (r + 8)) - (load (r + 4)))
-      n = n + ((load (r + 8)) - (load (r + 4)))
-    } else {
-      n <-8 (load8 q)
-      n = n + 1
-    }
-    q = q + 1
-  }
-  text(o, n)
 }
 function selmethod(x, sym, f, args) {
   if sym == 38 {

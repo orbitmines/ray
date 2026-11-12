@@ -2752,17 +2752,18 @@ Lowered := {
   }
   static noted_twice (sn, seen, twice) => ((level cw_index_of (Lowered.functions) (sn)) === None) ? None : (((level cw_index_of (seen) (sn)) === None) ? seen.append(sn) : twice.append(sn))
   static override_one (st, sn, twice, left, kept) => (((level cw_index_of (twice) (sn)) === None) || !((level cw_index_of (left) (sn)) === None)) ? kept.append(st) : left.append(sn)
-  // (what `Runtime := { … }` holds, each `static …` in it)
-  // (what each section, `X := { … }`, holds, each `static …` in it: Runtime.ray's, and Compiler.ray's own levels; a
-  // function of a section is called by its name, `X.f(…)`)
+  // (what each section, `X := class { … }` (or `X := { … }`), holds, each `static …` in it: Runtime.ray's, and Compiler.ray's
+  // own levels; a function of a section is called by its name, `X.f(…)`)
   static sections := Array.new
   static members_of (ms) => Lowered.members_in(Compiled.statements_of(ms), Array.new)
   static members_in (ml, mo) => ml.empty ? mo : Lowered.members_in(ml.rest, mo.joined(Lowered.section(ml.first)))
   static section (st) => (Lowered.kind(st) == `def_name`) ? Lowered.section_named(Compiled.trimmed(Lowered.parsed(st).def_name), Lowered.parsed(st).def_value) : Array.new
   static section_named (sn, sv) => {
     Lowered.sections.append(sn)
-    Compiled.statements_of(Compiled.inner_of(Compiled.trimmed(sv)))
+    Compiled.statements_of(Compiled.inner_of(Lowered.class_body(Compiled.trimmed(sv))))
   }
+  // (a class's block, `class { … }`: the block, after `class`)
+  static class_body (cb) => Compiled.braced(cb) ? cb : Compiled.trimmed(level cw_span_of (level cw_slice (cb) (5) (6)) (cb))
   static is_section (sn) => !((level cw_index_of (Lowered.sections) (sn)) === None)
   // (a kind, `X := (tag, a: T, b)`, or a constant, `X := 0`, noted before any function is written)
   static declared (dm) => (Lowered.kind(dm) == `def_name`) ? Lowered.declared_as(Compiled.trimmed(Lowered.parsed(dm).def_name), Compiled.trimmed(Lowered.parsed(dm).def_value)) : None

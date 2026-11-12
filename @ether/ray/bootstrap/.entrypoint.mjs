@@ -69,9 +69,9 @@ export const PAGES = 32000;
 export const uncommented = (text) => text.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
 const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'ex := (level input_part 0) as Expression\n'; return t.slice(0, t.indexOf(end) + end.length); };
 // (Compiler.ray's part the compiler is itself written with: from `Lowered :=` on, what writes Runtime.ray for the back end)
-const lowering = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.indexOf('\nLowered := {\n') + 1); };
+const lowering = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nLowered := (class )?\{\n/) + 1); };
 // (and Compiler.ray's own levels, written for the back end after Runtime.ray: from `Texts :=` up to `Lowered :=`)
-const levels = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.indexOf('\nTexts := {\n') + 1, t.indexOf('\nLowered := {\n') + 1); };
+const levels = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nTexts := (class )?\{\n/) + 1, t.search(/\nLowered := (class )?\{\n/) + 1); };
 export const lowered_input = () => readFileSync(bootstrap('Runtime.ray'), 'utf8') + '\n' + levels();
 export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray', 'High.ray'].map((f) => readFileSync(wasm(f), 'utf8')), lowering(), readFileSync(wasm('compile.ray'), 'utf8')].join(''));
 

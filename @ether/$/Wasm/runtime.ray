@@ -5075,12 +5075,6 @@ function over_budget(a, e) {
   }
   0
 }
-function white_after(q) {
-  while (q < textend) and white(load8 q) {
-    q = q + 1
-  }
-  q
-}
 function indent_written(a) {
   var o
   var q
@@ -5151,14 +5145,6 @@ function continued_at(n) {
   }
   (j > d) or ((load8 (3584 + (load8 (n + 1 + j)))) == 3)
 }
-function indent_at(q) {
-  var d
-  d = 0
-  while ((q + d) < textend) and (((load8 (q + d)) == 32) or ((load8 (q + d)) == 9)) {
-    d = d + 1
-  }
-  d
-}
 function continued_where_written(q) {
   var o
   var te
@@ -5186,69 +5172,6 @@ function continued_where_written(q) {
   b = continued_at(o)
   textend = r
   b
-}
-function quoted_around(a, n) {
-  var r
-  if pair_class(a - 1) != 2 {
-    return 0
-  }
-  r = pair_end(a - 1)
-  r > n
-}
-function quote_open(a, n) {
-  var q
-  var r
-  q = a
-  while q < n {
-    if (load8 (3584 + (load8 q))) == 2 {
-      if pair_class(q) == 2 {
-        r = pair_end(q)
-        if (r == 0) or (r > n) {
-          return 1
-        }
-        q = r
-      } else {
-        q = q + 1
-      }
-    } else {
-      q = q + 1
-    }
-  }
-  0
-}
-function statement_end(pos, at) {
-  var q
-  var d
-  var i
-  var j
-  var c
-  q = at
-  while (q > pos) and ((load8 (q - 1)) != 10) {
-    q = q - 1
-  }
-  d = indent_at(q)
-  q = at
-  while (q < textend) and ((load8 q) != 10) {
-    q = q + 1
-  }
-  while q < textend {
-    i = q + 1
-    j = indent_at(i)
-    c = 10
-    if (i + j) < textend {
-      c = load8 (i + j)
-    }
-    if ((c != 10) and (j <= d)) and (((load8 (3584 + c)) != 3) and (comma_ended(at, q) == 0)) {
-      if quote_open(at, q) == 0 {
-        return q
-      }
-    }
-    q = i
-    while (q < textend) and ((load8 q) != 10) {
-      q = q + 1
-    }
-  }
-  textend
 }
 function unread_until(pos, at) {
   var q

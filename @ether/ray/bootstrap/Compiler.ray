@@ -520,25 +520,25 @@ Lowered := {
   }
   static grouped (gc, ge) => (Compiled.statements_of(gc).count == 1) ? Lowered.expression(gc, ge) : Lowered.body(Compiled.trimmed(gc), ge)
   static choice (ci, cy, cn, ce) => {
-    Lowered.w("if ")
+    Lowered.w("if (")
     Lowered.expression(ci, ce)
-    Lowered.w(" {\n")
+    Lowered.w(") {\n")
     Lowered.expression(cy, ce)
     Lowered.w("\n} else {\n")
     Lowered.expression(cn, ce)
     Lowered.w("\n}")
   }
   static when (wc, wv, we) => {
-    Lowered.w("if ")
+    Lowered.w("if (")
     Lowered.expression(wc, we)
-    Lowered.w(" {\n")
+    Lowered.w(") {\n")
     Lowered.expression(wv, we)
     Lowered.w("\n}")
   }
   static looped (lc, lb, le) => {
-    Lowered.w("while ")
+    Lowered.w("while (")
     Lowered.expression(lc, le)
-    Lowered.w(" {\n")
+    Lowered.w(") {\n")
     Lowered.body(lb, le)
     Lowered.w("\n}")
   }

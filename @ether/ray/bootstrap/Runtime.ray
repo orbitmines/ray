@@ -49,4 +49,34 @@ Runtime := {
   static Class := (5, function, env, header)
   static classv (f, env) => Class(function: f, env: env)
   static classh (f, env, h) => Class(function: f, env: env, header: h)
+
+  // A text: where it starts in what a run holds, and where it ends.
+  static Text := (4, from, to)
+  static text (a, e) => Text(from: a, to: e)
+
+  // A pattern: what a text is read as. How, its kind says, what with, its parts: a literal (its text), characters (the
+  // text of those it takes), a sequence or an either (the list of what is read in turn, or of what is tried in turn),
+  // a repeat (what is repeated, and the least number of times), a field (its name, and what it takes), the end of the
+  // text, anything.
+  static literally := 1
+  static characters := 2
+  static in_turn := 3
+  static either_of := 4
+  static repeating := 5
+  static named_field := 6
+  static at_end := 7
+  static anything_at_all := 8
+  static Pattern := (6, kind, a, b, c, d)
+  static pattern (kind, a, b) => Pattern(kind: kind, a: a, b: b)
+  static pattern3 (kind, a, b, c) => Pattern(kind: kind, a: a, b: b, c: c)
+  static pattern4 (kind, a, b, c, d) => Pattern(kind: kind, a: a, b: b, c: c, d: d)
+  static literal (t) => Pattern(kind: literally, a: t)
+  static chars (c) => Pattern(kind: characters, a: c)
+  static sequence (l) => Pattern(kind: in_turn, a: l)
+  static either (l) => Pattern(kind: either_of, a: l)
+  // (repeated any number of times: of a repeat, the same; of what a repeat is of, at least as many times as it says)
+  static repeated (inner: Pattern, least) => ((least == 0) && (inner is Pattern) && (inner.kind == repeating)) ? Pattern(kind: repeating, a: inner.a) : Pattern(kind: repeating, a: inner, b: least)
+  static field (name, inner) => Pattern(kind: named_field, a: name, b: inner)
+  static ending => Pattern(kind: at_end)
+  static anything => Pattern(kind: anything_at_all)
 }

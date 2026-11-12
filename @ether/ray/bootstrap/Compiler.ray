@@ -712,6 +712,89 @@ Splices := {
     f.next
   }
 }
+// Readings (`level read …`): whether two values are the same (a text read wholly by a pattern is); a text read by a
+// pattern, to what its holes bound (`readtext`); a text, or a node's structure, with what a function picks mapped by
+// another (or to a value; into a pattern, a byte picked held by it).
+Readings := {
+  static Spanned := (11, name, from, to, value)
+  static Marked := (13, name, from, to, value)
+  static equal (a, b) => ((a == b) || Readings.same_place(a, b)) ? true : ((b is Pattern) ? Readings.reads_whole(a, b) : (((b is Text) && Texts.same_text(a, b)) ? true : false))
+  static same_place (a: Place, b: Place) => (a is Place) && (b is Place) && (a.name == b.name)
+  static reads_whole (a: Text, b) => ((a is Text) && (reads(b, a) == a.to)) ? true : false
+  static readtext (p, t) => Readings.read_from(p, (t is Node) ? member(t, Symbol.text) : t)
+  static read_from (p, t: Text) => (t is Text) ? Readings.read_in(p, t, textend, boundn) : Readings.not_whole()
+  static not_whole => {
+    wholly = false
+    None
+  }
+  static read_in (p, t: Text, te, bn) => {
+    textend = t.to
+    r := matched(sequence(append(append(list(), topattern(p)), ending())), t.from, 0)
+    textend = te
+    (r < 0) ? Readings.read_failed(bn) : Readings.curried_if(p, Readings.bound_read(t, bn))
+  }
+  static read_failed (bn) => {
+    boundn = bn
+    None
+  }
+  static bound_read (t, bn) => {
+    v := (Runtime.unnamed_count(bn) != 0) ? valued_from(bn) : ((boundn > bn) ? Runtime.defined_as(named_from(bn), Symbol.text, t) : t)
+    boundn = bn
+    v
+  }
+  static curried_if (p: Pattern, v) => ((p is Pattern) && (p.kind == with_function)) ? curried(p.b, v) : v
+  static mapped_text (t: Text, f, g) => ((g is Closure) || (g is Pattern)) ? Readings.mapped_pattern(t, f, g) : Readings.mapped_bytes(t, f, g, alloc_bytes(((t.to - t.from) * 16) + 16))
+  static mapped_pattern (t: Text, f, g) => {
+    l := list()
+    q := t.from
+    s := q
+    while q < t.to {
+      s = Readings.pattern_part(l, f, g, s, q)
+      q = q + 1
+    }
+    append(l, literal(text(s, q))) if q > s
+    sequence(l)
+  }
+  static pattern_part (l, f, g, s, q) => truthy(call1(f, text(q, q + 1))) ? Readings.part_put(l, g, s, q) : s
+  static part_put (l, g, s, q) => {
+    append(l, literal(text(s, q))) if q > s
+    append(l, (g is Closure) ? Pattern(kind: typed_with, a: g, b: text(q, q + 1)) : g)
+    q + 1
+  }
+  static mapped_bytes (t: Text, f, g, o) => {
+    n := o
+    q := t.from
+    while q < t.to {
+      n = Readings.byte_mapped(n, q, f, g)
+      q = q + 1
+    }
+    text(o, n)
+  }
+  static byte_mapped (n, q, f, g) => truthy(call1(f, text(q, q + 1))) ? Readings.text_put(n, (g is Closure) ? call1(g, text(q, q + 1)) : g) : Readings.byte_kept(n, q)
+  static text_put (n, r: Text) => {
+    copy(n, r.from, r.to - r.from)
+    n + (r.to - r.from)
+  }
+  static byte_kept (n, q) => {
+    byte_put(n, byte(q))
+    n + 1
+  }
+  static mapped_structure (n: Node, f, g) => Readings.structure_into(copied(n), n.keys, list(), f, g)
+  static structure_into (o: Node, s: List, l, f, g) => {
+    i := 0
+    while i < s.count {
+      append(l, Readings.span_mapped(o, at(s, i), f, g))
+      i = i + 1
+    }
+    o.keys = l
+    o
+  }
+  static span_mapped (o, c: Spanned, f, g) => truthy(call1(f, c.value)) ? Readings.span_marked(o, c, (g is Closure) ? call1(g, c.value) : g) : Spanned(name: c.name, from: c.from, to: c.to, value: c.value)
+  static span_marked (o, c: Spanned, v) => {
+    define(o, c.name, v)
+    Marked(name: c.name, from: c.from, to: c.to, value: v)
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

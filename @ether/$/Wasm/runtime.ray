@@ -192,6 +192,16 @@ function statement_over() {
 function aside_or_none() {
   load 3860
 }
+function choices_end() {
+  (load 3848) + 67108864
+}
+function word_logged(w, v) {
+  if w < (load 3944) {
+    logged(w)
+  }
+  w <- v
+  0
+}
 function char_class(c) {
   load8 (3584 + c)
 }

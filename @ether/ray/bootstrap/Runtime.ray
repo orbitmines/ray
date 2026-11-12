@@ -1,0 +1,357 @@
+// Runtime: what a program runs on, whatever runs it. The kinds of value a run holds, how a name is found, how a call runs, how
+// a text is read by a pattern and where a statement in it ends; the externals Expression is given (`.`, `&`, `goto`, `label`,
+// Design §21.2) and what the host gives (texts to read, bytes written out). Nothing here says where a value is kept or
+// how: a back end lays the kinds out (`$/Wasm.project.ray`'s level), and the rest is optimization, levels of Compiler.ray,
+// each removable (Philosophy: optimizations apart from their specification): fields indexed once a node has many,
+// rules found by the text they lead with, what a call made let go when it returns, a choice remembered instead of read
+// again.
+Runtime := {
+  // A value is one of these, or the language's own: None, false, true (what is read on them is read on the language's).
+  // (each kind is a class of the language too, `Runtime.kinds`: what is read on a list is read on Array, on a text String)
+
+  // A node: named fields in the order given (the latest first), and what it is in, which is asked what it does not hold.
+  // What it is made of, its parts (`x &+ y`), are asked after itself, before what it is in (Expression's `Node`).
+  static Node := class (in?: Runtime.Node) => {
+    fields := Array.new
+    // (its own field of that name: the entry, the latest given)
+    own (name) => fields.find((field) => field.name == name)
+    // (what it holds by that name, or what it is in holds; none anywhere, None)
+    lookup (name) => (own(name) === None) ? ((in === None) ? None : in.lookup(name)) : own(name).value
+    // (given here: a field of its own, the same one again if it has it)
+    define (name, value) => {
+      (own(name) === None) ? fields.prepend(Runtime.Field(name: name, value: value)) : (own(name).value = value)
+      value
+    }
+    // (given again: where it is held, here or in what it is in; held nowhere, here)
+    assign (name, value) => (holder(name) ?? this).define(name, value)
+    holder (name) => (own(name) === None) ? ((in === None) ? None : in.holder(name)) : this
+    // (each name it holds, its own, in order)
+    names => fields.map(.name)
+  }
+  static Field := class (name: Runtime.Name, value) => { }
+  // A name: a text, the same one wherever it is written (two names are the same when their characters are).
+  static Name := Runtime.Text
+
+  // A list: values in order, grown at its end. (Array is what the language makes of it.)
+  static List := class (items: Runtime.Value[] = []) => {
+    count => items.count
+    at (index) => items[index]
+    append (value) => {
+      items = items.joined([value])
+      this
+    }
+    prepend (value) => {
+      items = [value].joined(items)
+      this
+    }
+    find (wanted) => items.find(wanted)
+    map (mapping) => items.map(mapping)
+    joined (other) => Runtime.List(items: items.joined(other.items))
+  }
+
+  // A text: characters of a source from one place to another. Two read from the same source are the same text when their
+  // characters are; one made from others (`a + b`) is a source of its own.
+  static Text := class (source: Runtime.Source, from: Runtime.Place, to: Runtime.Place) => {
+    empty => from == to
+    first => source.at(from)
+    rest => Runtime.Text(source: source, from: from.next, to: to)
+    count => empty ? 0 : 1 + rest.count
+    == (other) => (empty && other.empty) || (!(empty || other.empty) && (first == other.first) && (rest == other.rest))
+    // (where it was written: its place in what the host gave, followed back through what it was copied from)
+    written_at => source.origin(from)
+  }
+  // A place in a source: before its first character, between two, after its last.
+  static Place := class (source: Runtime.Source, index: Runtime.Count) => {
+    next => Runtime.Place(source: source, index: index.next)
+    == (other) => (source === other.source) && (index == other.index)
+  }
+  // (a count, walked one at a time: Design's no integers; what the back end holds as a number, `Runtime.Count.next`, is
+  // the level's)
+  static Count := Number
+  // What the host gave to read, or what was made of other texts: its characters, and where each was written.
+  static Source := class (characters: Runtime.Character[], written?: Runtime.Text[]) => {
+    at (place) => characters[place.index]
+    origin (place) => (written === None) ? place : Runtime.copied_from(written, place)
+    whole => Runtime.Text(source: this, from: Runtime.Place(source: this, index: 0), to: Runtime.Place(source: this, index: characters.count))
+  }
+  // (a character: a byte of UTF-8 as the host gives it; what it is in Unicode is the language's, Char)
+  static Character := Byte
+  // (a text made of others: each character where the one it was copied from was written)
+  static copied_from (written, place) => Runtime.copied_in(written, place.index)
+  static copied_in (pieces, index) => (index < pieces.first.count) ? pieces.first.from.source.origin(Runtime.Place(source: pieces.first.from.source, index: pieces.first.from.index + index)) : Runtime.copied_in(pieces.rest, index - pieces.first.count)
+  static joined (a, b) => Runtime.Source(characters: a.characters.joined(b.characters), written: [a, b]).whole
+
+  // A closure: code written somewhere, its parameters, and the node it was written in (what its code sees).
+  static Closure := class (parameters: Runtime.Name[], code, scope: Runtime.Node, named?: boolean) => { }
+  // A class: its header (the fields an instance is given, a pattern its text is read by), its body, read for each instance
+  // (Design §21.3, "the body is the constructor"), and where it was written.
+  static Class := class (header: Runtime.Pattern, body, scope: Runtime.Node) => { }
+
+  // The kinds of value as the language has them: what is read on one that it does not hold is read on its class.
+  // (a node's own fields first; then its kind's class, the language's: a list Array's, a text String's, a number Number's;
+  // None, false and true the language's own values)
+  static kinds := Runtime.Node()
+  static kind_of (value) => (value is Runtime.List) ? `Array` : ((value is Runtime.Text) ? `String` : ((value is Runtime.Count) ? `Number` : ((value is Runtime.Closure) ? `Function` : None)))
+  static member (value, name) => Runtime.member_held((value is Runtime.Node) ? value.lookup(name) : None, value, name)
+  static member_held (held, value, name) => (held === None) ? Runtime.member_of_kind(value, name) : Runtime.answered(held, value)
+  static member_of_kind (value, name) => (Runtime.kind_of(value) === None) ? None : Runtime.answered(Runtime.kinds.lookup(Runtime.kind_of(value)).lookup(name), value)
+  // (a member that is a method without parameters, `count => …`, is what it answers, read on the value; any other as held)
+  static answered (held, on) => ((held is Runtime.Closure) && (held.parameters.empty && !(held.named === true))) ? Runtime.call(held, [], Runtime.Node(), on) : held
+  static give_member (value, name, given) => (value is Runtime.Node) ? value.define(name, given) : None
+
+  // A frame: a call running. Its node holds its parameters, given what it was called with, in the closure's node; `this` is
+  // what it was read on; its caller what called it. (Its node is the `&` Expression is given: a rule's application.)
+  static Frame := class (closure: Runtime.Closure, this?, caller?: Runtime.Frame) => {
+    node := Runtime.Node(in: closure.scope)
+    answer := None
+    // (where it is: the statement it runs, set by `goto`, read from `label`)
+    at := None
+  }
+  // A call: a closure run in a frame of its own, its parameters given the arguments in order and those given by name; a
+  // class, an instance made; a node, its own `(…)` method; anything else, nothing to call.
+  static call (called, arguments, named, on = None) => (called is Runtime.Closure) ? Runtime.run(Runtime.framed(called, arguments, named, on)) : ((called is Runtime.Class) ? Runtime.made(called, arguments, named) : ((called is Runtime.Node) ? Runtime.called_member(called, arguments, named) : None))
+  static framed (closure, arguments, named, on) => {
+    frame := Runtime.Frame(closure: closure, this: on)
+    closure.parameters.enumerate.for((parameter) => frame.node.define(parameter.value, arguments[parameter.index]))
+    named.names.for((name) => frame.node.define(name, named.lookup(name)))
+    frame
+  }
+  static run (frame) => {
+    frame.answer = Runtime.ran(frame.closure.code, frame)
+    frame.answer
+  }
+  // (a node called: its method `(…)`, `{this}(…)` in the language, read on it)
+  static called_member (called, arguments, named) => Runtime.call(called.lookup(`()`), arguments, named, called)
+  // (an instance: a node in the class's, its header's fields given what it was given, then its body read in it)
+  static made (made_by, arguments, named) => {
+    instance := Runtime.Node(in: made_by.scope)
+    instance.define(`class`, made_by)
+    Runtime.given_fields(made_by.header, arguments, named).for((field) => instance.define(field.name, field.value))
+    Runtime.ran(made_by.body, Runtime.Frame(closure: Runtime.Closure(parameters: [], code: made_by.body, scope: instance), this: instance))
+    instance
+  }
+  static given_fields (header, arguments, named) => header.names.enumerate.map((name) => Runtime.Field(name: name.value, value: (named.own(name.value) === None) ? arguments[name.index] : named.lookup(name.value)))
+  // (code run: Expression's statements, each read in the frame's node and run in turn; control at a label `goto` names)
+  static ran (code, frame) => code(frame)
+
+  // The externals (Design §21.2), as Expression is given them: each what its rule reads, `external <word> …`.
+  static externals := {
+    // (`.`: a node of its own in what it is read in, made of what the method was read on; given a value, that value made
+    // a part of where it is read)
+    `.` (frame, given) => (given === None) ? Runtime.Node(in: frame.node) : Runtime.made_of(frame.node, given)
+    // (`&`: the application itself, its captures, `this`, `caller`, what it is made of)
+    `&` (frame) => frame
+    // (`goto`: control to a statement, the one a label names; and `label`, where it is)
+    `goto` (frame, to) => (frame.at = to)
+    `label` (frame) => frame.at
+  }
+  static made_of (whole, part) => {
+    whole.define(`parts`, [part].joined(whole.lookup(`parts`) ?? []))
+    part
+  }
+
+  // A pattern: what it reads from a place in a text, every way it can, in order. To read is to find the first way whose
+  // end the rest reads too (`then`): what is read after it is asked for each way until one answers. A way is where it
+  // ends and what its holes were given (`Bound`).
+  static Pattern := class {
+    // (read from `at`, what was bound before given; `then` asked of each way, the first it answers is the reading's)
+    read (at, bound, then) => None
+    // (the names of its holes, in order)
+    names => []
+  }
+  // (what a hole took: its name, from where to where, and the value it was read as, if any; holes bound before it after it)
+  static Bound := class (name, from, to, value?, before?: Runtime.Bound) => {
+    of (wanted) => (name == wanted) ? this : ((before === None) ? None : before.of(wanted))
+  }
+  // (a text written as it is: its characters there; a bracket among them only where it pairs, `Runtime.pairs`)
+  static Literal := class: Runtime.Pattern (text: Runtime.Text) => {
+    read (at, bound, then) => (Runtime.written_at(at, text) && Runtime.pairs.where_paired(at, text)) ? then(Runtime.after(at, text), bound) : None
+  }
+  // (one character of a kind: a space, a line's end, a word's, a digit; one that ends a line only where the statement
+  // goes on after it)
+  static Characters := class: Runtime.Pattern (kind: (Runtime.Character) => boolean) => {
+    read (at, bound, then) => (!(at.index == at.source.characters.count) && kind(at.source.at(at))) ? then(at.next, bound) : None
+  }
+  // (each in turn)
+  static Sequence := class: Runtime.Pattern (parts: Runtime.Pattern[]) => {
+    read (at, bound, then) => parts.empty ? then(at, bound) : parts.first.read(at, bound, (after, given) => Runtime.Sequence(parts: parts.rest).read(after, given, then))
+    names => parts.map(.names).flatten
+  }
+  // (the first of them that reads, in order)
+  static Either := class: Runtime.Pattern (ways: Runtime.Pattern[]) => {
+    read (at, bound, then) => ways.empty ? None : (ways.first.read(at, bound, then) ?? Runtime.Either(ways: ways.rest).read(at, bound, then))
+    names => ways.map(.names).flatten
+  }
+  // (as many as read, the most first, at least so many; what each turn's holes took gathered, a list of each, `x[]`)
+  static Repeated := class: Runtime.Pattern (inner: Runtime.Pattern, least: Runtime.Count = 0) => {
+    read (at, bound, then) => Runtime.repeating(inner, least, at, bound, [], then)
+    names => inner.names
+  }
+  static repeating (inner, least, at, bound, turns, then) => inner.read(at, None, (after, given) => (after == at) ? None : Runtime.repeating(inner, least, after, bound, turns.joined([given]), then)) ?? ((turns.count >= least) ? then(at, Runtime.gathered(inner.names, turns, bound)) : None)
+  static gathered (names, turns, bound) => names.empty ? bound : Runtime.Bound(name: names.first, value: turns.map((turn) => Runtime.bound_value(turn, names.first)), before: Runtime.gathered(names.rest, turns, bound))
+  // (a hole: what its pattern reads, given its name; read as its type where it has one, `{x: T}`, the value it is read as)
+  static Hole := class: Runtime.Pattern (name: Runtime.Name, inner: Runtime.Pattern, type?) => {
+    read (at, bound, then) => inner.read(at, bound, (after, given) => then(after, Runtime.Bound(name: name, from: at, to: after, value: Runtime.typed(type, Runtime.Text(source: at.source, from: at, to: after), given), before: given)))
+    names => [name]
+  }
+  // (a hole's value: as its type reads it (a class, an instance its header gives; a function of the text, what it
+  // answers), else the text it took)
+  static typed (type, text, given) => (type === None) ? text : ((type is Runtime.Class) ? Runtime.made(type, [], Runtime.bound_node(given)) : Runtime.call(type, [text], Runtime.Node()))
+  static bound_node (bound) => {
+    node := Runtime.Node()
+    Runtime.each_bound(bound, (b) => (node.own(b.name) === None) ? node.define(b.name, b.value) : None)
+    node
+  }
+  static bound_value (bound, name) => ((bound === None) || (bound.of(name) === None)) ? None : bound.of(name).value
+  static each_bound (bound, body) => (bound === None) ? None : (body(bound) ?? Runtime.each_bound(bound.before, body))
+  // (anything: as little as the rest allows, one more character each time it does not)
+  static Anything := class: Runtime.Pattern {
+    read (at, bound, then) => then(at, bound) ?? ((at.index == at.source.characters.count) ? None : read(at.next, bound, then))
+  }
+  // (the end of the text)
+  static Ending := class: Runtime.Pattern {
+    read (at, bound, then) => (at.index == at.source.characters.count) ? then(at, bound) : None
+  }
+  // (what a node's rules read, the rule that reads it applied: its holes what each took, its input the text; a rule never
+  // reads again where it is already reading)
+  static Rules := class: Runtime.Pattern (node: Runtime.Node) => {
+    read (at, bound, then) => Runtime.reading.among(node, at) ? None : Runtime.applied(node, at, bound, then)
+  }
+  static applied (node, at, bound, then) => Runtime.reading.while_in(node, at, () => node.lookup(`reading`).read(at, None, (after, given) => then(after, Runtime.Bound(name: `applied`, from: at, to: after, value: Runtime.application(node, given, Runtime.Text(source: at.source, from: at, to: after)), before: bound))))
+  static application (node, given, input) => {
+    applied := Runtime.bound_node(given)
+    applied.define(`input`, input)
+    applied
+  }
+  // (what is being read where, so a rule is not read inside its own reading at the same place)
+  static reading := {
+    readings := []
+    among (node, at) => readings.some((r) => (r.first === node) && (r.last == at))
+    while_in (node, at, body) => {
+      readings = [[node, at]].joined(readings)
+      answer := body()
+      readings = readings.rest
+      answer
+    }
+  }
+  // (a pattern made when it is read: what the function answers, given what was bound)
+  static Dynamic := class: Runtime.Pattern (making) => {
+    read (at, bound, then) => Runtime.call(making, [Runtime.bound_node(bound)], Runtime.Node()).read(at, bound, then)
+  }
+  // (where a statement ends: the end of the text, or a line's end after which it does not go on, `Runtime.layout`)
+  static Statement_end := class: Runtime.Pattern (statement_from: Runtime.Place) => {
+    read (at, bound, then) => Runtime.layout.ends(statement_from, at) ? then(at, bound) : None
+  }
+  // (any value as the pattern it reads as: a pattern itself, a text the text written, a list each in turn, an unread name
+  // a hole of that name (of its type, if it has one); a node with a grammar of its own, by it)
+  static pattern_of (value) => (value is Runtime.Pattern) ? value : ((value is Runtime.Text) ? Runtime.Literal(text: value) : ((value is Runtime.List) ? Runtime.Sequence(parts: value.map((part) => Runtime.pattern_of(part))) : ((value is Runtime.Unread) ? Runtime.Hole(name: value.name, inner: Runtime.Anything(), type: value.type) : ((value is Runtime.Node) && !(value.lookup(`grammar`) === None) ? Runtime.Rules(node: value.lookup(`grammar`)) : value))))
+  // A name read where nothing holds it: its place, the name and where it was read (Expression's `Place`); given a type
+  // (`x: T`), read as a pattern, a hole of that type.
+  static Unread := class (name: Runtime.Name, in: Runtime.Node, type?) => { }
+  // (a text read whole by a pattern: what its holes took, or nothing when it does not read)
+  static read_whole (pattern, text) => pattern.read(text.from, None, (after, given) => (after == text.to) ? (given ?? Runtime.Bound(name: None, from: text.from, to: after)) : None)
+  // (and the reading the longest way from where it begins: where it ends, what was bound)
+  static read_from (pattern, at) => pattern.read(at, None, (after, given) => Runtime.Bound(name: `read`, from: at, to: after, before: given))
+
+  // Where a statement ends (Design §4.5): at a line's end, unless the statement goes on past it. It goes on where a bracket
+  // or quote opened in it is not closed yet, where the line ends with a comma, or where the next line that holds something
+  // is indented deeper than the statement's first, or begins with a closing bracket. A line holding only spaces is passed
+  // over.
+  static layout := {
+    ends (statement_from, at) => (at.index == at.source.characters.count) || (Runtime.line_end(at) && !goes_on(statement_from, at))
+    goes_on (statement_from, at) => Runtime.pairs.open_between(statement_from, at) || comma_ended(at) || deeper_after(statement_from, at)
+    comma_ended (at) => Runtime.before_spaces(at) == `,`
+    deeper_after (statement_from, at) => Runtime.next_line_held(at) !== None && ((Runtime.indent(Runtime.next_line_held(at)) > Runtime.indent(Runtime.line_start(statement_from))) || Runtime.pairs.closes(Runtime.after_indent(Runtime.next_line_held(at))))
+  }
+  static line_end (at) => !(at.index == at.source.characters.count) && (at.source.at(at) == `\n`)
+  static line_start (at) => ((at.index == 0) || (at.source.characters[at.index - 1] == `\n`)) ? at : Runtime.line_start(Runtime.Place(source: at.source, index: at.index - 1))
+  static indent (line) => Runtime.spaces_from(line).index - line.index
+  static spaces_from (at) => (!(at.index == at.source.characters.count) && ((at.source.at(at) == ` `) || (at.source.at(at) == `\t`))) ? Runtime.spaces_from(at.next) : at
+  static after_indent (line) => Runtime.spaces_from(line)
+  // (the next line after a line's end that holds more than spaces, its start; none, none)
+  static next_line_held (at) => (at.index == at.source.characters.count) ? None : (Runtime.line_end(Runtime.spaces_from(at.next)) ? Runtime.next_line_held(Runtime.spaces_from(at.next)) : ((Runtime.spaces_from(at.next).index == at.source.characters.count) ? None : at.next))
+  static before_spaces (at) => ((at.index == 0) || !((at.source.characters[at.index - 1] == ` `) || (at.source.characters[at.index - 1] == `\t`))) ? ((at.index == 0) ? None : at.source.characters[at.index - 1]) : Runtime.before_spaces(Runtime.Place(source: at.source, index: at.index - 1))
+  static written_at (at, text) => text.empty || (!(at.index == at.source.characters.count) && (at.source.at(at) == text.first) && Runtime.written_at(at.next, text.rest))
+  static after (at, text) => text.empty ? at : Runtime.after(at.next, text.rest)
+
+  // The pairs: brackets and quotes, as the language declares them (Expression's `level paired`, from the entrypoint's
+  // rules written with them: `({grouped})`, `[{items}]`, `` `{text}` ``). A bracket pairs with the first closing one after
+  // it not inside another pair, or a quote; inside a quote nothing pairs.
+  static pairs := {
+    // (each opening text, its closing one, and whether what is between is read (a bracket) or kept as written (a quote))
+    declared := []
+    declare (opening, closing, quoting) => declared = declared.joined([[opening, closing, quoting]])
+    opening_at (at) => declared.find((pair) => Runtime.written_at(at, pair.first))
+    closing_at (at) => declared.find((pair) => Runtime.written_at(at, pair[1]))
+    // (where the pair opened here closes: after its closing text; none, it is open)
+    end_of (at, pair) => Runtime.closed_from(Runtime.after(at, pair.first), pair)
+    // (a literal holding a bracket reads only where that bracket pairs: an opening one that closes, a closing one that
+    // closes one opened before it in the statement)
+    where_paired (at, text) => (opening_at(at) === None) || !(end_of(at, opening_at(at)) === None)
+    open_between (from, to) => (from == to) ? false : ((opening_at(from) === None) ? open_between(from.next, to) : ((end_of(from, opening_at(from)) === None) || (end_of(from, opening_at(from)).index > to.index) || open_between(end_of(from, opening_at(from)), to)))
+    closes (at) => !(closing_at(at) === None)
+  }
+  static closed_from (at, pair) => (at.index == at.source.characters.count) ? None : (Runtime.written_at(at, pair[1]) ? Runtime.after(at, pair[1]) : (((pair.last === true) || (Runtime.pairs.opening_at(at) === None)) ? Runtime.closed_from(at.next, pair) : Runtime.closed_inner(Runtime.pairs.end_of(at, Runtime.pairs.opening_at(at)), pair)))
+  static closed_inner (inner_end, pair) => (inner_end === None) ? None : Runtime.closed_from(inner_end, pair)
+
+  // A reading's budget: steps, each a pattern asked to read once. Past it the reading stops where it is: what it painted
+  // and said is kept, and it says it ran out. One statement past its own share answers nothing and the reading goes on
+  // after it (`budget.statement`).
+  static budget := {
+    steps := None
+    statement := None
+    spent := 0
+    step => {
+      spent = spent + 1
+      (!(steps === None) && (spent > steps)) ? Runtime.said(`ran out of steps`, None) : None
+    }
+  }
+
+  // What the host gives and takes (Design §14: a location is what is there). The texts given to read, in parts (the
+  // language's header, the program, what it includes); a file by its location; bytes written out, in order; what was painted
+  // and said, read back by the host when the reading ends.
+  static host := {
+    parts := []
+    part (index) => parts[index]
+    file_named (location) => external read location
+    written := []
+    write (byte) => written = written.joined([byte])
+    painted := []
+    paint (style, shown, holes) => painted = painted.joined([[style, shown, holes]])
+    said := []
+    unread := []
+  }
+  static said (message, at) => Runtime.host.said = Runtime.host.said.joined([[message, at]])
+
+  // Afterwards: programs kept while reading (`external goto afterwards`, a test), run once everything is read, in the
+  // order kept; one kept while one runs, run after it. Each runs apart: what it writes into what was there before it is
+  // undone when it ends, but what it painted and said.
+  static afterwards := {
+    kept := []
+    keep (program) => kept = kept.joined([program])
+    run_all => kept.empty ? None : run_first
+    run_first => {
+      first := kept.first
+      kept = kept.rest
+      Runtime.apart(() => Runtime.call(first, [], Runtime.Node()))
+      run_all
+    }
+  }
+  // (a run whose writes into older values are undone when it ends: each written field given back what it held)
+  static apart (body) => {
+    undo := Runtime.writes
+    Runtime.writes = []
+    answer := body()
+    Runtime.writes.for((write) => write.first.define(write[1], write.last))
+    Runtime.writes = undo
+    answer
+  }
+  static writes := []
+
+  // The program run: the host's first part read as Expression's header, then the rest by the language it defines, then
+  // what was kept for afterwards; what was painted and said left for the host.
+  static main => {
+    Runtime.host.part(0) as Expression
+    Runtime.afterwards.run_all
+  }
+}

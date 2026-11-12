@@ -291,6 +291,22 @@ its own reading its place, unread text recorded with reading going on.
     with, 20M steps, ~1 GB (~50 MB per 1M steps); `--test` does not finish in 600 s. The memory wall of "Memory once
     calls run" above, reached again.
 
+## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
+
+`ray/bootstrap/Runtime.ray` (at most 1000 lines) states what a program runs on, declaratively and apart from any back
+end: kinds of value, names and members, calls and frames, patterns (each "what it reads from a place, every way, in
+order", read through a continuation), statement layout, pairs, the budget, the host, afterwards. Memory layout belongs to
+the back end (`$/Wasm.project.ray`'s level). Fields indexed, rules by lead text, regions, compaction and the choice stack
+are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the host's.
+- Handover: Runtime.ray and Compiler.ray written in the subset today's High compiles; revision 130 built by the old
+  pipeline; 130 builds 131 from Runtime.ray + Compiler.ray + Wasm.project.ray alone, which must reproduce the suites; then
+  `$/Wasm/` goes.
+- Open: the lowering (Compiler.ray: Runtime's classes to the back end's words, Ray to its instructions, what High and
+  Low do now); level.ray's requests that Expression uses (`keys_reading`, `kind_of`, `spliced_entry`, `paired`,
+  `holds_text`, `cw_*` …) written in the language; the cw_* helpers the compiler uses moved into Compiler.ray code.
+- Draft 1 (this commit) does not yet cover: reading code in a node (`with`, `x.( … )`), splices, a rule's head read
+  as a pattern (`headpattern`), conversions (`astype`, `readtext`), the editor's image, the test memory budget.
+
 ## Node.ray
 
 - **The error handlers read members bare** (`diagnostics`, `diagnostics.last`, `diagnostics.some(.fatal)`, line 68–84):

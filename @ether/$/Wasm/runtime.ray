@@ -1117,86 +1117,6 @@ function shared_args(w, n) {
   (l + 4) <- n
   l
 }
-function invoke0(c) {
-  if (tag(c) != 2) and ((tag(c) != 9) and (tag(c) != 10)) {
-    return invoke(c, list(), 0)
-  }
-  call(c, shared_args(3928, 0), 0)
-}
-function call_member0(x, sym) {
-  var c
-  c = own_closure(x, sym)
-  if c != 0 {
-    return indirect(load (c + 8), shared_args(3928, 0), 0, load (c + 4))
-  }
-  invoke0(member2(x, sym))
-}
-function call_member1(x, sym, a) {
-  var c
-  var l
-  c = own_closure(x, sym)
-  if c != 0 {
-    l = shared_args(3928, 1)
-    (load (l + 12)) <- a
-    return indirect(load (c + 8), l, 0, load (c + 4))
-  }
-  invoke1(member2(x, sym), a)
-}
-function call_member2(x, sym, a, b) {
-  var c
-  var l
-  c = own_closure(x, sym)
-  if c != 0 {
-    l = shared_args(3928, 2)
-    (load (l + 12)) <- a
-    ((load (l + 12)) + 4) <- b
-    return indirect(load (c + 8), l, 0, load (c + 4))
-  }
-  invoke2(member2(x, sym), a, b)
-}
-function invoke1(c, a) {
-  var l
-  if (tag(c) != 2) and ((tag(c) != 9) and (tag(c) != 10)) {
-    return invoke(c, append(list(), a), 0)
-  }
-  l = shared_args(3928, 1)
-  (load (l + 12)) <- a
-  call(c, l, 0)
-}
-function invoke2(c, a, b) {
-  var l
-  if (tag(c) != 2) and ((tag(c) != 9) and (tag(c) != 10)) {
-    return invoke(c, append(append(list(), a), b), 0)
-  }
-  l = shared_args(3928, 2)
-  (load (l + 12)) <- a
-  ((load (l + 12)) + 4) <- b
-  call(c, l, 0)
-}
-function call1(f, x) {
-  var l
-  if (tag(f) != 2) and ((tag(f) != 9) and (tag(f) != 10)) {
-    return call(f, append(list(), x), 0)
-  }
-  l = shared_args(3928, 1)
-  (load (l + 12)) <- x
-  call(f, l, 0)
-}
-function select(l, f) {
-  var o
-  var i
-  var x
-  o = list()
-  i = 0
-  while i < (load (l + 4)) {
-    x = at(l, i)
-    if truthy(call1(f, x)) {
-      append(o, x)
-    }
-    i = i + 1
-  }
-  o
-}
 function zeroed(a, n) {
   var i
   i = 0
@@ -1205,18 +1125,6 @@ function zeroed(a, n) {
     i = i + 4
   }
   0
-}
-function place(t, ctx) {
-  var p
-  if tag(t) == 1 {
-    t = member(t, 32)
-  }
-  p = alloc(16)
-  p <- 12
-  (p + 4) <- intern(t)
-  (p + 8) <- 0
-  (p + 12) <- ctx
-  p
 }
 function text_led_reading(ctx, n) {
   var h
@@ -1283,22 +1191,6 @@ function text_led_read(ctx, n) {
   }
   0
 }
-function readsv(p, t) {
-  var r
-  var k
-  if tag(p) == 1 {
-    k = member(p, 17)
-    if k != 0 {
-      r = reads(topattern(k), t)
-      if r != 0 {
-        define(p, 19, int(((r - (load (t + 4))) * 2) + led_by_text(topattern(k))))
-        define(p, 53, wholly)
-      }
-      return r
-    }
-  }
-  reads(topattern(p), t)
-}
 function seeded(t) {
   if csyms == 0 {
     csyms = list()
@@ -1315,44 +1207,6 @@ function seeded(t) {
   }
   append(csyms, t)
   0
-}
-function name_text(sym) {
-  if sym >= 1000000 {
-    return at(names, sym - 1000000)
-  }
-  at(csyms, sym - 16)
-}
-function intern(t) {
-  var i
-  var x
-  i = 0
-  while i < (load (csyms + 4)) {
-    x = at(csyms, i)
-    if ((load (x + 8)) - (load (x + 4))) == ((load (t + 8)) - (load (t + 4))) {
-      if texteq(load (x + 4), load (t + 4), (load (t + 8)) - (load (t + 4))) {
-        return 16 + i
-      }
-    }
-    i = i + 1
-  }
-  i = 0
-  while i < (load (names + 4)) {
-    x = at(names, i)
-    if ((load (x + 8)) - (load (x + 4))) == ((load (t + 8)) - (load (t + 4))) {
-      if texteq(load (x + 4), load (t + 4), (load (t + 8)) - (load (t + 4))) {
-        return 1000000 + i
-      }
-    }
-    i = i + 1
-  }
-  if (load 3944) != 0 {
-    if lasting_name(t) {
-      return 1000000 + i
-    }
-    kept()
-  }
-  append(names, t)
-  1000000 + i
 }
 function roomy(l, k) {
   var d
@@ -1390,30 +1244,6 @@ function lasting_name(t) {
   append(names, x)
   3944 <- f
   1
-}
-function with(n, sym, v) {
-  define(n, sym, v)
-  n
-}
-function argn(args, named, i, sym) {
-  var e
-  if i < (load (args + 4)) {
-    return at(args, i)
-  }
-  if named == 0 {
-    return 0
-  }
-  e = own(named, sym)
-  if e == 0 {
-    return 0
-  }
-  load (e + 8)
-}
-function arg(args, i) {
-  if i < (load (args + 4)) {
-    return at(args, i)
-  }
-  0
 }
 function lasting_alloc(n) {
   var f
@@ -2206,20 +2036,6 @@ function enclosed_holes(l) {
       }
     }
     i = i + 1
-  }
-  0
-}
-function selmethod(x, sym, f, args) {
-  if sym == 38 {
-    if tag(x) == 4 {
-      return mapped_text(x, f, arg(args, 0))
-    }
-    if tag(x) == 1 {
-      if member(x, 32) != 0 {
-        return mapped_structure(x, f, arg(args, 0))
-      }
-    }
-    return x
   }
   0
 }

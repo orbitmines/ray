@@ -183,12 +183,6 @@ function char_class(c) {
 function white(c) {
   (c == 32) or ((c == 10) or ((c == 9) or (c == 13)))
 }
-function opener(c) {
-  (c == 40) or ((c == 91) or (c == 123))
-}
-function closer(c) {
-  (c == 41) or ((c == 93) or (c == 125))
-}
 function partstart(p, e) {
   var go
   go = 1
@@ -2342,68 +2336,6 @@ function fueled() {
   }
   0
 }
-function block_closed(a, n) {
-  var q
-  var d
-  var f
-  var l
-  d = 0
-  q = a
-  while q < textend {
-    if (q >= n) and (d <= 0) {
-      return 0
-    }
-    f = q
-    while (f < textend) and (((load8 f) == 32) or ((load8 f) == 9)) {
-      f = f + 1
-    }
-    if f < textend {
-      if (load8 (3584 + (load8 f))) == 3 {
-        d = d - 1
-        if (d == 0) and (f >= n) {
-          return f + 1
-        }
-      }
-    }
-    l = f
-    while (l < textend) and ((load8 l) != 10) {
-      l = l + 1
-    }
-    f = l
-    while (f > q) and (((load8 (f - 1)) == 32) or ((load8 (f - 1)) == 9)) {
-      f = f - 1
-    }
-    if f > q {
-      if pair_class(f - 1) == 1 {
-        d = d + 1
-      }
-    }
-    q = l + 1
-  }
-  0
-}
-function open_before(a, n) {
-  var q
-  var t
-  var r
-  q = a
-  while q < n {
-    t = load8 (3584 + (load8 q))
-    if t != 0 {
-      t = pair_class(q)
-    }
-    if (t == 1) or (t == 2) {
-      r = pair_end(q)
-      if (r == 0) or (r > n) {
-        return 1
-      }
-      q = r
-    } else {
-      q = q + 1
-    }
-  }
-  0
-}
 function bind(sym, a, e) {
   var b
   b = bounds + (boundn * 16)
@@ -3779,27 +3711,6 @@ function copied_from(o, s, n) {
   3868 <- (k + 1)
   0
 }
-function closing(cap) {
-  var oa
-  var oe
-  var ce
-  if tag(cap) != 4 {
-    return 0
-  }
-  oa = load (cap + 4)
-  ce = load (cap + 8)
-  oe = oa
-  while (oe < ce) and ((load8 oe) != 32) {
-    oe = oe + 1
-  }
-  if (oe > oa) and ((oe + 1) < ce) {
-    if (load8 (3584 + (load8 oa))) == 0 {
-      (3584 + (load8 oa)) <-8 1
-    }
-    (3584 + (load8 (ce - 1))) <-8 3
-  }
-  0
-}
 function anything_end(n) {
   var c
   var t
@@ -3862,114 +3773,6 @@ function pair_end(q) {
   }
   r
 }
-function pair_set(c, k, home) {
-  var b
-  var n
-  b = load 3988
-  if b == 0 {
-    b = lasting_alloc(65536)
-    b <- 0
-    3988 <- b
-  }
-  n = load b
-  if n < 5460 {
-    (b + (4 + (n * 12))) <- c
-    (b + (8 + (n * 12))) <- (load8 (3584 + c))
-    (b + (12 + (n * 12))) <- home
-    b <- (n + 1)
-  }
-  (3584 + c) <-8 k
-  3884 <- ((load 3884) + 1)
-  0
-}
-function unpaired(home) {
-  var b
-  var n
-  var r
-  b = load 3988
-  if b == 0 {
-    return 0
-  }
-  n = load b
-  while n > 0 {
-    r = b + (4 + ((n - 1) * 12))
-    if (load (r + 8)) == home {
-      (3584 + (load r)) <-8 (load (r + 4))
-      3884 <- ((load 3884) + 1)
-      n = n - 1
-    } else {
-      b <- n
-      return 0
-    }
-  }
-  b <- n
-  0
-}
-function paired(t, cap, home) {
-  var oa
-  var oe
-  var ce
-  var q
-  var e
-  var a
-  var r
-  var b
-  var c
-  if (tag(t) != 4) or (tag(cap) != 4) {
-    return 0
-  }
-  oa = load (cap + 4)
-  ce = load (cap + 8)
-  oe = oa
-  while (oe < ce) and ((load8 oe) != 32) {
-    oe = oe + 1
-  }
-  if (oe == oa) or ((oe + 1) >= ce) {
-    return 0
-  }
-  a = load (t + 4)
-  e = load (t + 8)
-  q = a
-  while q < e {
-    if at_text(q, e, oa, oe) {
-      r = q + (oe - oa)
-      while (r < e) and (at_text(r, e, oe + 1, ce) == 0) {
-        r = r + 1
-      }
-      if r < e {
-        r = r + (ce - (oe + 1))
-        if (q > a) and (r < e) {
-          b = load8 (q - 1)
-          c = load8 r
-          if (b == (load8 (ce - 1))) and ((q - 4) >= a) {
-            b = quoted_in(q - 4, b)
-          }
-          if (c == (load8 oa)) and ((r + 4) <= e) {
-            c = quoted_in(r, c)
-          }
-          if (white(b) == 0) and ((white(c) == 0) and (word_byte(b) == 0)) {
-            if (word_byte(c) == 0) and ((b != (load8 (ce - 1))) and (c != (load8 oa))) {
-              if b == c {
-                pair_set(b, 2, home)
-              } else {
-                if ((load8 (3584 + b)) == 0) and ((load8 (3584 + c)) == 0) {
-                  pair_set(b, 1, home)
-                  pair_set(c, 3, home)
-                }
-              }
-            }
-          }
-        }
-        q = r
-      } else {
-        q = e
-      }
-    } else {
-      q = q + 1
-    }
-  }
-  0
-}
 function holds_outside(t, part) {
   var te
   var r
@@ -4000,14 +3803,6 @@ function holds_outside(t, part) {
     (h + 16) <- r
   }
   r
-}
-function quoted_in(h, c) {
-  if (load8 (h + 1)) == (load8 (h + 3)) {
-    if (load8 (3584 + (load8 (h + 1)))) == 2 {
-      return load8 (h + 2)
-    }
-  }
-  c
 }
 function compactable(s) {
   if (load (s + 8)) == 2 {

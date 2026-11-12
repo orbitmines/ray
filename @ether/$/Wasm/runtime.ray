@@ -153,6 +153,22 @@ function taken_set(x) {
 function taken_entry() {
   load 3872
 }
+function word_of(a) {
+  load a
+}
+function word_put(a, v) {
+  a <- v
+  0
+}
+function in_program(a, e) {
+  (a >= 8388608) and (e <= (8388608 + (load 4088)))
+}
+function keys_moved() {
+  epoch = epoch + 1
+  4004 <- 0
+  3996 <- ((load 3996) + 1)
+  0
+}
 function char_class(c) {
   load8 (3584 + c)
 }

@@ -192,6 +192,13 @@ function caches_reach() {
   }
   0
 }
+function keys_touched(n) {
+  if (n < (load 4004)) or (n >= arena_base()) {
+    epoch = epoch + 1
+    4004 <- 0
+  }
+  0
+}
 function char_class(c) {
   load8 (3584 + c)
 }

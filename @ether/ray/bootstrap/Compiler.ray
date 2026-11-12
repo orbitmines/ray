@@ -2368,6 +2368,99 @@ Origins := {
     b
   }
 }
+// Heap (`level memory …`, removable: without it, memory is only taken): what is taken past a mark has where each
+// value starts noted (a bit a word, `starts_map`), and which of them hold bytes only (`bytes_map`); the arena (past
+// `arena_base`) is not; taking past it stops. Kept: what is made now outlives the region it is made in.
+Heap := {
+  static marked_from := 536870912
+  static starts_map => 1021000000 * 2
+  static bytes_map => 1033000000 * 2
+  static alloc (n) => Heap.taken_at(free, n)
+  static taken_at (p, n) => {
+    free = free + (((n + 7) / 8) * 8)
+    alloc_marked(p) if free > marked_from
+    p
+  }
+  static alloc_marked (p) => (free > arena_base()) ? Heap.arena_over(p) : Heap.start_noted(p)
+  static arena_over (p) => {
+    Heap.overflowed() if ((p <= arena_base()) || (free > (1020000000 * 2))) && (word_of(3924) == 0)
+    0
+  }
+  static overflowed => {
+    word_put(3924, 1)
+    unreachable_now()
+  }
+  static start_noted (p) => {
+    Heap.started(p) if p >= marked_from
+    0
+  }
+  static started (p) => {
+    starts_cleared(p + 8, free)
+    start_mark(p)
+  }
+  static bit_raised (b, c) => byte_put(b + (c / 8), byte(b + (c / 8)) | (1 << (c % 8)))
+  static bit_cleared (b, c) => byte_put(b + (c / 8), byte(b + (c / 8)) & (255 - (1 << (c % 8))))
+  static start_mark (p) => {
+    Heap.bit_raised(Heap.starts_map(), p / 8)
+    Heap.bit_cleared(Heap.bytes_map(), p / 8)
+    0
+  }
+  static starts_cleared (a, e) => (e <= marked_from) ? 0 : Heap.starts_cleared_in(Heap.at_least(a, marked_from) / 8, e / 8)
+  static at_least (a, m) => (a < m) ? m : a
+  static starts_cleared_in (c0, k) => {
+    c := c0
+    while (c < k) && ((c % 32) != 0) {
+      Heap.bit_cleared(Heap.starts_map(), c)
+      c = c + 1
+    }
+    while (c + 32) <= k {
+      word_put(Heap.starts_map() + (c / 8), 0)
+      c = c + 32
+    }
+    while c < k {
+      Heap.bit_cleared(Heap.starts_map(), c)
+      c = c + 1
+    }
+    0
+  }
+  static alloc_bytes (n) => Heap.bytes_noted(alloc(n))
+  static bytes_noted (p) => {
+    Heap.bit_raised(Heap.bytes_map(), p / 8) if (p >= marked_from) && (p < arena_base())
+    p
+  }
+  static starts_set (p, e) => {
+    Heap.bit_raised(Heap.starts_map(), p / 8)
+    Heap.bit_cleared(Heap.bytes_map(), p / 8)
+    c := (p / 8) + 1
+    while c < (e / 8) {
+      c = Heap.start_cleared_from(c, e / 8)
+    }
+    0
+  }
+  static start_cleared_from (c, k) => (((c % 8) == 0) && ((c + 8) <= k)) ? Heap.byte_cleared_at(c) : Heap.one_cleared(c)
+  static byte_cleared_at (c) => {
+    byte_put(Heap.starts_map() + (c / 8), 0)
+    c + 8
+  }
+  static one_cleared (c) => {
+    Heap.bit_cleared(Heap.starts_map(), c)
+    c + 1
+  }
+  static marked_at (y) => (byte(word_of(4016) + ((y / 64) - (word_of(4008) / 64))) / (1 << ((y / 8) % 8))) % 2
+  static bit_at (base, a) => (byte(base + (a / 64)) / (1 << ((a / 8) % 8))) % 2
+  static kept => {
+    Heap.test_kept(word_of(3932))
+    frames_kept()
+  }
+  static test_kept (t) => {
+    word_put(t + 44, 1) if (t != 0) && (word_of(3936) > 0)
+    0
+  }
+  static cache_key (x) => {
+    word_put(3920, x) if x > word_of(3920)
+    0
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

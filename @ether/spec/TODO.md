@@ -345,6 +345,11 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   `text(o, o + n)` is unread (followed by `o` it reads) when `into` takes five parameters, two typed.
   A whole section can be unread too (its `{` reported), by which statics share it: `bytes_at`, `word_byte`,
   `put_span`, `saved` together in `Basics` were, each alone was not, and moved into `Texts` they read.
+- **Lowered pitfalls, later**: a constant (`static x := v`) is put in place only when `v` is one token: `(1021000000
+  * 2)` stays a bare name, which Low takes for a global or function it does not have (write a no-argument static,
+  `static x => 1021000000 * 2`, called `X.x()`); a number past 2^30 is not a literal Low writes (`1021000000 * 2`, as the
+  old runtime did); a call to a function nothing defines is not an error (Runtime.ray's `builtin` called `noted`, gone
+  since revision 0's paints, and so called the module's first function).
 - **Lowered pitfalls, more**: `x = v if c` reads as `x = (v if c)` (write `x = c ? v : x`); in the debug printer the
   symbol numbers differ (High.program seeds them first); a kind with many fields must be `aside` or Low has no type.
 - **A lowering feature takes a revision before Runtime.ray can use it**: revision N's runtime is lowered by revision

@@ -319,7 +319,7 @@ Lowered := {
     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.named_function(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
     Lowered.w(lr_old)
     Lowered.w("\n")
-    Lowered.kinds.for((k) => Lowered.constructor(k))
+    Lowered.kinds.for((k) => Lowered.managed_kind(k.first) ? Lowered.constructor(k) : None)
     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.defined(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
   }
   static named_function (nf) => (Lowered.kind(nf) == `rule_head`) ? Lowered.functions.append(Lowered.function_name(Compiled.trimmed(Lowered.parsed(nf).rule_head))) : None

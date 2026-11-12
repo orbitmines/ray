@@ -1,92 +1,3 @@
-function alloc(n) {
-  var p
-  p = free
-  free = free + ((n + 7) / 8) * 8
-  if free > 536870912 {
-    alloc_marked(p)
-  }
-  p
-}
-function alloc_marked(p) {
-  if free > arena_base() {
-    if (p <= arena_base()) or (free > (1020000000 * 2)) {
-      if (load 3924) == 0 {
-        3924 <- 1
-        unreachable_now()
-      }
-    }
-    return 0
-  }
-  if p >= 536870912 {
-    starts_cleared(p + 8, free)
-    start_mark(p)
-  }
-  0
-}
-function start_mark(p) {
-  var c
-  c = p / 8
-  ((1021000000 * 2) + (c / 8)) <-8 ((load8 ((1021000000 * 2) + (c / 8))) or (1 << (c % 8)))
-  ((1033000000 * 2) + (c / 8)) <-8 ((load8 ((1033000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
-  0
-}
-function starts_cleared(a, e) {
-  var c
-  var k
-  if e <= 536870912 {
-    return 0
-  }
-  if a < 536870912 {
-    a = 536870912
-  }
-  c = a / 8
-  k = e / 8
-  while (c < k) and ((c % 32) != 0) {
-    ((1021000000 * 2) + (c / 8)) <-8 ((load8 ((1021000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
-    c = c + 1
-  }
-  while (c + 32) <= k {
-    ((1021000000 * 2) + (c / 8)) <- 0
-    c = c + 32
-  }
-  while c < k {
-    ((1021000000 * 2) + (c / 8)) <-8 ((load8 ((1021000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
-    c = c + 1
-  }
-  0
-}
-function alloc_bytes(n) {
-  var p
-  var c
-  p = alloc(n)
-  if (p >= 536870912) and (p < arena_base()) {
-    c = p / 8
-    ((1033000000 * 2) + (c / 8)) <-8 ((load8 ((1033000000 * 2) + (c / 8))) or (1 << (c % 8)))
-  }
-  p
-}
-function starts_set(p, e) {
-  var c
-  var b
-  var k
-  c = p / 8
-  k = e / 8
-  b = (1021000000 * 2) + (c / 8)
-  b <-8 ((load8 b) or (1 << (c % 8)))
-  ((1033000000 * 2) + (c / 8)) <-8 ((load8 ((1033000000 * 2) + (c / 8))) and (255 - (1 << (c % 8))))
-  c = c + 1
-  while c < k {
-    if ((c % 8) == 0) and ((c + 8) <= k) {
-      ((1021000000 * 2) + (c / 8)) <-8 0
-      c = c + 8
-    } else {
-      b = (1021000000 * 2) + (c / 8)
-      b <-8 ((load8 b) and (255 - (1 << (c % 8))))
-      c = c + 1
-    }
-  }
-  0
-}
 function input() {
   text(8388608, 8388608 + (load 4088))
 }
@@ -1112,16 +1023,6 @@ function eager_caches() {
   kept()
   0
 }
-function kept() {
-  var t
-  t = load 3932
-  if t != 0 {
-    if (load 3936) > 0 {
-      (t + 44) <- 1
-    }
-  }
-  frames_kept()
-}
 function framed() {
   if isodepth > 4000 {
     return 4000
@@ -1165,12 +1066,6 @@ function isolated_open() {
   }
   isodepth = isodepth + 1
   markf = free
-  0
-}
-function cache_key(x) {
-  if x > (load 3920) {
-    3920 <- x
-  }
   0
 }
 function isolated_value(o, v) {
@@ -1830,9 +1725,6 @@ function compactable(s) {
   }
   (free - (load s)) > 67108864
 }
-function bit_at(base, a) {
-  ((load8 (base + (a / 64))) / (1 << ((a / 8) % 8))) % 2
-}
 function start_of(x) {
   var c
   var b
@@ -1870,9 +1762,6 @@ function end_of(y) {
     }
   }
   k * 8
-}
-function marked_at(y) {
-  ((load8 ((load 4016) + ((y / 64) - ((load 4008) / 64)))) / (1 << ((y / 8) % 8))) % 2
 }
 function gc_mark(x) {
   var y

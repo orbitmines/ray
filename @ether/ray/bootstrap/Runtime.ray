@@ -40,10 +40,47 @@ Runtime := {
   static value_of (field: Field) => (field === None) ? None : field.value
   // (a name given a value in the node itself: a field of it added, the latest, unless it has one; or where it is found,
   // else in the node. A level may note each field added: Compiler.ray's index of a node's fields, `noted_field`)
+  static define (node: Node, name, value) => Runtime.defined(own(node, name), node, name, value)
+  static defined (field: Field, node: Node, name, value) => (field === None) ? Runtime.added(Field(next: node.fields, name: name, value: value), node) : Runtime.given(field, value)
+  static added (field: Field, node: Node) => {
+    node.fields = field
+    noted_field(node, field)
+    field.value
+  }
+  static given (field: Field, value) => (field.value === value) ? value : Runtime.given_again(field, value)
+  static given_again (field: Field, value) => {
+    field.value = value
+    value
+  }
+  static assign (node: Node, name, value) => Runtime.assigned(Runtime.found(node, name), node, name, value)
+  static assigned (field: Field, node: Node, name, value) => (field === None) ? Runtime.define(node, name, value) : Runtime.given(field, value)
+
   // A list: how many it holds, how many it has room for, and what it holds, one word each.
   static List := (3, count, room, items: Words)
   static list => List()
   static at (list: List, index) => list.items[index]
+  static append (list: List, value) => {
+    Runtime.roomier(list) if list.count == list.room
+    list.items[list.count] = value
+    list.count = list.count + 1
+    list
+  }
+  // (room for twice as many, at least four, what it holds moved there)
+  static roomier (list: List) => Runtime.room_made(list, Words(Runtime.more_room(list.room)), Runtime.more_room(list.room))
+  static more_room (room) => (room == 0) ? 4 : (room * 2)
+  static room_made (list: List, items: Words, room) => {
+    Runtime.moved(items, list.items, list.count)
+    list.items = items
+    list.room = room
+  }
+  static moved (to: Words, from: Words, count) => {
+    i := 0
+    while i < count {
+      to[i] = from[i]
+      i = i + 1
+    }
+  }
+
   // A function as a value: what it runs, the node it was written in, and how it is called (0 as it is, 1 read as a value:
   // a getter); a class, the same, its header in place of how it is called.
   static Closure := (2, function, env, called)

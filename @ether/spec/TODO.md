@@ -306,6 +306,23 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   `holds_text`, `cw_*` …) written in the language; the cw_* helpers the compiler uses moved into Compiler.ray code.
 - Draft 1 (this commit) does not yet cover: reading code in a node (`with`, `x.( … )`), splices, a rule's head read
   as a pattern (`headpattern`), conversions (`astype`, `readtext`), the editor's image, the test memory budget.
+- **How it goes now (revisions 130–132).** Compiler.ray's `Lowered` writes Runtime.ray's statics as the low dialect
+  after `$/Wasm/runtime.ray` (each kind a constructor `<Kind>_made`, each field read and written where the kind's header
+  puts it, every word written through the back end's `written(holder, place, value)`, `Lowered.managed`). A function of a
+  name both define is Runtime.ray's (`Lowered.overridden`), and the old one is then deleted from runtime.ray. Moved so
+  far: values, numbers, nodes (found, define, assign), lists, closures, texts, patterns, where a statement ends, pairs.
+  Not yet: the matcher (`matched`, 550 lines), calls and members, keys and splices, the cw_* helpers, memory.
+- **A lowering feature takes a revision before Runtime.ray can use it**: revision N's runtime is lowered by revision
+  N−1's built-in `Lowered`, so a new shape (`x[i] = v`, `return v if c`) is committed with Runtime.ray not using it, the
+  revision built, and only then used.
+- **Lowered pitfalls found**: parameters and locals are written `the_x`, apart from any function (Low reads names
+  regardless of case, and `node`, `field`, `index` are functions); a helper of a name the old runtime has replaces it
+  (`roomy`), so check; bodies are indented (a line starting with `(` at column 0 after a block's `}` is read as a new
+  statement of the module); a quoted bracket in a nested expression (`"(load "`) overflows the reader's stack.
+- **Size**: 6872 lines of runtime.ray are left: about 4600 of matching, calls, members and keys, 1200 of memory, 470 of
+  cw_* helpers, 300 of entry and IO, 260 of tests and paints. To fit in 1000 lines the core is to be restated (each
+  pattern kind's reading a rule of its own, through a continuation), not transliterated; the caches (pair ends, led
+  keys, rules by lead text) and memory go to Compiler.ray levels.
 
 ## Node.ray
 

@@ -313,6 +313,16 @@ Texts := {
     }
     text(a, e)
   }
+  static at_text (q, e, a, z) => ((q + (z - a)) > e) ? 0 : Texts.bytes_at(q, a, z)
+  static bytes_at (q, a, z) => {
+    i := 0
+    while (a + i) < z {
+      return 0 if byte(q + i) != byte(a + i)
+      i = i + 1
+    }
+    1
+  }
+  static word_byte (c) => ((c >= 97) && (c <= 122)) || ((c >= 65) && (c <= 90)) || ((c >= 48) && (c <= 57)) || (c == 95)
   static cw_trimmed (t: Text) => (t is Text) ? Texts.trimmed_text(t.from, t.to) : t
   static cw_slice (t: Text, x, v) => ((t is Text) && ((t.from + untag(v)) <= t.to)) ? text(t.from + untag(x), t.from + untag(v)) : None
   static cw_inner (t: Text) => ((t is Text) && ((t.to - t.from) >= 2)) ? text(t.from + 1, t.to - 1) : None
@@ -2247,6 +2257,116 @@ FieldIndex := {
   }
   static noted_field (n: Node, e) => ((n is Node) && (n.index != None)) ? FieldIndex.index_grown(n, n.index, e) : 0
   static index_grown (n, x, e) => ((word_of(x + 4) * 2) >= word_of(x)) ? indexed(n) : index_in(x, e)
+}
+// Basics (`level basics …`): a node (the first made without a parent noted as the root), a cell; bytes put; holes bound saved and restored; shifts; not equal; what is sized or set aside after a
+// mark; arrays (`Array.new`).
+Basics := {
+  static node (parent) => Basics.root_noted(Node(in: parent, fields: 0, keys: 0, index: 0), parent)
+  static root_noted (n, parent) => {
+    word_put(3904, n) if (parent == 0) && (word_of(3904) == 0)
+    n
+  }
+  static cell (p, next) => Cell(what: p, next: next)
+  static put_span (o, a, e) => {
+    copy(o, a, e - a)
+    o + (e - a)
+  }
+  static saved (mark) => ((boundn - mark) <= 0) ? 0 : Basics.bounds_copied(alloc(((boundn - mark) * 16) + 8), mark)
+  static bounds_copied (c, mark) => {
+    copy(c, bound_at(mark), (boundn - mark) * 16)
+    c
+  }
+  static restored (c, mark, m) => {
+    copy(bound_at(mark), c, (m - mark) * 16)
+    boundn = m
+    0
+  }
+  static shifted_left (a, b) => int(untag(a) << untag(b))
+  static shifted_right (a, b) => int(untag(a) >> untag(b))
+  static unequal (a, b) => negated(equal(a, b))
+  static sized_after (m, v) => cw_sized_from(m)
+  static aside_after (m, v) => cw_aside_from(m)
+  static array_new (env, args, named) => list()
+  static arrays => Runtime.defined_as(node(0), Symbol.new, getter(array_new, 0))
+}
+// Origins (`level origins …`): where a text copied was copied from (a log of copies, each where to, from where and
+// how long, one run on extending the last); the byte a byte was first written as (in the program, or in the entry's
+// text); the indent of the line it was written on; whether that line goes on.
+Origins := {
+  static Copy := (aside, to, from, length)
+  static copies_at := 3864
+  static copies_count_at := 3868
+  static copied_from (o, s, n) => Origins.copy_noted(Origins.copies(), word_of(copies_count_at), o, s, n)
+  static copies => (word_of(copies_at) == 0) ? Origins.copies_made() : word_of(copies_at)
+  static copies_made => {
+    word_put(copies_at, lasting_alloc(16777200))
+    word_put(copies_count_at, 0)
+    word_of(copies_at)
+  }
+  static copy_noted (b, k, o, s, n) => ((k > 0) && Origins.extends_copy(b + ((k - 1) * 12), o, s)) ? Origins.copy_extended(b + ((k - 1) * 12), n) : ((k >= 1398100) ? 0 : Origins.copy_put(b + (k * 12), k, o, s, n))
+  static extends_copy (r: Copy, o, s) => ((r.to + r.length) == o) && ((r.from + r.length) == s)
+  static copy_extended (r: Copy, n) => {
+    r.length = r.length + n
+    0
+  }
+  static copy_put (r: Copy, k, o, s, n) => {
+    r.to = o
+    r.from = s
+    r.length = n
+    word_put(copies_count_at, k + 1)
+    0
+  }
+  static origin_at (a) => {
+    q := a
+    n := 0
+    while n < 64 {
+      return q if Origins.original(q)
+      q = Origins.copied_back(q)
+      return q if q < 0
+      n = n + 1
+    }
+    0 - 1
+  }
+  static original (a) => in_program(a, a + 1) || Origins.in_entry(a)
+  static in_entry (a) => (word_of(entered_at) != 0) && Origins.entry_holds(word_of(entered_at), a)
+  static entry_holds (b: Reader, a) => (a >= b.from) && (a < b.to)
+  static copied_back (a) => (word_of(copies_at) == 0) ? (0 - 1) : Origins.copy_found(a, word_of(copies_at), word_of(copies_count_at))
+  static copy_found (a, b, count) => {
+    k := count
+    while k > 0 {
+      k = k - 1
+      return Origins.copy_through(b + (k * 12), a) if Origins.copy_holds(b + (k * 12), a)
+    }
+    0 - 1
+  }
+  static copy_holds (r: Copy, a) => (a >= r.to) && (a < (r.to + r.length))
+  static copy_through (r: Copy, a) => r.from + (a - r.to)
+  static indent_written (a) => Origins.indent_at_origin(origin_at(a))
+  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, Origins.text_low(o), Origins.text_high(o))
+  static text_low (o) => Origins.in_entry(o) ? Origins.entry_from(word_of(entered_at)) : program_from()
+  static text_high (o) => Origins.in_entry(o) ? Origins.entry_to(word_of(entered_at)) : (program_from() + program_length())
+  static entry_from (b: Reader) => b.from
+  static entry_to (b: Reader) => b.to
+  static indent_within (o, lo, te) => {
+    q := o
+    while (q > lo) && (byte(q - 1) != 10) {
+      q = q - 1
+    }
+    r := textend
+    textend = te
+    d := indent_at(q)
+    textend = r
+    d
+  }
+  static continued_where_written (q) => in_program(q, q + 1) ? 0 : Origins.continued_origin(q, origin_at(q))
+  static continued_origin (q, o) => ((o < 0) || (o == q) || (byte(o) != 10)) ? 0 : Origins.continued_within(o, Origins.text_high(o))
+  static continued_within (o, te) => {
+    r := textend
+    textend = te
+    b := continued_at(o)
+    textend = r
+    b
+  }
 }
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what

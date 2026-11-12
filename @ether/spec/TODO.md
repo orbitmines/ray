@@ -343,6 +343,8 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
 - **Reading a call statement fails before some lines** (revision 136, `--test` on a file of them): `f(g(r), g(r + 4))`
   followed by `h()` on the next line is unread (`f(g(r), 4)` reads); `A.into(t, cap, oe, l, o)` followed by
   `text(o, o + n)` is unread (followed by `o` it reads) when `into` takes five parameters, two typed.
+  A whole section can be unread too (its `{` reported), by which statics share it: `bytes_at`, `word_byte`,
+  `put_span`, `saved` together in `Basics` were, each alone was not, and moved into `Texts` they read.
 - **Lowered pitfalls, more**: `x = v if c` reads as `x = (v if c)` (write `x = c ? v : x`); in the debug printer the
   symbol numbers differ (High.program seeds them first); a kind with many fields must be `aside` or Low has no type.
 - **A lowering feature takes a revision before Runtime.ray can use it**: revision N's runtime is lowered by revision

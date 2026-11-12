@@ -2907,35 +2907,6 @@ function eager_caches() {
   kept()
   0
 }
-function astype(v, scope) {
-  if tag(v) == 5 {
-    return pattern(13, v, scope)
-  }
-  topattern(v)
-}
-function topattern(v) {
-  if tag(v) == 6 {
-    return v
-  }
-  if tag(v) == 12 {
-    if (load (v + 8)) != 0 {
-      return field(load (v + 4), astype(load (v + 8), 0))
-    }
-    return field(load (v + 4), pattern(28, load (v + 12), 0))
-  }
-  if tag(v) == 1 {
-    if member(v, 32) != 0 {
-      return rebuilt(v)
-    }
-  }
-  if tag(v) == 4 {
-    return literal(v)
-  }
-  if tag(v) == 3 {
-    return sequence(v)
-  }
-  v
-}
 function rest_cell(l, i, next) {
   var c
   c = alloc(12)
@@ -3401,24 +3372,6 @@ function open_before(a, n) {
   }
   0
 }
-function read_by_another(l, i, pos) {
-  var j
-  var m
-  var r
-  j = 0
-  m = boundn
-  while j < (load (l + 4)) {
-    if j != i {
-      r = matched(at(l, j), pos, 0)
-      boundn = m
-      if r > pos {
-        return 1
-      }
-    }
-    j = j + 1
-  }
-  0
-}
 function bind(sym, a, e) {
   var b
   b = bounds + (boundn * 16)
@@ -3434,33 +3387,6 @@ function bindv(sym, v) {
   (bounds + ((boundn - 1) * 16) + 12) <- v
   0
 }
-function boundvalue(i) {
-  var b
-  b = bounds + (i * 16)
-  if (load (b + 12)) != 0 {
-    return load (b + 12)
-  }
-  text(load (b + 4), load (b + 8))
-}
-function named_from(mark) {
-  var n
-  var i
-  var b
-  var s
-  n = node(0)
-  s = list()
-  i = mark
-  while i < boundn {
-    b = bounds + (i * 16)
-    if (load b) != 0 {
-      define(n, load b, boundvalue(i))
-      append(s, span(load b, load (b + 4), load (b + 8), boundvalue(i)))
-    }
-    i = i + 1
-  }
-  (n + 12) <- s
-  n
-}
 function span(sym, a, e, v) {
   var c
   c = alloc(20)
@@ -3470,52 +3396,6 @@ function span(sym, a, e, v) {
   (c + 12) <- e
   (c + 16) <- v
   c
-}
-function gathered(sym, a, e, mark, inner) {
-  var i
-  var b
-  var nv
-  var nn
-  var v
-  var l
-  nv = 0
-  nn = 0
-  i = mark
-  while i < boundn {
-    b = bounds + (i * 16)
-    if (load b) == 0 {
-      nv = nv + 1
-      v = load (b + 12)
-    } else {
-      nn = nn + 1
-    }
-    i = i + 1
-  }
-  if nn > 0 {
-    v = named_from(mark)
-    define(v, 32, text(a, e))
-    define(v, 15, inner)
-  } else {
-    if nv == 0 {
-      v = text(a, e)
-    }
-    if nv > 1 {
-      l = list()
-      i = mark
-      while i < boundn {
-        b = bounds + (i * 16)
-        if (load b) == 0 {
-          append(l, load (b + 12))
-        }
-        i = i + 1
-      }
-      v = l
-    }
-  }
-  boundn = mark
-  bind(sym, a, e)
-  (bounds + ((boundn - 1) * 16) + 12) <- v
-  0
 }
 function applied_again(c) {
   var a
@@ -4258,34 +4138,6 @@ function selmethod(x, sym, f, args) {
 function with_code(a, b) {
   a
 }
-function valued_from(mark) {
-  var v
-  var i
-  var b
-  var nv
-  nv = 0
-  i = mark
-  while i < boundn {
-    if (load (bounds + (i * 16))) == 0 {
-      nv = nv + 1
-      v = load (bounds + (i * 16) + 12)
-    }
-    i = i + 1
-  }
-  if nv == 1 {
-    return v
-  }
-  v = list()
-  i = mark
-  while i < boundn {
-    b = bounds + (i * 16)
-    if (load b) == 0 {
-      append(v, load (b + 12))
-    }
-    i = i + 1
-  }
-  v
-}
 function under(b, env) {
   touched_by(b, b + 4, env)
   if (b + 4) < (load 3944) {
@@ -4341,17 +4193,6 @@ function reading_at(c, pos) {
     i = i + 1
   }
   0
-}
-function listing(mark) {
-  var i
-  i = mark
-  while i < boundn {
-    if (load (bounds + (i * 16))) != 0 {
-      return 0
-    }
-    i = i + 1
-  }
-  boundn > mark
 }
 function read_again(item, f, args, u) {
   var l

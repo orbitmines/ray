@@ -1126,71 +1126,6 @@ function zeroed(a, n) {
   }
   0
 }
-function text_led_reading(ctx, n) {
-  var h
-  var r
-  if nomemo != 0 {
-    return text_led_read(ctx, n)
-  }
-  h = memo + ((((n * 31) + ctx) + (textend * 7)) and 65535) * 16
-  if (((load h) == n) and ((load (h + 4)) == ctx)) and (((load (h + 8)) == textend) and ((load (h + 12)) == epoch)) {
-    return load (memo + 1048576 + ((h - memo) / 4))
-  }
-  r = text_led_read(ctx, n)
-  h <- n
-  (h + 4) <- ctx
-  (h + 8) <- textend
-  cache_key(n)
-  cache_key(ctx)
-  cache_key(textend)
-  (h + 12) <- epoch
-  if free > (load 4004) {
-    4004 <- free
-  }
-  (memo + 1048576 + ((h - memo) / 4)) <- r
-  r
-}
-function text_led_read(ctx, n) {
-  var l
-  var i
-  var p
-  var r
-  var m
-  var b
-  var c
-  var a
-  var k
-  m = boundn
-  c = 0 - 2
-  if n < textend {
-    c = load8 n
-  }
-  while tag(ctx) == 1 {
-    l = load ((member(ctx, 37)) + 12)
-    if l != 0 {
-      a = led_keys(l)
-      k = load a
-      i = 0
-      while i < k {
-        b = load (a + (8 + (i * 8)))
-        if (b < 0) or (b == c) {
-          p = load (a + (4 + (i * 8)))
-          if p < 0 {
-            p = topattern(member(at(l, (0 - p) - 1), 17))
-          }
-          r = matched(p, n, 0)
-          boundn = m
-          if r > n {
-            return r
-          }
-        }
-        i = i + 1
-      }
-    }
-    ctx = member(ctx, 36)
-  }
-  0
-}
 function seeded(t) {
   if csyms == 0 {
     csyms = list()
@@ -1811,71 +1746,6 @@ function fueled() {
   }
   0
 }
-function bind(sym, a, e) {
-  var b
-  b = bounds + (boundn * 16)
-  b <- sym
-  (b + 4) <- a
-  (b + 8) <- e
-  (b + 12) <- 0
-  boundn = boundn + 1
-  0
-}
-function bindv(sym, v) {
-  bind(sym, 0, 0)
-  (bounds + ((boundn - 1) * 16) + 12) <- v
-  0
-}
-function span(sym, a, e, v) {
-  var c
-  c = alloc(20)
-  c <- 11
-  (c + 4) <- sym
-  (c + 8) <- a
-  (c + 12) <- e
-  (c + 16) <- v
-  c
-}
-function typed(t, v) {
-  if tag(v) == 4 {
-    if (tag(t) == 6) or (tag(t) == 5) {
-      return readtext(astype(t, 0), v)
-    }
-  }
-  v
-}
-function reads(p, t) {
-  var r
-  var te
-  var bn
-  if tag(t) == 1 {
-    t = member(t, 32)
-  }
-  if tag(t) != 4 {
-    wholly = 8
-    return 0
-  }
-  if literals_in(p, load (t + 4), load (t + 8)) == 0 {
-    wholly = 8
-    return 0
-  }
-  te = textend
-  bn = boundn
-  textend = load (t + 8)
-  r = matched(p, load (t + 4), cell(pattern(23, load (t + 4), 1), 0))
-  wholly = 12
-  if r < 0 {
-    boundn = bn
-    wholly = 8
-    r = matched(p, load (t + 4), 0)
-  }
-  textend = te
-  boundn = bn
-  if r < 0 {
-    return 0
-  }
-  r
-}
 function bindings() {
   var n
   var i
@@ -1888,59 +1758,6 @@ function bindings() {
     i = i + 1
   }
   n
-}
-function extended(x, c) {
-  indirect(x, list(), 0, load (c + 4))
-  x
-}
-function index(n, k) {
-  var l
-  var i
-  var e
-  var r
-  if tag(k) != 4 {
-    return 0
-  }
-  l = keys(n)
-  i = 0
-  while i < (load (l + 4)) {
-    e = at(l, i)
-    r = reads(topattern(member(e, 17)), k)
-    if r == (load (k + 8)) {
-      return member(e, 18)
-    }
-    i = i + 1
-  }
-  0
-}
-function last(l) {
-  if (load (l + 4)) == 0 {
-    return 0
-  }
-  at(l, (load (l + 4)) - 1)
-}
-function read_with(n, sym, v) {
-  var s
-  var t
-  s = member(n, 15)
-  if tag(s) == 6 {
-    if (load (s + 4)) == 18 {
-      s = load (s + 8)
-    }
-  }
-  if tag(s) != 1 {
-    return v
-  }
-  t = member(s, sym)
-  if tag(t) == 6 {
-    return t
-  }
-  if tag(t) == 1 {
-    if member(t, 32) != 0 {
-      return t
-    }
-  }
-  v
 }
 function rebuilt(n) {
   var t
@@ -2052,51 +1869,6 @@ function under(b, env) {
 }
 function staged(f) {
   pattern(17, f, 0)
-}
-function reading_of(p, pos) {
-  var h
-  var l
-  if (load 3908) == 0 {
-    3908 <- alloc(65536 * 20)
-    kept()
-    zeroed(load 3908, 65536 * 20)
-    kept()
-  }
-  h = (load 3908) + (((((p / 4) * 31) + (pos * 7)) + (textend * 13)) and 65535) * 20
-  if (((load h) == p) and ((load (h + 4)) == pos)) and (((load (h + 8)) == textend) and ((load (h + 12)) == epoch)) {
-    return load (h + 16)
-  }
-  l = call(load (p + 8), append(list(), text(pos, textend)), 0)
-  if (lasting_span(pos, textend) == 0) or (tag(l) != 1) {
-    return l
-  }
-  if l < arena_base() {
-    if l < markf {
-      h <- p
-      (h + 4) <- pos
-      (h + 8) <- textend
-      cache_key(p)
-      cache_key(pos)
-      cache_key(textend)
-      (h + 12) <- epoch
-      if free > (load 4004) {
-        4004 <- free
-      }
-      (h + 16) <- l
-    }
-  }
-  l
-}
-function reading_at(c, pos) {
-  var i
-  i = 1
-  while i <= activen {
-    if ((load (actives + (i * 8))) == c) and ((load (actives + (i * 8) + 4)) == pos) {
-      return 1
-    }
-    i = i + 1
-  }
-  0
 }
 function read_again(item, f, args, u) {
   var l

@@ -311,7 +311,15 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   puts it, every word written through the back end's `written(holder, place, value)`, `Lowered.managed`). A function of a
   name both define is Runtime.ray's (`Lowered.overridden`), and the old one is then deleted from runtime.ray. Moved so
   far: values, numbers, nodes (found, define, assign), lists, closures, texts, patterns, where a statement ends, pairs.
-  Not yet: the matcher (`matched`, 550 lines), calls and members, keys and splices, the cw_* helpers, memory.
+  Since then (revisions 133–135): the matcher (a step at a time over registers `rp rpos rk rmode …`, the choice stack
+  and bounds held aside), bound values, topattern, members and calls (`Symbol.x` for a name's number), lists of lists,
+  constructing, headers, applying again. Runtime.ray is at 795 lines, runtime.ray at 5773; suites unchanged
+  (249/200/11, 135/133/5), about 20% slower (a call per step: an inlining level would win it back).
+  Not yet: with/with_locals, statements in turn (`in_turn`, `read_again`), splices, keys and led rules, conversions,
+  the cw_* helpers, memory, entry/IO, tests and paints. These do not fit in the 205 lines left: the caches and memory
+  go to Compiler.ray levels (lowered from a section given as input part 3 with Runtime.ray), cw_* into Compiler.ray.
+- **Lowered pitfalls, more**: `x = v if c` reads as `x = (v if c)` (write `x = c ? v : x`); in the debug printer the
+  symbol numbers differ (High.program seeds them first); a kind with many fields must be `aside` or Low has no type.
 - **A lowering feature takes a revision before Runtime.ray can use it**: revision N's runtime is lowered by revision
   N−1's built-in `Lowered`, so a new shape (`x[i] = v`, `return v if c`) is committed with Runtime.ray not using it, the
   revision built, and only then used.

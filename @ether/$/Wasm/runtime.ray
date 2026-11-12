@@ -1050,12 +1050,6 @@ function out_base() {
 function out_length() {
   outn
 }
-function int(n) {
-  n + n + 1
-}
-function untag(v) {
-  v >> 1
-}
 function node(parent) {
   var n
   n = alloc(20)
@@ -1161,81 +1155,6 @@ function index_in(x, e) {
   (x + (12 + (k * 8))) <- e
   (x + 4) <- ((load (x + 4)) + 1)
   0
-}
-function define(n, sym, v) {
-  var e
-  e = own(n, sym)
-  if e != 0 {
-    if (load (e + 8)) == v {
-      return v
-    }
-    if pointer(v) {
-      stored(n, e + 8, v)
-    }
-  } else {
-    stored(n, n + 8, free)
-  }
-  if e == 0 {
-    e = alloc(12)
-    e <- load (n + 8)
-    (e + 4) <- sym
-    if (n + 8) < (load 3944) {
-      logged(n + 8)
-    }
-    (n + 8) <- e
-    if (load n) == 1 {
-      if (load (n + 16)) != 0 {
-        if ((load ((load (n + 16)) + 4)) * 2) >= (load (load (n + 16))) {
-          indexed(n)
-        } else {
-          index_in(load (n + 16), e)
-        }
-      }
-    }
-  }
-  if (e + 8) < (load 3944) {
-    logged(e + 8)
-  }
-  (e + 8) <- v
-  v
-}
-function lookup(n, sym) {
-  var e
-  while n != 0 {
-    e = own(n, sym)
-    if e != 0 {
-      return load (e + 8)
-    }
-    n = load (n + 4)
-  }
-  0
-}
-function assign(n, sym, v) {
-  var m
-  var e
-  m = n
-  while m != 0 {
-    e = own(m, sym)
-    if e != 0 {
-      touched_by(m, e + 8, v)
-      if (e + 8) < (load 3944) {
-        logged(e + 8)
-      }
-      (e + 8) <- v
-      return v
-    }
-    m = load (m + 4)
-  }
-  define(n, sym, v)
-}
-function list() {
-  var l
-  l = alloc(16)
-  l <- 3
-  (l + 4) <- 0
-  (l + 8) <- 0
-  (l + 12) <- 0
-  l
 }
 function origin_at(a) {
   var b
@@ -1679,47 +1598,6 @@ function test_end(painted, reported) {
   }
   0
 }
-function append(l, v) {
-  var d
-  var c
-  if (load (l + 4)) == (load (l + 8)) {
-    touched_by(l, 0, v)
-  } else {
-    touched_by(l, (load (l + 12)) + ((load (l + 4)) * 4), v)
-  }
-  if (l + 4) < (load 3944) {
-    logged(l + 4)
-  }
-  c = load (l + 4)
-  if c == (load (l + 8)) {
-    if (l + 8) < (load 3944) {
-      logged(l + 8)
-    }
-    if (l + 12) < (load 3944) {
-      logged(l + 12)
-    }
-    touched_by(l, l + 12, free)
-    if c == 0 {
-      d = alloc(16)
-      (l + 12) <- d
-      (l + 8) <- 4
-    } else {
-      d = alloc(c * 8)
-      copy(d, load (l + 12), c * 4)
-      (l + 12) <- d
-      (l + 8) <- c * 2
-    }
-  }
-  if ((load (l + 12)) + (c * 4)) < (load 3944) {
-    logged((load (l + 12)) + (c * 4))
-  }
-  ((load (l + 12)) + (c * 4)) <- v
-  (l + 4) <- c + 1
-  l
-}
-function at(l, i) {
-  load ((load (l + 12)) + (i * 4))
-}
 function copy(to, from, n) {
   var i
   i = 0
@@ -1735,33 +1613,6 @@ function copy(to, from, n) {
     i = i + 1
   }
   to
-}
-function closure(f, env) {
-  var c
-  c = alloc(16)
-  c <- 2
-  (c + 4) <- f
-  (c + 8) <- env
-  (c + 12) <- 0
-  c
-}
-function getter(f, env) {
-  var c
-  c = closure(f, env)
-  (c + 12) <- 1
-  c
-}
-function classv(f, env) {
-  var c
-  c = closure(f, env)
-  c <- 5
-  c
-}
-function classh(f, env, h) {
-  var c
-  c = classv(f, env)
-  (c + 12) <- h
-  c
 }
 function pointer(v) {
   ((v and 1) == 0) and (v >= 65536)
@@ -2811,16 +2662,6 @@ function lasting_name(t) {
   3944 <- f
   1
 }
-function truthy(v) {
-  (v != 0) and (v != 8)
-}
-function same(a, b) {
-  if a == b {
-    12
-  } else {
-    8
-  }
-}
 function with(n, sym, v) {
   define(n, sym, v)
   n
@@ -2856,14 +2697,6 @@ function construct(c, args, named) {
   }
   indirect(inst, args, named, load (c + 4))
   inst
-}
-function text(a, e) {
-  var t
-  t = alloc(12)
-  t <- 4
-  (t + 4) <- a
-  (t + 8) <- e
-  t
 }
 function arg(args, i) {
   if i < (load (args + 4)) {
@@ -2904,60 +2737,6 @@ function call(c, args, named) {
     return indirect(load (c + 8), args, named, load (c + 4))
   }
   isolated_value(isolated_open(), indirect(load (c + 8), args, named, load (c + 4)))
-}
-function plus(a, b) {
-  a + b - 1
-}
-function pattern(kind, a, b) {
-  var p
-  p = alloc(24)
-  p <- 6
-  (p + 4) <- kind
-  (p + 8) <- a
-  (p + 12) <- b
-  (p + 16) <- 0
-  p
-}
-function pattern3(kind, a, b, c) {
-  var p
-  p = pattern(kind, a, b)
-  (p + 16) <- c
-  p
-}
-function pattern4(kind, a, b, c, d) {
-  var p
-  p = pattern3(kind, a, b, c)
-  (p + 20) <- d
-  p
-}
-function literal(t) {
-  pattern(1, t, 0)
-}
-function chars(c) {
-  pattern(2, c, 0)
-}
-function sequence(l) {
-  pattern(3, l, 0)
-}
-function either(l) {
-  pattern(4, l, 0)
-}
-function repeated(inner, least) {
-  if (least == 0) and (tag(inner) == 6) {
-    if (load (inner + 4)) == 5 {
-      return pattern3(5, load (inner + 8), 0, 0)
-    }
-  }
-  pattern(5, inner, least)
-}
-function field(sym, inner) {
-  pattern(6, sym, inner)
-}
-function ending() {
-  pattern(7, 0, 0)
-}
-function anything() {
-  pattern(8, 0, 0)
 }
 function lasting_alloc(n) {
   var f
@@ -5546,41 +5325,11 @@ function restored(c, mark, m) {
 function heap_used() {
   free
 }
-function minus(a, b) {
-  (a - b) + 1
-}
-function times(a, b) {
-  int(untag(a) * untag(b))
-}
-function quotient(a, b) {
-  int(untag(a) / untag(b))
-}
-function remainder(a, b) {
-  int(untag(a) % untag(b))
-}
 function shifted_left(a, b) {
   int(untag(a) << untag(b))
 }
 function shifted_right(a, b) {
   int(untag(a) >> untag(b))
-}
-function boolean(c) {
-  if c {
-    return 12
-  }
-  8
-}
-function less(a, b) {
-  boolean(a < b)
-}
-function greater(a, b) {
-  boolean(a > b)
-}
-function less_equal(a, b) {
-  boolean(a <= b)
-}
-function greater_equal(a, b) {
-  boolean(a >= b)
 }
 function unequal(a, b) {
   negated(equal(a, b))

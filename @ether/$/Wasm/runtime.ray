@@ -1161,15 +1161,6 @@ function freed_back(f) {
   }
   0
 }
-function stored(n, w, v) {
-  if v >= arena_base() {
-    if n < markf {
-      effects = effects + 1
-    }
-    return 0
-  }
-  touched_by(n, w, v)
-}
 function touched_by(x, w, v) {
   var s
   if x >= arena_base() {

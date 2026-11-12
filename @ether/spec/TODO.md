@@ -350,6 +350,9 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   `static x => 1021000000 * 2`, called `X.x()`); a number past 2^30 is not a literal Low writes (`1021000000 * 2`, as the
   old runtime did); a call to a function nothing defines is not an error (Runtime.ray's `builtin` called `noted`, gone
   since revision 0's paints, and so called the module's first function).
+- **Lowered pitfalls, still**: a local (`x := v`) after a statement `s if c` is written wrong (all of `lasting_alloc`
+  broke every test): what it is the value of goes in as an argument instead; a section's name like a function of Low's
+  (`stored`) is to be checked too.
 - **Lowered pitfalls, more**: `x = v if c` reads as `x = (v if c)` (write `x = c ? v : x`); in the debug printer the
   symbol numbers differ (High.program seeds them first); a kind with many fields must be `aside` or Low has no type.
 - **A lowering feature takes a revision before Runtime.ray can use it**: revision N's runtime is lowered by revision

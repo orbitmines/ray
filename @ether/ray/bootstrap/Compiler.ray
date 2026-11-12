@@ -2461,6 +2461,129 @@ Heap := {
     0
   }
 }
+// Memory: what a write touches (the effects a turn counts, a frame's isolation that a younger value reached), what is
+// logged to be undone, and memory taken to last (past the arena's start, where nothing is freed back)
+Memory := {
+  static isolated_from := 536870912
+  static written (x, w, v) => {
+    touched_by(x, w, v)
+    logged(w) if w < word_of(3944)
+    v
+  }
+  static one_effect => {
+    effects = effects + 1
+    0
+  }
+  static kept_outside => {
+    kept()
+    0
+  }
+  static touched_by (x, w, v) => {
+    return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0)
+    Memory.effect_at(x, w, v) if x < markf
+    0
+  }
+  static effect_at (x, w, v) => {
+    Memory.one_effect()
+    Memory.isolation_seen(x, w, v, framed()) if (pointer(v) && (v < arena_base())) && (v >= word_of(isostack))
+    0
+  }
+  static isolation_seen (x, w, v, s0) => {
+    s := s0
+    while s > 0 {
+      s = Memory.frame_seen(x, w, v, s)
+    }
+    0
+  }
+  static frame_seen (x, w, v, s) => {
+    o := word_of(isostack + ((s - 1) * 12))
+    return 0 if x >= o
+    return s - 1 if v < o
+    Memory.frame_escaped(s - 1, o, w)
+    0
+  }
+  static frame_escaped (i, o, w) => (o < isolated_from) ? Memory.raised(isostack + ((i * 12) + 8)) : pin_slot(i, w)
+  static raised (a) => {
+    word_put(a, 1) if word_of(a) == 0
+    0
+  }
+  static touched (x) => {
+    return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0)
+    Memory.frames_touched(x, framed()) if x < markf
+    0
+  }
+  static frames_touched (x, s0) => {
+    Memory.one_effect()
+    s := s0
+    while s > 0 {
+      s = Memory.touched_frame(x, s)
+    }
+    0
+  }
+  static touched_frame (x, s) => (x < word_of(isostack + ((s - 1) * 12))) ? Memory.frame_raised(s) : 0
+  static frame_raised (s) => {
+    word_put(isostack + (((s - 1) * 12) + 8), 2)
+    s - 1
+  }
+  static logged (a) => (a < 8388608) ? 0 : Memory.log_entry(word_of(3932), a)
+  static log_entry (t, a) => (word_of(t + 1048) >= 2000000) ? Memory.log_full(t) : Memory.log_put(t, a, word_of(t + 1048))
+  static log_full (t) => {
+    word_put(t + 1056, 1)
+    0
+  }
+  static log_put (t, a, n) => {
+    u := word_of(t + 1044) + (n * 8)
+    word_put(u, a)
+    word_put(u + 4, word_of(a))
+    word_put(t + 1048, n + 1)
+    0
+  }
+  static freed_back (f) => {
+    free = f
+    word_put(3996, word_of(3996) + 1) if free <= word_of(3920)
+    0
+  }
+  static bound_at (i) => bounds + (i * 16)
+  static zeroed (a, n) => {
+    i := 0
+    while i < n {
+      word_put(a + i, 0)
+      i = i + 4
+    }
+    0
+  }
+  static roomy (l, k) => {
+    c := word_of(l + 4)
+    Memory.widened(l, c, k) if (word_of(l + 8) - c) < k
+    0
+  }
+  static widened (l, c, k) => {
+    touched_by(l, l + 12, free)
+    d := alloc((c + k) * 8)
+    copy(d, word_of(l + 12), c * 4)
+    word_put(l + 12, d)
+    word_put(l + 8, (c + k) * 2)
+    0
+  }
+  static lasting_alloc (n) => (free >= arena_base()) ? alloc(n) : Memory.lasting_taken(n)
+  static lasting_taken (n) => {
+    word_put(3840, arena_base() + 4194304) if word_of(3840) == 0
+    Memory.lasting_from(n, free, markf)
+  }
+  static lasting_from (n, f, m) => {
+    free = word_of(3840)
+    p := alloc(n)
+    word_put(3840, free)
+    free = f
+    markf = m
+    p
+  }
+  static lasting_span (a, e) => {
+    return 1 if e <= (8388608 + (((word_of(4088) + 7) / 8) * 8))
+    return 1 if (takent != 0) && ((a >= word_of(takent + 4)) && (e <= word_of(takent + 8)))
+    a >= arena_base()
+  }
+}
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,

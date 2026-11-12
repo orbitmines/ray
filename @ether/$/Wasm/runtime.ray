@@ -872,12 +872,6 @@ function set_parser(f) {
   kept()
   0
 }
-function curried_value(c) {
-  if tag(c) != 9 {
-    return list()
-  }
-  load (c + 8)
-}
 function grammar_of(t) {
   var g
   g = node(0)
@@ -1629,96 +1623,6 @@ function tag(v) {
   }
   0
 }
-function isgetter(v) {
-  if tag(v) == 2 {
-    return (load (v + 12)) == 1
-  }
-  0
-}
-function got(v) {
-  if isgetter(v) {
-    return call(v, list(), 0)
-  }
-  v
-}
-function get(scope, sym) {
-  got(lookup(scope, sym))
-}
-function member(x, sym) {
-  var e
-  var t
-  t = tag(x)
-  if (t == 1) or (t == 10) {
-    e = own(x, sym)
-    if e == 0 {
-      if sym == 23 {
-        return keys(x)
-      }
-      return 0
-    }
-    return got(load (e + 8))
-  }
-  if t == 3 {
-    if sym == 20 {
-      return int(load (x + 4))
-    }
-    if sym == 21 {
-      if (load (x + 4)) == 0 {
-        return 0
-      }
-      return at(x, 0)
-    }
-    if sym == 22 {
-      if (load (x + 4)) == 0 {
-        return 0
-      }
-      return at(x, (load (x + 4)) - 1)
-    }
-    if sym == 30 {
-      return same(load (x + 4), 0)
-    }
-    if (sym == 24) or ((sym == 25) or (sym == 38)) {
-      return bound(sym, x)
-    }
-    return mapped(x, sym)
-  }
-  if t == 4 {
-    if (sym == 20) or (sym == 19) {
-      return int((load (x + 8)) - (load (x + 4)))
-    }
-    return 0
-  }
-  0
-}
-function bound(id, x) {
-  var c
-  c = alloc(16)
-  c <- 8
-  (c + 4) <- id
-  (c + 8) <- x
-  c
-}
-function builtin(id, x, args) {
-  if id == 24 {
-    return sorted(x, arg(args, 0))
-  }
-  if id == 25 {
-    return each(x, arg(args, 0))
-  }
-  if id == 38 {
-    return each_value(x, arg(args, 0))
-  }
-  if id == 50 {
-    return place(arg(args, 0), arg(args, 1))
-  }
-  if id == 51 {
-    return noted(arg(args, 0))
-  }
-  if id == 52 {
-    return members_of(arg(args, 0))
-  }
-  0
-}
 function mapped(l, sym) {
   var o
   var i
@@ -1780,19 +1684,6 @@ function entry(p, v) {
   define(e, 18, v)
   e
 }
-function keys(n) {
-  var l
-  l = load (n + 12)
-  if l == 0 {
-    l = list()
-    touched_by(n, n + 12, l)
-    if (n + 12) < (load 3944) {
-      logged(n + 12)
-    }
-    (n + 12) <- l
-  }
-  l
-}
 function keyed(n, p, v) {
   var e
   if (n < (load 4004)) or (n >= arena_base()) {
@@ -1841,22 +1732,6 @@ function invoke0(c) {
     return invoke(c, list(), 0)
   }
   call(c, shared_args(3928, 0), 0)
-}
-function own_closure(x, sym) {
-  var e
-  var c
-  if tag(x) == 1 {
-    e = own(x, sym)
-    if e != 0 {
-      c = load (e + 8)
-      if tag(c) == 2 {
-        if (load (c + 12)) == 0 {
-          return c
-        }
-      }
-    }
-  }
-  0
 }
 function call_member0(x, sym) {
   var c
@@ -2710,40 +2585,6 @@ function arg(args, i) {
   }
   0
 }
-function call(c, args, named) {
-  var a
-  fueled()
-  if (load 3916) != 0 {
-    return 0
-  }
-  if tag(c) == 6 {
-    if (load (c + 4)) == 16 {
-      return pattern(19, c, args)
-    }
-    return 0
-  }
-  if tag(c) == 9 {
-    a = node(load ((load (c + 4)) + 8))
-    define(a, 16, load (c + 8))
-    return indirect(a, args, named, load ((load (c + 4)) + 4))
-  }
-  if tag(c) == 10 {
-    return indirect(applied_again(c), args, named, load ((load (c + 12)) + 4))
-  }
-  if tag(c) == 8 {
-    return builtin(load (c + 4), load (c + 8), args)
-  }
-  if tag(c) == 5 {
-    return construct(c, args, named)
-  }
-  if tag(c) != 2 {
-    return 0
-  }
-  if isodepth > 4000 {
-    return indirect(load (c + 8), args, named, load (c + 4))
-  }
-  isolated_value(isolated_open(), indirect(load (c + 8), args, named, load (c + 4)))
-}
 function lasting_alloc(n) {
   var f
   var m
@@ -3499,14 +3340,6 @@ function readtext(p, t) {
     }
   }
   v
-}
-function curried(f, v) {
-  var c
-  c = alloc(16)
-  c <- 9
-  (c + 4) <- f
-  (c + 8) <- v
-  c
 }
 function typed(t, v) {
   if tag(v) == 4 {
@@ -4593,57 +4426,6 @@ function rest_of(l) {
   }
   o
 }
-function member2(x, sym) {
-  var t
-  var a
-  var e
-  t = tag(x)
-  if t == 4 {
-    a = load (x + 4)
-    e = load (x + 8)
-    if sym == 21 {
-      if a == e {
-        return 0
-      }
-      return text(a, a + 1)
-    }
-    if sym == 22 {
-      if a == e {
-        return 0
-      }
-      return text(e - 1, e)
-    }
-    if sym == 29 {
-      if a == e {
-        return text(a, e)
-      }
-      return text(a + 1, e)
-    }
-    if sym == 30 {
-      return boolean(a == e)
-    }
-  }
-  if t == 3 {
-    if sym == 29 {
-      return rest_of(x)
-    }
-    if (sym == 54) or (sym == 55) {
-      return bound(sym, x)
-    }
-  }
-  member(x, sym)
-}
-function invoke(c, args, named) {
-  if tag(c) == 8 {
-    if (load (c + 4)) == 54 {
-      return joined(load (c + 8), arg(args, 0))
-    }
-    if (load (c + 4)) == 55 {
-      return append(load (c + 8), arg(args, 0))
-    }
-  }
-  call(c, args, named)
-}
 function array_new(env, args, named) {
   list()
 }
@@ -5030,22 +4812,6 @@ function with_locals(f) {
   free = g
   markf = s
   r
-}
-function call_member(x, sym, args, named) {
-  var e
-  var c
-  if tag(x) == 1 {
-    e = own(x, sym)
-    if e != 0 {
-      c = load (e + 8)
-      if tag(c) == 2 {
-        if (load (c + 12)) == 0 {
-          return indirect(load (c + 8), args, named, load (c + 4))
-        }
-      }
-    }
-  }
-  invoke(member2(x, sym), args, named)
 }
 function at_text(q, e, a, z) {
   var i

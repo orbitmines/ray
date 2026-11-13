@@ -2677,10 +2677,8 @@ Afterwards := class {
   static m4 (q, c0, c1, c2, c3) => (byte(q) == c0) && ((c1 == 0) || ((byte(q + 1) == c1) && ((c2 == 0) || ((byte(q + 2) == c2) && ((c3 == 0) || (byte(q + 3) == c3))))))
 }
 // Images: what the reading is at, kept (`image_out`, an Image) so the host can go on from it (`image_in`); a test's
-// state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside written out
-// (from word 3940 on, as ops: 7 a value, 1 a text by where, 2 by its bytes, 3 a list, 4 a node, 6 a node of class 10,
-// 5 a number, 8 one written before, 9 one written first) and made again after its memory is let go; the arguments a call
-// shares (word 3928), made once, to last
+// state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside copied to what
+// lasts and its memory let go; the arguments a call shares (word 3928), made once, to last
 Images := class {
   static Image := (aside, free, textend, boundn, bounds, names, activen, actives, markf, effects, syms, outb, outn, datab, datan, counter, asideb, asiden, takent, csyms, memo, epoch, wholly, noreclaim, parserhook, nomemo, pcache, isostack, isodepth)
   static image_out => Images.imaged(lasting_alloc(112))
@@ -2768,13 +2766,8 @@ Images := class {
     t := lasting_alloc(1088)
     zeroed(t, 1088)
     word_put(t + 1044, lasting_alloc(16000000))
-    word_put(t + 1060, lasting_alloc(32000))
-    word_put(t + 1068, lasting_alloc(32000))
     word_put(t + 1076, lasting_alloc(1048576))
     word_put(t + 1080, 0)
-    word_put(t + 1084, lasting_alloc(131072))
-    zeroed(word_of(t + 1084), 131072)
-    word_put(3940, lasting_alloc(8388608))
     word_put(3932, t)
   }
   static test_noted (t, painted, reported) => {
@@ -2817,31 +2810,26 @@ Images := class {
     0
   }
   static test_reclaimed (t, painted, reported, f0) => {
-    w := word_of(3940)
-    np := 0
-    nr := 0
-    nu := 0
-    word_put(t + 1064, 0)
-    word_put(t + 1072, 0)
-    np = Images.past(painted, word_of(t + 20))
-    w = Images.written_out(w, painted, word_of(t + 20), np, f0)
-    nr = Images.past(reported, word_of(t + 24))
-    w = Images.written_out(w, reported, word_of(t + 24), nr, f0)
-    nu = ((word_of(3860) != 0) && (word_of(3860) == word_of(t + 12))) ? Images.past(word_of(3860), word_of(t + 16)) : 0
-    w = Images.written_out(w, word_of(3860), word_of(t + 16), nu, f0)
+    np := Images.past(painted, word_of(t + 20))
+    nr := Images.past(reported, word_of(t + 24))
+    nu := ((word_of(3860) != 0) && (word_of(3860) == word_of(t + 12))) ? Images.past(word_of(3860), word_of(t + 16)) : 0
+    k := appended_from(appended_from(list(), painted, word_of(t + 20)), reported, word_of(t + 24))
+    k = Collector.lasting_copy(((nu > 0) ? appended_from(k, word_of(3860), word_of(t + 16)) : k), f0)
+    return Images.test_unkept(t) if k == 0
     Images.logged_undone(t)
     Images.state_back(t)
     Images.memory_back(t, f0)
-    Images.made_into(painted, reported, np, nr, nu)
+    Images.taken_onto(painted, k, 0, np)
+    Images.taken_onto(reported, k, np, nr)
+    Images.taken_onto(word_of(3860), k, np + nr, nu)
   }
-  static written_out (w0, l, from, n, f0) => {
-    w := w0
+  static taken_onto (l, k, from, n) => {
     i := 0
     while i < n {
-      w = Images.kept_out(w, at(l, from + i), f0, 0)
+      append(l, at(k, from + i))
       i = i + 1
     }
-    w
+    0
   }
   static logged_undone (t) => {
     n := word_of(t + 1048)
@@ -2863,7 +2851,6 @@ Images := class {
     0
   }
   static memory_back (t, f0) => {
-    zeroed(word_of(t + 1084), 131072) if word_of(t + 1064) != 0
     zeroed(f0, free - f0) if free > f0
     starts_cleared(f0, free)
     free = f0
@@ -2873,175 +2860,6 @@ Images := class {
   static keys_back => {
     keys_moved()
     word_put(3920, 0)
-  }
-  static made_into (painted, reported, np, nr, nu) => {
-    r := alloc(8)
-    word_put(r, word_of(3940))
-    Images.made_onto(painted, r, np)
-    Images.made_onto(reported, r, nr)
-    Images.made_aside(r, nu)
-  }
-  static made_onto (l, r, n) => {
-    i := 0
-    while i < n {
-      append(l, Images.made_again(r))
-      i = i + 1
-    }
-    0
-  }
-  static made_aside (r, n) => {
-    i := 0
-    while i < n {
-      Images.asides_made() if word_of(3860) == 0
-      append(word_of(3860), Images.made_again(r))
-      i = i + 1
-    }
-    0
-  }
-  static asides_made => {
-    word_put(3860, list())
-    kept()
-  }
-  // (a value written out: by what it is, as long as it was made since `f0`, else as it is)
-  static kept_out (w, v, f0, depth) => {
-    return Images.op2(w, 7, v) if (pointer(v) == 0) || (v < f0) || (v >= arena_base())
-    return Images.op1(w, 0) if (depth > 6) || (w > (word_of(3940) + 8323072))
-    Images.kept_shared(w, v, f0, depth, Images.shared_in(word_of(3932), word_of(word_of(3932) + 1084), ((v / 8) * 40503) & 16383, v))
-  }
-  static op1 (w, op) => {
-    word_put(w, op)
-    w + 4
-  }
-  static op2 (w, op, x) => {
-    word_put(w + 4, x)
-    Images.op1(w, op) + 4
-  }
-  static op3 (w, op, x, y) => {
-    word_put(w + 8, y)
-    Images.op2(w, op, x) + 4
-  }
-  static kept_shared (w, v, f0, depth, sid) => (sid >= 0) ? Images.op2(w, 8, sid) : ((sid == (0 - 1)) ? Images.kept_value(Images.op1(w, 9), v, f0, depth) : Images.kept_value(w, v, f0, depth))
-  static kept_value (w, v, f0, depth) => {
-    return Images.kept_text(w, word_of(v + 4), word_of(v + 8), f0) if word_of(v) == 4
-    return Images.kept_list(w, v, f0, depth) if word_of(v) == 3
-    return Images.kept_node(w, v, f0, depth, word_of(v)) if (word_of(v) == 1) || (word_of(v) == 10)
-    return Images.op2(w, 5, word_of(v + 4)) if word_of(v) == 12
-    Images.op1(w, 0)
-  }
-  static kept_text (w, a, e, f0) => (a < f0) ? Images.op3(w, 1, a, e) : Images.kept_origined(w, a, e, origin_at(a), ((e > a) ? (origin_at(e - 1) + 1) : origin_at(a)))
-  static kept_origined (w, a, e, oa, oe) => ((oa >= 0) && (oe >= oa)) ? Images.op3(w, 1, oa, oe) : Images.kept_bytes(w, a, e)
-  static kept_bytes (w, a, e) => {
-    word_put(w, 2)
-    word_put(w + 4, e - a)
-    copy(w + 8, a, e - a)
-    w + (8 + ((((e - a) + 3) / 4) * 4))
-  }
-  static kept_list (w0, v, f0, depth) => {
-    n := 0
-    w := 0
-    i := 0
-    n = (word_of(v + 4) > 64) ? 64 : word_of(v + 4)
-    w = Images.op2(w0, 3, n)
-    while i < n {
-      w = Images.kept_out(w, at(v, i), f0, depth + 1)
-      i = i + 1
-    }
-    w
-  }
-  static kept_node (w0, v, f0, depth, t) => {
-    w := w0 + 8
-    n := 0
-    k := 0
-    e := word_of(v + 8)
-    word_put(w0, ((t == 10) ? 6 : 4))
-    while (e != 0) && (n < 64) {
-      k = Images.entry_kept(word_of(e + 8), t, n)
-      w = k ? Images.kept_out(Images.op1(w, word_of(e + 4)), word_of(e + 8), f0, depth + 1) : w
-      n = k ? (n + 1) : n
-      e = word_of(e)
-    }
-    word_put(w0 + 4, n)
-    w
-  }
-  static entry_kept (a, t, n) => pointer(a) ? Images.pointer_kept(word_of(a), t, n) : 1
-  static pointer_kept (k, t, n) => (k == 4) || ((t == 1) && (n < 8) && ((k == 3) || (k == 1)))
-  // (the number a value written out before is known by (-1 the first time, -2 when there are too many))
-  static shared_in (t, h, q0, v) => {
-    q := q0
-    while word_of(h + (q * 8)) != 0 {
-      return word_of(h + ((q * 8) + 4)) if word_of(h + (q * 8)) == v
-      q = (q + 1) & 16383
-    }
-    return 0 - 2 if word_of(t + 1064) >= 8000
-    word_put(h + (q * 8), v)
-    word_put(h + ((q * 8) + 4), word_of(t + 1064))
-    word_put(t + 1064, word_of(t + 1064) + 1)
-    0 - 1
-  }
-  // (a value made again from what was written out of it, `r` where that is read on)
-  static made_again (r) => (word_of(word_of(r)) == 8) ? Images.made_seen(r, word_of(r), word_of(3932)) : ((word_of(word_of(r)) == 9) ? Images.made_noted(r, word_of(r), word_of(3932)) : Images.made_one(r))
-  static made_seen (r, p, t) => {
-    word_put(r, p + 8)
-    word_of(word_of(t + 1068) + (word_of(p + 4) * 4))
-  }
-  static made_noted (r, p, t) => {
-    n := word_of(t + 1072)
-    v := 0
-    word_put(t + 1072, n + 1)
-    word_put(r, p + 4)
-    v = Images.made_one(r)
-    word_put(word_of(t + 1068) + (n * 4), v)
-    v
-  }
-  static made_one (r) => Images.made_as(r, word_of(r), word_of(word_of(r)))
-  static made_as (r, p, op) => {
-    return Images.made_moved(r, p + 8, word_of(p + 4)) if op == 7
-    return Images.made_moved(r, p + 12, text(word_of(p + 4), word_of(p + 8))) if op == 1
-    return Images.made_text(r, p, word_of(p + 4)) if op == 2
-    return Images.made_list(r, p + 8, word_of(p + 4)) if op == 3
-    return Images.made_node(r, p + 8, word_of(p + 4), op) if (op == 4) || (op == 6)
-    return Images.made_moved(r, p + 8, Images.made_number(word_of(p + 4))) if op == 5
-    Images.made_moved(r, p + 4, 0)
-  }
-  static made_moved (r, to, v) => {
-    word_put(r, to)
-    v
-  }
-  static made_number (x) => {
-    v := alloc(8)
-    word_put(v, 12)
-    word_put(v + 4, x)
-    v
-  }
-  static made_text (r, p, n) => {
-    v := alloc_bytes(n + 8)
-    copy(v, p + 8, n)
-    word_put(r, p + (8 + (((n + 3) / 4) * 4)))
-    text(v, v + n)
-  }
-  static made_list (r, from, n) => {
-    v := list()
-    i := 0
-    word_put(r, from)
-    while i < n {
-      append(v, Images.made_again(r))
-      i = i + 1
-    }
-    v
-  }
-  static made_node (r, from, n, op) => {
-    v := node(0)
-    i := 0
-    s := 0
-    word_put(r, from)
-    word_put(v, 10) if op == 6
-    while i < n {
-      s = word_of(word_of(r))
-      word_put(r, word_of(r) + 4)
-      define(v, s, Images.made_again(r))
-      i = i + 1
-    }
-    v
   }
 }
 // Locals (`level with_locals …`): a function the compiler wrote with its parameters in a scope of its own

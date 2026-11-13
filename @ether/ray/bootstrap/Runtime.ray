@@ -38,12 +38,11 @@ Runtime := class {
   static lookup (node: Node, name) => Runtime.value_of(Runtime.found(node, name))
   static value_of (field: Field) => (field === None) ? None : field.value
   // (a name given a value in the node itself: a field of it added, the latest, unless it has one; or where it is found,
-  // else in the node. A level may note each field added: Compiler.ray's index of a node's fields, `noted_field`)
+  // else in the node)
   static define (node: Node, name, value) => Runtime.defined(own(node, name), node, name, value)
   static defined (field: Field, node: Node, name, value) => (field === None) ? Runtime.added(Field(next: node.fields, name: name, value: value), node) : Runtime.given(field, value)
   static added (field: Field, node: Node) => {
     node.fields = field
-    noted_field(node, field)
     field.value
   }
   static given (field: Field, value) => (field.value === value) ? value : Runtime.given_again(field, value)

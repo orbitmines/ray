@@ -1816,7 +1816,10 @@ Entry := class {
     word_put(3844, word_of(3844) - 1)
     l
   }
-  static parse_moved (g, a, e, f, m) => {
+  // (read in young memory, only what it reaches copied to what lasts; read in what lasts when that can not be)
+  static parse_moved (g, a, e, f, m) => ((f >= Heap.marked_from) && (f < arena_base())) ? Entry.parse_copied(Collector.lasting_copy(Entry.parse_counted(g, a, e), f), g, a, e) : Entry.parse_lasting(g, a, e, f, m)
+  static parse_copied (c, g, a, e) => (c != 0) ? c : Entry.parse_lasting(g, a, e, free, markf)
+  static parse_lasting (g, a, e, f, m) => {
     l := 0
     Memory.lasting_entered()
     l = Entry.parse_plain(g, a, e)
@@ -1983,7 +1986,7 @@ Origins := class {
 // value starts noted (a bit a word, `starts_map`), and which of them hold bytes only (`bytes_map`); the arena (past
 // `arena_base`) is not; taking past it stops. Kept: what is made now outlives the region it is made in.
 Heap := class {
-  static marked_from := 536870912
+  static marked_from := 16777216
   static starts_map => 1021000000 * 2
   static bytes_map => 1033000000 * 2
   static alloc (n) => Heap.taken_at(free, n)
@@ -2720,6 +2723,38 @@ Collector := class {
     0
   }
   static gc_log_length (t) => (t != 0) ? word_of(t + 1048) : 0
+  // (a value made since `base`, with what it reaches made since, copied to what lasts, in order, as it would be moved;
+  // nothing when there is no room to mark what it reaches)
+  static lasting_copy (v, base) => {
+    return v if (pointer(v) == 0) || (v < base) || (v >= free)
+    return 0 if ((free + (Collector.gc_map_size(base, free) * 5)) + 25165824) > (arena_base() - 4194304)
+    Collector.gc_compaction_set(base, free, Collector.gc_map_size(base, free))
+    zeroed(free, Collector.gc_map_size(base, free))
+    Collector.gc_mark(v)
+    Collector.gc_marks_traced()
+    return 0 if word_of(4052) != 0
+    Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(base, free), free, markf) - base, base, free, v)
+  }
+  static copied_to (d, base, top, v) => {
+    y := base
+    while y < top {
+      y = Collector.one_copied(d, y, Collector.end_of(y))
+    }
+    d + Collector.gc_reloc(v)
+  }
+  static one_copied (d, y, e) => {
+    copy(d + Collector.gc_reloc(y), y, e - y) if Heap.marked_at(y) != 0
+    Collector.words_fixed(d, d + Collector.gc_reloc(y), (d + Collector.gc_reloc(y)) + (e - y)) if (Heap.marked_at(y) != 0) && (Heap.bit_at(Heap.bytes_map(), y) == 0)
+    e
+  }
+  static words_fixed (d, a0, e) => {
+    a := a0
+    while a < e {
+      word_put(a, d + Collector.gc_reloc(word_of(a))) if Collector.gc_in(word_of(a))
+      a = a + 4
+    }
+    0
+  }
 }
 // Hooks: the reader's own words, each by its name: what is taken, the program's text, the pairs' classes, the caches'
 // reach, the statements set aside, a turn's depth and budget (a statement let go when it runs past it, or near the

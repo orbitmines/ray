@@ -362,7 +362,7 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   and parked (it compiles, its fixpoint holds): with it, a closure called with nothing, `(() => { … })()` (the class
   rule's body), no longer reads (it read because its `(` closed at the `=>`'s `>`), so every class fails; and the rules
   that relied on `:` closing. To be done with the restatement of matching in Runtime.ray, the language's files fixed
-  with it. Until then `Collector := class` is read by the tests as unread (one error).
+  with it. Until then `Collector := class` and `Afterwards := class` are read by the tests as unread (an error each).
 - **Lowered pitfalls, later**: a constant (`static x := v`) is put in place only when `v` is one token: `(1021000000
   * 2)` stays a bare name, which Low takes for a global or function it does not have (write a no-argument static,
   `static x => 1021000000 * 2`, called `X.x()`); a number past 2^30 is not a literal Low writes (`1021000000 * 2`, as the

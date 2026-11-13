@@ -2146,7 +2146,41 @@ Entry := class {
   }
   static parsed_statements (g, t) => Entry.parsed_in((g is Text) ? grammar_of(g) : g, t)
   static parsed_in (g, t) => (t is Text) ? Entry.parsed_trimmed(g, cw_trimmed(t)) : list()
-  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : ((lasting_span(t.from, t.to) != 0) ? parsed_kept(g, t.from, t.to) : call(parserhook, append(append(list(), g), t), 0))
+  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : ((lasting_span(t.from, t.to) != 0) ? parsed_kept(g, t.from, t.to) : Entry.parse_plain(g, t.from, t.to))
+  static parse_plain (g, a, e) => call(parserhook, append(append(list(), g), text(a, e)), 0)
+  // (a text that lasts read once, by where it is (a table at `arena_base`), into what lasts; read as any other once what
+  // lasts is near its end, past which taking stops)
+  static parsed_kept (g, a, e) => Entry.kept_parse(Entry.parse_slot(g, a, e), g, a, e)
+  static parse_slot (g, a, e) => {
+    word_put(3840, arena_base() + 4194304) if word_of(3840) == 0
+    arena_base() + ((((((a * 31) + (e * 7)) + g) / 4) & 262143) * 16)
+  }
+  static kept_parse (s, g, a, e) => ((word_of(s) == g) && (word_of(s + 4) == a) && (word_of(s + 8) == e)) ? word_of(s + 12) : Entry.parse_lasting(s, g, a, e)
+  static parse_lasting (s, g, a, e) => (word_of(3844) != 0) ? Entry.parse_noted(s, g, a, e, Entry.parse_counted(g, a, e)) : ((word_of(3840) > ((1020000000 * 2) - 268435456)) ? Entry.parse_plain(g, a, e) : Entry.parse_noted(s, g, a, e, Entry.parse_moved(g, a, e, free, markf)))
+  static parse_counted (g, a, e) => {
+    l := 0
+    word_put(3844, word_of(3844) + 1)
+    l = Entry.parse_plain(g, a, e)
+    word_put(3844, word_of(3844) - 1)
+    l
+  }
+  static parse_moved (g, a, e, f, m) => {
+    l := 0
+    free = word_of(3840)
+    markf = free
+    l = Entry.parse_counted(g, a, e)
+    word_put(3840, free)
+    free = f
+    markf = m
+    l
+  }
+  static parse_noted (s, g, a, e, l) => {
+    word_put(s, g)
+    word_put(s + 4, a)
+    word_put(s + 8, e)
+    word_put(s + 12, l)
+    l
+  }
 }
 // ChoiceStack (`level choices …`): a choice of how to go on reading, at the top of the stack of them (what kind, what
 // pattern, where, what comes after, and how far holes were bound, memory taken, effects and actives were then); one
@@ -3251,6 +3285,159 @@ Hooks := class {
     to
   }
   static unreachable_now => word_of(0 - 8)
+}
+// Afterwards: the programs kept for afterwards (`external goto afterwards`, words 4044, 4036 how far run), run once
+// everything is read, each by `run` (word 4048) with a test of its own; the code compiled once kept by what it writes
+// (word 3788: a table, by its words' hash); the names that last; the name of a value's kind
+Afterwards := class {
+  static kept_later (p) => {
+    append(word_of(4044), p)
+    p
+  }
+  static entry_step => ((word_of(4044) == 0) || (word_of(4036) >= word_of(word_of(4044) + 4))) ? int(0) : Afterwards.entry_ran(word_of(4044))
+  static entry_ran (l) => {
+    x := at(l, word_of(4036))
+    word_put(4036, word_of(4036) + 1)
+    Afterwards.kept_run(x)
+    int(word_of(l + 4) - word_of(4036))
+  }
+  // (first only those `tested` keeps; where the host runs them a step at a time (word 4080), held for it)
+  static run_kept (run, tested) => {
+    word_put(4048, run)
+    word_logged(word_of(4044) + 4, Afterwards.tested_kept(word_of(4044), tested, word_of(4036)))
+    return 0 if word_of(4080) != 0
+    while word_of(4036) < word_of(word_of(4044) + 4) {
+      word_put(4036, word_of(4036) + 1)
+      Afterwards.kept_run(at(word_of(4044), word_of(4036) - 1))
+    }
+    0
+  }
+  static tested_kept (l, tested, from) => {
+    i := from
+    j := from
+    k := 0
+    while i < word_of(l + 4) {
+      k = truthy(call1(tested, at(l, i)))
+      word_put(word_of(l + 12) + (j * 4), at(l, i)) if k
+      j = k ? (j + 1) : j
+      i = i + 1
+    }
+    j
+  }
+  static kept_run (x) => {
+    o := 0
+    i := word_of(4036)
+    n := 0
+    test_begin(word_of(3968), word_of(3972))
+    o = word_of(4044)
+    word_put(4044, list())
+    word_put(4036, 0)
+    call1(word_of(4048), x)
+    word_put(4036, i)
+    n = word_of(4044)
+    word_put(4044, o)
+    Afterwards.each_run(n)
+    test_end(word_of(3968), word_of(3972))
+    0
+  }
+  static each_run (n) => {
+    i := 0
+    while i < word_of(n + 4) {
+      Afterwards.kept_run(at(n, i))
+      i = i + 1
+    }
+    0
+  }
+  static seeded (t) => {
+    Afterwards.seeds() if csyms == 0
+    append(csyms, t)
+    0
+  }
+  static seeds => {
+    csyms = list()
+    kept()
+    memo = alloc(65536 * 20)
+    kept()
+    epoch = 1
+    actives = lasting_alloc(1048576)
+    bounds = lasting_alloc(16777216)
+    word_put(4044, list())
+    word_put(3968, list())
+    word_put(3972, list())
+    word_put(4084, 2)
+  }
+  static lasting_name (t: Text) => Afterwards.names_full(word_of(word_of(3932) + 1080) + (t.to - t.from)) ? 0 : Afterwards.name_lasting(word_of(3932), t, t.to - t.from)
+  static names_full (u) => ((u + 24) > 1048576) || (word_of(names + 4) >= word_of(names + 8))
+  static name_lasting (r, t: Text, n) => {
+    x := word_of(r + 1076) + word_of(r + 1080)
+    f := word_of(3944)
+    word_put(x, 4)
+    copy(x + 12, t.from, n)
+    word_put(x + 4, x + 12)
+    word_put(x + 8, (x + 12) + n)
+    word_put(r + 1080, word_of(r + 1080) + ((((n + 12) + 7) / 8) * 8))
+    word_put(3944, 0)
+    append(names, x)
+    word_put(3944, f)
+    1
+  }
+  static kept_same (a, e) => word_of(Afterwards.kept_slot(a, e) + 4)
+  static kept_as (a, e, c) => Afterwards.kept_into(Afterwards.kept_slot(a, e), a, e, c)
+  static kept_into (x, a, e, c) => {
+    return 0 if (word_of(x) != 0) || (word_of(word_of(3788) + 4) > 131072)
+    word_put(x, word_of(word_of(3788)))
+    word_put(x + 4, c)
+    word_put(x + 8, copy(alloc(e - a), a, e - a))
+    word_put(x + 12, e - a)
+    word_put(word_of(3788) + 4, word_of(word_of(3788) + 4) + 1)
+    0
+  }
+  static kept_slot (a, e) => Afterwards.slot_probed(Afterwards.slots(), a, e, Afterwards.words_hash(a, e))
+  static slots => (word_of(3788) == 0) ? Afterwards.slots_made() : word_of(3788)
+  static slots_made => {
+    word_put(3788, alloc(4194320))
+    zeroed(word_of(3788), 4194320)
+    word_of(3788)
+  }
+  static words_hash (a, e) => {
+    h := 7
+    q := a
+    while q < e {
+      h = (h * 31) + word_of(q)
+      q = q + 4
+    }
+    (h == 0) ? 1 : h
+  }
+  static slot_probed (s, a, e, h) => {
+    k := h & 262143
+    while (word_of(s + (16 + (k * 16))) != 0) && Afterwards.slot_other(s + (16 + (k * 16)), a, e, h) {
+      k = (k + 1) & 262143
+    }
+    word_put(s, h)
+    s + (16 + (k * 16))
+  }
+  static slot_other (x, a, e, h) => (word_of(x) != h) || (word_of(x + 12) != (e - a)) || (texteq(word_of(x + 8), a, e - a) == 0)
+  static kind_of (v) => Afterwards.kind_named(alloc_bytes(8), v)
+  static kind_named (t, v) => {
+    return text(t, put4(put4(t, 110, 111, 116, 104), 105, 110, 103, 0)) if v == 0
+    return text(t, put4(put4(t, 102, 97, 108, 115), 101, 0, 0, 0)) if v == 8
+    return text(t, put4(t, 116, 114, 117, 101)) if v == 12
+    return text(t, put4(put4(t, 110, 117, 109, 98), 101, 114, 0, 0)) if (v & 1) == 1
+    return text(t, put4(t, 116, 101, 120, 116)) if tag(v) == 4
+    return text(t, put4(t, 108, 105, 115, 116)) if tag(v) == 3
+    0
+  }
+  static put4 (o, c0, c1, c2, c3) => {
+    byte_put(o, c0)
+    return o + 1 if c1 == 0
+    byte_put(o + 1, c1)
+    return o + 2 if c2 == 0
+    byte_put(o + 2, c2)
+    return o + 3 if c3 == 0
+    byte_put(o + 3, c3)
+    o + 4
+  }
+  static m4 (q, c0, c1, c2, c3) => (byte(q) == c0) && ((c1 == 0) || ((byte(q + 1) == c1) && ((c2 == 0) || ((byte(q + 2) == c2) && ((c3 == 0) || (byte(q + 3) == c3))))))
 }
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
 // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what

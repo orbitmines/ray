@@ -853,6 +853,51 @@ Caches := class {
   }
   static key_leads (p, t: Text, b) => ((!Keys.led_by_text(p)) || (Keys.lead_byte(p) == b) || (b == (0 - 3))) && Keys.literals_in(p, t.from, t.to)
   static lead_class (b) => (white(b) || (b == 10)) ? (0 - 3) : b
+  // (a list of keys by the byte that leads each (256: led by text, by no byte): the first of each, the last, and each one's
+  // next, in order; in a table of slots (word 3908), each the list, the keys' version and its index, and the indexes after
+  // them, all cleared once full)
+  static led_index (l: List) => {
+    word_put(3908, lasting_alloc(33619968)) if word_of(3908) == 0
+    s := word_of(3908) + ((((l / 8) * 40503) & 4095) * 12)
+    x := ((word_of(s) == l) && (word_of(s + 4) == word_of(3996))) ? word_of(s + 8) : 0
+    x = ((x == 0) || (word_of(x) < l.count) || (word_of(x + 4) > l.count)) ? Caches.led_room(s, l, ((l.count < 8) ? 16 : (l.count * 2))) : x
+    Caches.led_added(x, l, word_of(x + 4)) if word_of(x + 4) < l.count
+    x
+  }
+  static led_room (s, l, n) => {
+    zeroed(word_of(3908), 49156) if (word_of(word_of(3908) + 49152) + (2064 + (n * 4))) > 33554432
+    x := word_of(3908) + (65536 + word_of(word_of(3908) + 49152))
+    word_put(word_of(3908) + 49152, word_of(word_of(3908) + 49152) + (2064 + (n * 4)))
+    word_put(x, n)
+    word_put(x + 4, 0)
+    Caches.chains_cleared(x + 8, x + 2064)
+    word_put(s, l)
+    word_put(s + 4, word_of(3996))
+    word_put(s + 8, x)
+    cache_key(l) if l < arena_base()
+    x
+  }
+  static chains_cleared (a0, e) => {
+    a := a0
+    while a < e {
+      word_put(a, 0 - 1)
+      a = a + 4
+    }
+    0
+  }
+  static led_added (x, l: List, i0) => {
+    i := i0
+    k := 0
+    while i < l.count {
+      k = Caches.lead_code(topattern(member(at(l, i), Symbol.key)))
+      word_put(x + (2064 + (i * 4)), 0 - 1)
+      word_put(((word_of(x + (1036 + (k * 4))) < 0) ? (x + (8 + (k * 4))) : (x + (2064 + (word_of(x + (1036 + (k * 4))) * 4)))), i) if k >= 0
+      word_put(x + (1036 + (k * 4)), i) if k >= 0
+      i = i + 1
+    }
+    word_put(x + 4, l.count)
+  }
+  static lead_code (p) => Keys.led_by_text(p) ? ((Keys.lead_byte(p) < 0) ? 256 : Keys.lead_byte(p)) : (0 - 1)
   static led_table => (pcache == 0) ? Caches.led_made() : pcache
   static led_made => {
     pcache = alloc(8388608)
@@ -1492,16 +1537,20 @@ Matching := class {
   }
   static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, n, m, c)
   static led_tried (l: List, n, m, c) => {
+    x := Caches.led_index(l)
+    a := (c >= 0) ? word_of(x + (8 + (c * 4))) : (0 - 1)
+    b := word_of(x + 1032)
     i := 0
     r := 0
-    while i < l.count {
-      r = Matching.led_key(topattern(member(at(l, i), Symbol.key)), n, m, c)
+    while (a >= 0) || (b >= 0) {
+      i = ((b < 0) || ((a >= 0) && (a < b))) ? a : b
+      r = Matching.led_matched(topattern(member(at(l, i), Symbol.key)), n, m)
       return r if r > n
-      i = i + 1
+      a = (i == a) ? word_of(x + (2064 + (i * 4))) : a
+      b = (i == b) ? word_of(x + (2064 + (i * 4))) : b
     }
     0
   }
-  static led_key (p, n, m, c) => (Keys.led_by_text(p) && ((Keys.lead_byte(p) < 0) || (Keys.lead_byte(p) == c))) ? Matching.led_matched(p, n, m) : 0
   static led_matched (p, n, m) => {
     r := matched(p, n, 0)
     boundn = m

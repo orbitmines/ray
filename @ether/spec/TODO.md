@@ -304,8 +304,9 @@ its own reading its place, unread text recorded with reading going on.
     level.ray's requests as the entrypoint's own definitions (they need calls), then numerals.
   - Again on revision 142 (a parse read in young memory, only its result copied to what lasts; no compaction; lasting
     memory 1763 → 1350 MB): Expression.lazy's `--test` now ends, in 70 s, but every statement runs past its 200M-step
-    budget, from the entrypoint's line 8 (`level style style x`) on. Speed of reading with the `led` rules is the wall
-    now, not memory.
+    budget, from the entrypoint's line 8 (`level style style x`) on. Not the steps: young memory fills to ~1.1 GB (the
+    young parts of statements kept, nothing compacts them since 430490e1) and `near_end` cuts every statement after.
+    Calls need what a statement made reclaimed when it ends, from a remembered set of the older words that point into it.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

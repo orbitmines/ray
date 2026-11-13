@@ -454,12 +454,11 @@ Texts := class {
     f := from
     named := None
     while f != None {
-      named = Texts.plain_name(f.name) ? f : named
+      named = ((f.name != Symbol.key) && (f.name != Symbol.this) && (f.name != Symbol.caller) && (f.name != Symbol.in)) ? f : named
       f = f.next
     }
     Texts.name_of(named)
   }
-  static plain_name (n) => (n != Symbol.key) && (n != Symbol.this) && (n != Symbol.caller) && (n != Symbol.in)
   static name_of (f: Field) => (f === None) ? None : name_text(f.name)
   // (a text's statements, as a grammar reads them: each, or the text each is)
   static cw_statements_in (g, t) => mapped(parsed_statements(g, t), Symbol.statement)
@@ -467,7 +466,7 @@ Texts := class {
   static statement_texts (l: List, o) => {
     i := 0
     while i < l.count {
-      append(o, continued_span(o, statement_span(l.items[i])))
+      append(o, continued_span(o, Layout.span_in(member((l.items[i]), 14))))
       i = i + 1
     }
     o
@@ -605,8 +604,7 @@ Splices := class {
     taken_entry()
   }
   static spliced (t: Text, cap: Text, l) => ((t is Text) && (cap is Text) && (l is List) && Splices.capture_ok(cap, Splices.opening_end_at(cap.from, cap.to))) ? Splices.spliced_as(t, cap, Splices.opening_end_at(cap.from, cap.to), l, Splices.spliced_whole(t, cap, Splices.opening_end_at(cap.from, cap.to), l)) : t
-  static spliced_as (t, cap, oe, l, whole) => (whole != None) ? whole : Splices.spliced_out(t, cap, oe, l, Splices.spliced_into(t, cap, oe, l, 0))
-  static spliced_out (t, cap, oe, l, n) => Splices.spliced_written(t, cap, oe, l, alloc_bytes(n + 8))
+  static spliced_as (t, cap, oe, l, whole) => (whole != None) ? whole : Splices.spliced_written(t, cap, oe, l, alloc_bytes(Splices.spliced_into(t, cap, oe, l, 0) + 8))
   static spliced_written (t, cap, oe, l, o) => text(o, o + Splices.spliced_into(t, cap, oe, l, o))
   // (how long the text is with each name taken, written to out unless it is 0)
   static spliced_into (t: Text, cap: Text, oe, l, out) => {
@@ -675,7 +673,7 @@ Splices := class {
   static alias_in (u: Text, l, i, oa, oe, ce) => ((at_text(u.from, u.to, oa, oe) != 0) && (at_text(u.to - (ce - (oe + 1)), u.to, oe + 1, ce) != 0)) ? Splices.take_named_from(u.from + (oe - oa), u.to - (ce - (oe + 1)), l, i + 1, oa, ce) : None
   static aliased_or (r, x) => (r != None) ? r : Splices.first_taken(x)
   static first_taken (x) => {
-    taken_set(x) if taken_entry() == 0
+    word_put(3872, x) if taken_entry() == 0
     member(x, Symbol.value)
   }
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
@@ -755,13 +753,12 @@ Readings := class {
     q := t.from
     s := q
     while q < t.to {
-      s = Readings.pattern_part(l, f, g, s, q)
+      s = (truthy(call1(f, text(q, q + 1))) ? Readings.part_put(l, g, s, q) : s)
       q = q + 1
     }
     append(l, literal(text(s, q))) if q > s
     sequence(l)
   }
-  static pattern_part (l, f, g, s, q) => truthy(call1(f, text(q, q + 1))) ? Readings.part_put(l, g, s, q) : s
   static part_put (l, g, s, q) => {
     append(l, literal(text(s, q))) if q > s
     append(l, (g is Closure) ? Pattern(kind: typed_with, a: g, b: text(q, q + 1)) : g)
@@ -771,12 +768,11 @@ Readings := class {
     n := o
     q := t.from
     while q < t.to {
-      n = Readings.byte_mapped(n, q, f, g)
+      n = (truthy(call1(f, text(q, q + 1))) ? Readings.text_put(n, (g is Closure) ? call1(g, text(q, q + 1)) : g) : Readings.byte_kept(n, q))
       q = q + 1
     }
     text(o, n)
   }
-  static byte_mapped (n, q, f, g) => truthy(call1(f, text(q, q + 1))) ? Readings.text_put(n, (g is Closure) ? call1(g, text(q, q + 1)) : g) : Readings.byte_kept(n, q)
   static text_put (n, r: Text) => {
     copy(n, r.from, r.to - r.from)
     n + (r.to - r.from)
@@ -842,7 +838,7 @@ Keys := class {
     keys_moved()
     int(Texts.count_of(lp))
   }
-  static key_moved (lv, lp, x, i) => (i < 2) ? append(lv, x) : ((catch_all(member(x, Symbol.key)) == 0) ? append(lp, x) : 0)
+  static key_moved (lv, lp, x, i) => (i < 2) ? append(lv, x) : ((Members.catches_all(topattern(member(x, Symbol.key))) == 0) ? append(lp, x) : 0)
 }
 // Caches (`level cached …`, removable: each what it caches, again): a list of keys, each its pattern and lead
 // (`keys_reading`, by the list, its length and the rules' epoch); of those, the ones read in a text of the program (by
@@ -895,10 +891,9 @@ Pairs := class {
   // (a quoted byte, `'x'`, around a capture: the byte quoted)
   static quoted_in (h, c) => ((byte(h + 1) == byte(h + 3)) && (char_class(byte(h + 1)) == 2)) ? byte(h + 2) : c
   static pair_between (cap: Text, home, b, c) => {
-    Pairs.pair_classed(home, b, c) if (white(b) == 0) && (white(c) == 0) && (word_byte(b) == 0) && (word_byte(c) == 0) && (b != byte(cap.to - 1)) && (c != byte(cap.from))
+    ((b == c) ? Pairs.pair_set(b, 2, home) : (((char_class(b) == 0) && (char_class(c) == 0)) ? Pairs.both_set(b, c, home) : 0)) if (white(b) == 0) && (white(c) == 0) && (word_byte(b) == 0) && (word_byte(c) == 0) && (b != byte(cap.to - 1)) && (c != byte(cap.from))
     0
   }
-  static pair_classed (home, b, c) => (b == c) ? Pairs.pair_set(b, 2, home) : (((char_class(b) == 0) && (char_class(c) == 0)) ? Pairs.both_set(b, c, home) : 0)
   static both_set (b, c, home) => {
     Pairs.pair_set(b, 1, home)
     Pairs.pair_set(c, 3, home)
@@ -1001,7 +996,6 @@ Pairs := class {
 // ends with a comma), whether a line goes on into the next (more indented, or a closing); a text's gaps (white) and
 // words as a pattern; digits, a word's inside, a line end in a text; a column of an entry; the first or last where.
 Layout := class {
-  static statement_span (st) => Layout.span_in(member(st, 14))
   static span_in (s: Node) => (s == None) ? None : Layout.statement_in(s.keys)
   static statement_in (l: List) => {
     i := 0
@@ -1028,7 +1022,7 @@ Layout := class {
     }
     q
   }
-  static continued_from (a, n) => (comma_ended(a, n) != 0) ? 1 : Layout.continued_by(n, indent_written(a))
+  static continued_from (a, n) => (comma_ended(a, n) != 0) ? 1 : Layout.continued_by(n, Origins.indent_at_origin(origin_at(a)))
   static continued_by (n, d) => (d < 0) ? 0 : Layout.indented_past(n, d, indent_at(n + 1))
   static indented_past (n, d, j) => (((n + 1 + j) >= textend) || (byte(n + 1 + j) == 10)) ? 0 : ((j > d) || (pair_class(n + 1 + j) == 3))
   static spaced (l: List, j) => ((j < 0) || (j >= l.count)) ? 0 : Layout.not_literal(at(l, j))
@@ -1072,7 +1066,6 @@ Layout := class {
     }
     d
   }
-  static inside_word (n, a) => (n > a) && (word_byte(byte(n - 1)) != 0) && (word_byte(byte(n)) != 0)
   static line_in (a, e) => {
     q := a
     while q < e {
@@ -1106,11 +1099,11 @@ Layout := class {
 // sorted, searched by halves); where a pair that opens at a place ends (`pair_end`, by place, the classes' version);
 // whether a part is held outside brackets (`holds_outside`); the entries by a column's value (`last_with`, `all_with`).
 Indexes := class {
-  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : (((e - a) > 64) ? Indexes.occurs_long(l, a, e, Indexes.bytes_cached(a, e)) : Indexes.occurs_short(l, a, e))
+  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : (((e - a) > 64) ? Indexes.occurs_long(l, a, e, ((pcache == 0) ? 0 : Indexes.bytes_kept(Indexes.bytes_slot(a, e), a, e))) : Indexes.occurs_short(l, a, e))
   static occurs_long (l: Text, a, e, b) => ((b != 0) && (Indexes.bytes_all(l, b) == 0)) ? 0 : (in_program(a, e) ? Indexes.occurs_based(Indexes.based_index(program_from(), program_from() + program_length(), 3960), program_length(), l, a, e) : (Indexes.in_taken(a, e, takent) ? Indexes.occurs_taken(l, a, e, takent) : Indexes.occurs_short(l, a, e)))
   static in_taken (a, e, t: Text) => (t != 0) && (a >= t.from) && (e <= t.to)
   static occurs_taken (l, a, e, t: Text) => Indexes.occurs_based(Indexes.based_index(t.from, t.to, 3952), t.to - t.from, l, a, e)
-  static occurs_short (l: Text, a, e) => Indexes.occurs_by(l, a, e, Indexes.bytes_in(a, e))
+  static occurs_short (l: Text, a, e) => Indexes.occurs_by(l, a, e, Indexes.bytes_from(Indexes.bytes_slot_made(a, e), a, e))
   static occurs_by (l: Text, a, e, b) => (Indexes.bytes_all(l, b) == 0) ? 0 : (((l.to - l.from) == 1) ? 1 : ((Indexes.pairs_all(l, b) == 0) ? 0 : Indexes.found_at(l, a, e)))
   static bit_off (b, f) => (byte(b + (f / 8)) & (1 << (f % 8))) == 0
   static bit_set (b, f) => byte_put(b + (f / 8), byte(b + (f / 8)) | (1 << (f % 8)))
@@ -1249,9 +1242,7 @@ Indexes := class {
   }
   // (the bytes and byte pairs in a text, as bits, kept by the text after the led keys' table)
   static bytes_slot (a, e) => (pcache + (8388608 - (2048 * 560))) + (((((a * 31) + (e * 7)) / 4) & 2047) * 560)
-  static bytes_cached (a, e) => (pcache == 0) ? 0 : Indexes.bytes_kept(Indexes.bytes_slot(a, e), a, e)
   static bytes_kept (s, a, e) => ((word_of(s) == a) && (word_of(s + 4) == e) && ((lasting_span(a, e) != 0) || (word_of(s + 8) == epoch))) ? (s + 16) : 0
-  static bytes_in (a, e) => Indexes.bytes_from(Indexes.bytes_slot_made(a, e), a, e)
   static bytes_slot_made (a, e) => {
     Caches.led_table()
     Indexes.bytes_slot(a, e)
@@ -1272,7 +1263,7 @@ Indexes := class {
     caches_reach()
     s + 16
   }
-  static pair_end (q) => pair_ending(q)
+  static pair_end (q) => ((pair_class(q) == 2) ? Runtime.quote_ending(q, byte(q)) : Runtime.bracket_ending(q))
   static holds_outside (t: Text, part) => (t is Text) ? Indexes.outside_read(t, part, textend) : false
   static outside_read (t: Text, part, te) => {
     textend = t.to
@@ -1318,7 +1309,6 @@ Members := class {
     append(l, entry(name_text(f.name), f.value)) if (f.name != Symbol.key) && (f.name != Symbol.input)
     f.next
   }
-  static catch_all (p) => Members.catches_all(topattern(p))
   static catches_all (p: Pattern) => (p is Pattern) && ((p.kind == named_field) || ((p.kind == in_sequence) && Members.one_field(p.a)))
   static one_field (l: List) => (l.count == 1) && Members.is_field(at(l, 0))
   static is_field (p: Pattern) => p.kind == named_field
@@ -1328,8 +1318,7 @@ Members := class {
     0
   }
   static grammar_of (t) => Runtime.defined_as(node(0), Symbol.text, t)
-  static setmember (x, sym, v) => Members.pattern_set(x, sym, Members.node_set(x, sym, v))
-  static node_set (x, sym, v) => ((x is Node) || (x is Applied)) ? Members.defined_to(x, sym, (v == x) ? copied(x) : v) : v
+  static setmember (x, sym, v) => Members.pattern_set(x, sym, (((x is Node) || (x is Applied)) ? Members.defined_to(x, sym, (v == x) ? copied(x) : v) : v))
   static defined_to (x, sym, v) => {
     define(x, sym, v)
     v
@@ -1398,8 +1387,7 @@ Calls := class {
   }
   static selmethod (x, sym, f, args) => (sym == Symbol.map) ? Calls.mapped_by(x, f, arg(args, 0)) : 0
   static mapped_by (x, f, g) => (x is Text) ? mapped_text(x, f, g) : (((x is Node) && (member(x, Symbol.text) != None)) ? mapped_structure(x, f, g) : x)
-  static place (t, ctx) => Calls.place_made_of((t is Node) ? member(t, Symbol.text) : t, ctx)
-  static place_made_of (t, ctx) => Place(name: intern(t), kind: 0, given: ctx)
+  static place (t, ctx) => Place(name: intern(((t is Node) ? member(t, Symbol.text) : t)), kind: 0, given: ctx)
   static readsv (p, t) => (p is Node) ? Calls.read_keyed(p, t, member(p, Symbol.key)) : reads(topattern(p), t)
   static read_keyed (p, t, k) => (k == None) ? reads(topattern(p), t) : Calls.read_measured(p, t, k, reads(topattern(k), t))
   static read_measured (p, t: Text, k, r) => {
@@ -1488,7 +1476,6 @@ Matching := class {
     None
   }
   static last (l: List) => (l.count == 0) ? None : at(l, l.count - 1)
-  static read_with (n, sym, v) => Matching.with_in(Matching.reread_of(member(n, 15)), sym, v)
   static reread_of (s: Pattern) => ((s is Pattern) && (s.kind == reread)) ? s.a : s
   static with_in (s, sym, v) => (s is Node) ? Matching.with_found(member(s, sym), v) : v
   static with_found (t, v) => ((t is Pattern) || ((t is Node) && (member(t, Symbol.text) != None))) ? t : v
@@ -1528,7 +1515,6 @@ Matching := class {
     boundn = m
     r
   }
-  static text_led_reading (ctx, n) => (nomemo != 0) ? text_led_read(ctx, n) : Matching.memo_read(ctx, n, memo + (((((n * 31) + ctx) + (textend * 7)) & 65535) * 16))
   static memo_read (ctx, n, h) => ((word_of(h) == n) && (word_of(h + 4) == ctx) && (word_of(h + 8) == textend) && (word_of(h + 12) == epoch)) ? word_of((memo + 1048576) + ((h - memo) / 4)) : Matching.memo_noted(ctx, n, h, text_led_read(ctx, n))
   static memo_noted (ctx, n, h, r) => {
     word_put(h, n)
@@ -1566,9 +1552,8 @@ Built := class {
     append(l, ((c.value is Place) || (c is Marked)) ? topattern(c.value) : Built.field_rebuilt(c.name, Built.with_read(n, c.name, member(n, c.name))))
     c.to
   }
-  static with_read (n, sym, v) => (v is Text) ? read_with(n, sym, v) : v
+  static with_read (n, sym, v) => (v is Text) ? Matching.with_in(Matching.reread_of(member(n, 15)), sym, v) : v
   static field_rebuilt (sym, v) => field(sym, (v is Pattern) ? v : (((v is Node) && (member(v, Symbol.text) != None)) ? pattern(reread, v, 0) : anything()))
-  static texts_equal (x, y) => Texts.same_text(x, y)
   static enclosed_holes (l: List) => {
     i := 0
     while i < l.count {
@@ -1583,14 +1568,13 @@ Built := class {
   }
   static literal_at (l: List, j) => ((j >= 0) && (j < l.count) && Layout.is_literal(at(l, j))) ? at(l, j) : 0
   static hole_between (l, i, h: Pattern, a, b) => {
-    Built.hole_closed_by(l, i, h, a, b) if (h is Pattern) && (h.kind == hole)
+    (((a != 0) && (b != 0)) ? Built.hole_inside(h, a, b) : Built.hole_beside(l, i, h, a, b)) if (h is Pattern) && (h.kind == hole)
     0
   }
-  static hole_closed_by (l, i, h, a, b) => ((a != 0) && (b != 0)) ? Built.hole_inside(h, a, b) : Built.hole_beside(l, i, h, a, b)
   static hole_inside (h: Pattern, a: Pattern, b: Pattern) => {
     h.b = 1
     h.c = byte(Built.text_from(b.a))
-    Built.ended_by(h, 2) if texts_equal(a.a, b.a)
+    Built.ended_by(h, 2) if Texts.same_text(a.a, b.a)
     0
   }
   static text_from (t: Text) => t.from
@@ -1608,9 +1592,7 @@ Built := class {
     b
   }
   static staged (f) => pattern(typed_by, f, 0)
-  static rest_cell (l, i, next) => Rest(list: l, next: next, index: i)
-  static recell (k: Rest, next) => (k.list is List) ? rest_cell(k.list, k.index, next) : cell(k.list, next)
-  static repeat_chosen (inner, least, d, pos, k) => Built.choice_given(chosen(4, inner, pos, k), least, d)
+  static recell (k: Rest, next) => (k.list is List) ? Rest(list: k.list, next: next, index: k.index) : cell(k.list, next)
   static choice_given (s: Choice, least, d) => {
     s.a = least
     s.c = d
@@ -1646,7 +1628,7 @@ Turns := class {
     at := Turns.in_order(item, f, args, pos)
     read_again(item, f, args, u)
     turn_depth_set(d)
-    fuel_floor_set(floor)
+    word_put(4060, floor)
     went_on()
     at
   }
@@ -1668,11 +1650,10 @@ Turns := class {
     isolated_open()
     r := matched(item, at, cell(pattern(statement_ending, at, 1), 0))
     textend = q
-    Turns.turned_by(f, args, at, se, r, mark)
+    (statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark)))
   }
   static closed_or (pos, se, at) => Turns.closed_at_or(pos, se, block_closed(at, se))
   static closed_at_or (pos, se, v) => (v > 0) ? statement_end(pos, v) : se
-  static turned_by (f, args, at, se, r, mark) => statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark))
   static over_turn (at, se, mark) => {
     isolated_value(0, 0)
     boundn = mark
@@ -1719,13 +1700,12 @@ Turns := class {
     changed := 0
     k := 0
     while i < l.count {
-      k = Turns.again_one(item, f, args, l, i)
+      k = Turns.again_matched(f, args, l, i, boundn, Turns.again_match(item, at(l, i)))
       changed = changed | k
       i = (k != 0) ? i : (i + 1)
     }
     changed
   }
-  static again_one (item, f, args, l, i) => Turns.again_matched(f, args, l, i, boundn, Turns.again_match(item, at(l, i)))
   static again_match (item, t: Text) => {
     q := textend
     textend = t.to
@@ -1763,12 +1743,11 @@ Entry := class {
   static entered_at := 3856
   static partstart (p, e) => {
     q := p
-    while (q < e) && (white(byte(q)) || Entry.comment_at(q, e)) {
+    while (q < e) && (white(byte(q)) || (((q + 1) < e) && (byte(q) == 47) && (byte(q + 1) == 47))) {
       q = white(byte(q)) ? (q + 1) : Entry.to_line_end(q, e)
     }
     q
   }
-  static comment_at (q, e) => ((q + 1) < e) && (byte(q) == 47) && (byte(q + 1) == 47)
   static to_line_end (q, e) => {
     k := q
     while (k < e) && (byte(k) != 10) {
@@ -1828,19 +1807,16 @@ Entry := class {
     textend = q
     r
   }
-  static parsed_statements (g, t) => Entry.parsed_in((g is Text) ? grammar_of(g) : g, t)
-  static parsed_in (g, t) => (t is Text) ? Entry.parsed_trimmed(g, cw_trimmed(t)) : list()
-  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : ((lasting_span(t.from, t.to) != 0) ? parsed_kept(g, t.from, t.to) : Entry.parse_plain(g, t.from, t.to))
+  static parsed_statements (g, t) => ((t is Text) ? Entry.parsed_trimmed(((g is Text) ? grammar_of(g) : g), cw_trimmed(t)) : list())
+  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : ((lasting_span(t.from, t.to) != 0) ? Entry.kept_parse(Entry.parse_slot(g, t.from, t.to), g, t.from, t.to) : Entry.parse_plain(g, t.from, t.to))
   static parse_plain (g, a, e) => call(parserhook, append(append(list(), g), text(a, e)), 0)
   // (a text that lasts read once, by where it is (a table at `arena_base`), into what lasts; read as any other once what
   // lasts is near its end, past which taking stops)
-  static parsed_kept (g, a, e) => Entry.kept_parse(Entry.parse_slot(g, a, e), g, a, e)
   static parse_slot (g, a, e) => {
     word_put(3840, arena_base() + 4194304) if word_of(3840) == 0
     arena_base() + ((((((a * 31) + (e * 7)) + g) / 4) & 262143) * 16)
   }
-  static kept_parse (s, g, a, e) => ((word_of(s) == g) && (word_of(s + 4) == a) && (word_of(s + 8) == e)) ? word_of(s + 12) : Entry.parse_lasting(s, g, a, e)
-  static parse_lasting (s, g, a, e) => (word_of(3844) != 0) ? Entry.parse_noted(s, g, a, e, Entry.parse_counted(g, a, e)) : ((word_of(3840) > ((1020000000 * 2) - 167772160)) ? Entry.parse_plain(g, a, e) : Entry.parse_noted(s, g, a, e, Entry.parse_moved(g, a, e, free, markf)))
+  static kept_parse (s, g, a, e) => ((word_of(s) == g) && (word_of(s + 4) == a) && (word_of(s + 8) == e)) ? word_of(s + 12) : ((word_of(3844) != 0) ? Entry.parse_noted(s, g, a, e, Entry.parse_counted(g, a, e)) : ((word_of(3840) > ((1020000000 * 2) - 167772160)) ? Entry.parse_plain(g, a, e) : Entry.parse_noted(s, g, a, e, Entry.parse_moved(g, a, e, free, markf))))
   static parse_counted (g, a, e) => {
     l := 0
     word_put(3844, word_of(3844) + 1)
@@ -1888,7 +1864,6 @@ ChoiceStack := class {
     markf = free
     s
   }
-  static undone_by (c, mark, m) => ChoiceStack.undo_made(ChoiceStack.choice_room(), c, mark, m)
   static undo_made (s: Choice, c, mark, m) => {
     s.kind = 10
     s.bound = m
@@ -1978,17 +1953,15 @@ Origins := class {
     q := a
     n := 0
     while n < 64 {
-      return q if Origins.original(q)
-      q = Origins.copied_back(q)
+      return q if (in_program(q, q + 1) || Origins.in_entry(q))
+      q = ((word_of(copies_at) == 0) ? (0 - 1) : Origins.copy_found(q, word_of(copies_at), word_of(copies_count_at)))
       return q if q < 0
       n = n + 1
     }
     0 - 1
   }
-  static original (a) => in_program(a, a + 1) || Origins.in_entry(a)
   static in_entry (a) => (word_of(entered_at) != 0) && Origins.entry_holds(word_of(entered_at), a)
   static entry_holds (b: Reader, a) => (a >= b.from) && (a < b.to)
-  static copied_back (a) => (word_of(copies_at) == 0) ? (0 - 1) : Origins.copy_found(a, word_of(copies_at), word_of(copies_count_at))
   static copy_found (a, b, count) => {
     k := count
     while k > 0 {
@@ -1999,10 +1972,7 @@ Origins := class {
   }
   static copy_holds (r: Copy, a) => (a >= r.to) && (a < (r.to + r.length))
   static copy_through (r: Copy, a) => r.from + (a - r.to)
-  static indent_written (a) => Origins.indent_at_origin(origin_at(a))
-  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, Origins.text_low(o), Origins.text_high(o))
-  static text_low (o) => Origins.in_entry(o) ? Origins.entry_from(word_of(entered_at)) : program_from()
-  static text_high (o) => Origins.in_entry(o) ? Origins.entry_to(word_of(entered_at)) : (program_from() + program_length())
+  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, (Origins.in_entry(o) ? Origins.entry_from(word_of(entered_at)) : program_from()), (Origins.in_entry(o) ? Origins.entry_to(word_of(entered_at)) : (program_from() + program_length())))
   static entry_from (b: Reader) => b.from
   static entry_to (b: Reader) => b.to
   static indent_within (o, lo, te) => {
@@ -2027,10 +1997,9 @@ Heap := class {
   static alloc (n) => Heap.taken_at(free, n)
   static taken_at (p, n) => {
     free = free + (((n + 7) / 8) * 8)
-    alloc_marked(p) if free > marked_from
+    ((free > arena_base()) ? Heap.arena_over(p) : Heap.start_noted(p)) if free > marked_from
     p
   }
-  static alloc_marked (p) => (free > arena_base()) ? Heap.arena_over(p) : Heap.start_noted(p)
   static arena_over (p) => {
     Heap.overflowed() if ((p <= arena_base()) || (free > (1020000000 * 2))) && (word_of(3924) == 0)
     0
@@ -2054,8 +2023,7 @@ Heap := class {
     Heap.bit_cleared(Heap.bytes_map(), p / 8)
     0
   }
-  static starts_cleared (a, e) => (e <= marked_from) ? 0 : Heap.starts_cleared_in(Heap.at_least(a, marked_from) / 8, e / 8)
-  static at_least (a, m) => (a < m) ? m : a
+  static starts_cleared (a, e) => (e <= marked_from) ? 0 : Heap.starts_cleared_in(((a < marked_from) ? marked_from : a) / 8, e / 8)
   static starts_cleared_in (c0, k) => {
     c := c0
     while (c < k) && ((c % 32) != 0) {
@@ -2151,7 +2119,7 @@ Memory := class {
     Memory.frame_escaped(s - 1, o, w)
     0
   }
-  static frame_escaped (i, o, w) => (o < isolated_from) ? Memory.raised(isostack + ((i * 12) + 8)) : pin_slot(i, w)
+  static frame_escaped (i, o, w) => (o < isolated_from) ? Memory.raised(isostack + ((i * 12) + 8)) : Collector.gc_pinned(isostack + ((i * 12) + 8), w, word_of(Collector.pins_area() + 49152), word_of(Collector.pins_area() + 49156))
   static raised (a) => {
     word_put(a, 1) if word_of(a) == 0
     0
@@ -2165,11 +2133,10 @@ Memory := class {
     Memory.one_effect()
     s := s0
     while s > 0 {
-      s = Memory.touched_frame(x, s)
+      s = ((x < word_of(isostack + ((s - 1) * 12))) ? Memory.frame_raised(s) : 0)
     }
     0
   }
-  static touched_frame (x, s) => (x < word_of(isostack + ((s - 1) * 12))) ? Memory.frame_raised(s) : 0
   static frame_raised (s) => {
     word_put(isostack + (((s - 1) * 12) + 8), 2)
     s - 1
@@ -2317,8 +2284,8 @@ Isolation := class {
     0
   }
   static frame_collected (s, v) => {
-    w := gc_close(s, v)
-    pins_up(s)
+    w := ((((free - word_of(s)) > (word_of(gc_after(s)) * 2)) && compactable(s)) ? Collector.gc_closed_compacted(s, Collector.gc_compacted_in(s, v, word_of(s), free)) : v)
+    Collector.gc_pins_kept(s, (s - isostack) / 12, slot_base((s - isostack) / 12))
     w
   }
   static isolated_close (o, v) => {
@@ -2408,11 +2375,10 @@ Collector := class {
     c := (y / 8) + 1
     k := word_of(4012) / 8
     while (c < k) && (Heap.bit_at(Heap.starts_map(), c * 8) == 0) {
-      c = Collector.gc_past(c)
+      c = ((((c % 8) == 0) && (byte(Heap.starts_map() + (c / 8)) == 0)) ? (c + 8) : (c + 1))
     }
     (c < k) ? (c * 8) : (k * 8)
   }
-  static gc_past (c) => (((c % 8) == 0) && (byte(Heap.starts_map() + (c / 8)) == 0)) ? (c + 8) : (c + 1)
   static gc_mark (x) => {
     return 0 if (x < word_of(4008)) || (x >= word_of(4012))
     Collector.gc_marked(start_of(x), word_of(4016) + ((start_of(x) / 64) - (word_of(4008) / 64)))
@@ -2459,7 +2425,6 @@ Collector := class {
     }
     0
   }
-  static gc_first (w) => Collector.gc_first_in(word_of(4024) + 16777216, ((w / 4) * 40503) & 2097151, w)
   static gc_first_in (b, h0, w) => {
     h := h0
     while (word_of(b + (h * 4)) != 0) && (word_of(b + (h * 4)) != w) {
@@ -2525,7 +2490,7 @@ Collector := class {
   }
   static gc_pin_rooted (w, fix) => {
     return 0 if (w >= word_of(4008)) && (w < word_of(4012))
-    Collector.gc_root_word(w, fix) if (fix == 0) || gc_first(w)
+    Collector.gc_root_word(w, fix) if (fix == 0) || Collector.gc_first_in(word_of(4024) + 16777216, ((w / 4) * 40503) & 2097151, w)
     0
   }
   static gc_root_word (w, fix) => {
@@ -2573,18 +2538,16 @@ Collector := class {
   }
   static gc_low_clear => {
     i := 3840
-    while (i < 4008) && (Collector.gc_low_held(i) == 0) {
+    while (i < 4008) && ((((word_of(i) >= word_of(4008)) && (word_of(i) < word_of(4012))) && (((i != 3920) && (i != 3872)) && (i != 4004))) == 0) {
       i = i + 4
     }
     return 0 if i < 4008
     return 0 if (word_of(3932) != 0) && ((word_of(3932) >= word_of(4008)) && (word_of(3932) < word_of(4012)))
     1
   }
-  static gc_low_held (i) => ((word_of(i) >= word_of(4008)) && (word_of(i) < word_of(4012))) && (((i != 3920) && (i != 3872)) && (i != 4004))
-  static compacted (s, v) => Collector.gc_compacted_in(s, v, word_of(s), free)
   static gc_compacted_in (s, v, base, top) => {
     return v if (isostack >= base) && (isostack < top)
-    return v if Collector.gc_compacting_over(s, base, top)
+    return v if (((((top + Collector.gc_map_size(base, top)) + (Collector.gc_map_size(base, top) * 4)) + 25165824) > (arena_base() - 4194304)) || ((word_of(Collector.pins_area() + 49156) - slot_base((s - isostack) / 12)) > 1000000))
     Collector.gc_compaction_set(base, top, Collector.gc_map_size(base, top))
     return v if gc_low_clear() == 0
     zeroed(top, Collector.gc_map_size(base, top))
@@ -2595,7 +2558,6 @@ Collector := class {
     Collector.gc_compacted_marked(s, v, base, top, Collector.gc_live_counted(base, top))
   }
   static gc_map_size (base, top) => ((((top / 64) - (base / 64)) + 16) / 8) * 8
-  static gc_compacting_over (s, base, top) => ((((top + Collector.gc_map_size(base, top)) + (Collector.gc_map_size(base, top) * 4)) + 25165824) > (arena_base() - 4194304)) || ((word_of(Collector.pins_area() + 49156) - slot_base((s - isostack) / 12)) > 1000000)
   static gc_compaction_set (base, top, n) => {
     word_put(4008, base)
     word_put(4012, top)
@@ -2629,7 +2591,7 @@ Collector := class {
     word_put(word_of(4020), 0)
     while c < k {
       word_put(word_of(4020) + (((c / 8) - (base / 64)) * 4), live) if (c % 8) == 0
-      cur = Collector.gc_current(c, cur)
+      cur = ((Heap.bit_at(Heap.starts_map(), c * 8) != 0) ? Heap.marked_at(c * 8) : cur)
       live = live + Collector.gc_live_marked(c, cur)
       c = c + 1
     }
@@ -2637,7 +2599,6 @@ Collector := class {
     word_put(4040, live)
     live
   }
-  static gc_current (c, cur) => (Heap.bit_at(Heap.starts_map(), c * 8) != 0) ? Heap.marked_at(c * 8) : cur
   static gc_live_marked (c, cur) => {
     Collector.gc_live_bit(word_of(4016) + ((c / 8) - (word_of(4008) / 64)), c) if cur != 0
     cur * 8
@@ -2701,7 +2662,6 @@ Collector := class {
     0
   }
   static gc_after (s) => Collector.pins_area() + (32768 + (((s - isostack) / 12) * 4))
-  static gc_close (s, v) => (((free - word_of(s)) > (word_of(gc_after(s)) * 2)) && compactable(s)) ? Collector.gc_closed_compacted(s, compacted(s, v)) : v
   static gc_closed_compacted (s, v) => {
     Collector.gc_after_raised(s - 12) if s > isostack
     v
@@ -2711,7 +2671,6 @@ Collector := class {
     0
   }
   static slot_base (d) => word_of(word_of(4056) + (d * 1028))
-  static pin_slot (d, w) => Collector.gc_pinned(isostack + ((d * 12) + 8), w, word_of(Collector.pins_area() + 49152), word_of(Collector.pins_area() + 49156))
   static gc_pinned (f, w, g, t) => {
     return 0 if word_of(f) == 2
     return 0 if w == 0
@@ -2734,7 +2693,6 @@ Collector := class {
     i >= t
   }
   static gc_pin_inside (s, x) => (x >= word_of(s)) && (x < free)
-  static pins_up (s) => Collector.gc_pins_kept(s, (s - isostack) / 12, slot_base((s - isostack) / 12))
   static gc_pins_kept (s, d, i) => {
     return Collector.gc_pins_to(i) if d == 0
     return Collector.gc_pins_spilled(s, i) if word_of(s + 8) == 2
@@ -2789,7 +2747,6 @@ Hooks := class {
   static program_length => word_of(4088)
   static in_program (a, e) => (a >= 8388608) && (e <= (8388608 + word_of(4088)))
   static taken_reset => word_put(3872, 0)
-  static taken_set (x) => word_put(3872, x)
   static taken_entry => word_of(3872)
   static keys_moved => {
     Hooks.keys_reset()
@@ -2825,7 +2782,6 @@ Hooks := class {
   static turn_depth => word_of(4072)
   static turn_depth_set (d) => word_put(4072, d)
   static fuel_floor => word_of(4060)
-  static fuel_floor_set (v) => word_put(4060, v)
   static turn_begun => {
     word_put(4060, word_of(3896) - 200000000)
     stopped_statement() if (word_of(3896) > 0) && Hooks.near_end()
@@ -2958,7 +2914,7 @@ Afterwards := class {
     n = word_of(4044)
     word_put(4044, o)
     Afterwards.each_run(n)
-    test_end(word_of(3968), word_of(3972))
+    ((word_of(3936) == 0) ? 0 : Images.test_left(word_of(3968), word_of(3972), word_of(3936) - 1))
     0
   }
   static each_run (n) => {
@@ -2987,8 +2943,7 @@ Afterwards := class {
     word_put(3972, list())
     word_put(4084, 2)
   }
-  static lasting_name (t: Text) => Afterwards.names_full(word_of(word_of(3932) + 1080) + (t.to - t.from)) ? 0 : Afterwards.name_lasting(word_of(3932), t, t.to - t.from)
-  static names_full (u) => ((u + 24) > 1048576) || (word_of(names + 4) >= word_of(names + 8))
+  static lasting_name (t: Text) => ((((word_of(word_of(3932) + 1080) + (t.to - t.from)) + 24) > 1048576) || (word_of(names + 4) >= word_of(names + 8))) ? 0 : Afterwards.name_lasting(word_of(3932), t, t.to - t.from)
   static name_lasting (r, t: Text, n) => {
     x := word_of(r + 1076) + word_of(r + 1080)
     f := word_of(3944)
@@ -3095,11 +3050,10 @@ Images := class {
     0
   }
   static shared_args (w, n) => {
-    Images.args_made(w) if word_of(w) == 0
+    ((free >= arena_base()) ? word_put(w, Images.two_none()) : Images.args_lasting(w, free, markf)) if word_of(w) == 0
     word_put(word_of(w) + 4, n)
     word_of(w)
   }
-  static args_made (w) => (free >= arena_base()) ? word_put(w, Images.two_none()) : Images.args_lasting(w, free, markf)
   static args_lasting (w, f, m) => {
     Memory.lasting_entered()
     word_put(w, Images.two_none())
@@ -3147,7 +3101,6 @@ Images := class {
   }
   static past (l, from) => ((tag(l) == 3) && (word_of(l + 4) > from)) ? (word_of(l + 4) - from) : 0
   // (a test ended: what it took let go, but for what it painted, said and set aside, written out first)
-  static test_end (painted, reported) => (word_of(3936) == 0) ? 0 : Images.test_left(painted, reported, word_of(3936) - 1)
   static test_left (painted, reported, d) => {
     word_put(3936, d)
     return 0 if d > 0
@@ -3256,7 +3209,7 @@ Images := class {
   static kept_out (w, v, f0, depth) => {
     return Images.op2(w, 7, v) if (pointer(v) == 0) || (v < f0) || (v >= arena_base())
     return Images.op1(w, 0) if (depth > 6) || (w > (word_of(3940) + 8323072))
-    Images.kept_shared(w, v, f0, depth, shared_id(v))
+    Images.kept_shared(w, v, f0, depth, Images.shared_in(word_of(3932), word_of(word_of(3932) + 1084), ((v / 8) * 40503) & 16383, v))
   }
   static op1 (w, op) => {
     word_put(w, op)
@@ -3278,8 +3231,7 @@ Images := class {
     return Images.op2(w, 5, word_of(v + 4)) if word_of(v) == 12
     Images.op1(w, 0)
   }
-  static kept_text (w, a, e, f0) => (a < f0) ? Images.op3(w, 1, a, e) : Images.kept_origined(w, a, e, origin_at(a), Images.origin_end(a, e))
-  static origin_end (a, e) => (e > a) ? (origin_at(e - 1) + 1) : origin_at(a)
+  static kept_text (w, a, e, f0) => (a < f0) ? Images.op3(w, 1, a, e) : Images.kept_origined(w, a, e, origin_at(a), ((e > a) ? (origin_at(e - 1) + 1) : origin_at(a)))
   static kept_origined (w, a, e, oa, oe) => ((oa >= 0) && (oe >= oa)) ? Images.op3(w, 1, oa, oe) : Images.kept_bytes(w, a, e)
   static kept_bytes (w, a, e) => {
     word_put(w, 2)
@@ -3304,7 +3256,7 @@ Images := class {
     n := 0
     k := 0
     e := word_of(v + 8)
-    word_put(w0, Images.node_op(t))
+    word_put(w0, ((t == 10) ? 6 : 4))
     while (e != 0) && (n < 64) {
       k = Images.entry_kept(word_of(e + 8), t, n)
       w = k ? Images.kept_out(Images.op1(w, word_of(e + 4)), word_of(e + 8), f0, depth + 1) : w
@@ -3314,11 +3266,9 @@ Images := class {
     word_put(w0 + 4, n)
     w
   }
-  static node_op (t) => (t == 10) ? 6 : 4
   static entry_kept (a, t, n) => pointer(a) ? Images.pointer_kept(word_of(a), t, n) : 1
   static pointer_kept (k, t, n) => (k == 4) || ((t == 1) && (n < 8) && ((k == 3) || (k == 1)))
   // (the number a value written out before is known by (-1 the first time, -2 when there are too many))
-  static shared_id (v) => Images.shared_in(word_of(3932), word_of(word_of(3932) + 1084), ((v / 8) * 40503) & 16383, v)
   static shared_in (t, h, q0, v) => {
     q := q0
     while word_of(h + (q * 8)) != 0 {
@@ -3411,7 +3361,7 @@ Locals := class {
     q := h + 33
     n := 0
     s := 0
-    while (n < 16) && Locals.define_at(q) {
+    while (n < 16) && (m4(q, 32, 32, 100, 101) && m4(q + 4, 102, 105, 110, 101) && m4(q + 8, 40, 115, 99, 111) && m4(q + 12, 112, 101, 44, 32)) {
       s = Locals.param_checked(q + 16, digits_at(q + 16, word_of(f + 8)), word_of(f + 8))
       return f if s == 0
       word_put(ps + (n * 8), q + 16)
@@ -3423,9 +3373,7 @@ Locals := class {
     Locals.mixed_in(q, word_of(f + 8)) ? Locals.kept_listed(f, h, ps, n, q, alloc(256)) : Locals.rewritten(f, h, ps, n, q, 0)
   }
   // (`  define(scope, `, then K, `, argn(args, named, `, N, `, `, K again, `))`: where it ends, else 0)
-  static define_at (q) => m4(q, 32, 32, 100, 101) && m4(q + 4, 102, 105, 110, 101) && m4(q + 8, 40, 115, 99, 111) && m4(q + 12, 112, 101, 44, 32)
-  static param_checked (k, d, e) => Locals.argn_at(d) ? Locals.param_index(k, d, digits_at(d + 20, e), e) : 0
-  static argn_at (d) => m4(d, 44, 32, 97, 114) && m4(d + 4, 103, 110, 40, 97) && m4(d + 8, 114, 103, 115, 44) && m4(d + 12, 32, 110, 97, 109) && m4(d + 16, 101, 100, 44, 32)
+  static param_checked (k, d, e) => (m4(d, 44, 32, 97, 114) && m4(d + 4, 103, 110, 40, 97) && m4(d + 8, 114, 103, 115, 44) && m4(d + 12, 32, 110, 97, 109) && m4(d + 16, 101, 100, 44, 32)) ? Locals.param_index(k, d, digits_at(d + 20, e), e) : 0
   static param_index (k, d, r, e) => ((r == (d + 20)) || (m4(r, 44, 32, 0, 0) == 0)) ? 0 : Locals.param_again(k, d, r, digits_at(r + 2, e))
   static param_again (k, d, r, s) => (m4(s, 41, 41, 10, 0) && ((s - (r + 2)) == (d - k)) && texteq(r + 2, k, d - k)) ? s : 0
   // (whether `scope` is written but in `get(scope, `)
@@ -3456,12 +3404,11 @@ Locals := class {
     c := 0
     x := a
     while (x + 14) < e {
-      c = (Locals.scope_defined(x) && texteq(x + 14, k, d - k) && (byte((x + 14) + (d - k)) == 44)) ? (c + 1) : c
+      c = ((m4(x, 100, 101, 102, 105) && m4(x + 4, 110, 101, 40, 115) && m4(x + 8, 99, 111, 112, 101) && m4(x + 12, 44, 32, 0, 0)) && texteq(x + 14, k, d - k) && (byte((x + 14) + (d - k)) == 44)) ? (c + 1) : c
       x = x + 1
     }
     c
   }
-  static scope_defined (x) => m4(x, 100, 101, 102, 105) && m4(x + 4, 110, 101, 40, 115) && m4(x + 8, 99, 111, 112, 101) && m4(x + 12, 44, 32, 0, 0)
   static number_in (from, to) => {
     d := 0
     x := from
@@ -3523,7 +3470,7 @@ Locals := class {
     b = o
     o = put_span(o, word_of(f + 4), h + 13)
     o = Locals.locals_written(o, h, qs, qn)
-    o = mixed ? put_span(o, h + 13, h + 33) : Locals.env_scope(o, h)
+    o = mixed ? put_span(o, h + 13, h + 33) : put_span(put_span(put_span(o, h + 13, h + 23), h + 28, h + 31), h + 32, h + 33)
     o = Locals.lines_written(o, h, qs, qn, m, mixed)
     o = Locals.body_written(o, m, word_of(f + 8), qs, qn)
     Memory.lasting_left(g, s)
@@ -3543,19 +3490,17 @@ Locals := class {
     o
   }
   // (`  scope = env`: of `  scope = node(env)`, all but `node(` and `)`)
-  static env_scope (o, h) => put_span(put_span(put_span(o, h + 13, h + 23), h + 28, h + 31), h + 32, h + 33)
   static lines_written (o0, h, qs, qn, m, mixed) => {
     o := o0
     x := h + 33
     r := 0
     while x < m {
       r = Texts.line_ended(x, m + 1)
-      o = Locals.param_of_line(x, digits_at(x + 16, m), qs, qn) ? Locals.param_line(o, h, x, digits_at(x + 16, m), r, mixed) : put_span(o, x, r + 1)
+      o = param_of(qs, qn, x + 16, digits_at(x + 16, m)) ? Locals.param_line(o, h, x, digits_at(x + 16, m), r, mixed) : put_span(o, x, r + 1)
       x = r + 1
     }
     o
   }
-  static param_of_line (x, d, qs, qn) => param_of(qs, qn, x + 16, d)
   // (`  pK = argn(…)`, and, when the scope is used otherwise, `  define(scope, K, pK)`)
   static param_line (o0, h, x, d, r, mixed) => {
     o := put_span(o0, h + 1, h + 3)

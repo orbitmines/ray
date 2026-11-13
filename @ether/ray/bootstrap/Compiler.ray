@@ -1273,13 +1273,6 @@ Indexes := class {
     s + 16
   }
   static pair_end (q) => pair_ending(q)
-  static kept_cleared (w, n) => {
-    word_put(w, alloc(n))
-    kept()
-    zeroed(word_of(w), n)
-    kept()
-    word_of(w)
-  }
   static holds_outside (t: Text, part) => (t is Text) ? Indexes.outside_read(t, part, textend) : false
   static outside_read (t: Text, part, te) => {
     textend = t.to
@@ -1549,24 +1542,7 @@ Matching := class {
     word_put((memo + 1048576) + ((h - memo) / 4), r)
     r
   }
-  static reading_of (p, pos) => Matching.reading_in(p, pos, Matching.readings_table() + ((((((p / 4) * 31) + (pos * 7)) + (textend * 13)) & 65535) * 20))
-  static readings_table => (word_of(3908) == 0) ? Indexes.kept_cleared(3908, 65536 * 20) : word_of(3908)
-  static reading_in (p: Pattern, pos, h) => ((word_of(h) == p) && (word_of(h + 4) == pos) && (word_of(h + 8) == textend) && (word_of(h + 12) == epoch)) ? word_of(h + 16) : Matching.reading_noted(p, pos, h, call(p.a, append(list(), text(pos, textend)), 0))
-  static reading_noted (p, pos, h, l) => {
-    Matching.reading_put(p, pos, h, l) if (lasting_span(pos, textend) != 0) && (l is Node) && (l < arena_base()) && (l < markf)
-    l
-  }
-  static reading_put (p, pos, h, l) => {
-    word_put(h, p)
-    word_put(h + 4, pos)
-    word_put(h + 8, textend)
-    cache_key(p)
-    cache_key(pos)
-    cache_key(textend)
-    word_put(h + 12, epoch)
-    caches_reach()
-    word_put(h + 16, l)
-  }
+  static reading_of (p: Pattern, pos) => call(p.a, append(list(), text(pos, textend)), 0)
 }
 // Built (`level built …`): a node's text read again as a pattern (its gaps and words, each key a field of what it
 // holds: a pattern, a text read with, else anything), the holes in it told how they end (inside a pair of literals,

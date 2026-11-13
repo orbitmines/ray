@@ -335,14 +335,13 @@ Texts := class {
     v := o
     g := t.from
     while g < t.to {
-      byte_put(v, Texts.escaped_byte(t, g))
+      byte_put(v, ((Texts.escape_width(t, g) == 1) ? byte(g) : Texts.escape_of(byte(g + 1))))
       g = g + Texts.escape_width(t, g)
       v = v + 1
     }
     text(o, v)
   }
   static escape_width (t: Text, g) => ((byte(g) == 92) && ((g + 1) < t.to)) ? 2 : 1
-  static escaped_byte (t: Text, g) => (Texts.escape_width(t, g) == 1) ? byte(g) : Texts.escape_of(byte(g + 1))
   static escape_of (c) => (c == 110) ? 10 : ((c == 116) ? 9 : c)
   // (whether a text, trimmed, is one bracket's: opened at its start, closed only at its end, what is quoted passed over)
   static cw_enclosed (t: Text) => Texts.enclosed_in(Texts.trimmed_text(t.from, t.to))
@@ -612,15 +611,13 @@ Splices := class {
     q := t.from
     m := None
     while q < t.to {
-      m = (at_text(q, t.to, cap.from, oe) != 0) ? Splices.match_at(q, t.to, cap, oe, l) : None
+      m = (at_text(q, t.to, cap.from, oe) != 0) ? Splices.single_or(((at_text(q + (oe - cap.from), t.to, cap.from, oe) != 0) ? Splices.doubled_found(q + ((oe - cap.from) * 2), Splices.found_from(q + ((oe - cap.from) * 2), t.to, oe + 1, cap.to), t.to, cap, oe, l) : None), q, t.to, cap, oe, l) : None
       n = (m === None) ? Splices.byte_copied(out, n, q) : Splices.taken_copied(out, n, m)
       q = (m === None) ? (q + 1) : Splices.past_of(m)
     }
     n
   }
   static past_of (m: Taken) => m.past
-  static match_at (q, e, cap: Text, oe, l) => Splices.single_or(Splices.doubled_at(q, e, cap, oe, l), q, e, cap, oe, l)
-  static doubled_at (q, e, cap: Text, oe, l) => (at_text(q + (oe - cap.from), e, cap.from, oe) != 0) ? Splices.doubled_found(q + ((oe - cap.from) * 2), Splices.found_from(q + ((oe - cap.from) * 2), e, oe + 1, cap.to), e, cap, oe, l) : None
   static doubled_found (s, r, e, cap: Text, oe, l) => ((r < e) && (at_text(r + (cap.to - (oe + 1)), e, oe + 1, cap.to) != 0)) ? Splices.taken_or_none(take_named(s, r, l, cap.from, oe, cap.to), r + ((cap.to - (oe + 1)) * 2)) : None
   static single_or (m, q, e, cap: Text, oe, l) => (m === None) ? Splices.single_found(q + (oe - cap.from), Splices.found_from(q + (oe - cap.from), e, oe + 1, cap.to), e, cap, oe, l) : m
   static single_found (s, r, e, cap: Text, oe, l) => (r < e) ? Splices.taken_or_none(take_named(s, r, l, cap.from, oe, cap.to), r + (cap.to - (oe + 1))) : None
@@ -643,8 +640,7 @@ Splices := class {
     copied_from(o, q, 1)
   }
   // (a text that is one capture whole: its name taken, trimmed)
-  static spliced_whole (t: Text, cap: Text, oe, l) => ((at_text(t.from, t.to, cap.from, oe) != 0) && ((t.to - (cap.to - (oe + 1))) >= (t.from + (oe - cap.from))) && (at_text(t.to - (cap.to - (oe + 1)), t.to, oe + 1, cap.to) != 0)) ? Splices.whole_taken(Splices.whole_or_single(Splices.whole_doubled(t, cap, oe, l), t, cap, oe, l)) : None
-  static whole_doubled (t: Text, cap: Text, oe, l) => ((at_text(t.from + (oe - cap.from), t.to, cap.from, oe) != 0) && ((t.to - ((cap.to - (oe + 1)) * 2)) >= (t.from + ((oe - cap.from) * 2))) && (at_text(t.to - ((cap.to - (oe + 1)) * 2), t.to, oe + 1, cap.to) != 0)) ? take_named(t.from + ((oe - cap.from) * 2), t.to - ((cap.to - (oe + 1)) * 2), l, cap.from, oe, cap.to) : 0
+  static spliced_whole (t: Text, cap: Text, oe, l) => ((at_text(t.from, t.to, cap.from, oe) != 0) && ((t.to - (cap.to - (oe + 1))) >= (t.from + (oe - cap.from))) && (at_text(t.to - (cap.to - (oe + 1)), t.to, oe + 1, cap.to) != 0)) ? Splices.whole_taken(Splices.whole_or_single((((at_text(t.from + (oe - cap.from), t.to, cap.from, oe) != 0) && ((t.to - ((cap.to - (oe + 1)) * 2)) >= (t.from + ((oe - cap.from) * 2))) && (at_text(t.to - ((cap.to - (oe + 1)) * 2), t.to, oe + 1, cap.to) != 0)) ? take_named(t.from + ((oe - cap.from) * 2), t.to - ((cap.to - (oe + 1)) * 2), l, cap.from, oe, cap.to) : 0), t, cap, oe, l)) : None
   static whole_or_single (x, t: Text, cap: Text, oe, l) => (x != 0) ? x : take_named(t.from + (oe - cap.from), t.to - (cap.to - (oe + 1)), l, cap.from, oe, cap.to)
   static whole_taken (x) => (x == 0) ? None : Splices.trimmed_of(x)
   // (a name, all of word bytes, taken from the list's entries from the i-th on: the first with that key; its value
@@ -845,7 +841,7 @@ Keys := class {
 // where it is too); the ones led by text in a node's rules (`led_keys`). Each a table of slots and a room after them,
 // cleared once full.
 Caches := class {
-  static keys_reading (l: List, t: Text) => ((l is List) && (t is Text)) ? Caches.keys_plain(l, t, Caches.first_byte(t)) : l
+  static keys_reading (l: List, t: Text) => ((l is List) && (t is Text)) ? Caches.keys_plain(l, t, ((t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2))) : l
   static keys_plain (l: List, t: Text, b) => {
     o := list()
     i := 0
@@ -856,7 +852,6 @@ Caches := class {
     o
   }
   static key_leads (p, t: Text, b) => ((!Keys.led_by_text(p)) || (Keys.lead_byte(p) == b) || (b == (0 - 3))) && Keys.literals_in(p, t.from, t.to)
-  static first_byte (t: Text) => (t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2)
   static lead_class (b) => (white(b) || (b == 10)) ? (0 - 3) : b
   static led_table => (pcache == 0) ? Caches.led_made() : pcache
   static led_made => {
@@ -883,11 +878,9 @@ Pairs := class {
   }
   static pair_at (t: Text, cap: Text, oe, home, q, r) => (r >= t.to) ? t.to : Pairs.pair_after(t, cap, home, q, r + (cap.to - (oe + 1)))
   static pair_after (t: Text, cap: Text, home, q, r) => {
-    Pairs.pair_between(cap, home, Pairs.before_byte(t, cap, q), Pairs.after_byte(t, cap, r)) if (q > t.from) && (r < t.to)
+    Pairs.pair_between(cap, home, (((byte(q - 1) == byte(cap.to - 1)) && ((q - 4) >= t.from)) ? Pairs.quoted_in(q - 4, byte(q - 1)) : byte(q - 1)), (((byte(r) == byte(cap.from)) && ((r + 4) <= t.to)) ? Pairs.quoted_in(r, byte(r)) : byte(r))) if (q > t.from) && (r < t.to)
     r
   }
-  static before_byte (t: Text, cap: Text, q) => ((byte(q - 1) == byte(cap.to - 1)) && ((q - 4) >= t.from)) ? Pairs.quoted_in(q - 4, byte(q - 1)) : byte(q - 1)
-  static after_byte (t: Text, cap: Text, r) => ((byte(r) == byte(cap.from)) && ((r + 4) <= t.to)) ? Pairs.quoted_in(r, byte(r)) : byte(r)
   // (a quoted byte, `'x'`, around a capture: the byte quoted)
   static quoted_in (h, c) => ((byte(h + 1) == byte(h + 3)) && (char_class(byte(h + 1)) == 2)) ? byte(h + 2) : c
   static pair_between (cap: Text, home, b, c) => {
@@ -1008,12 +1001,11 @@ Layout := class {
   static is_statement (c: Spanned) => c.name == Symbol.statement
   static span_text (c: Spanned) => text(c.from, c.to)
   static continued_span (o: List, x) => (o.count == 0) ? x : Layout.span_joined(o, at(o, o.count - 1), x)
-  static span_joined (o: List, p: Text, x: Text) => ((Layout.separated(p) == 0) || (x == None)) ? x : Layout.joined_span(o, p, x)
+  static span_joined (o: List, p: Text, x: Text) => ((((p == None) ? 0 : Layout.comma_last(p, Layout.white_back(p.from, p.to))) == 0) || (x == None)) ? x : Layout.joined_span(o, p, x)
   static joined_span (o: List, p: Text, x: Text) => {
     o.count = o.count - 1
     text(p.from, x.to)
   }
-  static separated (x: Text) => (x == None) ? 0 : Layout.comma_last(x, Layout.white_back(x.from, x.to))
   static comma_last (x: Text, e) => (e > x.from) && (byte(e - 1) == 44)
   static white_back (a, e) => {
     q := e

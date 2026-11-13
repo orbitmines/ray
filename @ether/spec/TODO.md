@@ -290,6 +290,18 @@ its own reading its place, unread text recorded with reading going on.
     Ray.ray:975). Measured (mem.mjs, heap_used and the furthest paint): without calls Ray.ray:975 at 5M steps, 235 MB;
     with, 20M steps, ~1 GB (~50 MB per 1M steps); `--test` does not finish in 600 s. The memory wall of "Memory once
     calls run" above, reached again.
+- **Checked again 2026-11-13 (revision 140), toward Compiler.ray as rules the full language runs:** all still so.
+  - Without calls, `f(x)` reads `f` then `(x)`, so it answers its argument: `h (x) => 7`, `h(1)` is `1`. Every test
+    whose callee returns what it was given passes for that reason only.
+  - `{x: T}` in a head never matches (`p{d: ("w" | "v")} => true`, `pw` unread) because `level unset_typed` answers
+    None. So no digit is a Number. `(1 + 1) === 2`, `1 == 1` and `[1, 2].count == 2` pass or fail by the vacuous rule
+    only. Wasm.project.ray's asserts and Ray.ray's list tests cannot pass before this.
+  - `level kinds` maps nothing, false, true and text, but neither number nor list, so the engine's own numbers (a
+    count, say) and lists have no members.
+  - Expression.lazy on revision 140 (the `led` rules): the probe's reading does not finish in 600 s (the calls
+    wall above).
+  - Order these block on: calls cheap enough to run every class body (memory reclaimed while a statement runs), then
+    level.ray's requests as the entrypoint's own definitions (they need calls), then numerals.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

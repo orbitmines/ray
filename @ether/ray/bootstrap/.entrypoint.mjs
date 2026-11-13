@@ -60,10 +60,10 @@ export const env = {
 const here = dirname(fileURLToPath(import.meta.url));
 export const root = [join(here, '..', '..'), join(here, '@ether')].find((r) => existsSync(join(r, 'ray', 'bootstrap', 'Expression.ray')));
 const bootstrap = (name) => join(root, 'ray', 'bootstrap', name);
-// (the Wasm package's bootstrap part (`$/Wasm.project.ray`, after its `// (bootstrap: name)` lines): each part's text, and
-// the line before it)
+// (the Wasm package's bootstrap part (`$/Wasm.project.ray`, after its `// (bootstrap: name)` lines, each line after `//| `):
+// each part's text, and the line before it)
 export const project = () => join(root, '$', 'Wasm.project.ray');
-const part = (name) => { const t = readFileSync(project(), 'utf8'), m = `// (bootstrap: ${name})\n`, a = t.indexOf(m) + m.length, e = t.indexOf('\n// (bootstrap: ', a); return t.slice(a, e < 0 ? t.length : e + 1); };
+const part = (name) => { const t = readFileSync(project(), 'utf8'), m = `// (bootstrap: ${name})\n`, a = t.indexOf(m) + m.length, e = t.indexOf('\n// (bootstrap: ', a); return t.slice(a, e < 0 ? t.length : e + 1).split('\n').map((l) => l.replace(/^\/\/\| ?/, '')).join('\n'); };
 const part_line = (name) => readFileSync(project(), 'utf8').split('\n').indexOf(`// (bootstrap: ${name})`) + 1;
 
 export const revision = () => Math.max(0, ...readdirSync(bootstrap('.')).map((f) => f.match(/^\.entrypoint\.(\d+)\.wasm$/)).filter(Boolean).map((m) => +m[1]));

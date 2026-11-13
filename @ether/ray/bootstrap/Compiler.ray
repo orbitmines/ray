@@ -1272,7 +1272,7 @@ Indexes := class {
     caches_reach()
     s + 16
   }
-  static pair_end (q) => in_program(q, q + 1) ? Indexes.pair_direct(q, Indexes.pairs_direct() + ((q - program_from()) * 8)) : Indexes.pair_hashed(q, Indexes.pairs_hashed() + (((q * 7) & 65535) * 16))
+  static pair_end (q) => pair_ending(q)
   static kept_cleared (w, n) => {
     word_put(w, alloc(n))
     kept()
@@ -1280,129 +1280,15 @@ Indexes := class {
     kept()
     word_of(w)
   }
-  static pairs_hashed => (word_of(3880) == 0) ? Indexes.kept_cleared(3880, 1048576) : word_of(3880)
-  static pair_hashed (q, h) => ((word_of(h) == q) && (word_of(h + 8) == (classes_version() + 1)) && (word_of(h + 4) <= textend) && ((lasting_span(q, word_of(h + 4)) != 0) || (word_of(h + 12) == epoch))) ? word_of(h + 4) : Indexes.pair_hash_noted(q, h, pair_ending(q))
-  static pair_hash_noted (q, h, r) => {
-    Indexes.hash_noted(q, h, r) if r != 0
-    r
-  }
-  static hash_noted (q, h, r) => {
-    word_put(h, q)
-    word_put(h + 4, r)
-    word_put(h + 8, classes_version() + 1)
-    cache_key(r)
-    word_put(h + 12, epoch)
-    caches_reach()
-  }
-  static pairs_direct => (word_of(3876) == 0) ? Indexes.kept_cleared(3876, program_length() * 8) : word_of(3876)
-  static pair_direct (q, h) => ((word_of(h + 4) == (classes_version() + 1)) && (word_of(h) <= textend)) ? word_of(h) : Indexes.pair_direct_noted(h, pair_ending(q))
-  static pair_direct_noted (h, r) => {
-    Indexes.direct_noted(h, r) if r != 0
-    r
-  }
-  static direct_noted (h, r) => {
-    word_put(h, r)
-    word_put(h + 4, classes_version() + 1)
-  }
-  static holds_outside (t: Text, part) => (t is Text) ? Indexes.outside_held(t, part, Indexes.outside_slot(t, part)) : false
-  static outside_slot (t: Text, part) => in_program(t.from, t.to) ? Indexes.outside_hash(Indexes.outside_table(), t, part) : 0
-  static outside_table => (word_of(4000) == 0) ? Indexes.zeroed_lasting(4000, 1572864) : word_of(4000)
-  static zeroed_lasting (w, n) => {
-    word_put(w, lasting_alloc(n))
-    zeroed(word_of(w), n)
-    word_of(w)
-  }
-  static outside_hash (c, t: Text, part) => c + (((((t.from * 31) + (t.to * 7)) + (part / 8)) & 65535) * 24)
-  static outside_held (t: Text, part, h) => ((h != 0) && (word_of(h) == t.from) && (word_of(h + 4) == t.to) && (word_of(h + 8) == part) && (word_of(h + 12) == (classes_version() + 1))) ? word_of(h + 16) : Indexes.outside_noted(h, t, part, Indexes.outside_read(t, part, textend))
+  static holds_outside (t: Text, part) => (t is Text) ? Indexes.outside_read(t, part, textend) : false
   static outside_read (t: Text, part, te) => {
     textend = t.to
     r := holds_outside_in(t, part)
     textend = te
     r
   }
-  static outside_noted (h, t, part, r) => {
-    Indexes.outside_put(h, t, part, r) if h != 0
-    r
-  }
-  static outside_put (h, t: Text, part, r) => {
-    word_put(h, t.from)
-    word_put(h + 4, t.to)
-    word_put(h + 8, part)
-    word_put(h + 12, classes_version() + 1)
-    word_put(h + 16, r)
-  }
   // (a list's entries by the value in a column: a table of each value's last entry, each entry the one before of it)
-  static column_index (l: List, k) => Indexes.columns_filled(Indexes.columns_for(Indexes.columns_table(), l, k), l, k)
-  static columns_table => (word_of(3992) == 0) ? Indexes.columns_made() : word_of(3992)
-  static columns_made => {
-    c := lasting_alloc(16 + (2097152 + 4194304))
-    zeroed(c, 16 + 2097152)
-    word_put(3992, c)
-    c
-  }
-  static columns_for (c, l: List, k) => ((word_of(c) != l) || (word_of(c + 4) != k) || (l.count < word_of(c + 8))) ? Indexes.columns_reset(c, l, k) : c
-  static columns_reset (c, l, k) => {
-    zeroed(c + 16, 2097152)
-    word_put(c, l)
-    word_put(c + 4, k)
-    word_put(c + 8, 0)
-    word_put(c + 12, 0)
-    c
-  }
-  static columns_filled (c, l: List, k) => {
-    i := word_of(c + 8)
-    while (i < l.count) && (i < 1048576) {
-      Indexes.column_put(c, i, column_of(at(l, i), k))
-      i = i + 1
-    }
-    word_put(c + 8, i)
-    ((word_of(c + 12) >= 200000) || (i < l.count)) ? 0 : c
-  }
-  static column_slot (c, x) => {
-    h := ((x / 8) * 40503) & 262143
-    while (word_of(c + (16 + (h * 8))) != 0) && (word_of(c + (16 + (h * 8))) != x) {
-      h = (h + 1) & 262143
-    }
-    h
-  }
-  static column_put (c, i, x) => {
-    word_put(c + (2097168 + (i * 4)), 0)
-    Indexes.column_hashed(c, i, x, Indexes.column_slot(c, x)) if (x != 0) && (word_of(c + 12) < 200000)
-    0
-  }
-  static column_hashed (c, i, x, h) => {
-    word_put(c + 12, word_of(c + 12) + 1) if word_of(c + (16 + (h * 8))) == 0
-    word_put(c + (16 + (h * 8)), x)
-    word_put(c + (2097168 + (i * 4)), word_of(c + (20 + (h * 8))))
-    word_put(c + (20 + (h * 8)), i + 1)
-  }
-  static column_last (c, v) => {
-    h := ((v / 8) * 40503) & 262143
-    while word_of(c + (16 + (h * 8))) != 0 {
-      return word_of(c + (20 + (h * 8))) if word_of(c + (16 + (h * 8))) == v
-      h = (h + 1) & 262143
-    }
-    0
-  }
-  static column_back (l, m) => ((word_of(3992) != 0) && (l is List) && (word_of(word_of(3992)) == l) && (m <= word_of(word_of(3992) + 8))) ? Indexes.columns_back(word_of(3992), l, m) : 0
-  static columns_back (c, l: List, m) => {
-    i := word_of(c + 8) - 1
-    while i >= m {
-      Indexes.column_unput(c, i, column_of(at(l, i), word_of(c + 4)))
-      i = i - 1
-    }
-    word_put(c + 8, m)
-  }
-  static column_unput (c, i, x) => {
-    Indexes.column_undone(c, i, x, Indexes.column_slot(c, x)) if (x != 0) && (word_of(c + 12) < 200000)
-    0
-  }
-  static column_undone (c, i, x, h) => {
-    word_put(c + (20 + (h * 8)), word_of(c + (2097168 + (i * 4)))) if word_of(c + (16 + (h * 8))) == x
-    0
-  }
-  static last_with (l: List, kv, v) => (((l is List) == 0) || stopped()) ? 0 : Indexes.last_by(l, untag(kv), v, (v != 0) ? Indexes.column_index(l, untag(kv)) : 0)
-  static last_by (l: List, k, v, c) => (c == 0) ? Indexes.last_scanned(l, k, v) : Indexes.last_indexed(l, Indexes.column_last(c, v))
+  static last_with (l: List, kv, v) => (((l is List) == 0) || stopped()) ? 0 : Indexes.last_scanned(l, untag(kv), v)
   static last_scanned (l: List, k, v) => {
     i := l.count - 1
     while i >= 0 {
@@ -1411,7 +1297,6 @@ Indexes := class {
     }
     0
   }
-  static last_indexed (l, i) => (i == 0) ? 0 : at(l, i - 1)
 }
 // Members (`level members …`): what applies a rule, around a node (`applied_of`); a node's members, or what a rule's
 // holes hold, as entries of a name and a value (but its key and input); whether a pattern catches all (a field, or a
@@ -3006,7 +2891,6 @@ Hooks := class {
   static class_put (c, k) => byte_put(3584 + c, k)
   static char_class (c) => byte(3584 + c)
   static classes_changed => word_put(3884, word_of(3884) + 1)
-  static classes_version => word_of(3884)
   static white (c) => (c == 32) || (c == 10) || (c == 9) || (c == 13)
   static logging => word_of(3944) != 0
   static word_logged (w, v) => {
@@ -3376,7 +3260,6 @@ Images := class {
     w = Images.written_out(w, reported, word_of(t + 24), nr, f0)
     nu = ((word_of(3860) != 0) && (word_of(3860) == word_of(t + 12))) ? Images.past(word_of(3860), word_of(t + 16)) : 0
     w = Images.written_out(w, word_of(3860), word_of(t + 16), nu, f0)
-    column_back(painted, word_of(t + 20))
     Images.logged_undone(t)
     Images.state_back(t)
     Images.memory_back(t, f0)

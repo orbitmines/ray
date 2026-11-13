@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Ether (`ether`, `ray`, `orbitmines`): the language as it compiles itself. Its latest revision, `.entrypoint.N.wasm`, is
-// Expression.ray with the compiler written in it ($/Wasm/Compiled.ray, Low.ray, High.ray, compile.ray), compiled; given
+// Expression.ray with the compiler written in it ($/Wasm/Compiled.ray, Low.ray, and Compiler.ray from `Lowered :=` on), compiled; given
 // a program it writes that program as a WebAssembly module (the runtime, $/Wasm/runtime.ray, in it), which is then run.
 // Each revision is written by the one before it, from those same sources: revision 0 by the interim engine that is gone
 // now. This file only hosts it: it gives a revision its input and runs what it writes.
@@ -68,12 +68,15 @@ export const engine = () => bootstrap(`.entrypoint.${revision()}.wasm`);
 export const PAGES = 32000;
 export const uncommented = (text) => text.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
 const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'ex := (level input_part 0) as Expression\n'; return t.slice(0, t.indexOf(end) + end.length); };
-// (Compiler.ray's part the compiler is itself written with: from `Lowered :=` on, what writes Runtime.ray for the back end)
+// (Compiler.ray's part the compiler is itself written with: from `Lowered :=` on, what writes Runtime.ray for the back end,
+// and what writes a program for the back end (`High`))
 const lowering = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nLowered := (class )?\{\n/) + 1); };
 // (and Compiler.ray's own levels, written for the back end after Runtime.ray: from `Texts :=` up to `Lowered :=`)
 const levels = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nTexts := (class )?\{\n/) + 1, t.search(/\nLowered := (class )?\{\n/) + 1); };
 export const lowered_input = () => readFileSync(bootstrap('Runtime.ray'), 'utf8') + '\n' + levels();
-export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray', 'High.ray'].map((f) => readFileSync(wasm(f), 'utf8')), lowering(), readFileSync(wasm('compile.ray'), 'utf8')].join(''));
+// (the compiler run: the program (input part 1) written with the runtime (input part 2) as a module of that many pages)
+const COMPILE = 'High.program(level input_part 1, level input_part 2, 32000)\nlevel out_length\n';
+export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray'].map((f) => readFileSync(wasm(f), 'utf8')), lowering(), COMPILE].join(''));
 
 // (a revision, given a program: its input the header Expression reads first, the program and the runtime (each without
 // its lines that are only a comment), apart by a 0;

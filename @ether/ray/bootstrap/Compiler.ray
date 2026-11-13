@@ -2156,7 +2156,7 @@ Entry := class {
     arena_base() + ((((((a * 31) + (e * 7)) + g) / 4) & 262143) * 16)
   }
   static kept_parse (s, g, a, e) => ((word_of(s) == g) && (word_of(s + 4) == a) && (word_of(s + 8) == e)) ? word_of(s + 12) : Entry.parse_lasting(s, g, a, e)
-  static parse_lasting (s, g, a, e) => (word_of(3844) != 0) ? Entry.parse_noted(s, g, a, e, Entry.parse_counted(g, a, e)) : ((word_of(3840) > ((1020000000 * 2) - 268435456)) ? Entry.parse_plain(g, a, e) : Entry.parse_noted(s, g, a, e, Entry.parse_moved(g, a, e, free, markf)))
+  static parse_lasting (s, g, a, e) => (word_of(3844) != 0) ? Entry.parse_noted(s, g, a, e, Entry.parse_counted(g, a, e)) : ((word_of(3840) > ((1020000000 * 2) - 167772160)) ? Entry.parse_plain(g, a, e) : Entry.parse_noted(s, g, a, e, Entry.parse_moved(g, a, e, free, markf)))
   static parse_counted (g, a, e) => {
     l := 0
     word_put(3844, word_of(3844) + 1)
@@ -3166,7 +3166,7 @@ Collector := class {
 // heap's end), the log, what is painted and said
 Hooks := class {
   static input => text(8388608, 8388608 + word_of(4088))
-  static arena_base => 650000000 * 2
+  static arena_base => 600000000 * 2
   static program_from => 8388608
   static program_length => word_of(4088)
   static in_program (a, e) => (a >= 8388608) && (e <= (8388608 + word_of(4088)))
@@ -3816,6 +3816,202 @@ Images := class {
       i = i + 1
     }
     v
+  }
+}
+// Locals (`level with_locals …`): a function the compiler wrote with its parameters in a scope of its own
+// (`  var scope`, `  scope = node(env)`, then `  define(scope, K, argn(args, named, N, K))` for each) given them as the
+// machine's locals instead (`pK`, each `get(scope, K)` read as it); when its scope is used otherwise too, only those
+// nothing writes anywhere (by `assign(`, `setmember(`, `with(`, a `define(` not of a scope: `written_symbols`, once a
+// program) and defined once
+Locals := class {
+  static with_locals (f) => (tag(f) != 4) ? f : Locals.headed(f, Texts.line_ended(word_of(f + 4), word_of(f + 8)))
+  // (`  var scope\n  scope = node(env)\n` after the head's line)
+  static headed (f, h) => (((h + 41) > word_of(f + 8)) || (Locals.scope_made(h + 1) == 0)) ? f : Locals.params_read(f, h, alloc(256))
+  static scope_made (q) => m4(q, 32, 32, 118, 97) && m4(q + 4, 114, 32, 115, 99) && m4(q + 8, 111, 112, 101, 10) && m4(q + 12, 32, 32, 115, 99) && m4(q + 16, 111, 112, 101, 32) && m4(q + 20, 61, 32, 110, 111) && m4(q + 24, 100, 101, 40, 101) && m4(q + 28, 110, 118, 41, 10)
+  static params_read (f, h, ps) => {
+    q := h + 33
+    n := 0
+    s := 0
+    while (n < 16) && Locals.define_at(q) {
+      s = Locals.param_checked(q + 16, digits_at(q + 16, word_of(f + 8)), word_of(f + 8))
+      return f if s == 0
+      word_put(ps + (n * 8), q + 16)
+      word_put(ps + ((n * 8) + 4), digits_at(q + 16, word_of(f + 8)))
+      n = n + 1
+      q = s + 3
+    }
+    return f if n == 0
+    Locals.mixed_in(q, word_of(f + 8)) ? Locals.kept_listed(f, h, ps, n, q, alloc(256)) : Locals.rewritten(f, h, ps, n, q, 0)
+  }
+  // (`  define(scope, `, then K, `, argn(args, named, `, N, `, `, K again, `))`: where it ends, else 0)
+  static define_at (q) => m4(q, 32, 32, 100, 101) && m4(q + 4, 102, 105, 110, 101) && m4(q + 8, 40, 115, 99, 111) && m4(q + 12, 112, 101, 44, 32)
+  static param_checked (k, d, e) => Locals.argn_at(d) ? Locals.param_index(k, d, digits_at(d + 20, e), e) : 0
+  static argn_at (d) => m4(d, 44, 32, 97, 114) && m4(d + 4, 103, 110, 40, 97) && m4(d + 8, 114, 103, 115, 44) && m4(d + 12, 32, 110, 97, 109) && m4(d + 16, 101, 100, 44, 32)
+  static param_index (k, d, r, e) => ((r == (d + 20)) || (m4(r, 44, 32, 0, 0) == 0)) ? 0 : Locals.param_again(k, d, r, digits_at(r + 2, e))
+  static param_again (k, d, r, s) => (m4(s, 41, 41, 10, 0) && ((s - (r + 2)) == (d - k)) && texteq(r + 2, k, d - k)) ? s : 0
+  // (whether `scope` is written but in `get(scope, `)
+  static mixed_in (m, e) => {
+    x := m
+    while (x + 5) <= e {
+      return 1 if m4(x, 115, 99, 111, 112) && m4(x + 4, 101, 0, 0, 0) && (Locals.got_at(x - 4) == 0)
+      x = x + 1
+    }
+    0
+  }
+  static got_at (x) => m4(x, 103, 101, 116, 40) && m4(x + 4, 115, 99, 111, 112) && m4(x + 8, 101, 44, 32, 0)
+  static kept_listed (f, h, ps, n, m, qs) => {
+    qn := 0
+    k := 0
+    w := written_symbols()
+    while k < n {
+      word_put(qs + (qn * 8), word_of(ps + (k * 8)))
+      word_put(qs + ((qn * 8) + 4), word_of(ps + ((k * 8) + 4)))
+      qn = Locals.kept_param(w, word_of(f + 4), word_of(f + 8), word_of(ps + (k * 8)), word_of(ps + ((k * 8) + 4))) ? (qn + 1) : qn
+      k = k + 1
+    }
+    (qn == 0) ? f : Locals.rewritten(f, h, qs, qn, m, 1)
+  }
+  static kept_param (w, a, e, k, d) => Locals.unwritten(w, Locals.number_in(k, d)) && (Locals.defined_once(a, e, k, d) == 1)
+  static unwritten (w, v) => (w != 0) && (v < 65536) && ((byte(w + (v / 8)) & (1 << (v % 8))) == 0)
+  static defined_once (a, e, k, d) => {
+    c := 0
+    x := a
+    while (x + 14) < e {
+      c = (Locals.scope_defined(x) && texteq(x + 14, k, d - k) && (byte((x + 14) + (d - k)) == 44)) ? (c + 1) : c
+      x = x + 1
+    }
+    c
+  }
+  static scope_defined (x) => m4(x, 100, 101, 102, 105) && m4(x + 4, 110, 101, 40, 115) && m4(x + 8, 99, 111, 112, 101) && m4(x + 12, 44, 32, 0, 0)
+  static number_in (from, to) => {
+    d := 0
+    x := from
+    while x < to {
+      d = (d * 10) + (byte(x) - 48)
+      x = x + 1
+    }
+    d
+  }
+  // (the numbers a program writes to, a bit each)
+  static written_symbols => (takent == 0) ? 0 : (((word_of(3892) == takent) && (word_of(3888) != 0)) ? word_of(3888) : Locals.symbols_scanned(word_of(takent + 4), word_of(takent + 8)))
+  static symbols_scanned (a, e) => {
+    b := alloc_bytes(8192)
+    x := a
+    v := 0
+    zeroed(b, 8192)
+    kept()
+    while (x + 10) < e {
+      v = Locals.written_at(x, e)
+      byte_put(b + (v / 8), byte(b + (v / 8)) | (1 << (v % 8))) if (v >= 0) && (v < 65536)
+      x = x + 1
+    }
+    word_put(3888, b)
+    word_put(3892, takent)
+    b
+  }
+  static written_at (x, e) => (Locals.written_after(x) == 0) ? (0 - 1) : Locals.second_symbol(Locals.written_after(x), e)
+  static written_after (x) => {
+    return x + 7 if m4(x, 97, 115, 115, 105) && m4(x + 4, 103, 110, 40, 0)
+    return x + 10 if m4(x, 115, 101, 116, 109) && m4(x + 4, 101, 109, 98, 101) && m4(x + 8, 114, 40, 0, 0)
+    return x + 5 if m4(x, 119, 105, 116, 104) && m4(x + 4, 40, 0, 0, 0)
+    return 0 if m4(x, 100, 101, 102, 105) && m4(x + 4, 110, 101, 40, 0) && m4(x + 7, 115, 99, 111, 112) && m4(x + 11, 101, 44, 32, 0)
+    return x + 7 if m4(x, 100, 101, 102, 105) && m4(x + 4, 110, 101, 40, 0)
+    0
+  }
+  // (the number after a call's first argument, `f(a, K`, by at most four digits; else -1)
+  static second_symbol (n, e) => {
+    x := n
+    d := 0
+    while x < e {
+      return 0 - 1 if (byte(x) == 41) && (d == 0)
+      d = (byte(x) == 40) ? (d + 1) : ((byte(x) == 41) ? (d - 1) : d)
+      return Locals.symbol_digits(x + 2, digits_at(x + 2, e)) if (byte(x) == 44) && (d == 0)
+      x = x + 1
+    }
+    0 - 1
+  }
+  static symbol_digits (x, v) => ((v == x) || ((v - x) > 4)) ? (0 - 1) : Locals.number_in(x, v)
+  // (the function written again, in what lasts: its head's line, `  var scope`, `  var pK` each, its scope (made as
+  // before, when used otherwise; else `env`), `  pK = argn(…)` each (and, when used otherwise, defined in it too), its
+  // body with each `get(scope, K)` as `pK`)
+  static rewritten (f, h, qs, qn, m, mixed) => {
+    g := free
+    s := markf
+    o := 0
+    b := 0
+    Memory.lasting_entered()
+    o = alloc(((word_of(f + 8) - word_of(f + 4)) * 2) + 1088)
+    b = o
+    o = put_span(o, word_of(f + 4), h + 13)
+    o = Locals.locals_written(o, h, qs, qn)
+    o = mixed ? put_span(o, h + 13, h + 33) : Locals.env_scope(o, h)
+    o = Locals.lines_written(o, h, qs, qn, m, mixed)
+    o = Locals.body_written(o, m, word_of(f + 8), qs, qn)
+    Memory.lasting_left(g, s)
+    text(b, o)
+  }
+  static locals_written (o0, h, qs, qn) => {
+    o := o0
+    k := 0
+    while k < qn {
+      o = put_span(o, h + 1, h + 7)
+      byte_put(o, 112)
+      o = put_span(o + 1, word_of(qs + (k * 8)), word_of(qs + ((k * 8) + 4)))
+      byte_put(o, 10)
+      o = o + 1
+      k = k + 1
+    }
+    o
+  }
+  // (`  scope = env`: of `  scope = node(env)`, all but `node(` and `)`)
+  static env_scope (o, h) => put_span(put_span(put_span(o, h + 13, h + 23), h + 28, h + 31), h + 32, h + 33)
+  static lines_written (o0, h, qs, qn, m, mixed) => {
+    o := o0
+    x := h + 33
+    r := 0
+    while x < m {
+      r = Texts.line_ended(x, m + 1)
+      o = Locals.param_of_line(x, digits_at(x + 16, m), qs, qn) ? Locals.param_line(o, h, x, digits_at(x + 16, m), r, mixed) : put_span(o, x, r + 1)
+      x = r + 1
+    }
+    o
+  }
+  static param_of_line (x, d, qs, qn) => param_of(qs, qn, x + 16, d)
+  // (`  pK = argn(…)`, and, when the scope is used otherwise, `  define(scope, K, pK)`)
+  static param_line (o0, h, x, d, r, mixed) => {
+    o := put_span(o0, h + 1, h + 3)
+    byte_put(o, 112)
+    o = put_span(o + 1, x + 16, d)
+    o = put_span(o, h + 20, h + 23)
+    o = put_span(o, d + 2, r - 1)
+    byte_put(o, 10)
+    o = o + 1
+    return o if mixed == 0
+    o = put_span(o, x, d + 2)
+    byte_put(o, 112)
+    o = put_span(o + 1, x + 16, d)
+    byte_put(o, 41)
+    byte_put(o + 1, 10)
+    o + 2
+  }
+  static body_written (o0, m, e, qs, qn) => {
+    o := o0
+    x := m
+    r := m
+    d := 0
+    k := 0
+    while x < e {
+      d = Locals.got_at(x) ? digits_at(x + 11, e) : 0
+      k = (d != 0) && (byte(d) == 41) && param_of(qs, qn, x + 11, d)
+      o = k ? Locals.local_read(put_span(o, r, x), x + 11, d) : o
+      r = k ? (d + 1) : r
+      x = k ? r : (x + 1)
+    }
+    put_span(o, r, e)
+  }
+  static local_read (o, k, d) => {
+    byte_put(o, 112)
+    put_span(o + 1, k, d)
   }
 }
 // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after

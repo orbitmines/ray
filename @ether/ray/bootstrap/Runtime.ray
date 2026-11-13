@@ -3,8 +3,7 @@
 // (its header): the back end lays it out so (one word each, the first its tag when it has one), and a function here reads
 // and writes them by name. What is an optimization (fields indexed once a node holds many, what a call made let go when it
 // returns, rules found by the text they lead with) is a level of Compiler.ray, each removable; Compiler.ray also writes
-// this file for its back end (`Compiler.lowered`). (Moving here from $/Wasm/runtime.ray a function at a time: one written
-// here is the one the runtime has, the old one of its name left out.)
+// this file for its back end (`Compiler.lowered`).
 Runtime := class {
   // The language's own values, as the back end holds them: nothing, false and true; a number, twice itself and one.
   static None := 0

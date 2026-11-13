@@ -293,6 +293,14 @@ its own reading its place, unread text recorded with reading going on.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 
+- **Done (2026-11-13), revision 140 on.** `$/Wasm/` is gone. runtime.ray's functions are Compiler.ray levels (`Hooks`,
+  `Afterwards`, `Images`, `Locals`) or the machine's own instructions (`byte`, `word_of`, `byte_put`, `word_put`, written
+  by Low as loads and stores); High is in Compiler.ray; Compiled, Low, the compile's header and the Wasm level are the
+  bootstrap part of `$/Wasm.project.ray` (after its `// (bootstrap: name)` lines), until its levels write the revisions.
+  Input part 2, where the old runtime was, is empty until a revision reads what is written for the back end there. What
+  a compile reads lasts (past `arena_base`, now 1200 MB, so about 640 MB of it): Compiler.ray's size is what bounds it, a
+  reading once what lasts is near its end read again each time (eleven times slower, revision 138's 84 s).
+
 `ray/bootstrap/Runtime.ray` (at most 1000 lines) states what a program runs on, declaratively and apart from any back
 end: kinds of value, names and members, calls and frames, patterns (each "what it reads from a place, every way, in
 order", read through a continuation), statement layout, pairs, the budget, the host, afterwards. Memory layout belongs to

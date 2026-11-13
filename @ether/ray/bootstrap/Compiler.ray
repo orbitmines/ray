@@ -843,146 +843,31 @@ Keys := class {
     int(Texts.count_of(lp))
   }
   static key_moved (lv, lp, x, i) => (i < 2) ? append(lv, x) : ((catch_all(member(x, Symbol.key)) == 0) ? append(lp, x) : 0)
-  static keys_version (ctx) => {
-    v := 1
-    c := ctx
-    while c is Node {
-      v = v + Keys.rules_count(member(c, Symbol.rules))
-      c = member(c, Symbol.in)
-    }
-    v
-  }
-  static rules_count (r: Node) => (r.keys == None) ? 0 : (Texts.count_of(r.keys) + 1)
 }
 // Caches (`level cached …`, removable: each what it caches, again): a list of keys, each its pattern and lead
 // (`keys_reading`, by the list, its length and the rules' epoch); of those, the ones read in a text of the program (by
 // where it is too); the ones led by text in a node's rules (`led_keys`). Each a table of slots and a room after them,
 // cleared once full.
 Caches := class {
-  static leads_at := 3912
-  static reads_at := 3984
-  static epoch_at := 3996
-  static keys_epoch => word_of(epoch_at)
-  static cache_table (w, size, first) => (word_of(w) == 0) ? Caches.cache_made(w, size, first) : word_of(w)
-  static cache_made (w, size, first) => {
-    c := lasting_alloc(size)
-    zeroed(c, first)
-    word_put(c, first)
-    word_put(w, c)
-    c
-  }
-  static table_cleared (c, n, first) => {
-    zeroed(c + 16, n)
-    word_put(c, first)
-  }
-  static room_after (c, n, size, n_cleared, first) => {
-    Caches.table_cleared(c, n_cleared, first) if (word_of(c) + n) > size
-    c + word_of(c)
-  }
-  static room_taken (c, n) => {
-    a := c + word_of(c)
-    word_put(c, word_of(c) + n)
-    a
-  }
-  static slot_noted (s, l: List, a) => {
-    word_put(s, l)
-    word_put(s + 4, l.count)
-    word_put(s + 8, Caches.keys_epoch())
-    word_put(s + 12, a)
-    cache_key(l)
-    a
-  }
-  static slot_same (s, l: List) => (word_of(s) == l) && (word_of(s + 4) == l.count) && (word_of(s + 8) == Caches.keys_epoch())
-  static keys_reading (l: List, t: Text) => ((l is List) && (t is Text)) ? Caches.keys_led(l, t, Caches.leads_of(l, Caches.cache_table(leads_at, 4194304, 16400))) : l
-  static leads_of (l: List, c) => Caches.leads_in(l, c + (16 + ((((l / 8) * 31) & 1023) * 16)), c)
-  static leads_in (l: List, s, c) => Caches.slot_same(s, l) ? word_of(s + 12) : Caches.leads_made(l, s, Caches.leads_room(c, (l.count * 8) + 8))
-  static leads_room (c, n) => {
-    Caches.room_after(c, n, 4194304, 16384, 16400)
-    Caches.room_taken(c, n)
-  }
-  static leads_made (l: List, s, a) => {
+  static keys_reading (l: List, t: Text) => ((l is List) && (t is Text)) ? Caches.keys_plain(l, t, Caches.first_byte(t)) : l
+  static keys_plain (l: List, t: Text, b) => {
+    o := list()
     i := 0
     while i < l.count {
-      Caches.lead_put(a + (i * 8), Keys.key_pattern(at(l, i)))
+      append(o, at(l, i)) if Caches.key_leads(Keys.key_pattern(at(l, i)), t, b)
       i = i + 1
     }
-    Caches.slot_noted(s, l, a)
+    o
   }
-  static lead_put (w, p) => {
-    word_put(w, p)
-    word_put(w + 4, Keys.led_by_text(p) ? Keys.lead_byte(p) : (0 - 1))
-  }
-  static keys_led (l, t: Text, a) => in_program(t.from, t.to) ? Caches.keys_read(l, t, a, Caches.cache_table(reads_at, 8388608, 1572880)) : Caches.keys_with(l, t, a, 0)
+  static key_leads (p, t: Text, b) => ((!Keys.led_by_text(p)) || (Keys.lead_byte(p) == b) || (b == (0 - 3))) && Keys.literals_in(p, t.from, t.to)
   static first_byte (t: Text) => (t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2)
   static lead_class (b) => (white(b) || (b == 10)) ? (0 - 3) : b
-  static keys_with (l: List, t: Text, a, d) => {
-    o := list()
-    b := Caches.first_byte(t)
-    i := 0
-    while i < l.count {
-      Caches.key_taken(o, l, i, d) if ((word_of(a + ((i * 8) + 4)) < 0) || (word_of(a + ((i * 8) + 4)) == b) || (b == (0 - 3))) && Keys.literals_in(word_of(a + (i * 8)), t.from, t.to)
-      i = i + 1
-    }
-    o
-  }
-  static key_taken (o: List, l, i, d) => {
-    append(o, at(l, i))
-    word_put(d + (o.count * 4), i) if d != 0
-  }
-  static keys_read (l: List, t: Text, a, c) => Caches.read_slot(l, t, a, c, c + (16 + (((((l / 8) * 7) + ((t.from * 31) + (t.to * 13))) & 65535) * 24)))
-  static read_slot (l: List, t: Text, a, c, h) => (Caches.same_read(h, l, t) && (word_of(h + 16) == Caches.keys_epoch())) ? Caches.keys_again(l, word_of(h + 20)) : Caches.read_noted(l, t, h, Caches.keys_with(l, t, a, Caches.room_after(c, (l.count * 4) + 4, 8388608, 1572864, 1572880)))
-  static same_read (h, l: List, t: Text) => (word_of(h) == l) && (word_of(h + 4) == l.count) && (word_of(h + 8) == t.from) && (word_of(h + 12) == t.to)
-  static keys_again (l, d) => {
-    o := list()
-    i := 0
-    while i < word_of(d) {
-      append(o, at(l, word_of(d + ((i + 1) * 4))))
-      i = i + 1
-    }
-    o
-  }
-  static read_noted (l: List, t: Text, h, o: List) => {
-    d := word_of(reads_at) + word_of(word_of(reads_at))
-    word_put(d, o.count)
-    word_put(word_of(reads_at), word_of(word_of(reads_at)) + ((o.count * 4) + 4))
-    word_put(h, l)
-    word_put(h + 4, l.count)
-    word_put(h + 8, t.from)
-    word_put(h + 12, t.to)
-    word_put(h + 16, Caches.keys_epoch())
-    word_put(h + 20, d)
-    o
-  }
-  static led_keys (l: List) => Caches.led_in(l, Caches.led_table(), Caches.led_table() + (16 + ((((l / 8) * 31) & 1023) * 16)))
   static led_table => (pcache == 0) ? Caches.led_made() : pcache
   static led_made => {
     pcache = alloc(8388608)
     kept()
     word_put(pcache, 16400)
     pcache
-  }
-  static led_in (l: List, c, s) => Caches.slot_same(s, l) ? word_of(s + 12) : Caches.led_found(l, s, Caches.led_room(c, 8 + (l.count * 8)))
-  static led_room (c, n) => {
-    Caches.room_after(c, n, 8388608 - (2048 * 560), 16384, 16400)
-    Caches.room_taken(c, n)
-  }
-  static led_found (l: List, s, a) => {
-    k := 0
-    i := 0
-    while i < l.count {
-      k = Caches.led_one(a, k, i, member(at(l, i), Symbol.key))
-      i = i + 1
-    }
-    word_put(a, k)
-    Caches.slot_noted(s, l, a)
-  }
-  static led_one (a, k, i, p) => (p is Pattern) ? Caches.led_pattern(a, k, p) : Caches.led_put(a, k, topattern(p), (0 - i) - 1)
-  static led_pattern (a, k, p) => Keys.led_by_text(p) ? Caches.led_stored(a, k, p, Keys.noted_key(p)) : k
-  static led_put (a, k, p, e) => Keys.led_by_text(p) ? Caches.led_stored(a, k, p, e) : k
-  static led_stored (a, k, p, e) => {
-    word_put(a + (4 + (k * 8)), e)
-    word_put(a + (8 + (k * 8)), Keys.lead_byte(p))
-    k + 1
   }
 }
 // Pairs (`level paired …`): which bytes pair, learned from a capture's uses (`open close`, the bytes just around each,
@@ -1527,34 +1412,6 @@ Indexes := class {
     0
   }
   static last_indexed (l, i) => (i == 0) ? 0 : at(l, i - 1)
-  static all_with (l, kv, v) => Indexes.all_into(list(), l, kv, v)
-  static all_into (o, l: List, kv, v) => (((l is List) == 0) || stopped()) ? o : Indexes.all_by(o, l, untag(kv), v, (v != 0) ? Indexes.column_index(l, untag(kv)) : 0)
-  static all_by (o, l: List, k, v, c) => (c == 0) ? Indexes.all_scanned(o, l, k, v) : Indexes.all_indexed(o, l, c, Indexes.column_last(c, v))
-  static all_scanned (o, l: List, k, v) => {
-    i := 0
-    while i < l.count {
-      append(o, at(l, i)) if column_of(at(l, i), k) == v
-      i = i + 1
-    }
-    o
-  }
-  static all_indexed (o, l, c, last) => {
-    r := list()
-    i := last
-    while i != 0 {
-      append(r, at(l, i - 1))
-      i = word_of(c + (2097168 + ((i - 1) * 4)))
-    }
-    Indexes.reversed_into(o, r)
-  }
-  static reversed_into (o, r: List) => {
-    n := r.count - 1
-    while n >= 0 {
-      append(o, at(r, n))
-      n = n - 1
-    }
-    o
-  }
 }
 // Members (`level members …`): what applies a rule, around a node (`applied_of`); a node's members, or what a rule's
 // holes hold, as entries of a name and a value (but its key and input); whether a pattern catches all (a field, or a
@@ -1776,18 +1633,18 @@ Matching := class {
     }
     0
   }
-  static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, led_keys(rules.keys), n, m, c)
-  static led_tried (l, a, n, m, c) => {
+  static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, n, m, c)
+  static led_tried (l: List, n, m, c) => {
     i := 0
     r := 0
-    while i < word_of(a) {
-      r = ((word_of(a + (8 + (i * 8))) < 0) || (word_of(a + (8 + (i * 8))) == c)) ? Matching.led_matched(Matching.led_pattern_of(l, word_of(a + (4 + (i * 8)))), n, m) : 0
+    while i < l.count {
+      r = Matching.led_key(topattern(member(at(l, i), Symbol.key)), n, m, c)
       return r if r > n
       i = i + 1
     }
     0
   }
-  static led_pattern_of (l, p) => (p < 0) ? topattern(member(at(l, (0 - p) - 1), Symbol.key)) : p
+  static led_key (p, n, m, c) => (Keys.led_by_text(p) && ((Keys.lead_byte(p) < 0) || (Keys.lead_byte(p) == c))) ? Matching.led_matched(p, n, m) : 0
   static led_matched (p, n, m) => {
     r := matched(p, n, 0)
     boundn = m
@@ -3215,7 +3072,6 @@ Hooks := class {
   }
   // (whether the reading runs abstractly, as the editor runs a file (the host's word 3900); whether a test written at t
   // runs: every one, but when the editor runs a file only those written in it, from where the host says it begins)
-  static abstractly => (word_of(3900) != 0) ? 12 : 8
   static tested_here (t) => ((word_of(3948) == 0) || (tag(t) != 4)) ? 12 : ((origin_at(word_of(t + 4)) < word_of(3948)) ? 8 : 12)
   static paints => word_of(3968)
   static reports => word_of(3972)
@@ -3342,12 +3198,6 @@ Afterwards := class {
     append(names, x)
     word_put(3944, f)
     1
-  }
-  static slots => (word_of(3788) == 0) ? Afterwards.slots_made() : word_of(3788)
-  static slots_made => {
-    word_put(3788, alloc(4194320))
-    zeroed(word_of(3788), 4194320)
-    word_of(3788)
   }
   static kind_of (v) => Afterwards.kind_named(alloc_bytes(8), v)
   static kind_named (t, v) => {

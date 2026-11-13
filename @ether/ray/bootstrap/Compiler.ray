@@ -477,7 +477,6 @@ Texts := class {
 // decimals, a size before what it counts (as many bytes as it takes, seven bits each), data apart, written last, and a
 // part set aside, written later)
 Output := class {
-  static cw_write (b) => outbyte(untag(b))
   static cw_write_value (v: Text) => (v is Text) ? Output.bytes_written(v.from, v.to - v.from) : outbyte(untag(v))
   static cw_written_at => int(outn)
   static cw_counted => {
@@ -1891,37 +1890,6 @@ Built := class {
     b
   }
   static staged (f) => pattern(typed_by, f, 0)
-  static unread_until (pos, at) => (Built.white_past(at) >= textend) ? at : Built.unread_from(at, Pairs.line_end_from(at), Built.indent_of(Built.line_begun(pos, at)))
-  static white_past (q) => {
-    r := q
-    while (r < textend) && white(byte(r)) {
-      r = r + 1
-    }
-    r
-  }
-  static line_begun (pos, at) => {
-    q := at
-    while (q > pos) && (byte(q - 1) != 10) {
-      q = q - 1
-    }
-    q
-  }
-  static indent_of (q) => Pairs.spaces_past(q) - q
-  static unread_from (at, end, d) => {
-    q := end
-    while q < textend {
-      return Built.aside_to(at, q, q + 1) if Built.dedented(q + 1, d)
-      q = Pairs.line_end_from(q + 1)
-    }
-    Built.aside_to(at, q, q)
-  }
-  static dedented (i, d) => (Pairs.spaces_past(i) < textend) && (byte(Pairs.spaces_past(i)) != 10) && ((Pairs.spaces_past(i) - i) <= d)
-  static aside_to (at, q, r) => {
-    l := statements_aside()
-    frames_kept()
-    append(l, text(at, q))
-    r
-  }
   static rest_cell (l, i, next) => Rest(list: l, next: next, index: i)
   static recell (k: Rest, next) => (k.list is List) ? rest_cell(k.list, k.index, next) : cell(k.list, next)
   static repeat_chosen (inner, least, d, pos, k) => Built.choice_given(chosen(4, inner, pos, k), least, d)
@@ -1939,8 +1907,6 @@ Built := class {
     }
     1
   }
-  static anything_end (n) => (byte(n - 1) == 10) ? 0 : Built.end_by_class(n, pair_class(n - 1))
-  static end_by_class (n, t) => (t == 3) ? 0 : (((t == 1) || (t == 2)) ? pair_end(n - 1) : n)
   static negated (v) => truthy(v) ? false : true
   static param_of (ps, n, a, e) => {
     i := 0
@@ -2388,15 +2354,6 @@ Origins := class {
     d := indent_at(q)
     textend = r
     d
-  }
-  static continued_where_written (q) => in_program(q, q + 1) ? 0 : Origins.continued_origin(q, origin_at(q))
-  static continued_origin (q, o) => ((o < 0) || (o == q) || (byte(o) != 10)) ? 0 : Origins.continued_within(o, Origins.text_high(o))
-  static continued_within (o, te) => {
-    r := textend
-    textend = te
-    b := continued_at(o)
-    textend = r
-    b
   }
 }
 // Heap (`level memory …`, removable: without it, memory is only taken): what is taken past a mark has where each
@@ -3214,7 +3171,7 @@ Hooks := class {
     stopped_statement() if (word_of(3896) > 0) && Hooks.near_end()
     0
   }
-  static near_end => (free > (arena_base() - 134217728)) && (free < arena_base())
+  static near_end => (free > (arena_base() - 33554432)) && (free < arena_base())
   static statement_over => word_of(4064) != 0
   static fueled => {
     word_put(3916, 1) if logging() && Hooks.log_over()
@@ -3386,42 +3343,12 @@ Afterwards := class {
     word_put(3944, f)
     1
   }
-  static kept_same (a, e) => word_of(Afterwards.kept_slot(a, e) + 4)
-  static kept_as (a, e, c) => Afterwards.kept_into(Afterwards.kept_slot(a, e), a, e, c)
-  static kept_into (x, a, e, c) => {
-    return 0 if (word_of(x) != 0) || (word_of(word_of(3788) + 4) > 131072)
-    word_put(x, word_of(word_of(3788)))
-    word_put(x + 4, c)
-    word_put(x + 8, copy(alloc(e - a), a, e - a))
-    word_put(x + 12, e - a)
-    word_put(word_of(3788) + 4, word_of(word_of(3788) + 4) + 1)
-    0
-  }
-  static kept_slot (a, e) => Afterwards.slot_probed(Afterwards.slots(), a, e, Afterwards.words_hash(a, e))
   static slots => (word_of(3788) == 0) ? Afterwards.slots_made() : word_of(3788)
   static slots_made => {
     word_put(3788, alloc(4194320))
     zeroed(word_of(3788), 4194320)
     word_of(3788)
   }
-  static words_hash (a, e) => {
-    h := 7
-    q := a
-    while q < e {
-      h = (h * 31) + word_of(q)
-      q = q + 4
-    }
-    (h == 0) ? 1 : h
-  }
-  static slot_probed (s, a, e, h) => {
-    k := h & 262143
-    while (word_of(s + (16 + (k * 16))) != 0) && Afterwards.slot_other(s + (16 + (k * 16)), a, e, h) {
-      k = (k + 1) & 262143
-    }
-    word_put(s, h)
-    s + (16 + (k * 16))
-  }
-  static slot_other (x, a, e, h) => (word_of(x) != h) || (word_of(x + 12) != (e - a)) || (texteq(word_of(x + 8), a, e - a) == 0)
   static kind_of (v) => Afterwards.kind_named(alloc_bytes(8), v)
   static kind_named (t, v) => {
     return text(t, put4(put4(t, 110, 111, 116, 104), 105, 110, 103, 0)) if v == 0

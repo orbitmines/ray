@@ -141,7 +141,6 @@ Runtime := class {
   static closure (f, env) => Closure(function: f, env: env)
   static getter (f, env) => Closure(function: f, env: env, called: 1)
   static Class := (5, function, env, header)
-  static classv (f, env) => Class(function: f, env: env)
   static classh (f, env, h) => Class(function: f, env: env, header: h)
 
   // A text: where it starts in what a run holds, and where it ends.
@@ -184,7 +183,6 @@ Runtime := class {
   static hole := 28
   static Pattern := (6, kind, a, b, c, d)
   static pattern (kind, a, b) => Pattern(kind: kind, a: a, b: b)
-  static pattern3 (kind, a, b, c) => Pattern(kind: kind, a: a, b: b, c: c)
   static pattern4 (kind, a, b, c, d) => Pattern(kind: kind, a: a, b: b, c: c, d: d)
   static literal (t) => Pattern(kind: literally, a: t)
   static chars (c) => Pattern(kind: characters, a: c)
@@ -195,10 +193,7 @@ Runtime := class {
   static field (name, inner) => Pattern(kind: named_field, a: name, b: inner)
   static ending => Pattern(kind: at_end)
   static anything => Pattern(kind: anything_at_all)
-  static sequence_from (l, i) => Pattern(kind: rest_from, a: l, b: i)
-  static repeat_more (inner, least) => Pattern(kind: repeat_from, a: inner, b: least)
   static greedy (inner: Pattern, least) => ((least == 0) && (inner is Pattern) && (inner.kind == repeating)) ? Pattern(kind: repeating, a: inner.a, c: 1) : Pattern(kind: repeating, a: inner, b: least, c: 1)
-  static bound_end (name, start, mark) => Pattern(kind: field_end, a: name, b: start, c: mark)
   static dynamic (f) => Pattern(kind: rules_of, a: f)
   static class_end (c, mark) => Pattern(kind: constructed, a: c, b: mark)
   static applied_end (e, mark, at) => Pattern(kind: applied, a: e, b: mark, c: at)
@@ -315,7 +310,6 @@ Runtime := class {
   static class_at (x) => (char_class(byte(x)) == 0) ? 0 : pair_class(x)
   static opened (t) => (t == 1) ? 1 : ((t == 3) ? (0 - 1) : 0)
   // (where a string read up to n ends: in a pair opened just before n, where it closes; just after one closed, never)
-  static string_end (n) => (pair_class(n - 1) == 3) ? 0 : (((pair_class(n - 1) == 1) || (pair_class(n - 1) == 2)) ? pair_end(n - 1) : n)
 
   // Reading: a pattern read from a place in the text, then what is still to read after it, a step at a time, through
   // the run's registers: the pattern (`rp`), where (`rpos`), what follows it (`rk`: a cell of a pattern to read, or the

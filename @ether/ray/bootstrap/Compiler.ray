@@ -4019,38 +4019,19 @@ Locals := class {
 // it compiles, as it is now. Until Runtime.ray holds the whole runtime, a function of $/Wasm/runtime.ray is written too,
 // unless Runtime.ray writes one of its name.)
 Lowered := {
-  // (each kind, `[name, tag, fields]`, each field `[name, type]`; each constant, `[name, value]`; each function's name)
+  // (each kind, `[name, tag, fields]`, each field `[name, type]`; each constant, `[name, value]`)
   static kinds := Array.new
   static constants := Array.new
-  static functions := Array.new
   static w (lw) => level write lw
   static kind (lk) => Compiled.kind_of(High.parsed_one(lk))
   static parsed (lp) => High.parsed_one(lp)
-  // (the runtime: the old one first, where it was (a name nothing defines is read as the first function: $/Wasm/runtime.ray's
-  // `builtin` calls `noted`), then what Runtime.ray writes; of two of a name, the old one is left out, `overridden`)
-  static runtime (lr_source, lr_old) => {
+  // (the runtime: what Runtime.ray and Compiler.ray's levels write, each kind's constructor first)
+  static runtime (lr_source) => {
     lr_members := Lowered.members_of(lr_source)
     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.declared(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
-    lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.named_function(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
-    Lowered.w(lr_old)
-    Lowered.w("\n")
     Lowered.kinds.for((k) => Lowered.managed_kind(k.first) ? Lowered.constructor(k) : None)
     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.defined(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
   }
-  static named_function (nf) => (Lowered.kind(nf) == `rule_head`) ? Lowered.functions.append(Lowered.function_name(Compiled.trimmed(Lowered.parsed(nf).rule_head))) : None
-  static function_name (fh) => (Compiled.kind_of(Compiled.head_parsed(fh).first) == `applied_name`) ? Compiled.trimmed(Compiled.head_parsed(fh).first.applied_name) : fh
-  // (the functions of a module, but of a name Runtime.ray writes and the old one too, the first: the old one)
-  static overridden (os) => {
-    o_seen := Array.new
-    o_twice := Array.new
-    os.for((st) => Lowered.noted_twice(Compiled.trimmed(Low.name_of(st)), o_seen, o_twice))
-    o_left := Array.new
-    o_kept := Array.new
-    os.for((st) => Lowered.override_one(st, Compiled.trimmed(Low.name_of(st)), o_twice, o_left, o_kept))
-    o_kept
-  }
-  static noted_twice (sn, seen, twice) => ((level cw_index_of (Lowered.functions) (sn)) === None) ? None : (((level cw_index_of (seen) (sn)) === None) ? seen.append(sn) : twice.append(sn))
-  static override_one (st, sn, twice, left, kept) => (((level cw_index_of (twice) (sn)) === None) || !((level cw_index_of (left) (sn)) === None)) ? kept.append(st) : left.append(sn)
   // (what each section, `X := class { … }` (or `X := { … }`), holds, each `static …` in it: Runtime.ray's, and Compiler.ray's
   // own levels; a function of a section is called by its name, `X.f(…)`)
   static sections := Array.new
@@ -4352,9 +4333,9 @@ High := {
   static quotes_from (ft, fi, fe, fn) => (fi >= fe) ? fn : (High.operator_led(High.char_at(ft, fi), "\\") ? High.quotes_from(ft, fi + 2, fe, fn) : ((High.char_at(ft, fi) == "\"") ? High.quotes_from(ft, fi + 1, fe, fn + 1) : High.quotes_from(ft, fi + 1, fe, fn)))
   static char_at (ct, ci) => (ci == 0) ? ct.first : level cw_slice (ct) (ci) (ci + 1)
   static kind (kt) => Compiled.kind_of(High.parsed_one(kt))
-  static program (pr_text, pr_runtime, pr_pages) => {
+  static program (pr_text, pr_pages) => {
     Compiled.parts(`this, key, value, length, count, first, last, keys, sort, for, body, statements, statement, rest, empty, reading, text, caller, at, node, in, rules, map, \s, \n, String, ⊣, None, true, false, \n\n, input, holes, Place, noted, applied, members, whole, joined, append, new, Array`).for((s) => level cw_symbol_of (s))
-    Lowered.runtime(level input_part 3, pr_runtime)
+    Lowered.runtime(level input_part 3)
     High.w("\nfunction main() {\n  var scope\n  free = 8388608 + (((load 4088) + 7) / 8) * 8\n  names = list()\n  symtab()\n  scope = node(0)\n  define(scope, 57, arrays())\n")
     Compiled.statements_of(pr_text).for((st) => High.statement_isolated(st))
     High.w("\n}\n")

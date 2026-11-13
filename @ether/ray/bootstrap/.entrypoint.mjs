@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Ether (`ether`, `ray`, `orbitmines`): the language as it compiles itself. Its latest revision, `.entrypoint.N.wasm`, is
 // Expression.ray with the compiler written in it ($/Wasm/Compiled.ray, Low.ray, and Compiler.ray from `Lowered :=` on), compiled; given
-// a program it writes that program as a WebAssembly module (the runtime, $/Wasm/runtime.ray, in it), which is then run.
+// a program it writes that program as a WebAssembly module (the runtime, Runtime.ray and Compiler.ray's levels, in it),
+// which is then run.
 // Each revision is written by the one before it, from those same sources: revision 0 by the interim engine that is gone
 // now. This file only hosts it: it gives a revision its input and runs what it writes.
 //   node .entrypoint.mjs FILE         FILE compiled by the latest revision, then run: what its main answers
@@ -74,8 +75,8 @@ const lowering = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8
 // (and Compiler.ray's own levels, written for the back end after Runtime.ray: from `Texts :=` up to `Lowered :=`)
 const levels = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nTexts := (class )?\{\n/) + 1, t.search(/\nLowered := (class )?\{\n/) + 1); };
 export const lowered_input = () => readFileSync(bootstrap('Runtime.ray'), 'utf8') + '\n' + levels();
-// (the compiler run: the program (input part 1) written with the runtime (input part 2) as a module of that many pages)
-const COMPILE = 'High.program(level input_part 1, level input_part 2, 32000)\nlevel out_length\n';
+// (the compiler run: the program (input part 1) written with the runtime (input part 3) as a module of that many pages)
+const COMPILE = 'High.program(level input_part 1, 32000)\nlevel out_length\n';
 export const source = () => uncommented([reader(), ...['Compiled.ray', 'Low.ray'].map((f) => readFileSync(wasm(f), 'utf8')), lowering(), COMPILE].join(''));
 
 // (a revision, given a program: its input the header Expression reads first, the program and the runtime (each without
@@ -85,8 +86,9 @@ export const instance = async (module, memory = new WebAssembly.Memory({ initial
   const { instance } = await WebAssembly.instantiate(module, { m: { memory } });
   return { exports: instance.exports, memory, u8: new Uint8Array(memory.buffer), i32: new Int32Array(memory.buffer) };
 };
-export const given = (it, program, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), written = lowered_input()) => {
-  const input = Buffer.from([readFileSync(wasm('header.ray'), 'utf8'), uncommented(program), uncommented(runtime), uncommented(written)].join('\0'));
+// (part 2 is empty: where the old runtime was, until a revision reads what is written for the back end as part 2)
+export const given = (it, program, written = lowered_input()) => {
+  const input = Buffer.from([readFileSync(wasm('header.ray'), 'utf8'), uncommented(program), '', uncommented(written)].join('\0'));
   it.u8.set(input, 8388608); it.i32[4088 >> 2] = input.length;
 };
 export const compiled = async (module, program) => {
@@ -102,7 +104,7 @@ export const run = async (module) => (await instance(module)).exports.main();
 export const grammar = () => { const t = readFileSync(wasm('Compiled.ray'), 'utf8'), a = t.indexOf('(Compiled.grammar).(\n') + 21; return t.slice(a, t.indexOf('\n)\n', a) + 1); };
 export const statements = async () => {
   const it = await instance(readFileSync(engine()));
-  given(it, '', '');
+  given(it, '');
   it.exports.main();
   const text = (s) => { const b = Buffer.from(s), at = it.exports.alloc(b.length + 8); it.u8.set(b, at); return [it.exports.text(at, at + b.length), at]; };
   const span = (t) => [it.i32[(t >> 2) + 1], it.i32[(t >> 2) + 2]];
@@ -150,8 +152,8 @@ const emptied = (text) => text.split('\n').map((l) => (l.trimStart().startsWith(
 const left_out = (text) => text.split('\n').flatMap((l, line) => { const column = l.length - l.trimStart().length; return l.trimStart().startsWith('//') ? [{ style: 'comment', line, column, length: l.trimEnd().length - column }] : []; });
 // (the module that reads, once per revision and sources: kept beside the revision)
 export const tester = async () => {
-  const program = reader() + TESTING, runtime = readFileSync(wasm('runtime.ray'), 'utf8'), was = readFileSync(engine());
-  const key = createHash('sha256').update(was).update(program).update(runtime).update(readFileSync(bootstrap('Runtime.ray'))).update(readFileSync(bootstrap('Compiler.ray'))).update(readFileSync(wasm('header.ray'))).digest('hex').slice(0, 12);
+  const program = reader() + TESTING, was = readFileSync(engine());
+  const key = createHash('sha256').update(was).update(program).update(readFileSync(wasm('Low.ray'))).update(readFileSync(bootstrap('Runtime.ray'))).update(readFileSync(bootstrap('Compiler.ray'))).update(readFileSync(wasm('header.ray'))).digest('hex').slice(0, 12);
   const name = `.entrypoint.${revision()}.test.${key}.wasm`;
   if (existsSync(bootstrap(name))) return readFileSync(bootstrap(name));
   const module = await compiled(was, program);

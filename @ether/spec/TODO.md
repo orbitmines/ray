@@ -302,6 +302,10 @@ its own reading its place, unread text recorded with reading going on.
     wall above).
   - Order these block on: calls cheap enough to run every class body (memory reclaimed while a statement runs), then
     level.ray's requests as the entrypoint's own definitions (they need calls), then numerals.
+  - Again on revision 142 (a parse read in young memory, only its result copied to what lasts; no compaction; lasting
+    memory 1763 → 1350 MB): Expression.lazy's `--test` now ends, in 70 s, but every statement runs past its 200M-step
+    budget, from the entrypoint's line 8 (`level style style x`) on. Speed of reading with the `led` rules is the wall
+    now, not memory.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

@@ -2223,7 +2223,7 @@ Isolation := class {
   static isolated_open => {
     Isolation.stack_made() if isostack == 0
     Isolation.pins_made() if word_of(4056) == 0
-    eager_caches() if word_of(3876) == 0
+    eager_caches() if pcache == 0
     return Isolation.frame_deeper() if isodepth >= depth_most
     Isolation.frame_opened(isostack + (isodepth * 12))
   }
@@ -2299,16 +2299,8 @@ Isolation := class {
   static eager_caches => {
     return 0 if isodepth > 0
     Isolation.pcache_made() if pcache == 0
-    word_put(3908, Isolation.zeroed_alloc(65536 * 20)) if word_of(3908) == 0
-    word_put(3880, Isolation.zeroed_alloc(1048576)) if word_of(3880) == 0
-    word_put(3876, Isolation.zeroed_alloc(word_of(4088) * 8)) if word_of(3876) == 0
     kept()
     0
-  }
-  static zeroed_alloc (n) => {
-    p := alloc(n)
-    zeroed(p, n)
-    p
   }
   static pcache_made => {
     pcache = alloc(8388608)

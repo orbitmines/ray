@@ -127,8 +127,10 @@ Low := {
   }
   static called_with (ca, cn, l, n) => {
     Low.arguments(ca, l, n)
-    Low.called(cn, n)
+    Low.called_as(cn, n)
   }
+  // (memory, a byte or a word at a place, read or written (answering 0), is the machine's own: no call)
+  static called_as (cn, n) => (cn == `byte`) ? Low.outs([0x2D, 0, 0]) : ((cn == `word_of`) ? Low.outs([0x28, 2, 0]) : ((cn == `byte_put`) ? Low.outs([0x3A, 0, 0, 0x41, 0]) : ((cn == `word_put`) ? Low.outs([0x36, 2, 0, 0x41, 0]) : Low.called(cn, n))))
   // (what a call is given, `a, b`: each in turn)
   static arguments (at, at_l, at_n) => Compiled.parts(at).for((part) => Low.ops(part, at_l, at_n))
   static arguments_two (a2, a2_l, a2_n) => {

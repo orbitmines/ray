@@ -1,17 +1,3 @@
-function byte(q) {
-  load8 q
-}
-function byte_put(q, c) {
-  q <-8 c
-  0
-}
-function word_of(a) {
-  load a
-}
-function word_put(a, v) {
-  a <- v
-  0
-}
 function second_symbol(n, e) {
   var x
   var d

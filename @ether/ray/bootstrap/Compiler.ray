@@ -3845,13 +3845,13 @@ Lowered := {
   }
   static grouped (gc, ge) => (Compiled.statements_of(gc).count == 1) ? Lowered.expression(gc, ge) : Lowered.body(Compiled.trimmed(gc), ge)
   static choice (ci, cy, cn, ce) => {
-    Lowered.w("if (")
+    Lowered.w("(if (")
     Lowered.expression(ci, ce)
     Lowered.w(") {\n  ")
     Lowered.expression(cy, ce)
     Lowered.w("\n  } else {\n  ")
     Lowered.expression(cn, ce)
-    Lowered.w("\n  }")
+    Lowered.w("\n  })")
   }
   static when (wc, wv, we) => {
     Lowered.w("if (")

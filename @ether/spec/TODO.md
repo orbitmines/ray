@@ -307,6 +307,11 @@ its own reading its place, unread text recorded with reading going on.
     budget, from the entrypoint's line 8 (`level style style x`) on. Not the steps: young memory fills to ~1.1 GB (the
     young parts of statements kept, nothing compacts them since 430490e1) and `near_end` cuts every statement after.
     Calls need what a statement made reclaimed when it ends, from a remembered set of the older words that point into it.
+  - Again on revision 143 with statements copied out (2026-11-14, a552d4be): Expression.lazy's `--test` reads past line 8
+    now, and the statements up to line 521 finish; from the `Array &+= { … }` blocks (lines 522–525, 649) on, every
+    statement is cut again (205 past their budget in 39 s, so cut by young memory, `near_end`, not by steps), and no
+    test runs. What one statement's calls make is let go only at its end. Next: a call's frame compacted when it ends
+    (what older words hold of it moved down to where the frame began), tried in a worktree, not yet at baseline.
   - **Tried 2026-11-14, shelved (branch `shelved/statement-copy-out`):** the barrier (`touched_by` and `word_held`
     note an older word given a value of the statement still read: words 3880 log, 3876 count, 3964 overflow, 3912 the
     innermost statement's start, 3956 the outermost's) and, at the outermost statement's end, what those words and the

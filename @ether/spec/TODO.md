@@ -333,6 +333,11 @@ its own reading its place, unread text recorded with reading going on.
     afterwards, young memory filled and the later tests stopped (`log_over`) without painting. Such a write is now logged
     and undone with the test, as a write into older young memory is (`Memory.lasting_tested`). Both suites at baseline
     with every statement copied out.
+  - **But mostly not copied out (found 2026-11-14):** the notes' overflow (3964) and the outermost statement's start
+    (3956) were the second words of two index slots (`Indexes.based_index` writes w and w + 4: 3960 for the program,
+    3952 for what is taken). Once the program's index was built, 3964 held its start, so `statement_copied` returned at
+    once, and 3956 was overwritten by a taken text's start. Moved to 3992 and 3984: both suites at baseline again
+    (249/200/11, 135/133/8), now with the copy really made.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

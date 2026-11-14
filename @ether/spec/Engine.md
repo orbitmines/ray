@@ -42,7 +42,7 @@ classes.
 | `occurs` byte/pair index, `literals_in`, `keys_reading`'s filter (Indexes, Keys, Caches: ~250) | A rule is tried where its first literal can be: rules are kept **by their lead** as they are added (a node's rules are a map lead → rules in order, the structure itself), so no scan and no filter. A statement nothing reads waits on the leads it holds, so a rule added with one of those leads wakes it (§21.1's retry, without reading every literal of every rule against every statement). |
 | `memo_read` (hole extents re-read at each byte), `text_led_read` | A hole ends at shape boundaries (pair, line, word), so it takes a token at a time, not a byte at a time. The O(n²) goes, and with it the memo. |
 | Register machine + choice stack + undo notes (Runtime 321–670, ChoiceStack, Built: ~450) | **Reading with continuations:** `read(pattern, at, then)` calls `then(end)` for each way the pattern reads, nearest first, and the first that answers wins. Backtracking is returning; bindings are arguments, so there is nothing to undo. About 150 lines. |
-| Regions, isolation flags, pins, the undo log, test images, `lasting_copy` (Heap, Memory, Isolation, Collector, Images: ~700) | **A statement is a transaction over values it returns:** what a statement defines (rules, members), paints and says is its answer, appended by the turn that read it, never written by the statement into older nodes. So when a statement ends, its memory is let go except its answer, which is copied out (one copy, the one routine kept). Tests are statements. No barrier, no log, no pins. Calls run inside it as they like. |
+| Regions, isolation flags, pins, the undo log, test images, `lasting_copy` (Heap, Memory, Isolation, Collector, Images: ~700) | **A statement's memory is let go when it ends, but what older memory points into.** The one write barrier there is (every field written goes through `written`) notes each older word given a value of a statement still running. When the statement ends, what those words (and the run's state) reach is copied out, they are moved with it, and the rest of the statement's memory is let go. Tests are statements. Calls run inside it as they like. (The reader's own writes, rules, paints and says, returned as the statement's answer instead, keep the noted words few.) |
 | `Locals` (185 lines rewriting compiled text) | High writes a function's parameters as the machine's locals when it writes the function (it knows them then). |
 | Afterwards, Hooks, Origins, Output, Texts, Splices (~700) | Mostly host plumbing in raw words. What stays is in the Run class (written out by the back end) and in the language: `goto afterwards` is a label (§21.2); origins are where a text is (its span is its origin); splicing is a rule. |
 | `level` requests (90 names) answered by engine functions | Design §21.2: externals are `.`, `&`, `goto`, `label`, plus the host's IO. The requests become the entrypoint's own definitions, read by the full language once calls run. The engine keeps only what a back end must give: the value kinds, member, call, read. |
@@ -50,7 +50,9 @@ classes.
 ## Decided (the user, 2026-11-13)
 
 - **Statements answer what they define** (step 4): Expression.ray's rule maker, `painted` and `reported` return what
-  a statement adds; the turn appends it. No barrier, log, pins or collector.
+  a statement adds; the turn appends it. (Correction, same day: a program's own writes into older nodes, a class body
+  defining into its file's scope, still happen once calls run, so the barrier notes those words and the statement's end
+  copies out what they reach. The answers only keep that set small.)
 - **The 1000 lines count Runtime.ray, Compiler.ray, Expression.ray and `$/Wasm.project.ray`'s bootstrap part
   together** (today 758 + 4068 + 456 + about 460 = about 5740).
 
@@ -85,6 +87,10 @@ Wasm bootstrap   ≈ 150   Ray → WebAssembly: sections, a function's locals, e
    bootstrap part, parameters and names as locals. Texts and Output go with them.
 6. **Requests into the language.** With calls running: level.ray's requests as the entrypoint's definitions, then
    numerals (spec/TODO.md's order), then Compiler.ray's levels run by the full language.
+
+Step 4's copy-out was tried first (2026-11-14) and shelved: every copy checks out, but which rule answers changes with
+where things are in memory (spec/TODO.md, "Tried 2026-11-14"). Step 3 goes first: with no choice stack and nothing to
+undo, most of what reading compares by address goes too.
 
 Steps 1–3 can each be measured alone: the suites' time and the self-compile's memory say whether the shape pays for
 the cache it replaces. Step 4 needs Expression.ray changed with it. Step 6 is the language's own work, and the

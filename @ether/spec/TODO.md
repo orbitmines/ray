@@ -307,6 +307,21 @@ its own reading its place, unread text recorded with reading going on.
     budget, from the entrypoint's line 8 (`level style style x`) on. Not the steps: young memory fills to ~1.1 GB (the
     young parts of statements kept, nothing compacts them since 430490e1) and `near_end` cuts every statement after.
     Calls need what a statement made reclaimed when it ends, from a remembered set of the older words that point into it.
+  - **Tried 2026-11-14, shelved (branch `shelved/statement-copy-out`):** the barrier (`touched_by` and `word_held`
+    note an older word given a value of the statement still read: words 3880 log, 3876 count, 3964 overflow, 3912 the
+    innermost statement's start, 3956 the outermost's) and, at the outermost statement's end, what those words and the
+    run's state reach copied to what lasts, the rest let go (`Collector.statement_copied`). Every copy checks out (each
+    object as before, no live word holding an old address), and reading runs faster than without it (led keys moved with
+    their lists, not all made again). Even so, the tests come out differently: `--test` 66/8/153 (baseline 249/200/11). With
+    the prefix to line 3700: base fails `true.next == false` (line 233), with copies it passes, but the enum tests
+    (239–250) never run and one runs past its budget in `{on} &+= {code}` (line 43). So which rule answers depends on
+    where things are in memory, not only a pointer left stale. Found and fixed on the way (kept on main): the set-aside
+    statements held in a local across their reading; writes into what lasts not counted as effects, so a backtrack freed
+    what they pointed to; cache keys past the arena. Found and kept on the branch: the parse cache keyed by a grammar
+    made fresh for each call, which another can take the place of once memory is let go; a statement read again needs a
+    frame of its own. Open: what compares or hashes by address in matching (rule order, `active_noted`, the led slots by
+    address, `reading_of`). Step 3 (reading with continuations, no choice stack or undo notes) takes most of these
+    away, and is the order to try next.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

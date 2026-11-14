@@ -99,6 +99,12 @@ Step 4's copy-out was tried first (2026-11-14) and shelved: every copy checks ou
 where things are in memory (spec/TODO.md, "Tried 2026-11-14"). Step 3 goes first: with no choice stack and nothing to
 undo, most of what reading compares by address goes too.
 
+**Step 4's copy-out landed (2026-11-14, b06f7054):** each outermost statement's end copies out what older words and the
+run hold of it and lets the rest go, both suites at baseline. What was left comparing by address was the pairs log, and
+tests writing into what was copied out were never let go (spec/TODO.md, "Landed"). Next in step 4: the older machinery
+the copy makes redundant (frames, `isostack`, regions, `lasting_copy`'s own pass) goes, and statements answer what they
+define.
+
 Steps 1–3 can each be measured alone: the suites' time and the self-compile's memory say whether the shape pays for
 the cache it replaces. Step 4 needs Expression.ray changed with it. Step 6 is the language's own work, and the
 engine's line count reaches 1000 only once it is done: until then a request in the language is a request in the

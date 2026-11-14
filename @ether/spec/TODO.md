@@ -322,6 +322,12 @@ its own reading its place, unread text recorded with reading going on.
     frame of its own. Open: what compares or hashes by address in matching (rule order, `active_noted`, the led slots by
     address, `reading_of`). Step 3 (reading with continuations, no choice stack or undo notes) takes most of these
     away, and is the order to try next.
+  - **Landed 2026-11-14 (b06f7054), after step 3.** Two causes, neither in matching: the pairs log (`Pairs`, word 3988)
+    keeps where each pair was learned as a raw place, compared by `unpaired`, and was not moved with the copy (now a root);
+    and a test writing into what was copied out (past `arena_base`) counted as "kept outside", so no test was let go
+    afterwards, young memory filled and the later tests stopped (`log_over`) without painting. Such a write is now logged
+    and undone with the test, as a write into older young memory is (`Memory.lasting_tested`). Both suites at baseline
+    with every statement copied out.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

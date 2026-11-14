@@ -338,6 +338,10 @@ its own reading its place, unread text recorded with reading going on.
     3952 for what is taken). Once the program's index was built, 3964 held its start, so `statement_copied` returned at
     once, and 3956 was overwritten by a taken text's start. Moved to 3992 and 3984: both suites at baseline again
     (249/200/11, 135/133/8), now with the copy really made.
+  - **What holds what, odd or not:** the barrier noted a write only when its value was `pointer(v)` (even). A text's
+    ends are bytes, often odd, so a text older than a statement or frame given the ends of bytes made in it was never
+    noted, and its bytes could go with the frame. The barrier, a frame's value and `lasting_copy` now take any value
+    past the low words (`held`); the collector's own tracing already did. Both suites at baseline.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

@@ -2129,14 +2129,14 @@ Memory := class {
     0
   }
   static touched_by (x, w, v) => {
-    Memory.held_noted(w) if (word_of(3912) != 0) && pointer(v) && (v >= word_of(3984)) && (v < arena_base()) && ((x < word_of(3912)) || (x >= arena_base()))
+    Memory.held_noted(w) if (word_of(3912) != 0) && held(v) && (v >= word_of(3984)) && (v < arena_base()) && ((x < word_of(3912)) || (x >= arena_base()))
     return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0) && (word_of(3944) == 0)
     Memory.effect_at(x, w, v) if (x < markf) || (x >= arena_base())
     0
   }
   static effect_at (x, w, v) => {
     Memory.one_effect()
-    Memory.isolation_seen(x, w, v, framed()) if (pointer(v) && (v < arena_base())) && (v >= word_of(isostack))
+    Memory.isolation_seen(x, w, v, framed()) if (held(v) && (v < arena_base())) && (v >= word_of(isostack))
     0
   }
   static isolation_seen (x, w, v, s0) => {
@@ -2292,7 +2292,7 @@ Isolation := class {
     markf = word_of(isostack + ((isodepth * 12) + 4))
     Isolation.value_closed(isostack + (isodepth * 12), v, word_of(isostack + ((isodepth * 12) + 8)) == 0)
   }
-  static value_closed (s, v, g) => (((g && (noreclaim == 0)) && (word_of(3844) == 0)) && ((pointer(v) == 0) || (v < word_of(s)))) ? Isolation.value_dropped(s, v) : Isolation.frame_collected(s, v)
+  static value_closed (s, v, g) => (((g && (noreclaim == 0)) && (word_of(3844) == 0)) && ((held(v) == 0) || (v < word_of(s)))) ? Isolation.value_dropped(s, v) : Isolation.frame_collected(s, v)
   static value_dropped (s, v) => {
     Isolation.freed_to(word_of(s)) if free > word_of(s)
     v
@@ -2445,7 +2445,7 @@ Collector := class {
   // (a value made since `base`, with what it reaches made since, copied to what lasts, in order, as it would be moved;
   // nothing when there is no room to mark what it reaches)
   static lasting_copy (v, base) => {
-    return v if (pointer(v) == 0) || (v < base) || (v >= free)
+    return v if (held(v) == 0) || (v < base) || (v >= free)
     return 0 if ((free + (Collector.gc_map_size(base, free) * 5)) + 25165824) > (arena_base() - 4194304)
     Collector.gc_compaction_set(base, free, Collector.gc_map_size(base, free))
     zeroed(free, Collector.gc_map_size(base, free))
@@ -2480,7 +2480,7 @@ Collector := class {
   // be (the notes full, word 3992, or a test open))
   // (a word copied out holding a value of a statement around it: noted for that one's end)
   static outer_noted (a, v) => {
-    Memory.held_noted(a) if (word_of(3912) != 0) && pointer(v) && (v >= word_of(3984)) && (v < word_of(4008))
+    Memory.held_noted(a) if (word_of(3912) != 0) && held(v) && (v >= word_of(3984)) && (v < word_of(4008))
     0
   }
   static statement_copied (b) => {
@@ -2648,7 +2648,7 @@ Hooks := class {
   // (a word given a value raw: noted as `written` notes one, when the value is of a statement still read)
   static word_held (w, v) => {
     word_put(w, v)
-    Memory.held_noted(w) if (word_of(3912) != 0) && pointer(v) && (v >= word_of(3984)) && (v < arena_base()) && ((w < word_of(3912)) || (w >= arena_base()))
+    Memory.held_noted(w) if (word_of(3912) != 0) && held(v) && (v >= word_of(3984)) && (v < arena_base()) && ((w < word_of(3912)) || (w >= arena_base()))
     0
   }
   static statements_aside => {
@@ -2720,6 +2720,9 @@ Hooks := class {
   static out_base => outb
   static out_length => outn
   static pointer (v) => ((v & 1) == 0) && (v >= 65536)
+  // (what may be a place in memory, an object or a byte in one (a text's ends), for what holds what: any value past the
+  // low words, odd or not; a number held so is only kept a little longer)
+  static held (v) => v >= 65536
   static tag (v) => pointer(v) ? word_of(v) : 0
   static copy (to, from, n) => ((((to | from) | n) & 3) == 0) ? Hooks.words_copied(to, from, n) : Hooks.bytes_copied(to, from, n)
   static words_copied (to, from, n) => {

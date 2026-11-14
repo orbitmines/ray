@@ -312,6 +312,22 @@ its own reading its place, unread text recorded with reading going on.
     statement is cut again (205 past their budget in 39 s, so cut by young memory, `near_end`, not by steps), and no
     test runs. What one statement's calls make is let go only at its end. Next: a call's frame compacted when it ends
     (what older words hold of it moved down to where the frame began), tried in a worktree, not yet at baseline.
+  - **A call's frame compacted when it ends (2026-11-15):** a frame closing with something older holding what it made
+    has what the notes, the run's state and its value reach moved down to where it began, the rest let go
+    (`Isolation.compacted_or`, `Collector.frame_compacted`). Unlimited, 14983 compactions over the suite with no stale
+    read. What it took, each found with a checker comparing every live word after a compaction: a frame is compacted
+    only at or above an open test's base (3944), as a test is undone by address; what lasts given a value of an open
+    statement, frame or test not by a write (copied bounds, `lasting_copy`, a kind made while what lasts is taken) is
+    noted as a write is (`Notes.older_copied`, `older_held`, `lasting_made`), keeping its test; and a word object slid
+    onto where a text once began has the bytes bit cleared there, or it is moved as bytes, its words unfixed.
+    Speed: compacting every frame of a megabyte made the suites 4× slower (395 s for `--test-all`), each survivor moved
+    again by every frame around it. Now a frame is compacted only when it made as much since the last compaction as it
+    holds of what that kept (`Collector.paced`, word 3980); where objects begin is read a block of 2048 bytes at a time
+    (`Starts`, a bit per block raised with any start, never lowered) and a byte's bits counted at once. Both suites at
+    baseline, `--test` faster than without (239 s against 265 s), `--test-all` a little slower (188 s against 173 s).
+    The notes are their own class (`Notes`): one more function with a loop in `Memory` puts its reading past the
+    statement's budget (calls within budget, below). And `word_put(3980, f)` as `frame_freed`'s first line is read as
+    "Nothing reads this" in the tested text, though `frame_fixed`'s first `word_put` is not.
   - **Tried 2026-11-14, shelved (branch `shelved/statement-copy-out`):** the barrier (`touched_by` and `word_held`
     note an older word given a value of the statement still read: words 3880 log, 3876 count, 3964 overflow, 3912 the
     innermost statement's start, 3956 the outermost's) and, at the outermost statement's end, what those words and the

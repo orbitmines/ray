@@ -105,6 +105,11 @@ tests writing into what was copied out were never let go (spec/TODO.md, "Landed"
 the copy makes redundant (frames, `isostack`, regions, `lasting_copy`'s own pass) goes, and statements answer what they
 define.
 
+**Step 4's frames compacted (2026-11-15):** a call's frame of a megabyte or more, ending with something older holding
+what it made, moves what is still held down to where it began and lets the rest go, paced so each byte moved is paid for
+by one made (`Collector.paced`). What lasts given values not by a write is noted as a write is (`Notes`). Both suites at
+baseline, in about the time they took without (spec/TODO.md, "A call's frame compacted").
+
 Steps 1–3 can each be measured alone: the suites' time and the self-compile's memory say whether the shape pays for
 the cache it replaces. Step 4 needs Expression.ray changed with it. Step 6 is the language's own work, and the
 engine's line count reaches 1000 only once it is done: until then a request in the language is a request in the

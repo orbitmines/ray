@@ -315,7 +315,14 @@ its own reading its place, unread text recorded with reading going on.
   - Again with frames compacted (2026-11-15, 48c16485): Expression.lazy's `--test` is no longer cut by young memory:
     175 statements run their full 200M steps (94 s) and none of the tests run. The first are rule definitions, the
     entrypoint's line 8 (`{x} ^{style} => level style style x`), 25 and 28 (`.{member ^property} => {member}`), 43
-    (`{on} &+= …`): reading a rule's head with the `led` rules is what is past the budget, not memory.
+    (`{on} &+= …`). ~~Reading a rule's head with the `led` rules is what is past the budget, not memory.~~ Measured:
+    the whole run spends 59M steps, so they are cut by young memory (`near_end`) after all. The first stop is in the
+    entrypoint's line 385, a comment ending ``…`if x > 3 { … }`.)``: there the reading is 30924 frames deep with 1.1 GB
+    held, and the statements read inside it (each stop lowered at its own statement) are cut one after another. Plain
+    Expression.ray recurses there too (one of the statements past their budget at baseline) but recovers after it;
+    Expression.lazy does not. Smallest text: the entrypoint's first 25 lines (the rule creator, `({grouped})`,
+    `. => (external &).this`) and a line `.)`. `x.)`, `)`, `x.` and `. => 1` then `.)` read at once: `.` read where
+    nothing follows reads its own body, `(external &).this`, whose `.` is the rule again.
   - **A call's frame compacted when it ends (2026-11-15):** a frame closing with something older holding what it made
     has what the notes, the run's state and its value reach moved down to where it began, the rest let go
     (`Isolation.compacted_or`, `Collector.frame_compacted`). Unlimited, 14983 compactions over the suite with no stale

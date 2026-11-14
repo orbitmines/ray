@@ -88,6 +88,13 @@ Wasm bootstrap   ≈ 150   Ray → WebAssembly: sections, a function's locals, e
 6. **Requests into the language.** With calls running: level.ray's requests as the entrypoint's definitions, then
    numerals (spec/TODO.md's order), then Compiler.ray's levels run by the full language.
 
+**Step 3 done (2026-11-14, 5dc5e0ff):** `read(pattern, at, then)` in Runtime.ray (758 → 652 lines), the choice stack,
+undo notes and registers gone; both suites at baseline. As fast for the same work (the same steps, the same time, at every
+prefix measured). The suites take longer only because the statements that never finish (six, past their budget in both)
+now run to their 200M steps: they were cut earlier by young memory filling (`near_end`), which the reader now lets go
+of sooner. A reading goes as deep as what it reads on to, so compiles run in a thread given the reading stack
+(`.entrypoint.mjs` `compiled`). Memo and led caches still there (steps 1–2).
+
 Step 4's copy-out was tried first (2026-11-14) and shelved: every copy checks out, but which rule answers changes with
 where things are in memory (spec/TODO.md, "Tried 2026-11-14"). Step 3 goes first: with no choice stack and nothing to
 undo, most of what reading compares by address goes too.

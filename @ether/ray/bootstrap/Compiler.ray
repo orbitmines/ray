@@ -1732,16 +1732,17 @@ Turns := class {
   static read_again (item, f, args, u) => {
     changed := 1
     while changed != 0 {
-      changed = (aside_or_none() == None) ? 0 : Turns.again_over(item, f, args, u, aside_or_none())
+      changed = (aside_or_none() == None) ? 0 : Turns.again_over(item, f, args, u)
     }
     0
   }
-  static again_over (item, f, args, u, l: List) => {
+  // (the list read again each time, not held: a statement taken may move it)
+  static again_over (item, f, args, u) => {
     i := u
     changed := 0
     k := 0
-    while i < l.count {
-      k = Turns.again_matched(f, args, l, i, boundn, Turns.again_match(item, at(l, i)))
+    while i < Turns.aside_count() {
+      k = Turns.again_matched(f, args, i, boundn, Turns.again_match(item, at(aside_or_none(), i)))
       changed = changed | k
       i = (k != 0) ? i : (i + 1)
     }
@@ -1754,14 +1755,14 @@ Turns := class {
     textend = q
     r
   }
-  static again_matched (f, args, l, i, mark, r) => ((r > Built.text_from(at(l, i))) && (white_after(r) >= Turns.text_to(at(l, i)))) ? Turns.again_taken(f, args, l, i, mark) : Turns.again_left(mark)
+  static again_matched (f, args, i, mark, r) => ((r > Built.text_from(at(aside_or_none(), i))) && (white_after(r) >= Turns.text_to(at(aside_or_none(), i)))) ? Turns.again_taken(f, args, i, mark) : Turns.again_left(mark)
   static text_to (t: Text) => t.to
   static again_left (mark) => {
     boundn = mark
     0
   }
-  static again_taken (f, args, l, i, mark) => {
-    Turns.removed_at(l, i)
+  static again_taken (f, args, i, mark) => {
+    Turns.removed_at(aside_or_none(), i)
     v := valued_from(mark)
     boundn = mark
     call(curried(f, append(list(), v)), args, 0)
@@ -2100,7 +2101,7 @@ Heap := class {
     0
   }
   static cache_key (x) => {
-    word_put(3920, x) if x > word_of(3920)
+    word_put(3920, x) if (x > word_of(3920)) && (x < arena_base())
     0
   }
 }
@@ -2122,7 +2123,7 @@ Memory := class {
   }
   static touched_by (x, w, v) => {
     return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0)
-    Memory.effect_at(x, w, v) if x < markf
+    Memory.effect_at(x, w, v) if (x < markf) || (x >= arena_base())
     0
   }
   static effect_at (x, w, v) => {
@@ -2151,6 +2152,7 @@ Memory := class {
   }
   static touched (x) => {
     return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0)
+    Memory.one_effect() if x >= arena_base()
     Memory.frames_touched(x, framed()) if x < markf
     0
   }

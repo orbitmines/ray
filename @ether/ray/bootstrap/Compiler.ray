@@ -669,7 +669,7 @@ Splices := class {
   static alias_in (u: Text, l, i, oa, oe, ce) => ((at_text(u.from, u.to, oa, oe) != 0) && (at_text(u.to - (ce - (oe + 1)), u.to, oe + 1, ce) != 0)) ? Splices.take_named_from(u.from + (oe - oa), u.to - (ce - (oe + 1)), l, i + 1, oa, ce) : None
   static aliased_or (r, x) => (r != None) ? r : Splices.first_taken(x)
   static first_taken (x) => {
-    word_put(3872, x) if taken_entry() == 0
+    word_held(3872, x) if taken_entry() == 0
     member(x, Symbol.value)
   }
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
@@ -1682,23 +1682,45 @@ Turns := class {
     turn_begun()
     q := textend
     se := Turns.closed_or(pos, statement_end(pos, white_after(at)), at)
+    ob := word_of(3912)
     textend = se
+    word_put(3956, free) if ob == 0
+    word_put(3912, free)
     isolated_open()
     r := matched(item, at, cell(pattern(statement_ending, at, 1), 0))
     textend = q
-    (statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark)))
+    Turns.based(ob, (statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark))))
+  }
+  // (back in the statement around it, if any; none, the notes cleared)
+  static based (ob, r) => {
+    word_put(3912, ob)
+    word_put(3876, 0) if ob == 0
+    word_put(3964, 0) if ob == 0
+    word_put(3956, 0) if ob == 0
+    r
+  }
+  // (a statement's frame closed: when something older holds what it made, that copied out first, so all of it goes; a
+  // statement in another's reading keeps its memory to that one's end, what it answers held where nothing notes it)
+  static left => {
+    Turns.copied_out(isostack + ((isodepth - 1) * 12)) if (word_of(3912) == word_of(3956)) && (isodepth <= Isolation.depth_most) && (word_of(isostack + (((isodepth - 1) * 12) + 8)) != 0) && (word_of(3844) == 0) && (noreclaim == 0)
+    isolated_value(0, 0)
+  }
+  static copied_out (s) => {
+    word_put(s + 8, 0) if Collector.statement_copied(word_of(s))
+    Collector.notes_kept(word_of(3880), word_of(s), word_of(3956)) if word_of(s + 8) == 0
+    0
   }
   static closed_or (pos, se, at) => Turns.closed_at_or(pos, se, block_closed(at, se))
   static closed_at_or (pos, se, v) => (v > 0) ? statement_end(pos, v) : se
   static over_turn (at, se, mark) => {
-    isolated_value(0, 0)
+    Turns.left()
     boundn = mark
     over_budget(at, se)
     went_on()
     se
   }
   static unread_turn (at, se, mark) => {
-    isolated_value(0, 0)
+    Turns.left()
     boundn = mark
     (white_after(at) >= textend) ? ((0 - at) - 1) : Turns.put_aside(at, se)
   }
@@ -1716,7 +1738,7 @@ Turns := class {
     v := valued_from(mark)
     boundn = mark
     call(curried(f, append(list(), v)), args, 0)
-    isolated_value(0, 0)
+    Turns.left()
     Turns.over_after(at, r) if statement_over()
     r
   }
@@ -1731,17 +1753,23 @@ Turns := class {
     }
     0
   }
-  // (the list read again each time, not held: a statement taken may move it)
+  // (the list read again each time: a statement taken may move it, its end copying out what it reaches)
   static again_over (item, f, args, u) => {
     i := u
     changed := 0
     k := 0
     while i < Turns.aside_count() {
-      k = Turns.again_matched(f, args, i, boundn, Turns.again_match(item, at(aside_or_none(), i)))
+      k = Turns.again_framed(item, f, args, i, word_of(3912))
       changed = changed | k
       i = (k != 0) ? i : (i + 1)
     }
     changed
+  }
+  // (a statement read again is a statement: those in it are inside it, its memory kept to the turn's end)
+  static again_framed (item, f, args, i, ob) => {
+    word_put(3956, free) if ob == 0
+    word_put(3912, free)
+    Turns.based(ob, Turns.again_matched(f, args, i, boundn, Turns.again_match(item, at(aside_or_none(), i))))
   }
   static again_match (item, t: Text) => {
     q := textend
@@ -1766,7 +1794,7 @@ Turns := class {
   static removed_at (l: List, i) => {
     j := i
     while (j + 1) < l.count {
-      word_put(Calls.items_of(l) + (j * 4), at(l, j + 1))
+      word_held(Calls.items_of(l) + (j * 4), at(l, j + 1))
       j = j + 1
     }
     l.count = l.count - 1
@@ -1845,7 +1873,9 @@ Entry := class {
     r
   }
   static parsed_statements (g, t) => ((t is Text) ? Entry.parsed_trimmed(((g is Text) ? grammar_of(g) : g), cw_trimmed(t)) : list())
-  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : ((lasting_span(t.from, t.to) != 0) ? Entry.kept_parse(Entry.parse_slot(g, t.from, t.to), g, t.from, t.to) : Entry.parse_plain(g, t.from, t.to))
+  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : (((lasting_span(t.from, t.to) != 0) && Entry.grammar_lasts(g)) ? Entry.kept_parse(Entry.parse_slot(g, t.from, t.to), g, t.from, t.to) : Entry.parse_plain(g, t.from, t.to))
+  // (a grammar a statement made, let go when it ends, is no key: another made after it may be where it was)
+  static grammar_lasts (g) => (word_of(3956) == 0) || (g < word_of(3956)) || (g >= arena_base())
   static parse_plain (g, a, e) => call(parserhook, append(append(list(), g), text(a, e)), 0)
   // (a text that lasts read once, by where it is (a table at `arena_base`), into what lasts; read as any other once what
   // lasts is near its end, past which taking stops)
@@ -1875,7 +1905,7 @@ Entry := class {
     word_put(s, g)
     word_put(s + 4, a)
     word_put(s + 8, e)
-    word_put(s + 12, l)
+    word_held(s + 12, l)
     l
   }
 }
@@ -1905,7 +1935,7 @@ FieldIndex := class {
 Basics := class {
   static node (parent) => Basics.root_noted(Node(in: parent, fields: 0, keys: 0, index: 0), parent)
   static root_noted (n, parent) => {
-    word_put(3904, n) if (parent == 0) && (word_of(3904) == 0)
+    word_held(3904, n) if (parent == 0) && (word_of(3904) == 0)
     n
   }
   static cell (p, next) => Cell(what: p, next: next)
@@ -2074,8 +2104,21 @@ Heap := class {
 Memory := class {
   static written (x, w, v) => {
     touched_by(x, w, v)
-    logged(w) if w < word_of(3944)
+    logged(w) if (w < word_of(3944)) || Memory.lasting_tested(x)
     v
+  }
+  // (a write into what lasts while a test is open, not while what lasts is taken: undone with the test, as older words are)
+  static lasting_tested (x) => (word_of(3944) != 0) && (x >= arena_base()) && (word_of(3844) == 0)
+  // (a word older than the statement read now given a value of a statement still read: noted, for its end)
+  static held_noted (w) => {
+    word_put(3880, lasting_alloc(67108864)) if word_of(3880) == 0
+    word_put(3964, 1) if word_of(3876) >= 16777216
+    Memory.note_put(w) if word_of(3876) < 16777216
+    0
+  }
+  static note_put (w) => {
+    word_put(word_of(3880) + (word_of(3876) * 4), w)
+    word_put(3876, word_of(3876) + 1)
   }
   static one_effect => {
     effects = effects + 1
@@ -2086,7 +2129,8 @@ Memory := class {
     0
   }
   static touched_by (x, w, v) => {
-    return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0)
+    Memory.held_noted(w) if (word_of(3912) != 0) && pointer(v) && (v >= word_of(3956)) && (v < arena_base()) && ((x < word_of(3912)) || (x >= arena_base()))
+    return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0) && (word_of(3944) == 0)
     Memory.effect_at(x, w, v) if (x < markf) || (x >= arena_base())
     0
   }
@@ -2102,9 +2146,10 @@ Memory := class {
     }
     0
   }
+  // (what lasts is older than any frame: a value of one written there escapes it)
   static frame_seen (x, w, v, s) => {
     o := word_of(isostack + ((s - 1) * 12))
-    return 0 if x >= o
+    return 0 if (x >= o) && (x < arena_base())
     return s - 1 if v < o
     Memory.frame_escaped(s - 1, o, w)
     0
@@ -2124,7 +2169,7 @@ Memory := class {
     Memory.one_effect()
     s := s0
     while s > 0 {
-      s = ((x < word_of(isostack + ((s - 1) * 12))) ? Memory.frame_raised(s) : 0)
+      s = (((x < word_of(isostack + ((s - 1) * 12))) || (x >= arena_base())) ? Memory.frame_raised(s) : 0)
     }
     0
   }
@@ -2407,14 +2452,14 @@ Collector := class {
     Collector.gc_mark(v)
     Collector.gc_marks_traced()
     return 0 if word_of(4052) != 0
-    Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(base, free), free, markf) - base, base, free, v)
+    Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(base, free), free, markf) - base, base, free) + Collector.gc_reloc(v)
   }
-  static copied_to (d, base, top, v) => {
+  static copied_to (d, base, top) => {
     y := base
     while y < top {
       y = Collector.one_copied(d, y, Collector.end_of(y))
     }
-    d + Collector.gc_reloc(v)
+    d
   }
   static one_copied (d, y, e) => {
     copy(d + Collector.gc_reloc(y), y, e - y) if Heap.marked_at(y) != 0
@@ -2425,9 +2470,143 @@ Collector := class {
     a := a0
     while a < e {
       word_put(a, d + Collector.gc_reloc(word_of(a))) if Collector.gc_in(word_of(a))
+      Collector.outer_noted(a, word_of(a))
       a = a + 4
     }
     0
+  }
+  // (a statement ended, begun at `b`: what the words older memory gave a value of it (noted by `written`: word 3880, 3876
+  // of them) and the run's state reach of it, copied to what lasts, those words moved with it; nothing when that can not
+  // be (the notes full, word 3964, or a test open))
+  // (a word copied out holding a value of a statement around it: noted for that one's end)
+  static outer_noted (a, v) => {
+    Memory.held_noted(a) if (word_of(3912) != 0) && pointer(v) && (v >= word_of(3956)) && (v < word_of(4008))
+    0
+  }
+  static statement_copied (b) => {
+    return 0 if (word_of(3964) != 0) || (word_of(3936) != 0) || (((free + (Collector.gc_map_size(b, free) * 5)) + 25165824) > (arena_base() - 4194304))
+    Collector.gc_compaction_set(b, free, Collector.gc_map_size(b, free))
+    zeroed(free, Collector.gc_map_size(b, free))
+    Collector.roots_of(0, 0, b)
+    Collector.gc_marks_traced()
+    return 0 if word_of(4052) != 0
+    d := Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(b, free), free, markf) - b, b, free)
+    Collector.roots_of(d, 1, b)
+    Collector.statement_freed(b, Collector.led_moved(d, word_of(3908), 0))
+    1
+  }
+  // (the led keys of lists moved, moved with them; of lists let go, cleared)
+  static led_moved (d, t, i0) => {
+    i := i0
+    m := 0
+    while (t != 0) && (i < 4096) {
+      Collector.slot_moved(d, t + (i * 12), word_of(t + (i * 12)))
+      m = ((word_of(t + (i * 12)) < arena_base()) && (word_of(t + (i * 12)) > m)) ? word_of(t + (i * 12)) : m
+      i = i + 1
+    }
+    m
+  }
+  static slot_moved (d, s, l) => {
+    word_put(s, (Heap.marked_at(l) != 0) ? (d + Collector.gc_reloc(l)) : 0) if Collector.gc_in(l) && (l < word_of(4012))
+    0
+  }
+  // (what a statement took let go, what it made copied out: the caches by place begun again, the led keys kept)
+  // (only the led keys outlast it: the highest of them young is the caches' reach)
+  static statement_freed (b, m) => {
+    starts_cleared(b, free)
+    epoch = epoch + 1
+    word_put(4004, 0)
+    word_put(3920, m)
+    free = b
+    0
+  }
+  static root (w, d, fix) => {
+    gc_mark(word_of(w)) if fix == 0
+    word_put(w, d + gc_reloc(word_of(w))) if (fix != 0) && gc_in(word_of(w))
+    0
+  }
+  // (the copies made since a statement began, the last of the log: each where it is copied to)
+  static copies_root (l, n, d, fix, b) => {
+    k := n
+    while (k > 0) && ((word_of(l + ((k - 1) * 12)) >= b) || (word_of(l + ((k - 1) * 12)) >= arena_base())) {
+      k = k - 1
+      Collector.root(l + (k * 12), d, fix)
+      Collector.root(l + ((k * 12) + 4), d, fix)
+    }
+    0
+  }
+  // (a list the run holds: it, and what it holds)
+  static listed_root (w, d, fix) => {
+    Collector.roots_in(word_of(word_of(w) + 12), word_of(word_of(w) + 12) + (word_of(word_of(w) + 4) * 4), d, fix) if (word_of(w) != 0) && (word_of(word_of(w)) == 3)
+    Collector.root(w, d, fix)
+  }
+  static roots_in (a0, e, d, fix) => {
+    a := a0
+    while a < e {
+      Collector.root(a, d, fix)
+      a = a + 4
+    }
+    0
+  }
+  static noted_roots (l, n, d, fix, b) => {
+    i := 0
+    while i < n {
+      Collector.root(word_of(l + (i * 4)), d, fix) if (word_of(l + (i * 4)) < b) || (word_of(l + (i * 4)) >= arena_base())
+      i = i + 1
+    }
+    0
+  }
+  static root_value (v, d, fix) => {
+    gc_mark(v) if fix == 0
+    ((fix != 0) && gc_in(v)) ? (d + gc_reloc(v)) : v
+  }
+  static roots_of (d, fix, b) => {
+    Collector.noted_roots(word_of(3880), word_of(3876), d, fix, b)
+    Collector.roots_in(bounds, bounds + (boundn * 16), d, fix)
+    Collector.roots_in(actives + 8, (actives + 8) + (activen * 8), d, fix)
+    Collector.roots_in(word_of(3856) + 4, word_of(3856) + 12, d, fix) if word_of(3856) != 0
+    Collector.copies_root(word_of(3864), word_of(3868), d, fix, b) if word_of(3864) != 0
+    Collector.listed_root(3860, d, fix)
+    Collector.listed_root(3968, d, fix)
+    Collector.listed_root(3972, d, fix)
+    Collector.listed_root(4044, d, fix)
+    Collector.root(4048, d, fix)
+    Collector.listed_root(4068, d, fix)
+    Collector.root(3872, d, fix)
+    Collector.root(3904, d, fix)
+    Collector.pairs_root(word_of(3988), 0, d, fix) if word_of(3988) != 0
+    names = Collector.root_value(names, d, fix)
+    bounds = Collector.root_value(bounds, d, fix)
+    actives = Collector.root_value(actives, d, fix)
+    syms = Collector.root_value(syms, d, fix)
+    takent = Collector.root_value(takent, d, fix)
+    csyms = Collector.root_value(csyms, d, fix)
+    memo = Collector.root_value(memo, d, fix)
+    pcache = Collector.root_value(pcache, d, fix)
+    parserhook = Collector.root_value(parserhook, d, fix)
+    datab = Collector.root_value(datab, d, fix)
+    asideb = Collector.root_value(asideb, d, fix)
+    0
+  }
+  // (where each pair was learned, a raw place in the pairs log: moved with it)
+  static pairs_root (b, i0, d, fix) => {
+    i := i0
+    while i < word_of(b) {
+      Collector.root(b + (12 + (i * 12)), d, fix)
+      i = i + 1
+    }
+    0
+  }
+  // (the notes kept past a statement: of words older than it still holding a value of a statement around it)
+  static notes_kept (l, b, o) => {
+    i := 0
+    j := 0
+    while i < word_of(3876) {
+      word_put(l + (j * 4), word_of(l + (i * 4))) if ((word_of(l + (i * 4)) < b) || (word_of(l + (i * 4)) >= arena_base())) && (word_of(word_of(l + (i * 4))) >= o) && (word_of(word_of(l + (i * 4))) < b)
+      j = (((word_of(l + (i * 4)) < b) || (word_of(l + (i * 4)) >= arena_base())) && (word_of(word_of(l + (i * 4))) >= o) && (word_of(word_of(l + (i * 4))) < b)) ? (j + 1) : j
+      i = i + 1
+    }
+    word_put(3876, j)
   }
 }
 // Hooks: the reader's own words, each by its name: what is taken, the program's text, the pairs' classes, the caches'
@@ -2464,7 +2643,13 @@ Hooks := class {
   static logging => word_of(3944) != 0
   static word_logged (w, v) => {
     logged(w) if w < word_of(3944)
+    word_held(w, v)
+  }
+  // (a word given a value raw: noted as `written` notes one, when the value is of a statement still read)
+  static word_held (w, v) => {
     word_put(w, v)
+    Memory.held_noted(w) if (word_of(3912) != 0) && pointer(v) && (v >= word_of(3956)) && (v < arena_base()) && ((w < word_of(3912)) || (w >= arena_base()))
+    0
   }
   static statements_aside => {
     word_put(3860, list()) if word_of(3860) == 0

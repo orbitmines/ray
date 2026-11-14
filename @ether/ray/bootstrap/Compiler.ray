@@ -1574,7 +1574,7 @@ Matching := class {
 // Built (`level built …`): a node's text read again as a pattern (its gaps and words, each key a field of what it
 // holds: a pattern, a text read with, else anything), the holes in it told how they end (inside a pair of literals,
 // beside one); the lines of a statement set aside to be read again, up to one no more indented; cells of a pattern
-// read; a choice of repeating; bytes compared and classed; where anything read up to a place ends; not.
+// read on; bytes compared and classed; where anything read up to a place ends; not.
 Built := class {
   static rebuilt (n: Node) => Built.rebuilt_from(n, member(n, Symbol.text), n.keys, list())
   static rebuilt_from (n, t: Text, s: List, l) => {
@@ -1634,11 +1634,6 @@ Built := class {
   }
   static staged (f) => pattern(typed_by, f, 0)
   static recell (k: Rest, next) => (k.list is List) ? Rest(list: k.list, next: next, index: k.index) : cell(k.list, next)
-  static choice_given (s: Choice, least, d) => {
-    s.a = least
-    s.c = d
-    s
-  }
   static chared (c, k) => (k == 1) ? ((c == 32) || (c == 9)) : (((k == 2) || (k == 4)) ? (c == 10) : ((k == 3) ? white(c) : 1))
   static texteq (a, b, n) => {
     i := 0
@@ -1884,39 +1879,8 @@ Entry := class {
     l
   }
 }
-// ChoiceStack (`level choices …`): a choice of how to go on reading, at the top of the stack of them (what kind, what
-// pattern, where, what comes after, and how far holes were bound, memory taken, effects and actives were then); one
-// that undoes, when gone back to, what a choice did.
-ChoiceStack := class {
-  static chosen (kind, p, pos, k) => ChoiceStack.choice_made(ChoiceStack.choice_room(), kind, p, pos, k)
-  static choice_room => {
-    s := choices_top()
-    unreachable_now() if (s + 48) > choices_end()
-    s
-  }
-  static choice_made (s: Choice, kind, p, pos, k) => {
-    s.kind = kind
-    s.pattern = p
-    s.at = pos
-    s.then = k
-    s.a = 0
-    s.b = 0
-    s.bound = boundn
-    s.free = free
-    s.effects = effects
-    s.active = activen
-    choices_set(s + 48)
-    markf = free
-    s
-  }
-  static undo_made (s: Choice, c, mark, m) => {
-    s.kind = 10
-    s.bound = m
-    s.c = c
-    s.d = mark
-    choices_set(s + 48)
-    0
-  }
+// Actives: the rules, or a class's header, being read at a place (read again there, it fails).
+Actives := class {
   static active_noted (p, pos) => {
     activen = activen + 1
     word_put(actives + (activen * 8), p)
@@ -2242,7 +2206,7 @@ Memory := class {
 }
 // Isolation: a frame of memory a call opens (where memory was taken up to, what was older then, whether something older was
 // written something of it), closed by letting all it took go when nothing older holds it, else kept, as the frame it is
-// in then keeps it; the caches made at once, and the choices' stack
+// in then keeps it; the caches made at once
 Isolation := class {
   static depth_most := 4000
   static framed => (isodepth > depth_most) ? depth_most : isodepth
@@ -2332,26 +2296,7 @@ Isolation := class {
     word_put(pcache, 16400)
     0
   }
-  static choices_open => {
-    Isolation.choices_made() if word_of(3848) == 0
-    word_of(3852)
-  }
-  static choices_made => {
-    word_put(3848, lasting_alloc(67108864))
-    word_put(3852, word_of(3848))
-    0
-  }
-  static choices_top => word_of(3852)
-  static choices_set (t) => {
-    word_put(3852, t)
-    0
-  }
   static stopped => word_of(3916) != 0
-  static spun_out => {
-    stopped_statement() if word_of(4072) > 0
-    word_put(3896, 1) if word_of(4072) <= 0
-    0
-  }
 }
 // Collector: a value made since a point, with what it reaches made since, copied to what lasts: what it reaches marked
 // (by where each value starts), then each marked value copied in order, every word that held one moved with it
@@ -2526,7 +2471,6 @@ Hooks := class {
     word_of(3860)
   }
   static aside_or_none => word_of(3860)
-  static choices_end => word_of(3848) + 67108864
   static turn_depth => word_of(4072)
   static turn_depth_set (d) => word_put(4072, d)
   static fuel_floor => word_of(4060)
@@ -2831,7 +2775,6 @@ Images := class {
     word_put(t + 20, Images.past(painted, 0))
     word_put(t + 24, Images.past(reported, 0))
     word_put(t + 28, boundn)
-    word_put(t + 32, word_of(3852))
     word_put(t + 36, activen)
     word_put(t + 40, effects)
     word_put(t + 44, 0)
@@ -2897,7 +2840,6 @@ Images := class {
     Images.aside_back(t) if word_of(3860) != 0
     word_put(3868, word_of(t + 8))
     boundn = word_of(t + 28)
-    word_put(3852, word_of(t + 32))
     activen = word_of(t + 36)
     0
   }

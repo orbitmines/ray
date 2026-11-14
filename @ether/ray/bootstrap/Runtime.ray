@@ -302,72 +302,32 @@ Runtime := class {
   static opened (t) => (t == 1) ? 1 : ((t == 3) ? (0 - 1) : 0)
   // (where a string read up to n ends: in a pair opened just before n, where it closes; just after one closed, never)
 
-  // Reading: a pattern read from a place in the text, then what is still to read after it, a step at a time, through
-  // the run's registers: the pattern (`rp`), where (`rpos`), what follows it (`rk`: a cell of a pattern to read, or the
-  // rest of a sequence, from where), and the step (`rmode`). Where there is a choice (of an either, how many times a
-  // repeat goes, how far a hole or anything reads), it is noted on the back end's stack of choices, each a Choice, with
-  // how many holes were bound, which rules were being read, and the memory taken then; a reading that fails goes back
-  // to the latest, and takes it on from there. What was bound when a choice was noted is undone by a note of its own.
-  // A reading answers where it ended, or −1.
+  // Reading: a pattern read from a place in the text, then what is still to read after it (a cell of a pattern to read,
+  // or the rest of a sequence, from where), answering where the whole reading ended, or −1. Where there is a choice (of
+  // an either, how many times a repeat goes, how far a hole or anything reads), each way is read on in turn, nearest
+  // first, and the first to answer is the answer: going back is returning. Before each way, what was bound, which rules
+  // were being read, and the memory taken are as they were (what was taken let go, unless something was written
+  // meanwhile); what a binding wrote over is put back when what follows it does not read.
   static Cell := (what, next)
   static Rest := (list, next, index)
-  static Choice := (aside, kind, pattern, at, then, a, b, bound, free, effects, active, c, d)
   static Bound := (aside, hole, start, end, held)
-  static entering := 0
-  static read_on := 1
-  static failed := 2
-  static done := 3
-  static resumed := 4
   static matched (pattern, from, then) => {
     fueled()
     return 0 - 1 if stopped()
-    was_p := rp
-    was_pos := rpos
-    was_k := rk
-    was_mode := rmode
     was_start := rstart
-    was_base := rbase
-    was_result := rresult
     om := markf
     fr := free
     ef := effects
     an := activen
     bn := boundn
-    rbase = choices_open()
     rstart = from
-    rp = pattern
-    rpos = from
-    rk = then
-    rresult = 0 - 1
     markf = free
-    rmode = entering
-    spins := 0
-    while rmode != done {
-      spins = spins + 1
-      Runtime.spun() if spins > 200000000
-      Runtime.entered(rp) if rmode == entering
-      Runtime.continued(rk) if rmode == read_on
-      Runtime.backtracked() if rmode == failed
-      Runtime.resumed_from(choices_top() - 48) if rmode == resumed
-    }
-    choices_set(rbase)
+    result := Runtime.pattern_read(pattern, from, then)
+    rstart = was_start
     activen = an
     markf = om
-    Runtime.unbound(bn, fr, ef) if rresult < 0
-    result := rresult
-    rp = was_p
-    rpos = was_pos
-    rk = was_k
-    rmode = was_mode
-    rstart = was_start
-    rbase = was_base
-    rresult = was_result
+    Runtime.unbound(bn, fr, ef) if result < 0
     result
-  }
-  static spun => {
-    spun_out()
-    rresult = 0 - 1
-    rmode = done
   }
   // (failed: what it bound left out, and, when nothing was written meanwhile, the memory it took)
   static unbound (bn, fr, ef) => {
@@ -378,77 +338,104 @@ Runtime := class {
     starts_cleared(fr, free)
     freed_back(fr)
   }
-  static read_to (at) => {
-    rpos = at
-    rmode = read_on
-  }
-  static enter (p) => {
-    rp = p
-    rmode = entering
+  // (a way tried again: as it was when the choice began)
+  static ways_retried (bn, an, fr, ef) => {
+    boundn = bn
+    activen = an
+    freed_back(fr) if (free > fr) && (effects == ef) && (noreclaim == 0)
+    markf = fr
+    0
   }
   // (read on: done when nothing follows; else what follows, and after it what follows that)
-  static continued (k: Cell) => (k === None) ? Runtime.ended() : (((k.what is List) ? Runtime.rest_entered(k) : Runtime.cell_entered(k)))
-  static ended => {
-    rresult = rpos
-    rmode = done
-  }
-  static cell_entered (k: Cell) => {
-    rk = k.next
-    Runtime.enter(k.what)
-  }
-  static rest_entered (k: Rest) => {
-    rk = k.next
-    Runtime.item_entered(k.list, k.index)
-  }
-  static item_entered (l: List, i) => {
-    rk = ((i + 1) < l.count) ? Rest(list: l, next: rk, index: i + 1) : rk
-    Runtime.enter(l.items[i])
-  }
-  static next_of (l: List, i) => (i >= l.count) ? Runtime.read_to(rpos) : Runtime.item_entered(l, i)
+  static onward (k: Cell, at) => (k === None) ? at : ((k.what is List) ? Runtime.rest_read(k, at) : Runtime.pattern_read(k.what, at, k.next))
+  static rest_read (k: Rest, at) => Runtime.items_read(k.list, k.index, at, k.next)
+  static items_read (l: List, i, at, k) => (i >= l.count) ? Runtime.onward(k, at) : Runtime.pattern_read(l.items[i], at, ((i + 1) < l.count) ? Rest(list: l, next: k, index: i + 1) : k)
 
-  // (a pattern entered: what its kind reads, or notes; read as a pattern if it is not one)
-  static entered (p) => {
-    rp = (p is Pattern) ? p : topattern(p)
-    rmode = failed
-    Runtime.entered_kind(rp)
-  }
-  static entered_kind (p: Pattern) => (p.kind == rest_from) ? Runtime.next_of(p.a, p.b) : ((p.kind == literally) ? Runtime.literal_read(p.a) : ((p.kind == characters) ? (Runtime.read_to(rpos + 1) if (rpos < textend) && chared(byte(rpos), p.a) && ((p.a != 4) || continued_at(rpos))) : ((p.kind == in_sequence) ? Runtime.next_of(p.a, 0) : ((p.kind == either_of) ? Runtime.chosen_as(1, p) : ((p.kind == hole) ? Runtime.chosen_as(2, p) : ((p.kind == anything_at_all) ? Runtime.anything_chosen(chosen(3, p, rpos, rk)) : ((p.kind == repeat_from) ? Runtime.repeat_chosen_as(p.a, p.b, p.c) : ((p.kind == repeat_next) ? ((rpos == p.c) ? (Runtime.read_to(rpos) if p.b <= 0) : Runtime.repeat_chosen_as(p.a, p.b, p.d)) : ((p.kind == repeating) ? Runtime.repeat_entered(p) : ((p.kind == named_field) ? Runtime.field_entered(p) : ((p.kind == field_end) ? Runtime.field_ended(p, boundn, saved(p.c)) : ((p.kind == holes_listed) ? Runtime.holes_gathered(p.a, saved(p.a), boundn) : ((p.kind == constructed) ? Runtime.bound_as(p.b, saved(p.b), boundn, construct(p.a, list(), named_from(p.b))) : ((p.kind == applied) ? Runtime.bound_as(p.b, saved(p.b), boundn, Runtime.defined_as(Runtime.application_of(p.a, p.b, member(p.a, Symbol.value)), 47, text(p.c, rpos))) : ((p.kind == rules_of) ? (Runtime.rules_read(p) if reading_at(p, rpos) == 0) : ((p.kind == class_header) ? (Runtime.header_read(p) if reading_at(p.a, rpos) == 0) : ((p.kind == with_function) ? Runtime.with_entered(p.a) : ((p.kind == reread) ? Runtime.enter(rebuilt(p.a)) : ((p.kind == functioned) ? Runtime.functioned_entered(p, p.a) : ((p.kind == function_given) ? Runtime.function_called(p, p.a, saved(p.c), boundn, valued_from(p.c)) : ((p.kind == statement_ending) ? ((p.b == 2) ? Runtime.statement_marked(rk) : (((rpos == textend) || ((byte(rpos) == 10) && (open_before(rstart, rpos) == 0) && ((continued_from((p.b == 1) ? p.a : rstart, rpos) == 0) || (continued_from(rpos, rpos) == 0)))) ? Runtime.read_to(rpos) : None)) : ((p.kind == typed_by) ? Runtime.enter(topattern(call(p.a, append(list(), named_from(0)), 0))) : ((p.kind == at_end) ? Runtime.ended_at_end() : ((p.kind == typed_with) ? Runtime.enter(topattern(call(p.a, append(list(), p.b), 0))) : None))))))))))))))))))))))))
+  // (a pattern read: what its kind reads; read as a pattern if it is not one)
+  static pattern_read (p, at, k) => Runtime.kind_read((p is Pattern) ? p : topattern(p), at, k)
+  static kind_read (p: Pattern, at, k) => (p.kind == rest_from) ? Runtime.items_read(p.a, p.b, at, k) : ((p.kind == literally) ? Runtime.literal_read(p.a, at, k) : ((p.kind == characters) ? (((at < textend) && chared(byte(at), p.a) && ((p.a != 4) || continued_at(at))) ? Runtime.onward(k, at + 1) : (0 - 1)) : ((p.kind == in_sequence) ? Runtime.items_read(p.a, 0, at, k) : ((p.kind == either_of) ? Runtime.either_from(p.a, at, k) : ((p.kind == hole) ? Runtime.hole_ways(p, at, k) : ((p.kind == anything_at_all) ? Runtime.anything_from(at + 1, k) : ((p.kind == repeat_from) ? Runtime.repeat_read(p.a, p.b, p.c, at, k) : ((p.kind == repeat_next) ? ((at == p.c) ? ((p.b <= 0) ? Runtime.onward(k, at) : (0 - 1)) : Runtime.repeat_read(p.a, p.b, p.d, at, k)) : ((p.kind == repeating) ? Runtime.repeat_read(p.a, p.b, p.c, at, Cell(what: Pattern(kind: holes_listed, a: boundn), next: k)) : ((p.kind == named_field) ? Runtime.pattern_read(p.b, at, Cell(what: Pattern(kind: field_end, a: p.a, b: at, c: boundn, d: p.b), next: k)) : ((p.kind == field_end) ? Runtime.field_closed(p, at, k, boundn, saved(p.c)) : ((p.kind == holes_listed) ? Runtime.holes_closed(p.a, at, k, saved(p.a), boundn) : ((p.kind == constructed) ? Runtime.value_bound(p.b, saved(p.b), boundn, construct(p.a, list(), named_from(p.b)), at, k) : ((p.kind == applied) ? Runtime.value_bound(p.b, saved(p.b), boundn, Runtime.defined_as(Runtime.application_of(p.a, p.b, member(p.a, Symbol.value)), 47, text(p.c, at)), at, k) : ((p.kind == rules_of) ? ((reading_at(p, at) == 0) ? Runtime.rules_read(p, at, k) : (0 - 1)) : ((p.kind == class_header) ? ((reading_at(p.a, at) == 0) ? Runtime.header_read(p, at, k) : (0 - 1)) : ((p.kind == with_function) ? Runtime.pattern_read(Runtime.with_pattern(p.a), at, k) : ((p.kind == reread) ? Runtime.pattern_read(rebuilt(p.a), at, k) : ((p.kind == functioned) ? Runtime.functioned_read(p, p.a, at, k) : ((p.kind == function_given) ? Runtime.function_read(p, saved(p.c), boundn, valued_from(p.c), at, k) : ((p.kind == statement_ending) ? ((p.b == 2) ? Runtime.statement_marked(k, at) : (((at == textend) || ((byte(at) == 10) && (open_before(rstart, at) == 0) && ((continued_from((p.b == 1) ? p.a : rstart, at) == 0) || (continued_from(at, at) == 0)))) ? Runtime.onward(k, at) : (0 - 1))) : ((p.kind == typed_by) ? Runtime.pattern_read(topattern(call(p.a, append(list(), named_from(0)), 0)), at, k) : ((p.kind == at_end) ? ((at == textend) ? Runtime.onward(k, at) : (0 - 1)) : ((p.kind == typed_with) ? Runtime.pattern_read(topattern(call(p.a, append(list(), p.b), 0)), at, k) : (0 - 1)))))))))))))))))))))))))
   // (a literal, there: a bracket only where it pairs)
-  static literal_read (t: Text) => Runtime.literal_of(t, t.to - t.from)
-  static literal_of (t: Text, n) => Runtime.read_to(rpos + n) if ((rpos + n) <= textend) && texteq(rpos, t.from, n) && ((n == 0) || (char_class(byte(rpos)) == 0) || (pair_class(rpos) != 0))
-  static ended_at_end => Runtime.read_to(rpos) if rpos == textend
-  static chosen_as (kind, p) => {
-    chosen(kind, p, rpos, rk)
-    rmode = resumed
+  static literal_read (t: Text, at, k) => Runtime.literal_of(t, t.to - t.from, at, k)
+  static literal_of (t: Text, n, at, k) => (((at + n) <= textend) && texteq(at, t.from, n) && ((n == 0) || (char_class(byte(at)) == 0) || (pair_class(at) != 0))) ? Runtime.onward(k, at + n) : (0 - 1)
+  // (an either: each of its ways in order; anything among them a byte, where no other way reads further)
+  static either_from (l: List, at, k) => {
+    bn := boundn
+    an := activen
+    fr := free
+    ef := effects
+    r := 0 - 1
+    j := 0
+    while (j < l.count) && (r < 0) {
+      Runtime.ways_retried(bn, an, fr, ef)
+      r = Runtime.either_one(l, j, at, k, l.items[j])
+      j = j + 1
+    }
+    r
   }
-  static anything_chosen (s: Choice) => {
-    s.a = rpos + 1
-    rmode = resumed
+  static either_one (l: List, j, at, k, c: Pattern) => (c.kind == anything_at_all) ? (((at < textend) && (read_by_another(l, j, at) == 0) && ((at + 1) > 0)) ? Runtime.onward(k, at + 1) : (0 - 1)) : Runtime.pattern_read(c, at, k)
+  // (anything: a byte more at a time, not past a line's end)
+  static anything_from (n0, k) => {
+    bn := boundn
+    an := activen
+    fr := free
+    ef := effects
+    n := n0
+    r := 0 - 1
+    while (r < 0) && (n <= textend) && (byte(n - 1) != 10) {
+      Runtime.ways_retried(bn, an, fr, ef)
+      r = Runtime.onward(k, n)
+      n = n + 1
+    }
+    r
   }
-  static repeat_chosen_as (inner, least, greedy) => {
-    Built.choice_given(chosen(4, inner, rpos, rk), least, greedy)
-    rmode = resumed
+  // (a repeat: once more, or not; at least as many as it says; greedy, more first)
+  static repeat_read (inner, least, greedy, at, k) => {
+    bn := boundn
+    an := activen
+    fr := free
+    ef := effects
+    r := ((least <= 0) && (greedy == 0)) ? Runtime.onward(k, at) : (0 - 1)
+    Runtime.ways_retried(bn, an, fr, ef) if r < 0
+    r = (r < 0) ? Runtime.pattern_read(inner, at, Cell(what: Pattern(kind: repeat_next, a: inner, b: least - 1, c: at, d: greedy), next: k)) : r
+    Runtime.ways_retried(bn, an, fr, ef) if r < 0
+    r = ((r < 0) && (least <= 0) && (greedy != 0)) ? Runtime.onward(k, at) : r
+    r
   }
-  static repeat_entered (p: Pattern) => {
-    rk = Cell(what: Pattern(kind: holes_listed, a: boundn), next: rk)
-    Runtime.repeat_chosen_as(p.a, p.b, p.c)
+  // (a hole: what it takes, a byte, a pair, a text a rule leads with, at a time, up to where it may not go on: a line
+  // end the statement does not go on past, and as it says (its mode): 0 anywhere, 1 on one line up to its byte, a quote
+  // not crossed, 2 up to its byte, 3 not past a space; its next end, −1 none, or below that one it closes at)
+  static hole_ways (p: Pattern, at, k) => {
+    bn := boundn
+    an := activen
+    fr := free
+    ef := effects
+    r := ((p.b == 1) || (p.b == 2)) ? Runtime.onward(k, at) : (0 - 1)
+    n := at
+    e := 0
+    while (r < 0) && (n >= 0) {
+      Runtime.ways_retried(bn, an, fr, ef)
+      e = Runtime.hole_next(p, at, n)
+      r = (e == (0 - 1)) ? r : Runtime.onward(k, (e < 0) ? ((0 - e) - 2) : e)
+      n = (e < 0) ? (0 - 1) : e
+    }
+    r
   }
-  // (a field: what it takes read, then what was read bound to its name; bound, undone when read again)
-  static field_entered (p: Pattern) => {
-    rk = Cell(what: Pattern(kind: field_end, a: p.a, b: rpos, c: boundn, d: p.b), next: rk)
-    Runtime.enter(p.b)
+  static hole_next (p: Pattern, at, n) => (n < textend) ? Runtime.hole_led(p, at, n, ((p.b != 2) ? ((((n > at) && (word_byte(byte(n - 1)) != 0) && (word_byte(byte(n)) != 0)) == 0) ? ((nomemo != 0) ? text_led_read(p.a, n) : Matching.memo_read(p.a, n, memo + (((((n * 31) + p.a) + (textend * 7)) & 65535) * 16))) : 0) : (((byte(n) == 92) && ((n + 1) < textend)) ? (n + 2) : 0))) : (0 - 1)
+  static hole_led (p: Pattern, at, n, l) => (l > n) ? l : ((((byte(n) == 10) && (p.b != 1) && (((continued_from(at, n) == 0) && (((pair_class(at - 1) == 2) && (pair_end(at - 1) > n)) == 0)) || (block_closed(at, n) > 0))) || ((p.b == 3) && ((byte(n) == 32) || (byte(n) == 9)))) ? (0 - 1) : Runtime.hole_byte(p, n, Runtime.class_at(n)))
+  static hole_byte (p: Pattern, n, pc) => (((p.b == 0) || (p.b == 3)) && (pc != 0)) ? ((pc == 3) ? (0 - 1) : (((pair_end(n) - 1) < 0) ? (0 - 1) : pair_end(n))) : (((p.b == 1) && (pc == 2)) ? (0 - 1) : ((((p.b == 1) || (p.b == 2)) && (byte(n) == p.c)) ? ((0 - n) - 2) : (n + 1)))
+  // (a binding: what it wrote over put back when what follows does not read)
+  static kept_or_restored (r, kept, mark, bound) => {
+    restored(kept, mark, bound) if r < 0
+    r
   }
-  static field_ended (p: Pattern, bound, kept) => {
-    gathered(p.a, p.b, rpos, p.c, p.d)
-    Runtime.undone(kept, p.c, bound)
+  // (a field: what it takes read, then what was read bound to its name)
+  static field_closed (p: Pattern, at, k, bound, kept) => {
+    gathered(p.a, p.b, at, p.c, p.d)
+    Runtime.kept_or_restored(Runtime.onward(k, at), kept, p.c, bound)
   }
-  static undone (kept, mark, bound) => {
-    ChoiceStack.undo_made(ChoiceStack.choice_room(), kept, mark, bound)
-    rmode = read_on
-  }
-  static holes_gathered (mark, kept, bound) => {
+  static holes_closed (mark, at, k, kept, bound) => {
     Runtime.holes_listed_from(mark, Runtime.bound_values(mark)) if listing(mark)
-    Runtime.undone(kept, mark, bound)
+    Runtime.kept_or_restored(Runtime.onward(k, at), kept, mark, bound)
   }
   static holes_listed_from (mark, values) => {
     boundn = mark
@@ -464,53 +451,45 @@ Runtime := class {
     l
   }
   static value_listed (l: List, b: Bound) => append(l, b.held) if b.hole == 0
-  static bound_as (mark, kept, bound, value) => {
+  static value_bound (mark, kept, bound, value, at, k) => {
     boundn = mark
     bindv(0, value)
-    Runtime.undone(kept, mark, bound)
+    Runtime.kept_or_restored(Runtime.onward(k, at), kept, mark, bound)
   }
   static defined_as (n, name, value) => {
     define(n, name, value)
     n
   }
   // (a node's rules, or a class's header, read once at a place at a time: read again there, it fails)
-  static rules_read (p: Pattern) => {
-    active_noted(p, rpos)
-    Runtime.rules_found(reading_of(p, rpos))
+  static rules_read (p: Pattern, at, k) => {
+    active_noted(p, at)
+    Runtime.rules_found(reading_of(p, at), at, k)
   }
-  static rules_found (l) => {
-    activen = (l is Node) ? activen : (activen - 1)
-    Runtime.rules_of_read(l) if l is Node
+  static rules_found (l, at, k) => (l is Node) ? Runtime.rules_applied(l, at, Cell(what: Pattern(kind: applied, a: l, b: boundn, c: at), next: k)) : Runtime.rules_none()
+  static rules_applied (l: Node, at, c) => Runtime.pattern_read(topattern(member(l, 17)), at, c)
+  static rules_none => {
+    activen = activen - 1
+    0 - 1
   }
-  static rules_of_read (l: Node) => {
-    rk = Cell(what: Pattern(kind: applied, a: l, b: boundn, c: rpos), next: rk)
-    Runtime.enter(topattern(member(l, 17)))
+  static header_read (p: Pattern, at, k) => {
+    active_noted(p.a, at)
+    Runtime.header_cell(p, at, Cell(what: Pattern(kind: constructed, a: p.a, b: boundn), next: k))
   }
-  static header_read (p: Pattern) => {
-    active_noted(p.a, rpos)
-    rk = Cell(what: Pattern(kind: constructed, a: p.a, b: boundn), next: rk)
-    Runtime.enter(header(p.a, p.b))
-  }
-  static with_entered (l: Pattern) => Runtime.enter(((l is Pattern) && (l.kind == repeating)) ? Pattern(kind: repeating, a: sequence(append(append(list(), Pattern(kind: statement_ending, b: 2)), l.a)), b: l.b, c: l.c) : l)
+  static header_cell (p: Pattern, at, c) => Runtime.pattern_read(header(p.a, p.b), at, c)
+  static with_pattern (l: Pattern) => ((l is Pattern) && (l.kind == repeating)) ? Pattern(kind: repeating, a: sequence(append(append(list(), Pattern(kind: statement_ending, b: 2)), l.a)), b: l.b, c: l.c) : l
   // (a pattern a function reads by: a repeat read in turn by it; else read, then the function given what was read)
-  static functioned_entered (p: Pattern, f: Pattern) => ((f.a is Pattern) && (Runtime.kind_of_pattern(f.a) == repeating)) ? Runtime.read_to(in_turn(Runtime.inner_of(f.a), f.b, p.b, rpos)) : Runtime.function_reading(p, f)
+  static functioned_read (p: Pattern, f: Pattern, at, k) => ((f.a is Pattern) && (Runtime.kind_of_pattern(f.a) == repeating)) ? Runtime.onward(k, in_turn(Runtime.inner_of(f.a), f.b, p.b, at)) : Runtime.pattern_read(f.a, at, Cell(what: Pattern(kind: function_given, a: f, b: p.b, c: boundn), next: k))
   static kind_of_pattern (p: Pattern) => p.kind
+  static function_of (f: Pattern) => f.b
   static inner_of (p: Pattern) => p.a
-  static function_reading (p: Pattern, f: Pattern) => {
-    rk = Cell(what: Pattern(kind: function_given, a: f, b: p.b, c: boundn), next: rk)
-    Runtime.enter(f.a)
-  }
-  static function_called (p: Pattern, f: Pattern, kept, bound, values) => {
+  static function_read (p: Pattern, kept, bound, values, at, k) => {
     boundn = p.c
-    bindv(0, call(curried(f.b, values), p.b, 0))
-    Runtime.undone(kept, p.c, bound)
+    bindv(0, call(curried(Runtime.function_of(p.a), values), p.b, 0))
+    Runtime.kept_or_restored(Runtime.onward(k, at), kept, p.c, bound)
   }
   // (the end of a statement: where a line ends, unless the statement goes on past it; noted to be read after what
   // follows, there)
-  static statement_marked (k: Cell) => {
-    rk = recell(k, Cell(what: Pattern(kind: statement_ending, a: rpos, b: 1), next: k.next))
-    rmode = read_on
-  }
+  static statement_marked (k: Cell, at) => Runtime.onward(recell(k, Cell(what: Pattern(kind: statement_ending, a: at, b: 1), next: k.next)), at)
 
   // (what the holes bound from a mark hold: those without a name, the one, else all as a list; with names, a node of
   // them, its keys each where it was read, `named_from`; a field read up to here bound to that, or to what it read)
@@ -583,91 +562,6 @@ Runtime := class {
   static place_pattern (v: Place) => (v.kind != 0) ? field(v.name, astype(v.kind, 0)) : field(v.name, Pattern(kind: hole, a: v.given))
   static astype (v, scope) => (v is Class) ? Pattern(kind: class_header, a: v, b: scope) : topattern(v)
 
-  // (failed: back to the latest choice, what was bound after it undone; none left, the reading fails)
-  static backtracked => Runtime.back_to(Runtime.undone_until(choices_top()))
-  static undone_until (top) => {
-    t := top
-    while (t != rbase) && (Runtime.choice_kind(t - 48) == 10) {
-      Runtime.restored_by(t - 48)
-      t = t - 48
-    }
-    choices_set(t)
-    t
-  }
-  static choice_kind (s: Choice) => s.kind
-  static restored_by (s: Choice) => restored(s.c, s.d, s.bound)
-  static back_to (t) => (t == rbase) ? Runtime.spun_none() : Runtime.choice_again(t - 48)
-  static spun_none => {
-    rresult = 0 - 1
-    rmode = done
-  }
-  static choice_again (s: Choice) => {
-    boundn = s.bound
-    activen = s.active
-    freed_back(s.free) if (s.effects == effects) && (noreclaim == 0)
-    markf = s.free
-    rmode = resumed
-  }
-  // (a choice taken on: its next way; none left, gone from the stack)
-  static resumed_from (s: Choice) => {
-    rp = s.pattern
-    rk = s.then
-    rmode = failed
-    Runtime.resumed_kind(s, s.pattern)
-    choices_set(s) if (rmode == failed) && (choices_top() == (s + 48))
-  }
-  static resumed_kind (s: Choice, p: Pattern) => (s.kind == 1) ? Runtime.either_next(s, p.a) : ((s.kind == 2) ? ((s.b == 0) ? Runtime.hole_begun(s, p) : ((s.b == 1) ? Runtime.hole_on(s, p, s.a) : None)) : ((s.kind == 3) ? (Runtime.anything_to(s, s.a) if (s.a <= textend) && (byte(s.a - 1) != 10)) : ((s.kind == 4) ? ((s.b == 0) ? Runtime.repeat_begun(s, p) : ((s.b == 1) ? Runtime.repeat_once_more(s, p) : Runtime.repeat_left(s))) : None)))
-  static either_next (s: Choice, l: List) => {
-    i := s.b
-    while (i < l.count) && (rmode == failed) {
-      Runtime.either_tried(s, l, i, l.items[i])
-      i = i + 1
-    }
-    s.b = i
-  }
-  static either_tried (s: Choice, l: List, i, c: Pattern) => (c.kind == anything_at_all) ? (Runtime.read_to(s.at + 1) if (s.at < textend) && (read_by_another(l, i, s.at) == 0) && ((s.at + 1) > 0)) : Runtime.either_entered(s, c)
-  static either_entered (s: Choice, c) => {
-    rpos = s.at
-    Runtime.enter(c)
-  }
-  static anything_to (s: Choice, n) => {
-    s.a = n + 1
-    Runtime.read_to(n)
-  }
-  // (a repeat: once more, or not; at least as many as it says; greedy, more first)
-  static repeat_begun (s: Choice, p) => {
-    s.b = 1
-    ((s.a <= 0) && (s.c == 0)) ? Runtime.read_to(s.at) : Runtime.repeat_once_more(s, p)
-  }
-  static repeat_once_more (s: Choice, p) => {
-    s.b = 2
-    rk = Cell(what: Pattern(kind: repeat_next, a: p, b: (s.a - 1), c: s.at, d: s.c), next: rk)
-    rpos = s.at
-    Runtime.enter(p)
-  }
-  static repeat_left (s: Choice) => {
-    choices_set(s)
-    Runtime.read_to(s.at) if (s.a <= 0) && (s.c != 0)
-  }
-  // (a hole: what it takes, a byte, a pair, a text a rule leads with, at a time, up to where it may not go on: a line
-  // end the statement does not go on past, and as it says (its mode): 0 anywhere, 1 on one line up to its byte, a quote
-  // not crossed, 2 up to its byte, 3 not past a space)
-  static hole_begun (s: Choice, p: Pattern) => {
-    s.b = 1
-    s.a = s.at
-    ((p.b == 1) || (p.b == 2)) ? Runtime.read_to(s.at) : Runtime.hole_on(s, p, s.a)
-  }
-  static hole_on (s: Choice, p: Pattern, n) => Runtime.hole_led(s, p, n, ((p.b != 2) ? ((((n > s.at) && (word_byte(byte(n - 1)) != 0) && (word_byte(byte(n)) != 0)) == 0) ? ((nomemo != 0) ? text_led_read(p.a, n) : Matching.memo_read(p.a, n, memo + (((((n * 31) + p.a) + (textend * 7)) & 65535) * 16))) : 0) : (((byte(n) == 92) && ((n + 1) < textend)) ? (n + 2) : 0))) if n < textend
-  static hole_led (s: Choice, p: Pattern, n, l) => (l > n) ? Runtime.hole_taken(s, l) : ((((byte(n) == 10) && (p.b != 1) && (((continued_from(s.at, n) == 0) && (((pair_class(s.at - 1) == 2) && (pair_end(s.at - 1) > n)) == 0)) || (block_closed(s.at, n) > 0))) || ((p.b == 3) && ((byte(n) == 32) || (byte(n) == 9)))) ? None : Runtime.hole_byte(s, p, n, Runtime.class_at(n)))
-  static hole_byte (s: Choice, p: Pattern, n, pc) => (((p.b == 0) || (p.b == 3)) && (pc != 0)) ? ((pc == 3) ? None : (((pair_end(n) - 1) < 0) ? None : Runtime.hole_taken(s, pair_end(n)))) : (((p.b == 1) && (pc == 2)) ? None : ((((p.b == 1) || (p.b == 2)) && (byte(n) == p.c)) ? Runtime.hole_closed(s, n) : Runtime.hole_taken(s, n + 1)))
-  static hole_taken (s: Choice, n) => {
-    s.a = n
-    Runtime.read_to(n)
-  }
-  static hole_closed (s: Choice, n) => {
-    s.b = 2
-    Runtime.read_to(n)
-  }
 
   // Members and calls. A member of a value, by the number its name is known by: of a node, or of what a rule read, its
   // own field of it (a getter's, what that answers), else its keys; of a list, how many it holds, its first, its last,

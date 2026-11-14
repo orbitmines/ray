@@ -96,12 +96,19 @@ export const given = (it, program, written = lowered_input()) => {
   const input = Buffer.from([part('header'), uncommented(program), '', uncommented(written)].join('\0'));
   it.u8.set(input, 8388608); it.i32[4088 >> 2] = input.length;
 };
-export const compiled = async (module, program) => {
+// (in a thread of its own, given the stack a reading needs: reading goes as deep as what it reads is nested)
+export const compiled = async (module, program) => isMainThread ? threaded({ compiling: { module, program } }) : written(module, program);
+const written = async (module, program) => {
   const it = await instance(module);
   given(it, program);
   it.exports.main();
   return it.u8.slice(it.exports.out_base(), it.exports.out_base() + it.exports.out_length());
 };
+const threaded = (data) => new Promise((done, failed) => {
+  const thread = new Worker(fileURLToPath(import.meta.url), { workerData: data, resourceLimits: { stackSizeMb: STACK_MB } });
+  thread.on('message', (m) => { done(m); thread.terminate(); });
+  thread.on('error', failed);
+});
 export const run = async (module) => (await instance(module)).exports.main();
 
 // (the statements a text is read as, by the latest revision's own reader with the compiler's grammar: each its span and
@@ -470,7 +477,8 @@ export async function main(argv = process.argv.slice(2)) {
   console.log(answer);
 }
 
-// (the stack a reading thread is given: reading no longer goes deep, so what a thread has)
+// (the stack a reading thread is given: a pattern's reading is a call for each part it reads on to, so as deep as that)
 export const STACK_MB = 512;
 export const start = (argv = process.argv.slice(2)) => main(argv);
+if (!isMainThread && workerData?.compiling) parentPort.postMessage(await written(workerData.compiling.module, workerData.compiling.program));
 if (isMainThread && (import.meta.main || (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href))) await start();

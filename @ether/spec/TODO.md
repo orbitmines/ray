@@ -312,6 +312,10 @@ its own reading its place, unread text recorded with reading going on.
     statement is cut again (205 past their budget in 39 s, so cut by young memory, `near_end`, not by steps), and no
     test runs. What one statement's calls make is let go only at its end. Next: a call's frame compacted when it ends
     (what older words hold of it moved down to where the frame began), tried in a worktree, not yet at baseline.
+  - Again with frames compacted (2026-11-15, 48c16485): Expression.lazy's `--test` is no longer cut by young memory:
+    175 statements run their full 200M steps (94 s) and none of the tests run. The first are rule definitions, the
+    entrypoint's line 8 (`{x} ^{style} => level style style x`), 25 and 28 (`.{member ^property} => {member}`), 43
+    (`{on} &+= …`): reading a rule's head with the `led` rules is what is past the budget, not memory.
   - **A call's frame compacted when it ends (2026-11-15):** a frame closing with something older holding what it made
     has what the notes, the run's state and its value reach moved down to where it began, the rest let go
     (`Isolation.compacted_or`, `Collector.frame_compacted`). Unlimited, 14983 compactions over the suite with no stale

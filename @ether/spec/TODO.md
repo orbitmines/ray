@@ -323,6 +323,12 @@ its own reading its place, unread text recorded with reading going on.
     Expression.lazy does not. Smallest text: the entrypoint's first 25 lines (the rule creator, `({grouped})`,
     `. => (external &).this`) and a line `.)`. `x.)`, `)`, `x.` and `. => 1` then `.)` read at once: `.` read where
     nothing follows reads its own body, `(external &).this`, whose `.` is the rule again.
+    Why: a body's statements are read as they run (`Statement`'s `concurrently context.reading(.)`), and running
+    restores what is set aside (`runs`: "while it runs, the rule is no longer set aside"), so the `.` of `.this` is read
+    with the `.` rule no longer aside. Expression.ray line 66 ("the rule set aside while it is read: a rule never
+    reads itself") and line 210 disagree for a statement read while it runs. To decide: what is set aside belongs to
+    where code is read (the body's node, and what is read in it), not to the run, e.g. kept on `me.in` and looked up along
+    `in`; running still sees the rule, so recursion through a call stays.
   - **A call's frame compacted when it ends (2026-11-15):** a frame closing with something older holding what it made
     has what the notes, the run's state and its value reach moved down to where it began, the rest let go
     (`Isolation.compacted_or`, `Collector.frame_compacted`). Unlimited, 14983 compactions over the suite with no stale

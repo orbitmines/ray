@@ -1702,7 +1702,7 @@ Turns := class {
   // (a statement's frame closed: when something older holds what it made, that copied out first, so all of it goes; a
   // statement in another's reading keeps its memory to that one's end, what it answers held where nothing notes it)
   static left => {
-    Turns.copied_out(isostack + ((isodepth - 1) * 12)) if (word_of(3912) == word_of(3956)) && (isodepth <= Isolation.depth_most) && (word_of(isostack + (((isodepth - 1) * 12) + 8)) != 0) && (word_of(3844) == 0) && (noreclaim == 0)
+    Turns.copied_out(isostack + ((isodepth - 1) * 12)) if (word_of(3912) == word_of(3956)) && (isodepth <= Isolation.depth_most) && (word_of(3844) == 0) && (noreclaim == 0)
     isolated_value(0, 0)
   }
   static copied_out (s) => {

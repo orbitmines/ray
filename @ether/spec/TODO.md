@@ -509,6 +509,8 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   padding that put everything else past the mark. Without it revision 142 ran the heap into the arena building 143
   (`overflowed`). Every allocation's start is noted now, the mark gone, and with it `pcache`, `eager_caches` and the
   led table (same suites, the self-compile 51 → 50 s).
+- **The memo, measured again (2026-11-15)**: off (`nomemo = 1`), `--test` 65 → 116 s, `--test-all` 28 → 62 s. It stays
+  until holes read differently.
 
 ## Node.ray
 

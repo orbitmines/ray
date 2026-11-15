@@ -2777,7 +2777,9 @@ Heap := class {
     0
   }
   static starts_cleared (a, e) => Heap.starts_cleared_in(a / 8, e / 8)
-  static starts_cleared_in (c0, k) => {
+  // (within one byte, as most values' cells are, at once)
+  static starts_cleared_in (c0, k) => (k <= c0) ? 0 : (((c0 / 8) == ((k - 1) / 8)) ? byte_put(Heap.starts_map() + (c0 / 8), byte(Heap.starts_map() + (c0 / 8)) & (255 - (((1 << (k - c0)) - 1) * (1 << (c0 % 8))))) : Heap.starts_cleared_over(c0, k))
+  static starts_cleared_over (c0, k) => {
     c := c0
     while (c < k) && ((c % 32) != 0) {
       Heap.bit_cleared(Heap.starts_map(), c)

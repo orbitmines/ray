@@ -522,6 +522,12 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   (`gc_live_counted`, `none_in`, `end_of`, `gc_start_back`), member lookup by walking a node's fields (`own`) 8%.
   `level shown`, every `:=`'s, scanned all that was painted (what calls paint grows it): a node now keeps the style it
   is shown as (ed6593d0, both suites 5% faster, the same results). Regressions to look at when it lands: GN1, IX9, IS1.
+- **Starts found stale where a value is made (2026-11-16)**: every place that lets memory go clears where values started
+  in it (`freed_to`, `all_freed`, `memory_back`, and `freed_back` with it), yet a value made after a `freed_back` finds
+  starts noted in its own cells (769 times in one self-compile). Clearing only where memory is let go (and not where a
+  value is made) is 5% faster but the self-compile takes 7 MB more (545 against 539 MB, steady): something leaves starts
+  above `free` that no letting go clears (not `frame_freed`: clearing there too changes nothing). Until it is found a
+  value's cells are cleared where it is made (within one byte at once).
 
 ## Node.ray
 

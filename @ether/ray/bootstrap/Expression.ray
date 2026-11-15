@@ -3232,7 +3232,8 @@ Collector := class {
     word_put(word_of(4020), 0)
     while c < k {
       word_put(word_of(4020) + (((c / 8) - (base / 64)) * 4), live) if (c % 8) == 0
-      w = (((c % 8) == 0) && ((c + 8) <= k) && (byte(Heap.starts_map() + (c / 8)) == 0)) ? 8 : 1
+      // (eight at once where nothing starts, or where nothing marked starts and no marked value runs on into them)
+      w = (((c % 8) == 0) && ((c + 8) <= k) && ((byte(Heap.starts_map() + (c / 8)) == 0) || ((cur == 0) && (byte(word_of(4016) + ((c / 8) - (base / 64))) == 0)))) ? 8 : 1
       cur = (((w == 1) && (Heap.bit_at(Heap.starts_map(), c * 8) != 0)) ? Heap.marked_at(c * 8) : cur)
       byte_put((word_of(4016) - (word_of(4008) / 64)) + (c / 8), 255) if (w == 8) && (cur != 0)
       Heap.bit_raised(word_of(4016) - (word_of(4008) / 64), c) if (w == 1) && (cur != 0)
@@ -3255,12 +3256,21 @@ Collector := class {
     return 0 if word_of(4052) != 0
     Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(base, free), free, markf) - base, base, free) + Collector.gc_reloc(v)
   }
+  // (each marked value, from one to the next by what is live: what was let go not walked)
   static copied_to (d, base, top) => {
-    y := base
+    y := Collector.live_next(base, top)
     while y < top {
-      y = Collector.one_copied(d, y, Collector.end_of(y))
+      y = Collector.live_next(Collector.one_copied(d, y, Collector.end_of(y)), top)
     }
     d
+  }
+  static live_next (y, top) => {
+    c := y / 8
+    k := top / 8
+    while (c < k) && (Heap.marked_at(c * 8) == 0) {
+      c = (((c % 8) == 0) && (byte(word_of(4016) + ((c / 8) - (word_of(4008) / 64))) == 0)) ? (c + 8) : (c + 1)
+    }
+    (c < k) ? (c * 8) : top
   }
   static one_copied (d, y, e) => {
     copy(d + Collector.gc_reloc(y), y, e - y) if Heap.marked_at(y) != 0

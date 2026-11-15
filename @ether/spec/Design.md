@@ -1341,7 +1341,7 @@ are still open are in [Appendix A](#appendix-a-open-questions).
   strings and numbers alike (`"0110" ~|| "1010"`, `0110 ~|| 1010`), through the String/Binary isomorphism.
 - Complex numbers are components: `Complex := Real + Imaginary`, with `i` a unit (`2 + 3i`).
 - `∑ ∏`, `√ ∛ ∜`, `∫` and `lim`: `∑ [1, 2, 3] // 6`.
-- Native `<` and `>` on numbers are rewrites, in `Compiler.ray` or, when platform-specific, in the interpreter's
+- Native `<` and `>` on numbers are rewrites, in Expression.ray's levels or, when platform-specific, in the interpreter's
   `.o.ray`. Never a new external.
 - Integer parts are bounded by default; `Binary.Unbounded` is an unbounded one.
 - Counts `1k`, `1M`, `1B`.
@@ -2044,7 +2044,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 ### 20.1 Levels
 
-- Optimizations are rewrite rules, kept in `Compiler.ray` and removable. A reduction is a rule, and a level is which rules
+- Optimizations are rewrite rules, kept in Expression.ray's levels and removable. A reduction is a rule, and a level is which rules
   are in scope: a level is a scope. `Program{O: …}` is a program under a level, and `O` is the selected optimizations:
 
   ```ray
@@ -2092,7 +2092,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 - The classic passes, in this order: (1) numbers counted rather than walked; (2) constant folding and dead code;
   (3) goto → `if`/`while`; (4) CSE, LICM and SSA. Dead-code elimination is a rule over statements narrowed by
   `unreachable`, rewriting them to nothing. Loop unrolling: a loop with a known count becomes its unrolled ray.
-- The backlog of specific optimizations, kept in Compiler.ray: store both arrays vs iterate; indexes for string lookups;
+- The backlog of specific optimizations, kept in Expression.ray's levels: store both arrays vs iterate; indexes for string lookups;
   `ignore_case` on both sides; `Ray.index` as a counting loop; an unordered `#` collapses on the first true;
   `bound < infinite` makes `.infinite` false; reference counting to decide store vs reference; large `instance_of`
   iterables stored separately; KMP/Boyer–Moore; dead stores (dead only if no one reads `a%`); `.push_back(A)` as
@@ -2119,7 +2119,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
 
 - What is designed and not yet in `Compiler.default`: each joins it when the analysis it asks of the program answers
   (asked of `Compiler`, so no member of the code itself is mistaken for it) and it is measured to do fewer applications.
-  Until then a rule of these would read every statement its hole is typed by (and run it to ask), so none is in Compiler.ray:
+  Until then a rule of these would read every statement its hole is typed by (and run it to ask), so none is in Expression.ray's levels:
 
   ```ray
   designed := {
@@ -2278,7 +2278,7 @@ it, comparing characters is an error (`ERROR@Security`), `@me = x` sets x as giv
   - **Reading what does not depend on the instance once per class is a compiler optimization**, not the meaning: a
     method, a rule, `static …`, a class or enum named in it, an `assert`, names given together (`a | b : T`). The
     kernel does it for now (`external hoisted { … }` in the entrypoint's class rule: the class reads its whole block
-    once, as before, and each instance reads it again without those); it belongs in `Compiler.ray` as a level.
+    once, as before, and each instance reads it again without those); it belongs in Expression.ray as a level.
 - Decided 2026-10-21 (the user), Expression's `.statement#.for .(caller)`:
   - **A field read on a list of instances is each one's, in order.** `.statement` of the `Statement[]` read is each
     statement's `statement` field, one after another (superposed in order; `#` lists them, one alone too). The kernel

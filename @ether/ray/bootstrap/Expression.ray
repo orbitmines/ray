@@ -149,7 +149,7 @@ Expression := class (
           `style` (how) => painted_with(how, caller)
           `include` (file) => included(caller, file.first)
           `rule` (head) => rule_written(caller.in, head.first)
-          `shown` (how) => (how.first === None) ? how.last : shown_of(level last_with (painted) (1) (how.first), how.last)
+          `shown` (how) => (how.first === None) ? how.last : ((((level kind_of (how.first)) === None) ? (how.first).shown_as : None) ?? how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
@@ -323,6 +323,8 @@ Expression := class (
         sink.append(painted.append([how.first, how.last, bound_along(program)]).last)
         // (a rule keeps the styles it is shown as, read each time it is applied)
         ((how.last).styled_as = ((how.last).styled_as ?? Array.new).append(sink.last)) if !((how.last).written_head === None)
+        // (and a node the style it is shown as, the last given it: what `shown` answers)
+        ((how.last).shown_as = how.first) if (level kind_of (how.last)) === None
         how.last
       }
       // (a hole read in its body: its name shown as a parameter, where it is read)
@@ -330,8 +332,6 @@ Expression := class (
         painted.append([`parameter`, [hole.key, program.input], [Array.new]])
         answer
       }
-      // (what a value is shown as: the style it was given last, `made ^class`; else what is given)
-      shown_of (style, otherwise) => (style === None) ? otherwise : style.first
       // (a rule by its head as written, `level rule`: the latest written so, here or around)
       rule_written (place, text) => ((place === None) || (text === None)) ? None : (place.rules.keys{.written_head == text}#.last ?? rule_written(place.in, text))
       bound_along (program) => (program === None) ? Array.new : [program.bound].joined(bound_along(program.caller))
@@ -1899,7 +1899,7 @@ Pairs := class {
   }
 }
 // Layout (`level layout …`): whether a line goes on into the next (more indented, or a closing); a text's gaps (white)
-// and words as a pattern; a word's inside, a line end in a text; a column of an entry; the first or last where.
+// and words as a pattern; a word's inside, a line end in a text; the first or last where.
 Layout := class {
   static continued_from (a, n) => (comma_ended(a, n) != 0) ? 1 : Layout.continued_by(n, Origins.indent_at_origin(origin_at(a)))
   static continued_by (n, d) => (d < 0) ? 0 : Layout.indented_past(n, d, indent_at(n + 1))
@@ -1946,7 +1946,6 @@ Layout := class {
     }
     0
   }
-  static column_of (e: List, k) => ((e is List) && (e.count > k)) ? at(e, k) : None
   static first_where (l: List, f) => (l is List) ? Layout.first_in(l, f) : member2(select(l, f), Symbol.first)
   static first_in (l: List, f) => {
     i := 0
@@ -1969,7 +1968,7 @@ Layout := class {
 // Indexes (`level indexed …`, removable: each a cache of what it answers): whether a text occurs in another (by the
 // bytes and byte pairs in it, and over the program's text or the text taken, an index of where each byte and pair is,
 // sorted, searched by halves); where a pair that opens at a place ends (`pair_end`, by place, the classes' version);
-// whether a part is held outside brackets (`holds_outside`); the entries by a column's value (`last_with`, `all_with`).
+// whether a part is held outside brackets (`holds_outside`).
 Indexes := class {
   static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : ((((e - a) > 64) && in_program(a, e)) ? Indexes.occurs_based(Indexes.based_index(program_from(), program_from() + program_length(), 3960), program_length(), l, a, e) : ((((e - a) > 64) && Indexes.in_taken(a, e, takent)) ? Indexes.occurs_taken(l, a, e, takent) : Indexes.found_at(l, a, e)))
   static in_taken (a, e, t: Text) => (t != 0) && (a >= t.from) && (e <= t.to)
@@ -2098,16 +2097,6 @@ Indexes := class {
     r := holds_outside_in(t, part)
     textend = te
     r
-  }
-  // (a list's entries by the value in a column: a table of each value's last entry, each entry the one before of it)
-  static last_with (l: List, kv, v) => (((l is List) == 0) || stopped()) ? 0 : Indexes.last_scanned(l, untag(kv), v)
-  static last_scanned (l: List, k, v) => {
-    i := l.count - 1
-    while i >= 0 {
-      return at(l, i) if column_of(at(l, i), k) == v
-      i = i - 1
-    }
-    0
   }
 }
 // Members (`level members …`): what applies a rule, around a node (`applied_of`); a node's members, or what a rule's

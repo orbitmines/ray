@@ -390,6 +390,10 @@ its own reading its place, unread text recorded with reading going on.
   (269 s / 185 s), but the self-compile 156 s against 67 s (it reads whole texts for each literal), so kept until rules
   by lead need no literal check. Found on the way: `eager_caches`' one `kept()` at the first frame opened is load-bearing;
   without it revision 142 writes 143 out of stack (`Maximum call stack size exceeded`).
+  Rules by lead landed (38df3446: led keys indexed on their node; 9a0f4794: `keys_reading` by that index, given the
+  rules): `--test` 226 s against 271 s, the self-compile 50 s. `occurs` unindexed again after it: the self-compile
+  still 124 s, from `Readings.reads_text`'s check that a rule's literals are all in the text before reading it whole
+  (each a scan of the whole statement). It goes with the hole read a token at a time, which makes that check moot.
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

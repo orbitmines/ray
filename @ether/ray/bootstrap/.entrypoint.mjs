@@ -78,7 +78,8 @@ const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8
 const lowering = () => part('Lowering');
 // (and what is lowered: Expression.ray's runtime (`Runtime := class`, with the comment before it) and the levels after it, to
 // the end, then what the back end adds to it (the Wasm package's `Writing` part))
-export const lowered_input = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'); return t.slice(t.search(/\n(\/\/[^\n]*\n)*Runtime := class \{\n/) + 1) + '\n' + part('Writing'); };
+const lowered_from = (t) => t.search(/\n(\/\/[^\n]*\n)*Runtime := class \{\n/) + 1;
+export const lowered_input = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'); return t.slice(lowered_from(t)) + '\n' + part('Writing'); };
 // (the compiler run: the program (input part 1) written with the runtime (input part 3) as a module of that many pages)
 const COMPILE = 'High.program(level input_part 1, 32000)\nlevel out_length\n';
 export const source = () => uncommented([reader(), part('Compiled'), part('Low'), lowering(), COMPILE].join(''));
@@ -157,8 +158,9 @@ export async function build() {
 // it is made: each style, what it styles and what the holes took in each program it ran in) says each test's result,
 // `passed` or `failed`, and where it is.
 const TESTING = '0\n';
-// (a whole-line comment as an empty line: each line where it is written)
-const emptied = (text) => text.split('\n').map((l) => (l.trimStart().startsWith('//') ? '' : l));
+// (a whole-line comment as an empty line: each line where it is written; and so what Expression.ray has lowered, the
+// back end's, not the language's to read)
+const emptied = (text) => { const e = lowered_from(text), n = e > 0 ? text.slice(0, e).split('\n').length - 1 : Infinity; return text.split('\n').map((l, i) => (i >= n || l.trimStart().startsWith('//') ? '' : l)); };
 // (and painted as a comment, where it is written)
 const left_out = (text) => text.split('\n').flatMap((l, line) => { const column = l.length - l.trimStart().length; return l.trimStart().startsWith('//') ? [{ style: 'comment', line, column, length: l.trimEnd().length - column }] : []; });
 // (the module that reads, once per revision and sources: kept beside the revision)

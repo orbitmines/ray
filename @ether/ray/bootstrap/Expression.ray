@@ -2002,31 +2002,10 @@ Layout := class {
 // sorted, searched by halves); where a pair that opens at a place ends (`pair_end`, by place, the classes' version);
 // whether a part is held outside brackets (`holds_outside`); the entries by a column's value (`last_with`, `all_with`).
 Indexes := class {
-  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : (((e - a) > 64) ? Indexes.occurs_long(l, a, e, ((pcache == 0) ? 0 : Indexes.bytes_kept(Indexes.bytes_slot(a, e), a, e))) : Indexes.occurs_short(l, a, e))
-  static occurs_long (l: Text, a, e, b) => ((b != 0) && (Indexes.bytes_all(l, b) == 0)) ? 0 : (in_program(a, e) ? Indexes.occurs_based(Indexes.based_index(program_from(), program_from() + program_length(), 3960), program_length(), l, a, e) : (Indexes.in_taken(a, e, takent) ? Indexes.occurs_taken(l, a, e, takent) : Indexes.occurs_short(l, a, e)))
+  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : ((((e - a) > 64) && in_program(a, e)) ? Indexes.occurs_based(Indexes.based_index(program_from(), program_from() + program_length(), 3960), program_length(), l, a, e) : ((((e - a) > 64) && Indexes.in_taken(a, e, takent)) ? Indexes.occurs_taken(l, a, e, takent) : Indexes.found_at(l, a, e)))
   static in_taken (a, e, t: Text) => (t != 0) && (a >= t.from) && (e <= t.to)
   static occurs_taken (l, a, e, t: Text) => Indexes.occurs_based(Indexes.based_index(t.from, t.to, 3952), t.to - t.from, l, a, e)
-  static occurs_short (l: Text, a, e) => Indexes.occurs_by(l, a, e, Indexes.bytes_from(Indexes.bytes_slot_made(a, e), a, e))
-  static occurs_by (l: Text, a, e, b) => (Indexes.bytes_all(l, b) == 0) ? 0 : (((l.to - l.from) == 1) ? 1 : ((Indexes.pairs_all(l, b) == 0) ? 0 : Indexes.found_at(l, a, e)))
-  static bit_off (b, f) => (byte(b + (f / 8)) & (1 << (f % 8))) == 0
-  static bit_set (b, f) => byte_put(b + (f / 8), byte(b + (f / 8)) | (1 << (f % 8)))
   static pair_hash (q) => ((byte(q - 1) * 31) + byte(q)) & 4095
-  static bytes_all (l: Text, b) => {
-    i := 0
-    while i < (l.to - l.from) {
-      return 0 if Indexes.bit_off(b, byte(l.from + i))
-      i = i + 1
-    }
-    1
-  }
-  static pairs_all (l: Text, b) => {
-    i := 1
-    while i < (l.to - l.from) {
-      return 0 if Indexes.bit_off(b + 32, Indexes.pair_hash(l.from + i))
-      i = i + 1
-    }
-    1
-  }
   static found_at (l: Text, a, e) => {
     q := a
     while (q + (l.to - l.from)) <= e {
@@ -2142,29 +2121,6 @@ Indexes := class {
       q = q + 1
     }
     0
-  }
-  // (the bytes and byte pairs in a text, as bits, kept by the text after the led keys' table)
-  static bytes_slot (a, e) => (pcache + (8388608 - (2048 * 560))) + (((((a * 31) + (e * 7)) / 4) & 2047) * 560)
-  static bytes_kept (s, a, e) => ((word_of(s) == a) && (word_of(s + 4) == e) && ((lasting_span(a, e) != 0) || (word_of(s + 8) == epoch))) ? (s + 16) : 0
-  static bytes_slot_made (a, e) => {
-    Caches.led_table()
-    Indexes.bytes_slot(a, e)
-  }
-  static bytes_from (s, a, e) => (Indexes.bytes_kept(s, a, e) != 0) ? (s + 16) : Indexes.bytes_made(s, a, e)
-  static bytes_made (s, a, e) => {
-    zeroed(s + 16, 544)
-    q := a
-    while q < e {
-      Indexes.bit_set(s + 16, byte(q))
-      Indexes.bit_set(s + 48, (q > a) ? Indexes.pair_hash(q) : byte(q))
-      q = q + 1
-    }
-    word_put(s, a)
-    word_put(s + 4, e)
-    cache_key(e)
-    word_put(s + 8, epoch)
-    caches_reach()
-    s + 16
   }
   static pair_end (q) => ((pair_class(q) == 2) ? Runtime.quote_ending(q, byte(q)) : Runtime.bracket_ending(q))
   static holds_outside (t: Text, part) => (t is Text) ? Indexes.outside_read(t, part, textend) : false

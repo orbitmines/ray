@@ -3308,83 +3308,82 @@ Collector := class {
   static outer_noted (a, v) => {
     Notes.older_held(a, v, word_of(4008))
   }
-  static root (w, d, fix) => {
+  static root (w, fix) => {
     gc_mark(word_of(w)) if fix == 0
-    word_put(w, d + gc_reloc(word_of(w))) if (fix == 1) && gc_in(word_of(w)) && (!gc_in(w))
-    Collector.fix_later(w, d + gc_reloc(word_of(w))) if (fix == 2) && gc_in(word_of(w)) && (!gc_in(w))
+    Collector.fix_later(w, gc_reloc(word_of(w))) if (fix == 2) && gc_in(word_of(w)) && (!gc_in(w))
     0
   }
   // (the copies made since a statement began, the last of the log: each where it is copied to)
-  static copies_root (l, n, d, fix, b) => {
+  static copies_root (l, n, fix, b) => {
     k := n
     while (k > 0) && ((word_of(l + ((k - 1) * 12)) >= b) || (word_of(l + ((k - 1) * 12)) >= arena_base())) {
       k = k - 1
-      Collector.root(l + (k * 12), d, fix)
-      Collector.root(l + ((k * 12) + 4), d, fix)
+      Collector.root(l + (k * 12), fix)
+      Collector.root(l + ((k * 12) + 4), fix)
     }
     0
   }
   // (a list the run holds: it, and what it holds)
-  static listed_root (w, d, fix) => {
-    Collector.roots_in(word_of(word_of(w) + 12), word_of(word_of(w) + 12) + (word_of(word_of(w) + 4) * 4), d, fix) if (word_of(w) != 0) && ((fix == 0) || (!gc_in(word_of(w)))) && (word_of(word_of(w)) == 3)
-    Collector.root(w, d, fix)
+  static listed_root (w, fix) => {
+    Collector.roots_in(word_of(word_of(w) + 12), word_of(word_of(w) + 12) + (word_of(word_of(w) + 4) * 4), fix) if (word_of(w) != 0) && ((fix == 0) || (!gc_in(word_of(w)))) && (word_of(word_of(w)) == 3)
+    Collector.root(w, fix)
   }
-  static roots_in (a0, e, d, fix) => {
+  static roots_in (a0, e, fix) => {
     a := a0
     while a < e {
-      Collector.root(a, d, fix)
+      Collector.root(a, fix)
       a = a + 4
     }
     0
   }
-  static noted_roots (l, n, d, fix, b) => {
+  static noted_roots (l, n, fix, b) => {
     i := 0
     while i < n {
-      Collector.root(word_of(l + (i * 4)), d, fix) if (word_of(l + (i * 4)) < b) || (word_of(l + (i * 4)) >= arena_base())
+      Collector.root(word_of(l + (i * 4)), fix) if (word_of(l + (i * 4)) < b) || (word_of(l + (i * 4)) >= arena_base())
       i = i + 1
     }
     0
   }
-  static root_value (v, d, fix) => {
+  static root_value (v, fix) => {
     gc_mark(v) if fix == 0
-    ((fix == 1) && gc_in(v)) ? (d + gc_reloc(v)) : v
+    ((fix == 1) && gc_in(v)) ? gc_reloc(v) : v
   }
-  static roots_of (d, fix, b) => {
-    Collector.noted_roots(word_of(3880), word_of(3876), d, fix, b)
-    Collector.roots_in(bounds, bounds + (boundn * 16), d, fix)
-    Collector.roots_in(actives + 8, (actives + 8) + (activen * 8), d, fix)
-    Collector.roots_in(word_of(3856) + 4, word_of(3856) + 12, d, fix) if word_of(3856) != 0
-    Collector.copies_root(word_of(3864), word_of(3868), d, fix, b) if word_of(3864) != 0
-    Collector.listed_root(3860, d, fix)
-    Collector.listed_root(3968, d, fix)
-    Collector.listed_root(3972, d, fix)
-    Collector.listed_root(4044, d, fix)
-    Collector.root(4048, d, fix)
-    Collector.listed_root(4068, d, fix)
-    Collector.root(3872, d, fix)
-    Collector.root(3904, d, fix)
-    Collector.pairs_root(word_of(3988), 0, d, fix) if word_of(3988) != 0
-    Collector.roots_named(d, fix)
+  static roots_of (fix, b) => {
+    Collector.noted_roots(word_of(3880), word_of(3876), fix, b)
+    Collector.roots_in(bounds, bounds + (boundn * 16), fix)
+    Collector.roots_in(actives + 8, (actives + 8) + (activen * 8), fix)
+    Collector.roots_in(word_of(3856) + 4, word_of(3856) + 12, fix) if word_of(3856) != 0
+    Collector.copies_root(word_of(3864), word_of(3868), fix, b) if word_of(3864) != 0
+    Collector.listed_root(3860, fix)
+    Collector.listed_root(3968, fix)
+    Collector.listed_root(3972, fix)
+    Collector.listed_root(4044, fix)
+    Collector.root(4048, fix)
+    Collector.listed_root(4068, fix)
+    Collector.root(3872, fix)
+    Collector.root(3904, fix)
+    Collector.pairs_root(word_of(3988), 0, fix) if word_of(3988) != 0
+    Collector.roots_named(fix)
   }
   // (the run's own roots, by name)
-  static roots_named (d, fix) => {
-    names = Collector.root_value(names, d, fix)
-    bounds = Collector.root_value(bounds, d, fix)
-    actives = Collector.root_value(actives, d, fix)
-    syms = Collector.root_value(syms, d, fix)
-    takent = Collector.root_value(takent, d, fix)
-    csyms = Collector.root_value(csyms, d, fix)
-    memo = Collector.root_value(memo, d, fix)
-    parserhook = Collector.root_value(parserhook, d, fix)
-    datab = Collector.root_value(datab, d, fix)
-    asideb = Collector.root_value(asideb, d, fix)
+  static roots_named (fix) => {
+    names = Collector.root_value(names, fix)
+    bounds = Collector.root_value(bounds, fix)
+    actives = Collector.root_value(actives, fix)
+    syms = Collector.root_value(syms, fix)
+    takent = Collector.root_value(takent, fix)
+    csyms = Collector.root_value(csyms, fix)
+    memo = Collector.root_value(memo, fix)
+    parserhook = Collector.root_value(parserhook, fix)
+    datab = Collector.root_value(datab, fix)
+    asideb = Collector.root_value(asideb, fix)
     0
   }
   // (where each pair was learned, a raw place in the pairs log: moved with it)
-  static pairs_root (b, i0, d, fix) => {
+  static pairs_root (b, i0, fix) => {
     i := i0
     while i < word_of(b) {
-      Collector.root(b + (12 + (i * 12)), d, fix)
+      Collector.root(b + (12 + (i * 12)), fix)
       i = i + 1
     }
     0
@@ -3396,7 +3395,7 @@ Collector := class {
     return v if ((free + (Collector.gc_map_size(word_of(s), free) * 5)) + 25165824) > (arena_base() - 4194304)
     Collector.gc_compaction_set(word_of(s), free, Collector.gc_map_size(word_of(s), free))
     zeroed(free, Collector.gc_map_size(word_of(s), free))
-    Collector.roots_of(0, 0, word_of(s))
+    Collector.roots_of(0, word_of(s))
     Collector.gc_mark(v) if pointer(v)
     Collector.gc_marks_traced()
     return v if word_of(4052) != 0
@@ -3410,7 +3409,7 @@ Collector := class {
   // moved once; none moved when there is no room to note them)
   static frame_fixed (b, top, n, v) => {
     word_put(4028, 0)
-    Collector.roots_of(0, 2, b)
+    Collector.roots_of(2, b)
     return v if word_of(4052) != 0
     Collector.frame_slid(b, top, n, v)
   }
@@ -3431,7 +3430,7 @@ Collector := class {
   static frame_slid (b, top, n, v) => {
     Collector.slid(b, top)
     Collector.fixes_applied()
-    Collector.roots_named(0, 1)
+    Collector.roots_named(1)
     Collector.notes_moved(word_of(3880)) if word_of(3880) != 0
     Collector.frame_freed(b + n, 0)
     (pointer(v) && Collector.gc_in(v)) ? Collector.gc_reloc(v) : v

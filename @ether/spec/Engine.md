@@ -169,6 +169,17 @@ lowered (from `Runtime := class` to its end) is the back end's, as Runtime.ray w
 reads (as it leaves out a comment, each line kept where it is). The same results, `--test` 183 → 67 s, `--test-all`
 140 → 30 s (5 errors), the self-compile 51 s. Baselines from here: 249/200/11 in 67 s, 135/133/5 in 30 s.
 
+**Where it stands (2026-11-15, evening).** Expression.ray is 3950 lines: the reader 384, its tests 73, `Compiler`'s own
+level and the language's extensions ~300, then what is lowered ~3200 (Runtime 646; memory ~860: Collector 330, Memory
+139, Images 117, Isolation 108, Notes 72, Heap 71, Starts 17; the reading's caches and indexes ~560: Indexes 184, Pairs
+120, Readings 78, Caches 78, Keys 40, Layout 66; the turn and the host's words ~500: Turns 145, Splices 134, Hooks 125,
+Afterwards 112; values and calls ~260). Moved to the Wasm package as the back end's (`Writing`, ~420 lines): Output,
+Locals, what only the compiler asks of a text (`Asked`) and reads a program as (`Statements`, with the parse table). What
+nothing but the back end's compiler reaches is now none (scratchpad `backend.py`). A statement's end compacts its frame
+as a call's does (the copy out gone). What is left to reach 1000 is the restatement the plan above describes: the reading
+as one rule per pattern kind through a continuation, the caches replaced by the text's shape, memory as one way of
+keeping (a test's end that way measured 15% slower: TODO.md).
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

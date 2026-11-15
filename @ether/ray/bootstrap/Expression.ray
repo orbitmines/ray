@@ -1423,15 +1423,7 @@ Texts := class {
     }
     text(a, e)
   }
-  static at_text (q, e, a, z) => ((q + (z - a)) > e) ? 0 : Texts.bytes_at(q, a, z)
-  static bytes_at (q, a, z) => {
-    i := 0
-    while (a + i) < z {
-      return 0 if byte(q + i) != byte(a + i)
-      i = i + 1
-    }
-    1
-  }
+  static at_text (q, e, a, z) => ((q + (z - a)) > e) ? 0 : texteq(q, a, z - a)
   static word_byte (c) => ((c >= 97) && (c <= 122)) || ((c >= 65) && (c <= 90)) || ((c >= 48) && (c <= 57)) || (c == 95)
   static cw_trimmed (t: Text) => (t is Text) ? Texts.trimmed_text(t.from, t.to) : t
   static cw_inner (t: Text) => ((t is Text) && ((t.to - t.from) >= 2)) ? text(t.from + 1, t.to - 1) : None
@@ -1560,15 +1552,7 @@ Splices := class {
     member(x, Symbol.value)
   }
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
-  static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Splices.held_in(t.from, t.to, part) != 0)) ? true : false
-  static held_in (a, e, part: Text) => {
-    q := a
-    while q < e {
-      return 1 if at_text(q, e, part.from, part.to) != 0
-      q = q + 1
-    }
-    0
-  }
+  static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Indexes.found_at(part, t.from, t.to) != 0)) ? true : false
   static holds_outside_in (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from)) ? Splices.outside_in(t.from, t.to, part) : false
   static outside_in (a, e, part: Text) => {
     q := a

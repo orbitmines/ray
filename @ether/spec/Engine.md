@@ -157,6 +157,12 @@ too, and measured the same (suites 249/200/11 and 135/133/8 in 223 s and 185 s, 
 `Compiler`'s own level, the runtime (`Runtime := class`, which the host lowers from, to the end) and the levels. Runtime.ray
 and Compiler.ray are gone; what is pruned from here on is pruned in the one file.
 
+**What writes WebAssembly out, moved to the Wasm package (2026-11-15).** Output (bytes, LEBs, data and the aside part)
+and Locals (High's functions given their parameters as locals) are the back end's: they went to `$/Wasm.project.ray`'s
+`Writing` part, which the host lowers after Expression.ray's runtime. The module is the same, byte for byte; the suites
+got faster, since a test no longer reads them as the language's (`--test` 223 → 183 s, `--test-all` 185 → 140 s, with
+one error fewer, 7). Expression.ray: 4250 lines.
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

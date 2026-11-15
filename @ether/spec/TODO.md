@@ -504,6 +504,11 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   it is moved again by each of their compactions and written past the barrier. Not landed; `lasting_copy` stays for it
   and for the compiler's parse table (Writing's `parse_moved`). With no reclaiming at all (`noreclaim = 1`) the suites
   run out of memory (18 passed, 207 errors): reclaiming is not removable, only unifiable.
+- **Why `eager_caches`' allocation was load-bearing (found 2026-11-15)**: memory taken below `Heap.marked_from`
+  (16 MB) had no starts noted, and the program's text ends near 9 MB; `pcache`'s 8 MB, taken at the first frame, was
+  padding that put everything else past the mark. Without it revision 142 ran the heap into the arena building 143
+  (`overflowed`). Every allocation's start is noted now, the mark gone, and with it `pcache`, `eager_caches` and the
+  led table (same suites, the self-compile 51 → 50 s).
 
 ## Node.ray
 

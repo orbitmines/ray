@@ -1874,9 +1874,43 @@ Entry := class {
     r
   }
   static parsed_statements (g, t) => ((t is Text) ? Entry.parsed_trimmed(((g is Text) ? grammar_of(g) : g), cw_trimmed(t)) : list())
-  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : Entry.parse_plain(g, t.from, t.to)
+  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : (((lasting_span(t.from, t.to) != 0) && Entry.grammar_lasts(g)) ? Entry.kept_parse(Entry.parse_slot(g, t.from, t.to), g, t.from, t.to) : Entry.parse_plain(g, t.from, t.to))
+  // (a grammar a statement made, let go when it ends, is no key: another made after it may be where it was)
+  // (a grammar older than anything that can still move or be let go: the outermost statement read, frame or test)
+  static grammar_lasts (g) => (g >= arena_base()) || (g < Entry.lowest(Entry.lowest(Entry.lowest(free, word_of(3984)), (isodepth > 0) ? word_of(isostack) : 0), word_of(3944)))
   static lowest (a, b) => ((b != 0) && (b < a)) ? b : a
   static parse_plain (g, a, e) => call(parserhook, append(append(list(), g), text(a, e)), 0)
+  // (a text that lasts read once, by where it is (a table at `arena_base`), into what lasts; read as any other once what
+  // lasts is near its end, past which taking stops)
+  static parse_slot (g, a, e) => {
+    word_put(3840, arena_base() + 4194304) if word_of(3840) == 0
+    arena_base() + ((((((a * 31) + (e * 7)) + g) / 4) & 262143) * 16)
+  }
+  static kept_parse (s, g, a, e) => ((word_of(s) == g) && (word_of(s + 4) == a) && (word_of(s + 8) == e)) ? word_of(s + 12) : ((word_of(3844) != 0) ? Entry.parse_noted(s, g, a, e, Entry.parse_counted(g, a, e)) : ((word_of(3840) > ((1020000000 * 2) - 167772160)) ? Entry.parse_plain(g, a, e) : Entry.parse_noted(s, g, a, e, Entry.parse_moved(g, a, e, free, markf))))
+  static parse_counted (g, a, e) => {
+    l := 0
+    word_put(3844, word_of(3844) + 1)
+    l = Entry.parse_plain(g, a, e)
+    word_put(3844, word_of(3844) - 1)
+    l
+  }
+  // (read in young memory, only what it reaches copied to what lasts; read in what lasts when that can not be)
+  static parse_moved (g, a, e, f, m) => ((f >= Heap.marked_from) && (f < arena_base())) ? Entry.parse_copied(Collector.lasting_copy(Entry.parse_counted(g, a, e), f), g, a, e) : Entry.parse_lasting(g, a, e, f, m)
+  static parse_copied (c, g, a, e) => (c != 0) ? c : Entry.parse_lasting(g, a, e, free, markf)
+  static parse_lasting (g, a, e, f, m) => {
+    l := 0
+    Memory.lasting_entered()
+    l = Entry.parse_plain(g, a, e)
+    Memory.lasting_left(f, m)
+    l
+  }
+  static parse_noted (s, g, a, e, l) => {
+    word_put(s, g)
+    word_put(s + 4, a)
+    word_put(s + 8, e)
+    word_held(s + 12, l)
+    l
+  }
 }
 // Actives: the rules, or a class's header, being read at a place (read again there, it fails).
 Actives := class {

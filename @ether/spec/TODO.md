@@ -383,7 +383,7 @@ its own reading its place, unread text recorded with reading going on.
 
 - **The caches measured again (2026-11-15, with frames compacted, revision 141, baseline 269 s / 188 s):** each
   removed alone keeps both suites at baseline. The parse table (`kept_parse`, by place at `arena_base`): 257 s / 188 s,
-  no slower, so it is gone (the self-compile 67 s for three revisions). `keys_reading`'s filter (every key tried):
+  no slower in the suites, but the self-compile 68 s against 52 s (three revisions), so it is back (9e433321 undone). `keys_reading`'s filter (every key tried):
   319 s / 217 s. The reading memo (`memo_read`, every hole read again): 313 s / 226 s. Each goes with what replaces it
   (rules kept by lead; a hole a token at a time), not before.
   `occurs` as a plain scan (its byte and pair indexes, 165 lines, gone): both suites at baseline and no slower

@@ -1929,35 +1929,9 @@ Pairs := class {
     f
   }
 }
-// Layout (`level layout …`): a statement's span (its `statement` key), one continued from the one before it (that one
-// ends with a comma), whether a line goes on into the next (more indented, or a closing); a text's gaps (white) and
-// words as a pattern; digits, a word's inside, a line end in a text; a column of an entry; the first or last where.
+// Layout (`level layout …`): whether a line goes on into the next (more indented, or a closing); a text's gaps (white)
+// and words as a pattern; a word's inside, a line end in a text; a column of an entry; the first or last where.
 Layout := class {
-  static span_in (s: Node) => (s == None) ? None : Layout.statement_in(s.keys)
-  static statement_in (l: List) => {
-    i := 0
-    while (l != None) && (i < l.count) {
-      return Layout.span_text(at(l, i)) if Layout.is_statement(at(l, i))
-      i = i + 1
-    }
-    None
-  }
-  static is_statement (c: Spanned) => c.name == Symbol.statement
-  static span_text (c: Spanned) => text(c.from, c.to)
-  static continued_span (o: List, x) => (o.count == 0) ? x : Layout.span_joined(o, at(o, o.count - 1), x)
-  static span_joined (o: List, p: Text, x: Text) => ((((p == None) ? 0 : Layout.comma_last(p, Layout.white_back(p.from, p.to))) == 0) || (x == None)) ? x : Layout.joined_span(o, p, x)
-  static joined_span (o: List, p: Text, x: Text) => {
-    o.count = o.count - 1
-    text(p.from, x.to)
-  }
-  static comma_last (x: Text, e) => (e > x.from) && (byte(e - 1) == 44)
-  static white_back (a, e) => {
-    q := e
-    while (q > a) && white(byte(q - 1)) {
-      q = q - 1
-    }
-    q
-  }
   static continued_from (a, n) => (comma_ended(a, n) != 0) ? 1 : Layout.continued_by(n, Origins.indent_at_origin(origin_at(a)))
   static continued_by (n, d) => (d < 0) ? 0 : Layout.indented_past(n, d, indent_at(n + 1))
   static indented_past (n, d, j) => (((n + 1 + j) >= textend) || (byte(n + 1 + j) == 10)) ? 0 : ((j > d) || (pair_class(n + 1 + j) == 3))
@@ -1994,13 +1968,6 @@ Layout := class {
   static word_added (l, s, q) => {
     append(l, literal(text(s, q)))
     q
-  }
-  static digits_at (q, e) => {
-    d := q
-    while (d < e) && (byte(d) >= 48) && (byte(d) <= 57) {
-      d = d + 1
-    }
-    d
   }
   static line_in (a, e) => {
     q := a
@@ -2253,7 +2220,6 @@ Members := class {
     kept()
     0
   }
-  static grammar_of (t) => Runtime.defined_as(node(0), Symbol.text, t)
   static setmember (x, sym, v) => Members.pattern_set(x, sym, (((x is Node) || (x is Applied)) ? Members.defined_to(x, sym, (v == x) ? copied(x) : v) : v))
   static defined_to (x, sym, v) => {
     define(x, sym, v)
@@ -2542,14 +2508,6 @@ Built := class {
     1
   }
   static negated (v) => truthy(v) ? false : true
-  static param_of (ps, n, a, e) => {
-    i := 0
-    while i < n {
-      return 1 if ((word_of(ps + ((i * 8) + 4)) - word_of(ps + (i * 8))) == (e - a)) && texteq(word_of(ps + (i * 8)), a, e - a)
-      i = i + 1
-    }
-    0
-  }
 }
 // Turns (`level in_turn …`): the statements of a text read in turn by an item, each to where it ends (or where a block
 // opened in it closes), each read in a region of its own and given to a function as it is read; one not read is set
@@ -2700,25 +2658,10 @@ Turns := class {
   }
 }
 // Entry (`level entry …`): the input is parts, each ended by a zero byte (the program, the runtime, then files, each
-// its name, a line end, and what it holds); where a part's text begins (past white and `//` lines); a file by its name;
-// the i-th part; the entry's reader, given a text to read; the statements of a text, as a grammar reads them.
+// its name, a line end, and what it holds); a file by its name; the i-th part; the entry's reader, given a text to read.
 Entry := class {
   static Reader := (aside, reader, from, to)
   static entered_at := 3856
-  static partstart (p, e) => {
-    q := p
-    while (q < e) && (white(byte(q)) || (((q + 1) < e) && (byte(q) == 47) && (byte(q + 1) == 47))) {
-      q = white(byte(q)) ? (q + 1) : Entry.to_line_end(q, e)
-    }
-    q
-  }
-  static to_line_end (q, e) => {
-    k := q
-    while (k < e) && (byte(k) != 10) {
-      k = k + 1
-    }
-    k
-  }
   static zero_from (a, e) => {
     q := a
     while (q < e) && (byte(q) != 0) {
@@ -2771,44 +2714,7 @@ Entry := class {
     textend = q
     r
   }
-  static parsed_statements (g, t) => ((t is Text) ? Entry.parsed_trimmed(((g is Text) ? grammar_of(g) : g), cw_trimmed(t)) : list())
-  static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : (((lasting_span(t.from, t.to) != 0) && Entry.grammar_lasts(g)) ? Entry.kept_parse(Entry.parse_slot(g, t.from, t.to), g, t.from, t.to) : Entry.parse_plain(g, t.from, t.to))
-  // (a grammar a statement made, let go when it ends, is no key: another made after it may be where it was)
-  // (a grammar older than anything that can still move or be let go: the outermost statement read, frame or test)
-  static grammar_lasts (g) => (g >= arena_base()) || (g < Entry.lowest(Entry.lowest(Entry.lowest(free, word_of(3984)), (isodepth > 0) ? word_of(isostack) : 0), word_of(3944)))
   static lowest (a, b) => ((b != 0) && (b < a)) ? b : a
-  static parse_plain (g, a, e) => call(parserhook, append(append(list(), g), text(a, e)), 0)
-  // (a text that lasts read once, by where it is (a table at `arena_base`), into what lasts; read as any other once what
-  // lasts is near its end, past which taking stops)
-  static parse_slot (g, a, e) => {
-    word_put(3840, arena_base() + 4194304) if word_of(3840) == 0
-    arena_base() + ((((((a * 31) + (e * 7)) + g) / 4) & 262143) * 16)
-  }
-  static kept_parse (s, g, a, e) => ((word_of(s) == g) && (word_of(s + 4) == a) && (word_of(s + 8) == e)) ? word_of(s + 12) : ((word_of(3844) != 0) ? Entry.parse_noted(s, g, a, e, Entry.parse_counted(g, a, e)) : ((word_of(3840) > ((1020000000 * 2) - 167772160)) ? Entry.parse_plain(g, a, e) : Entry.parse_noted(s, g, a, e, Entry.parse_moved(g, a, e, free, markf))))
-  static parse_counted (g, a, e) => {
-    l := 0
-    word_put(3844, word_of(3844) + 1)
-    l = Entry.parse_plain(g, a, e)
-    word_put(3844, word_of(3844) - 1)
-    l
-  }
-  // (read in young memory, only what it reaches copied to what lasts; read in what lasts when that can not be)
-  static parse_moved (g, a, e, f, m) => ((f >= Heap.marked_from) && (f < arena_base())) ? Entry.parse_copied(Collector.lasting_copy(Entry.parse_counted(g, a, e), f), g, a, e) : Entry.parse_lasting(g, a, e, f, m)
-  static parse_copied (c, g, a, e) => (c != 0) ? c : Entry.parse_lasting(g, a, e, free, markf)
-  static parse_lasting (g, a, e, f, m) => {
-    l := 0
-    Memory.lasting_entered()
-    l = Entry.parse_plain(g, a, e)
-    Memory.lasting_left(f, m)
-    l
-  }
-  static parse_noted (s, g, a, e, l) => {
-    word_put(s, g)
-    word_put(s + 4, a)
-    word_put(s + 8, e)
-    word_held(s + 12, l)
-    l
-  }
 }
 // Actives: the rules, or a class's header, being read at a place (read again there, it fails).
 Actives := class {
@@ -2840,10 +2746,6 @@ Basics := class {
     n
   }
   static cell (p, next) => Cell(what: p, next: next)
-  static put_span (o, a, e) => {
-    copy(o, a, e - a)
-    o + (e - a)
-  }
   static saved (mark) => ((boundn - mark) <= 0) ? 0 : Basics.bounds_copied(alloc(((boundn - mark) * 16) + 8), mark)
   static bounds_copied (c, mark) => {
     copy(c, bound_at(mark), (boundn - mark) * 16)
@@ -3797,12 +3699,6 @@ Hooks := class {
   static tested_here (t) => ((word_of(3948) == 0) || (tag(t) != 4)) ? 12 : ((origin_at(word_of(t + 4)) < word_of(3948)) ? 8 : 12)
   static paints => word_of(3968)
   static reports => word_of(3972)
-  static outbyte (b) => {
-    outb = (outb == 0) ? lasting_alloc(16777216) : outb
-    byte_put(outb + outn, b)
-    outn = outn + 1
-    0
-  }
   static out_base => outb
   static out_length => outn
   static pointer (v) => ((v & 1) == 0) && (v >= 65536)
@@ -3943,7 +3839,6 @@ Afterwards := class {
     byte_put(o + 3, c3)
     o + 4
   }
-  static m4 (q, c0, c1, c2, c3) => (byte(q) == c0) && ((c1 == 0) || ((byte(q + 1) == c1) && ((c2 == 0) || ((byte(q + 2) == c2) && ((c3 == 0) || (byte(q + 3) == c3))))))
 }
 // Images (what the reading is at, kept so the host can go on from it, is the back end's: `image_out`, `image_in`); a test's
 // state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside copied to what

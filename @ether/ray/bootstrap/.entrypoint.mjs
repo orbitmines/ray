@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 // Ether (`ether`, `ray`, `orbitmines`): the language as it compiles itself. Its latest revision, `.entrypoint.N.wasm`, is
-// Expression.ray with the compiler written in it (Compiler.ray from `Lowered :=` on, and $/Wasm.project.ray's bootstrap
-// part), compiled; given
+// Expression.ray with the compiler written in it ($/Wasm.project.ray's bootstrap part), compiled; given
 // a program it writes that program as a WebAssembly module (the runtime, Runtime.ray and Compiler.ray's levels, in it),
 // which is then run.
 // Each revision is written by the one before it, from those same sources: revision 0 by the interim engine that is gone
@@ -74,11 +73,11 @@ export const engine = () => bootstrap(`.entrypoint.${revision()}.wasm`);
 export const PAGES = 32000;
 export const uncommented = (text) => text.split('\n').filter((l) => !l.trimStart().startsWith('//')).join('\n');
 const reader = () => { const t = readFileSync(bootstrap('Expression.ray'), 'utf8'), end = 'ex := (level input_part 0) as Expression\n'; return t.slice(0, t.indexOf(end) + end.length); };
-// (Compiler.ray's part the compiler is itself written with: from `Lowered :=` on, what writes Runtime.ray for the back end,
+// (what the compiler is itself written with: the Wasm package's `Lowering` part, what writes Runtime.ray for the back end,
 // and what writes a program for the back end (`High`))
-const lowering = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nLowered := (class )?\{\n/) + 1); };
-// (and Compiler.ray's own levels, written for the back end after Runtime.ray: from `Texts :=` up to `Lowered :=`)
-const levels = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nTexts := (class )?\{\n/) + 1, t.search(/\nLowered := (class )?\{\n/) + 1); };
+const lowering = () => part('Lowering');
+// (and Compiler.ray's own levels, written for the back end after Runtime.ray: from `Texts :=` on)
+const levels = () => { const t = readFileSync(bootstrap('Compiler.ray'), 'utf8'); return t.slice(t.search(/\nTexts := (class )?\{\n/) + 1); };
 export const lowered_input = () => readFileSync(bootstrap('Runtime.ray'), 'utf8') + '\n' + levels();
 // (the compiler run: the program (input part 1) written with the runtime (input part 3) as a module of that many pages)
 const COMPILE = 'High.program(level input_part 1, 32000)\nlevel out_length\n';

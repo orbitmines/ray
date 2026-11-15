@@ -511,6 +511,17 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   led table (same suites, the self-compile 51 → 50 s).
 - **The memo, measured again (2026-11-15)**: off (`nomemo = 1`), `--test` 65 → 116 s, `--test-all` 28 → 62 s. It stays
   until holes read differently.
+- **Calls, the lazy reader (2026-11-15, not landed)**: a method led by what it is read on, `{this}(…)`, kept in a node
+  of its own rules (`led`) and read only on a value made of it (`led_from`), about 40 reader lines. With it calls run:
+  `--test` 249 → 255 passed, `--test-all` 135 → 294 passed (far more of each file read), no budget stops. Number.ray's
+  `{ }{value}` loops it (read on the class itself: `Number{true}`); written `{this}{value}` it reads on an instance only,
+  as its one use, `1 Vertex.Boundary`, does. Not landed for its speed: `--test` 60 → 187 s, `--test-all` 18 → 107 s.
+  What it costs is the language running its own library: tests run once everything is read, so every list is then
+  made by Array's `new` and `append` (taking those out alone gives back 15 of the entrypoint's 35 extra seconds); each
+  single call is cheap. Profiled, nearly every function is twice as busy; the collector is a third of either run
+  (`gc_live_counted`, `none_in`, `end_of`, `gc_start_back`), member lookup by walking a node's fields (`own`) 8%.
+  `level shown`, every `:=`'s, scanned all that was painted (what calls paint grows it): a node now keeps the style it
+  is shown as (ed6593d0, both suites 5% faster, the same results). Regressions to look at when it lands: GN1, IX9, IS1.
 
 ## Node.ray
 

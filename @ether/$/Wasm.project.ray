@@ -530,7 +530,7 @@ Wasm := class (0x00, 0x61, 0x73, 0x6D, 0x01, 0x00, 0x00, 0x00, sections: Section
     {applied: Expression.Statement} => local.get, 0, call, applied.statement.index, local.set, 2
   }
 
-  // `@wasm` (`@wasm.default`): the language's optimizations (Compiler.ray), then the same, then WebAssembly's own, each a
+  // `@wasm` (`@wasm.default`): the language's optimizations (Expression.ray's levels), then the same, then WebAssembly's own, each a
   // rule that can be left out by name; each answers what `none` answers
   static default := lazily Compiler.default + none &+ {
     // Representations: a 32-bit integer an i32, its operators i32's
@@ -1042,7 +1042,7 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|   }
 //| }
 // (bootstrap: Lowering)
-//| // Lowered: Runtime.ray written for a back end (Design §21): each kind laid out as its header says, one word a field after
+//| // Lowered: Expression.ray's runtime written for a back end (Design §21): each kind laid out as its header says, one word a field after
 //| // its tag; each function as the back end's, reading and writing them by name. (Read by the compiler itself: written in what
 //| // it compiles, as it is now.)
 //| Lowered := {
@@ -1052,15 +1052,15 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|   static w (lw) => level write lw
 //|   static kind (lk) => Compiled.kind_of(High.parsed_one(lk))
 //|   static parsed (lp) => High.parsed_one(lp)
-//|   // (the runtime: what Runtime.ray and Compiler.ray's levels write, each kind's constructor first)
+//|   // (the runtime: what Expression.ray's runtime and its levels write, each kind's constructor first)
 //|   static runtime (lr_source) => {
 //|     lr_members := Lowered.members_of(lr_source)
 //|     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.declared(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
 //|     Lowered.kinds.for((k) => Lowered.managed_kind(k.first) ? Lowered.constructor(k) : None)
 //|     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.defined(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
 //|   }
-//|   // (what each section, `X := class { … }` (or `X := { … }`), holds, each `static …` in it: Runtime.ray's, and Compiler.ray's
-//|   // own levels; a function of a section is called by its name, `X.f(…)`)
+//|   // (what each section, `X := class { … }` (or `X := { … }`), holds, each `static …` in it: the runtime's, and the
+//|   // levels'; a function of a section is called by its name, `X.f(…)`)
 //|   static sections := Array.new
 //|   static members_of (ms) => Lowered.members_in(Compiled.statements_of(ms), Array.new)
 //|   static members_in (ml, mo) => ml.empty ? mo : Lowered.members_in(ml.rest, mo.joined(Lowered.section(ml.first)))

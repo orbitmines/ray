@@ -3426,7 +3426,7 @@ Char := class: Number { }
 // (a 32-bit integer: its bits, 32 binary digits (Number.ray's `Binary₃₂.Signed`))
 Int32 := class (bits) => { }
 Program := class { }
-// (the level the language is read with, `O`: none until Compiler.ray gives it its default (a project may give another; code
+// (the level the language is read with, `O`: none until Expression.ray's levels give it its default (a project may give another; code
 // may read with another where it is, `with O: …`))
 O := None
 Narrowing := class { }
@@ -3620,7 +3620,6 @@ include @./Number.ray
 include @./String.ray
 include @./CLI.ray
 include @./Expression.ray
-include @./Compiler.ray
 // (the edges `|` and `,` make: each a node of its own, the rule that decorated it a component on it)
 superposed_edge := (Node &+ { })
 superposed_edge &+= superposing_rule

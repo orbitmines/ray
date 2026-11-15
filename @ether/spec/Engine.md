@@ -151,6 +151,12 @@ Order: the one writer first (it changes nothing the suites see, and the fixpoint
 structural fixes with what they replace, then Runtime.ray and the levels folded into Expression.ray, which the host then
 reads alone (with the Wasm part).
 
+**Folded first (2026-11-15).** The fold moved ahead of the rest: every test already read Expression.ray and Compiler.ray
+(included by the entrypoint; Runtime.ray was beside it, not included), so one file changes little: the runtime is now read
+too, and measured the same (suites 249/200/11 and 135/133/8 in 223 s and 185 s, the self-compile 51 s). Expression.ray is now the reader, its tests,
+`Compiler`'s own level, the runtime (`Runtime := class`, which the host lowers from, to the end) and the levels. Runtime.ray
+and Compiler.ray are gone; what is pruned from here on is pruned in the one file.
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

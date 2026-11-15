@@ -381,6 +381,12 @@ its own reading its place, unread text recorded with reading going on.
     noted, and its bytes could go with the frame. The barrier, a frame's value and `lasting_copy` now take any value
     past the low words (`held`); the collector's own tracing already did. Both suites at baseline.
 
+- **The caches measured again (2026-11-15, with frames compacted, revision 141, baseline 269 s / 188 s):** each
+  removed alone keeps both suites at baseline. The parse table (`kept_parse`, by place at `arena_base`): 257 s / 188 s,
+  no slower, so it is gone (the self-compile 67 s for three revisions). `keys_reading`'s filter (every key tried):
+  319 s / 217 s. The reading memo (`memo_read`, every hole read again): 313 s / 226 s. Each goes with what replaces it
+  (rules kept by lead; a hole a token at a time), not before.
+
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 
 - **Done (2026-11-13), revision 140 on.** `$/Wasm/` is gone. runtime.ray's functions are Compiler.ray levels (`Hooks`,

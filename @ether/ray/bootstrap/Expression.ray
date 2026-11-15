@@ -2556,17 +2556,19 @@ Turns := class {
     word_put(3984, 0) if ob == 0
     r
   }
-  // (a statement's frame closed: what something older holds of it copied out first, so all of it goes; a statement in
-  // another's reading keeps its memory to that one's end, what it answers held where nothing notes it)
+  // (a statement's frame closed: what something older holds of it, or the run's state, moved down to where it began, as
+  // a call's frame is, the rest let go, and the frame kept when anything is left; a statement in another's reading keeps
+  // its memory to that one's end, what it answers held where nothing notes it)
   static left => {
     Turns.copied_out(isostack + ((isodepth - 1) * 12)) if (word_of(3912) == word_of(3984)) && (isodepth <= Isolation.depth_most) && (word_of(3844) == 0) && (noreclaim == 0)
     Isolation.statement_closed()
   }
   static copied_out (s) => {
-    word_put(s + 8, 0) if Collector.statement_copied(word_of(s))
+    Turns.compacted_kept(s, Collector.frame_compacted(s, 0)) if (word_of(3992) == 0) && (word_of(3936) == 0)
     Collector.notes_kept(word_of(3880), word_of(s), word_of(3984)) if (word_of(s + 8) == 0) && (s == isostack)
     0
   }
+  static compacted_kept (s, v) => word_put(s + 8, (free > word_of(s)) ? 1 : 0)
   static closed_or (pos, se, at) => Turns.closed_at_or(pos, se, block_closed(at, se))
   static closed_at_or (pos, se, v) => (v > 0) ? statement_end(pos, v) : se
   static over_turn (at, se, mark) => {
@@ -3377,34 +3379,9 @@ Collector := class {
     }
     0
   }
-  // (a statement ended, begun at `b`: what the words older memory gave a value of it (noted by `written`: word 3880, 3876
-  // of them) and the run's state reach of it, copied to what lasts, those words moved with it; nothing when that can not
-  // be (the notes full, word 3992, or a test open))
   // (a word copied out holding a value of a statement around it: noted for that one's end)
   static outer_noted (a, v) => {
     Notes.older_held(a, v, word_of(4008))
-  }
-  static statement_copied (b) => {
-    return 0 if (word_of(3992) != 0) || (word_of(3936) != 0) || (((free + (Collector.gc_map_size(b, free) * 5)) + 25165824) > (arena_base() - 4194304))
-    Collector.gc_compaction_set(b, free, Collector.gc_map_size(b, free))
-    zeroed(free, Collector.gc_map_size(b, free))
-    Collector.roots_of(0, 0, b)
-    Collector.gc_marks_traced()
-    return 0 if word_of(4052) != 0
-    d := Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(b, free), free, markf) - b, b, free)
-    Collector.roots_of(d, 1, b)
-    Collector.statement_freed(b, 0)
-    1
-  }
-  // (what a statement took let go, what it made copied out: the caches by place begun again, the led keys kept)
-  // (only the led keys outlast it: the highest of them young is the caches' reach)
-  static statement_freed (b, m) => {
-    starts_cleared(b, free)
-    epoch = epoch + 1
-    word_put(4004, 0)
-    word_put(3920, m)
-    free = b
-    0
   }
   static root (w, d, fix) => {
     gc_mark(word_of(w)) if fix == 0

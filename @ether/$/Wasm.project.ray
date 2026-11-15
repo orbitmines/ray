@@ -2144,7 +2144,7 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //| // nothing writes anywhere (by `assign(`, `setmember(`, `with(`, a `define(` not of a scope: `written_symbols`, once a
 //| // program) and defined once
 //| Locals := class {
-//|   static with_locals (f) => (tag(f) != 4) ? f : Locals.headed(f, Texts.line_ended(word_of(f + 4), word_of(f + 8)))
+//|   static with_locals (f) => (tag(f) != 4) ? f : Locals.headed(f, Asked.line_ended(word_of(f + 4), word_of(f + 8)))
 //|   // (`  var scope\n  scope = node(env)\n` after the head's line)
 //|   static headed (f, h) => (((h + 41) > word_of(f + 8)) || (Locals.scope_made(h + 1) == 0)) ? f : Locals.params_read(f, h, alloc(256))
 //|   static scope_made (q) => m4(q, 32, 32, 118, 97) && m4(q + 4, 114, 32, 115, 99) && m4(q + 8, 111, 112, 101, 10) && m4(q + 12, 32, 32, 115, 99) && m4(q + 16, 111, 112, 101, 32) && m4(q + 20, 61, 32, 110, 111) && m4(q + 24, 100, 101, 40, 101) && m4(q + 28, 110, 118, 41, 10)
@@ -2286,7 +2286,7 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|     x := h + 33
 //|     r := 0
 //|     while x < m {
-//|       r = Texts.line_ended(x, m + 1)
+//|       r = Asked.line_ended(x, m + 1)
 //|       o = param_of(qs, qn, x + 16, digits_at(x + 16, m)) ? Locals.param_line(o, h, x, digits_at(x + 16, m), r, mixed) : put_span(o, x, r + 1)
 //|       x = r + 1
 //|     }
@@ -2327,5 +2327,128 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|   static local_read (o, k, d) => {
 //|     byte_put(o, 112)
 //|     put_span(o + 1, k, d)
+//|   }
+//| }
+//| // Asked: what the compiler asks of the texts it reads (`level cw_…`), apart from what the language's own levels ask
+//| // too (Expression.ray's `Texts`)
+//| Asked := class {
+//|   static cw_slice (t: Text, x, v) => ((t is Text) && ((t.from + untag(v)) <= t.to)) ? text(t.from + untag(x), t.from + untag(v)) : None
+//|   static cw_chopped (t: Text) => ((t is Text) && (t.to > t.from)) ? text(t.from, t.to - 1) : None
+//|   static cw_starts (t: Text, x: Text) => (((t.to - t.from) >= (x.to - x.from)) && texteq(t.from, x.from, x.to - x.from)) ? true : false
+//|   // (a text with its escapes read: `\n` a line end, `\t` a tab, else what is escaped)
+//|   static cw_unescaped (t: Text) => Asked.unescaped_to(t, alloc_bytes((t.to - t.from) + 8))
+//|   static unescaped_to (t: Text, o) => {
+//|     v := o
+//|     g := t.from
+//|     while g < t.to {
+//|       byte_put(v, ((Asked.escape_width(t, g) == 1) ? byte(g) : Asked.escape_of(byte(g + 1))))
+//|       g = g + Asked.escape_width(t, g)
+//|       v = v + 1
+//|     }
+//|     text(o, v)
+//|   }
+//|   static escape_width (t: Text, g) => ((byte(g) == 92) && ((g + 1) < t.to)) ? 2 : 1
+//|   static escape_of (c) => (c == 110) ? 10 : ((c == 116) ? 9 : c)
+//|   // (the parts of a text apart by its commas, not those in brackets, quotes or comments; each trimmed)
+//|   static cw_parts (t: Text) => Asked.parts_in(list(), t.to, partstart(t.from, t.to))
+//|   static parts_in (l: List, e, from) => {
+//|     d := 0
+//|     p := from
+//|     q := from
+//|     c := 0
+//|     split := 0
+//|     while q < e {
+//|       c = (Asked.comment_end(q, e) != q) ? 10 : byte(q)
+//|       q = Asked.comment_end(q, e)
+//|       q = (c == 96) ? Asked.backtick_end(q + 1, e) : q
+//|       d = (c == 96) ? d : (d + Texts.depth_change(c))
+//|       split = (c == 44) && (d == 0)
+//|       append(l, Texts.trimmed_text(p, q)) if split
+//|       p = split ? partstart(q + 1, e) : p
+//|       q = split ? (p - 1) : q
+//|       q = q + 1
+//|     }
+//|     Asked.last_part(l, Texts.trimmed_text(p, e)) if p < e
+//|     l
+//|   }
+//|   static comment_end (q, e) => (((q + 1) < e) && (byte(q) == 47) && (byte(q + 1) == 47)) ? Asked.line_ended(q, e) : q
+//|   static line_ended (from, e) => {
+//|     q := from
+//|     while (q < e) && (byte(q) != 10) {
+//|       q = q + 1
+//|     }
+//|     q
+//|   }
+//|   static backtick_end (from, e) => {
+//|     q := from
+//|     while (q < e) && (byte(q) != 96) {
+//|       q = q + 1
+//|     }
+//|     q
+//|   }
+//|   static last_part (l, c: Text) => append(l, c) if c.to > c.from
+//|   // (the number a text writes, in decimals or after `0x` in hexadecimals; none, when it writes none)
+//|   static cw_numeral_value (t: Text) => Asked.numeral_in(Texts.trimmed_text(t.from, t.to))
+//|   static numeral_in (u: Text) => (u.from >= u.to) ? None : ((((u.to - u.from) >= 3) && (byte(u.from) == 48) && ((byte(u.from + 1) == 120) || (byte(u.from + 1) == 88))) ? Asked.digits_from(u.from + 2, u.to, 16) : Asked.digits_from(u.from, u.to, 10))
+//|   static digits_from (from, to, base) => {
+//|     h := 0
+//|     a := from
+//|     while a < to {
+//|       return None if Asked.digit(byte(a), base) < 0
+//|       h = (h * base) + Asked.digit(byte(a), base)
+//|       a = a + 1
+//|     }
+//|     int(h)
+//|   }
+//|   static digit (c, base) => ((c >= 48) && (c <= 57)) ? (c - 48) : ((base == 16) ? (((c >= 97) && (c <= 102)) ? (c - 87) : (((c >= 65) && (c <= 70)) ? (c - 55) : (0 - 1))) : (0 - 1))
+//|   // (where a text is in a list, by what it writes; and the number a name is known by, a new one the next)
+//|   static cw_index_of (l: List, t: Text) => {
+//|     i := 0
+//|     while i < l.count {
+//|       return int(i) if Texts.same_text(l.items[i], t)
+//|       i = i + 1
+//|     }
+//|     None
+//|   }
+//|   static cw_symbol_of (t) => Asked.symbol_in(Asked.symbols(), t)
+//|   static symbols => (syms == 0) ? Asked.symbols_made() : syms
+//|   static symbols_made => {
+//|     syms = list()
+//|     kept()
+//|     syms
+//|   }
+//|   static symbol_in (s: List, t: Text) => {
+//|     i := 0
+//|     while i < s.count {
+//|       return int(i + 16) if Texts.same_text(s.items[i], t)
+//|       i = i + 1
+//|     }
+//|     append(s, t)
+//|     int(i + 16)
+//|   }
+//|   static cw_symbol_count => int((syms == 0) ? 0 : Texts.count_of(syms))
+//|   static cw_symbol_text (x) => at(syms, untag(x))
+//|   // (the name of a node's first field the program gave it, not one every node has)
+//|   static cw_first_member (x: Node) => ((x is Node) || (x is Applied)) ? Asked.first_named(x.fields) : None
+//|   static first_named (from: Field) => {
+//|     f := from
+//|     named := None
+//|     while f != None {
+//|       named = ((f.name != Symbol.key) && (f.name != Symbol.this) && (f.name != Symbol.caller) && (f.name != Symbol.in)) ? f : named
+//|       f = f.next
+//|     }
+//|     Asked.name_of(named)
+//|   }
+//|   static name_of (f: Field) => (f === None) ? None : name_text(f.name)
+//|   // (a text's statements, as a grammar reads them: each, or the text each is)
+//|   static cw_statements_in (g, t) => mapped(parsed_statements(g, t), Symbol.statement)
+//|   static cw_statement_texts (g, t) => Asked.statement_texts(parsed_statements(g, t), list())
+//|   static statement_texts (l: List, o) => {
+//|     i := 0
+//|     while i < l.count {
+//|       append(o, continued_span(o, Layout.span_in(member((l.items[i]), 14))))
+//|       i = i + 1
+//|     }
+//|     o
 //|   }
 //| }

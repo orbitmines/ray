@@ -1058,6 +1058,27 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.declared(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
 //|     Lowered.kinds.for((k) => Lowered.managed_kind(k.first) ? Lowered.constructor(k) : None)
 //|     lr_members.for((m) => (Lowered.kind(m) == `static_of`) ? Lowered.defined(Compiled.trimmed(Lowered.parsed(m).static_of)) : None)
+//|     Lowered.image()
+//|   }
+//|   // (what the run is at, every global, a word each in what lasts (`image_out`), so the host can go on from it, and put
+//|   // back from there (`image_in`))
+//|   static image => {
+//|     Lowered.w("function image_out() {\n  var x\n  x = lasting_alloc(")
+//|     High.number(Low.globals.count * 4)
+//|     Lowered.w(")\n")
+//|     Lowered.image_words(Low.globals, 0, true)
+//|     Lowered.w("  x\n}\nfunction image_in(x) {\n")
+//|     Lowered.image_words(Low.globals, 0, false)
+//|     Lowered.w("  0\n}\n")
+//|   }
+//|   static image_words (il, ii, i_out) => il.empty ? None : Lowered.image_word(il, ii, i_out)
+//|   static image_word (iw, ii, i_out) => {
+//|     Lowered.w(i_out ? "  (x + " : "  ")
+//|     i_out ? High.number(ii * 4) : Lowered.w(iw.first)
+//|     Lowered.w(i_out ? ") <- " : " = (load (x + ")
+//|     i_out ? Lowered.w(iw.first) : High.number(ii * 4)
+//|     Lowered.w(i_out ? "\n" : "))\n")
+//|     Lowered.image_words(iw.rest, ii + 1, i_out)
 //|   }
 //|   // (what each section, `X := class { … }` (or `X := { … }`), holds, each `static …` in it: the runtime's, and the
 //|   // levels'; a function of a section is called by its name, `X.f(…)`)

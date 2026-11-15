@@ -4063,74 +4063,10 @@ Afterwards := class {
   }
   static m4 (q, c0, c1, c2, c3) => (byte(q) == c0) && ((c1 == 0) || ((byte(q + 1) == c1) && ((c2 == 0) || ((byte(q + 2) == c2) && ((c3 == 0) || (byte(q + 3) == c3))))))
 }
-// Images: what the reading is at, kept (`image_out`, an Image) so the host can go on from it (`image_in`); a test's
+// Images (what the reading is at, kept so the host can go on from it, is the back end's: `image_out`, `image_in`); a test's
 // state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside copied to what
 // lasts and its memory let go; the arguments a call shares (word 3928), made once, to last
 Images := class {
-  static Image := (aside, free, textend, boundn, bounds, names, activen, actives, markf, effects, syms, outb, outn, datab, datan, counter, asideb, asiden, takent, csyms, memo, epoch, wholly, noreclaim, parserhook, nomemo, pcache, isostack, isodepth)
-  static image_out => Images.imaged(lasting_alloc(112))
-  static imaged (b: Image) => {
-    b.free = free
-    b.textend = textend
-    b.boundn = boundn
-    b.bounds = bounds
-    b.names = names
-    b.activen = activen
-    b.actives = actives
-    b.markf = markf
-    b.effects = effects
-    b.syms = syms
-    b.outb = outb
-    b.outn = outn
-    b.datab = datab
-    b.datan = datan
-    b.counter = counter
-    b.asideb = asideb
-    b.asiden = asiden
-    b.takent = takent
-    b.csyms = csyms
-    b.memo = memo
-    b.epoch = epoch
-    b.wholly = wholly
-    b.noreclaim = noreclaim
-    b.parserhook = parserhook
-    b.nomemo = nomemo
-    b.pcache = pcache
-    b.isostack = isostack
-    b.isodepth = isodepth
-    b
-  }
-  static image_in (b: Image) => {
-    free = b.free
-    textend = b.textend
-    boundn = b.boundn
-    bounds = b.bounds
-    names = b.names
-    activen = b.activen
-    actives = b.actives
-    markf = b.markf
-    effects = b.effects
-    syms = b.syms
-    outb = b.outb
-    outn = b.outn
-    datab = b.datab
-    datan = b.datan
-    counter = b.counter
-    asideb = b.asideb
-    asiden = b.asiden
-    takent = b.takent
-    csyms = b.csyms
-    memo = b.memo
-    epoch = b.epoch
-    wholly = b.wholly
-    noreclaim = b.noreclaim
-    parserhook = b.parserhook
-    nomemo = b.nomemo
-    pcache = b.pcache
-    isostack = b.isostack
-    isodepth = b.isodepth
-    0
-  }
   static shared_args (w, n) => {
     ((free >= arena_base()) ? word_put(w, Images.two_none()) : Images.args_lasting(w, free, markf)) if word_of(w) == 0
     word_put(word_of(w) + 4, n)

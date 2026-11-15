@@ -386,6 +386,10 @@ its own reading its place, unread text recorded with reading going on.
   no slower, so it is gone (the self-compile 67 s for three revisions). `keys_reading`'s filter (every key tried):
   319 s / 217 s. The reading memo (`memo_read`, every hole read again): 313 s / 226 s. Each goes with what replaces it
   (rules kept by lead; a hole a token at a time), not before.
+  `occurs` as a plain scan (its byte and pair indexes, 165 lines, gone): both suites at baseline and no slower
+  (269 s / 185 s), but the self-compile 156 s against 67 s (it reads whole texts for each literal), so kept until rules
+  by lead need no literal check. Found on the way: `eager_caches`' one `kept()` at the first frame opened is load-bearing;
+  without it revision 142 writes 143 out of stack (`Maximum call stack size exceeded`).
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

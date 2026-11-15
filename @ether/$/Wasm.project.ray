@@ -778,7 +778,7 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //| Low := {
 //|   // (the globals, by place: where the next is made (from 65536), the end of the text read, how many holes are bound and
 //|   // where (from 32768))
-//|   static globals := Compiled.parts("free, textend, boundn, bounds, names, activen, actives, markf, effects, syms, outb, outn, datab, datan, counter, asideb, asiden, takent, csyms, memo, epoch, wholly, noreclaim, parserhook, nomemo, pcache, isostack, isodepth, rp, rpos, rk, rmode, rstart, rbase, rresult")
+//|   static globals := Compiled.parts("free, textend, boundn, bounds, names, activen, actives, markf, effects, syms, outb, outn, datab, datan, counter, asideb, asiden, takent, csyms, memo, epoch, wholly, noreclaim, parserhook, nomemo, isostack, isodepth, rp, rpos, rk, rmode, rstart, rbase, rresult")
 //|   // (where a name is among names: its place; not there, none)
 //|   static place_of (po_list, po_name) => level cw_index_of (po_list) (po_name)
 //|   static has (hs_list, hs_name) => !((level cw_index_of (hs_list) (hs_name)) === None)
@@ -2531,7 +2531,7 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|     l
 //|   }
 //|   // (read in young memory, only what it reaches copied to what lasts; read in what lasts when that can not be)
-//|   static parse_moved (g, a, e, f, m) => ((f >= Heap.marked_from) && (f < arena_base())) ? Statements.parse_copied(Collector.lasting_copy(Statements.parse_counted(g, a, e), f), g, a, e) : Statements.parse_lasting(g, a, e, f, m)
+//|   static parse_moved (g, a, e, f, m) => (f < arena_base()) ? Statements.parse_copied(Collector.lasting_copy(Statements.parse_counted(g, a, e), f), g, a, e) : Statements.parse_lasting(g, a, e, f, m)
 //|   static parse_copied (c, g, a, e) => (c != 0) ? c : Statements.parse_lasting(g, a, e, free, markf)
 //|   static parse_lasting (g, a, e, f, m) => {
 //|     l := 0

@@ -1797,13 +1797,6 @@ Caches := class {
     word_put(x + 4, l.count)
   }
   static lead_code (p) => Keys.led_by_text(p) ? ((Keys.lead_byte(p) < 0) ? 256 : Keys.lead_byte(p)) : (0 - 1)
-  static led_table => (pcache == 0) ? Caches.led_made() : pcache
-  static led_made => {
-    pcache = alloc(8388608)
-    kept()
-    word_put(pcache, 16400)
-    pcache
-  }
 }
 // Pairs (`level paired …`): which bytes pair, learned from a capture's uses (`open close`, the bytes just around each,
 // neither white nor of a word: the same both a quote, else an opening and a closing bracket), each noted with where
@@ -2786,17 +2779,16 @@ Origins := class {
     d
   }
 }
-// Heap (`level memory …`, removable: without it, memory is only taken): what is taken past a mark has where each
+// Heap (`level memory …`, removable: without it, memory is only taken): what is taken has where each
 // value starts noted (a bit a word, `starts_map`), and which of them hold bytes only (`bytes_map`); the arena (past
 // `arena_base`) is not; taking past it stops. Kept: what is made now outlives the region it is made in.
 Heap := class {
-  static marked_from := 16777216
   static starts_map => 1021000000 * 2
   static bytes_map => 1033000000 * 2
   static alloc (n) => Heap.taken_at(free, n)
   static taken_at (p, n) => {
     free = free + (((n + 7) / 8) * 8)
-    ((free > arena_base()) ? Heap.arena_over(p) : Heap.start_noted(p)) if free > marked_from
+    (free > arena_base()) ? Heap.arena_over(p) : Heap.started(p)
     p
   }
   static arena_over (p) => {
@@ -2806,10 +2798,6 @@ Heap := class {
   static overflowed => {
     word_put(3924, 1)
     unreachable_now()
-  }
-  static start_noted (p) => {
-    Heap.started(p) if p >= marked_from
-    0
   }
   static started (p) => {
     starts_cleared(p + 8, free)
@@ -2823,7 +2811,7 @@ Heap := class {
     Heap.bit_cleared(Heap.bytes_map(), p / 8)
     0
   }
-  static starts_cleared (a, e) => (e <= marked_from) ? 0 : Heap.starts_cleared_in(((a < marked_from) ? marked_from : a) / 8, e / 8)
+  static starts_cleared (a, e) => Heap.starts_cleared_in(a / 8, e / 8)
   static starts_cleared_in (c0, k) => {
     c := c0
     while (c < k) && ((c % 32) != 0) {
@@ -2842,7 +2830,7 @@ Heap := class {
   }
   static alloc_bytes (n) => Heap.bytes_noted(alloc(n))
   static bytes_noted (p) => {
-    Heap.bit_raised(Heap.bytes_map(), p / 8) if (p >= marked_from) && (p < arena_base())
+    Heap.bit_raised(Heap.bytes_map(), p / 8) if p < arena_base()
     p
   }
   static marked_at (y) => (byte(word_of(4016) + ((y / 64) - (word_of(4008) / 64))) / (1 << ((y / 8) % 8))) % 2
@@ -3111,7 +3099,6 @@ Isolation := class {
   }
   static isolated_open => {
     Isolation.stack_made() if isostack == 0
-    eager_caches() if pcache == 0
     return Isolation.frame_deeper() if isodepth >= depth_most
     Isolation.frame_opened(isostack + (isodepth * 12))
   }
@@ -3190,17 +3177,6 @@ Isolation := class {
     epoch = epoch + 1
     word_put(4004, 0)
     word_put(3996, word_of(3996) + 1)
-    0
-  }
-  static eager_caches => {
-    return 0 if isodepth > 0
-    Isolation.pcache_made() if pcache == 0
-    kept()
-    0
-  }
-  static pcache_made => {
-    pcache = alloc(8388608)
-    word_put(pcache, 16400)
     0
   }
   static stopped => word_of(3916) != 0
@@ -3406,7 +3382,6 @@ Collector := class {
     takent = Collector.root_value(takent, d, fix)
     csyms = Collector.root_value(csyms, d, fix)
     memo = Collector.root_value(memo, d, fix)
-    pcache = Collector.root_value(pcache, d, fix)
     parserhook = Collector.root_value(parserhook, d, fix)
     datab = Collector.root_value(datab, d, fix)
     asideb = Collector.root_value(asideb, d, fix)

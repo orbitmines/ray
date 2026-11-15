@@ -115,6 +115,42 @@ the cache it replaces. Step 4 needs Expression.ray changed with it. Step 6 is th
 engine's line count reaches 1000 only once it is done: until then a request in the language is a request in the
 engine.
 
+## One file: the new Expression.ray (the user, 2026-11-15)
+
+"Continue autonomously with the whole plan … try not to change Expression.ray or only small edits, no new externals,
+keeping the core. The next steps should merge all the functionality in a proper setup which is 1000 lines and is
+Expression, Runtime and Compiler in one: the new Expression.ray."
+
+So the three files become one, Expression.ray, of about 1000 lines, its reader (today's, up to `ex :=`) kept as it is
+but for small edits. What is the back end's stays in `$/Wasm.project.ray` (AGENTS.md: what differs per platform goes in
+the package it is about): writing WebAssembly is the Wasm package's, not Expression.ray's.
+
+```
+Expression.ray   ≈ 1000
+  the reader        ≈ 380   today's, kept (its tests after `ex :=`, as now)
+  values and calls  ≈ 250   Runtime.ray's kinds as headers, members, calls, reading with continuations
+  the turn          ≈ 120   statements read and run, retried by lead, includes; what a statement defines kept
+  memory            ≈ 150   one barrier; a statement's end copied out; a call's frame compacted, paced
+  the levels        ≈ 100   Compiler.ray's own level (optimizations as rules), what is left of `level …`
+$/Wasm.project.ray's bootstrap part: Ray written as WebAssembly directly (High, Lowered, Locals, Compiled, Low as one)
+```
+
+Where each of today's parts goes:
+
+| Today | Lines | Goes |
+|---|---|---|
+| Expression.ray's reader | 384 | kept |
+| Runtime.ray | 652 | values and calls, the turn |
+| Texts, Output, Splices, Origins, Afterwards, Hooks | ~730 | the turn and the host's few words; what is the language's (origins as spans, `goto afterwards`) into the entrypoint |
+| Readings, Keys, Caches, Pairs, Layout, Indexes, Members, Calls, Matching, Built, Turns, Entry, Basics, FieldIndex, Actives | ~1350 | values and calls; caches go with the structural fixes above (the text's shape, rules by lead) |
+| Heap, Memory, Notes, Isolation, Collector, Starts, Images | ~990 | memory |
+| Compiler (its level) | 300 | the levels |
+| Lowered, High, Locals | ~1150 | the Wasm package's bootstrap part, one writer with Compiled and Low |
+
+Order: the one writer first (it changes nothing the suites see, and the fixpoint checks it), then memory, then the
+structural fixes with what they replace, then Runtime.ray and the levels folded into Expression.ray, which the host then
+reads alone (with the Wasm part).
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

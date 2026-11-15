@@ -841,7 +841,23 @@ Keys := class {
 // where it is too); the ones led by text in a node's rules (`led_keys`). Each a table of slots and a room after them,
 // cleared once full.
 Caches := class {
-  static keys_reading (l: List, t: Text) => ((l is List) && (t is Text)) ? Caches.keys_plain(l, t, ((t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2))) : l
+  static keys_reading (r, t: Text) => (r is Node) ? Caches.keys_of(r, keys(r), t) : (((r is List) && (t is Text)) ? Caches.keys_plain(r, t, Caches.reading_lead(t)) : r)
+  static reading_lead (t: Text) => (t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2)
+  // (a node's keys that can read a text: those led by its first byte and those led by a hole, by the node's index, in order)
+  static keys_of (r: Node, l: List, t: Text) => (!(t is Text)) ? l : ((Caches.reading_lead(t) == (0 - 3)) ? Caches.keys_plain(l, t, 0 - 3) : Caches.keys_led(l, Caches.leads(r), t, Caches.reading_lead(t)))
+  static keys_led (l: List, x, t: Text, c) => {
+    o := list()
+    a := (c >= 0) ? word_of(x + (8 + (c * 4))) : (0 - 1)
+    b := word_of(x + 1036)
+    i := 0
+    while (a >= 0) || (b >= 0) {
+      i = ((b < 0) || ((a >= 0) && (a < b))) ? a : b
+      append(o, at(l, i)) if Keys.literals_in(Keys.key_pattern(at(l, i)), t.from, t.to)
+      a = (i == a) ? word_of(x + (2072 + (i * 4))) : a
+      b = (i == b) ? word_of(x + (2072 + (i * 4))) : b
+    }
+    o
+  }
   static keys_plain (l: List, t: Text, b) => {
     o := list()
     i := 0
@@ -853,23 +869,23 @@ Caches := class {
   }
   static key_leads (p, t: Text, b) => ((!Keys.led_by_text(p)) || (Keys.lead_byte(p) == b) || (b == (0 - 3))) && Keys.literals_in(p, t.from, t.to)
   static lead_class (b) => (white(b) || (b == 10)) ? (0 - 3) : b
-  // (a node's keys by the byte that leads each (256: led by text, by no byte), kept on the node (`index`) as they grow:
+  // (a node's keys by the byte that leads each (256: led by text, by no byte; 257: by a hole), kept on the node (`index`) as they grow:
   // the first of each, the last, each one's next, in order, then the list and its last key indexed; made again when
   // its keys are others, fewer, or past its room)
   static leads (r: Node) => Caches.leads_grown(r.keys, Caches.leads_fitting(r, r.keys, r.index))
-  static leads_fitting (r: Node, l: List, x) => ((x == 0) || (word_of(x) < l.count) || (word_of(x + 4) > l.count) || (word_of(x + (2064 + (word_of(x) * 4))) != l) || ((word_of(x + 4) > 0) && (word_of(x + (2068 + (word_of(x) * 4))) != at(l, word_of(x + 4) - 1)))) ? Caches.leads_made(r, l, (l.count < 8) ? 16 : (l.count * 2)) : x
+  static leads_fitting (r: Node, l: List, x) => ((x == 0) || (word_of(x) < l.count) || (word_of(x + 4) > l.count) || (word_of(x + (2072 + (word_of(x) * 4))) != l) || ((word_of(x + 4) > 0) && (word_of(x + (2076 + (word_of(x) * 4))) != at(l, word_of(x + 4) - 1)))) ? Caches.leads_made(r, l, (l.count < 8) ? 16 : (l.count * 2)) : x
   static leads_made (r: Node, l: List, n) => {
-    x := (r >= arena_base()) ? lasting_alloc(2072 + (n * 4)) : alloc(2072 + (n * 4))
+    x := (r >= arena_base()) ? lasting_alloc(2080 + (n * 4)) : alloc(2080 + (n * 4))
     word_put(x, n)
     word_put(x + 4, 0)
-    Caches.chains_cleared(x + 8, x + 2064)
-    word_put(x + (2064 + (n * 4)), l)
+    Caches.chains_cleared(x + 8, x + 2072)
+    word_put(x + (2072 + (n * 4)), l)
     r.index = x
     x
   }
   static leads_grown (l: List, x) => {
     Caches.led_added(x, l, word_of(x + 4)) if word_of(x + 4) < l.count
-    word_put(x + (2068 + (word_of(x) * 4)), at(l, l.count - 1)) if l.count > 0
+    word_put(x + (2076 + (word_of(x) * 4)), at(l, l.count - 1)) if l.count > 0
     x
   }
   static chains_cleared (a0, e) => {
@@ -885,9 +901,10 @@ Caches := class {
     k := 0
     while i < l.count {
       k = Caches.lead_code(topattern(member(at(l, i), Symbol.key)))
-      word_put(x + (2064 + (i * 4)), 0 - 1)
-      word_put(((word_of(x + (1036 + (k * 4))) < 0) ? (x + (8 + (k * 4))) : (x + (2064 + (word_of(x + (1036 + (k * 4))) * 4)))), i) if k >= 0
-      word_put(x + (1036 + (k * 4)), i) if k >= 0
+      k = (k < 0) ? 257 : k
+      word_put(x + (2072 + (i * 4)), 0 - 1)
+      word_put(((word_of(x + (1040 + (k * 4))) < 0) ? (x + (8 + (k * 4))) : (x + (2072 + (word_of(x + (1040 + (k * 4))) * 4)))), i)
+      word_put(x + (1040 + (k * 4)), i)
       i = i + 1
     }
     word_put(x + 4, l.count)
@@ -1540,8 +1557,8 @@ Matching := class {
       i = ((b < 0) || ((a >= 0) && (a < b))) ? a : b
       r = Matching.led_matched(topattern(member(at(l, i), Symbol.key)), n, m)
       return r if r > n
-      a = (i == a) ? word_of(x + (2064 + (i * 4))) : a
-      b = (i == b) ? word_of(x + (2064 + (i * 4))) : b
+      a = (i == a) ? word_of(x + (2072 + (i * 4))) : a
+      b = (i == b) ? word_of(x + (2072 + (i * 4))) : b
     }
     0
   }

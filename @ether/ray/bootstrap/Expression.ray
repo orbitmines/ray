@@ -123,8 +123,8 @@ Expression := class (
         prefix (text) => longest(text, defines(text)) ?? (parts_prefix(parts, text) ?? in?.prefix(text))
         own_prefix (text) => longest(text, false) ?? parts_prefix(parts, text)
         parts_prefix (ps, text) => ps.empty ? None : (ps.first.own_prefix(text) ?? parts_prefix(ps.rest, text))
-        defining (text) => (level keys_reading (rules.keys) (text)){.defines && (!among(aside, .) && (text ~= .))}#.sort(.length).last ?? in?.defining(text)
-        longest (text, defining_text) => (level keys_reading (rules.keys) (text)){!(. === split_key) && ((defining_text || !((. === maker_key) || .defines)) && (!among(aside, .) && (text ~= .)))}#.sort(.length).last
+        defining (text) => (level keys_reading (rules) (text)){.defines && (!among(aside, .) && (text ~= .))}#.sort(.length).last ?? in?.defining(text)
+        longest (text, defining_text) => (level keys_reading (rules) (text)){!(. === split_key) && ((defining_text || !((. === maker_key) || .defines)) && (!among(aside, .) && (text ~= .)))}#.sort(.length).last
         // (and the split, `x.f`, when it reads more)
         reading (text) => longer(text, whole(text))
         longer (text, found) => ((found === maker_key) || (text == found?.key) || !prefer_split(text, found)) ? found : split_key

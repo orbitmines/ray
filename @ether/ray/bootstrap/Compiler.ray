@@ -853,28 +853,23 @@ Caches := class {
   }
   static key_leads (p, t: Text, b) => ((!Keys.led_by_text(p)) || (Keys.lead_byte(p) == b) || (b == (0 - 3))) && Keys.literals_in(p, t.from, t.to)
   static lead_class (b) => (white(b) || (b == 10)) ? (0 - 3) : b
-  // (a list of keys by the byte that leads each (256: led by text, by no byte): the first of each, the last, and each one's
-  // next, in order; in a table of slots (word 3908), each the list, the keys' version and its index, and the indexes after
-  // them, all cleared once full)
-  static led_index (l: List) => {
-    word_put(3908, lasting_alloc(33619968)) if word_of(3908) == 0
-    s := word_of(3908) + ((((l / 8) * 40503) & 4095) * 12)
-    x := ((word_of(s) == l) && (word_of(s + 4) == word_of(3996))) ? word_of(s + 8) : 0
-    x = ((x == 0) || (word_of(x) < l.count) || (word_of(x + 4) > l.count)) ? Caches.led_room(s, l, ((l.count < 8) ? 16 : (l.count * 2))) : x
-    Caches.led_added(x, l, word_of(x + 4)) if word_of(x + 4) < l.count
-    x
-  }
-  static led_room (s, l, n) => {
-    zeroed(word_of(3908), 49156) if (word_of(word_of(3908) + 49152) + (2064 + (n * 4))) > 33554432
-    x := word_of(3908) + (65536 + word_of(word_of(3908) + 49152))
-    word_put(word_of(3908) + 49152, word_of(word_of(3908) + 49152) + (2064 + (n * 4)))
+  // (a node's keys by the byte that leads each (256: led by text, by no byte), kept on the node (`index`) as they grow:
+  // the first of each, the last, each one's next, in order, then the list and its last key indexed; made again when
+  // its keys are others, fewer, or past its room)
+  static leads (r: Node) => Caches.leads_grown(r.keys, Caches.leads_fitting(r, r.keys, r.index))
+  static leads_fitting (r: Node, l: List, x) => ((x == 0) || (word_of(x) < l.count) || (word_of(x + 4) > l.count) || (word_of(x + (2064 + (word_of(x) * 4))) != l) || ((word_of(x + 4) > 0) && (word_of(x + (2068 + (word_of(x) * 4))) != at(l, word_of(x + 4) - 1)))) ? Caches.leads_made(r, l, (l.count < 8) ? 16 : (l.count * 2)) : x
+  static leads_made (r: Node, l: List, n) => {
+    x := (r >= arena_base()) ? lasting_alloc(2072 + (n * 4)) : alloc(2072 + (n * 4))
     word_put(x, n)
     word_put(x + 4, 0)
     Caches.chains_cleared(x + 8, x + 2064)
-    word_put(s, l)
-    word_put(s + 4, word_of(3996))
-    word_put(s + 8, x)
-    cache_key(l) if l < arena_base()
+    word_put(x + (2064 + (n * 4)), l)
+    r.index = x
+    x
+  }
+  static leads_grown (l: List, x) => {
+    Caches.led_added(x, l, word_of(x + 4)) if word_of(x + 4) < l.count
+    word_put(x + (2068 + (word_of(x) * 4)), at(l, l.count - 1)) if l.count > 0
     x
   }
   static chains_cleared (a0, e) => {
@@ -1535,9 +1530,8 @@ Matching := class {
     }
     0
   }
-  static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, n, m, c)
-  static led_tried (l: List, n, m, c) => {
-    x := Caches.led_index(l)
+  static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, Caches.leads(rules), n, m, c)
+  static led_tried (l: List, x, n, m, c) => {
     a := (c >= 0) ? word_of(x + (8 + (c * 4))) : (0 - 1)
     b := word_of(x + 1032)
     i := 0
@@ -2595,23 +2589,8 @@ Collector := class {
     return 0 if word_of(4052) != 0
     d := Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(b, free), free, markf) - b, b, free)
     Collector.roots_of(d, 1, b)
-    Collector.statement_freed(b, Collector.led_moved(d, word_of(3908), 0))
+    Collector.statement_freed(b, 0)
     1
-  }
-  // (the led keys of lists moved, moved with them; of lists let go, cleared)
-  static led_moved (d, t, i0) => {
-    i := i0
-    m := 0
-    while (t != 0) && (i < 4096) {
-      Collector.slot_moved(d, t + (i * 12), word_of(t + (i * 12)))
-      m = ((word_of(t + (i * 12)) < arena_base()) && (word_of(t + (i * 12)) > m)) ? word_of(t + (i * 12)) : m
-      i = i + 1
-    }
-    m
-  }
-  static slot_moved (d, s, l) => {
-    word_put(s, (Heap.marked_at(l) != 0) ? (d + Collector.gc_reloc(l)) : 0) if Collector.gc_in(l) && (l < word_of(4012))
-    0
   }
   // (what a statement took let go, what it made copied out: the caches by place begun again, the led keys kept)
   // (only the led keys outlast it: the highest of them young is the caches' reach)
@@ -2749,7 +2728,7 @@ Collector := class {
     Collector.fixes_applied()
     Collector.roots_named(0, 1)
     Collector.notes_moved(word_of(3880)) if word_of(3880) != 0
-    Collector.frame_freed(b + n, Collector.led_moved(0, word_of(3908), 0))
+    Collector.frame_freed(b + n, 0)
     (pointer(v) && Collector.gc_in(v)) ? Collector.gc_reloc(v) : v
   }
   static slid (b, top) => {

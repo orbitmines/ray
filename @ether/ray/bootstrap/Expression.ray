@@ -1892,8 +1892,8 @@ Pairs := class {
     while q < textend {
       return 0 if (q >= n) && (d <= 0)
       return Pairs.spaces_past(q) + 1 if Pairs.closed_here(Pairs.spaces_past(q), d, n)
-      d = Pairs.opened_after(q, Pairs.line_end_from(Pairs.spaces_past(q)), Pairs.closed_at(Pairs.spaces_past(q), d))
-      q = Pairs.line_end_from(Pairs.spaces_past(q)) + 1
+      d = Pairs.opened_after(q, Runtime.line_end(Pairs.spaces_past(q)), Pairs.closed_at(Pairs.spaces_past(q), d))
+      q = Runtime.line_end(Pairs.spaces_past(q)) + 1
     }
     0
   }
@@ -1906,13 +1906,6 @@ Pairs := class {
       f = f + 1
     }
     f
-  }
-  static line_end_from (f) => {
-    l := f
-    while (l < textend) && (byte(l) != 10) {
-      l = l + 1
-    }
-    l
   }
   static spaces_back (q, l) => {
     f := l

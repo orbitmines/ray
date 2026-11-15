@@ -2499,16 +2499,9 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|   static partstart (p, e) => {
 //|     q := p
 //|     while (q < e) && (white(byte(q)) || (((q + 1) < e) && (byte(q) == 47) && (byte(q + 1) == 47))) {
-//|       q = white(byte(q)) ? (q + 1) : Statements.to_line_end(q, e)
+//|       q = white(byte(q)) ? (q + 1) : Asked.line_ended(q, e)
 //|     }
 //|     q
-//|   }
-//|   static to_line_end (q, e) => {
-//|     k := q
-//|     while (k < e) && (byte(k) != 10) {
-//|       k = k + 1
-//|     }
-//|     k
 //|   }
 //|   static parsed_statements (g, t) => ((t is Text) ? Statements.parsed_trimmed(((g is Text) ? grammar_of(g) : g), cw_trimmed(t)) : list())
 //|   static parsed_trimmed (g, t: Text) => (t.to == t.from) ? list() : (((lasting_span(t.from, t.to) != 0) && Statements.grammar_lasts(g)) ? Statements.kept_parse(Statements.parse_slot(g, t.from, t.to), g, t.from, t.to) : Statements.parse_plain(g, t.from, t.to))

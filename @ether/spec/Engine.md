@@ -180,6 +180,16 @@ as a call's does (the copy out gone). What is left to reach 1000 is the restatem
 as one rule per pattern kind through a continuation, the caches replaced by the text's shape, memory as one way of
 keeping (a test's end that way measured 15% slower: TODO.md).
 
+**Where it stands (2026-11-16).** 3836 lines. Baselines now: `--test` 249/200/11 in ~56 s, `--test-all` 135/133/5 in
+~17.5 s, the self-compile 48 s and 539 MB (r144 219113 bytes). What made them faster, with the same results: a node
+keeps the style it is shown as (`level shown` no longer scans what is painted), and the collector walks what is kept,
+not what was made (whole chunks skipped where nothing marked starts, the copy out from one live value to the next, a
+value's cells cleared at once). Calls (step 1 of the language order) read with the lazy reader (`led`, ~40 lines, not
+landed: TODO.md) pass more (`--test-all` 135 → 294) but take ~3× as long, as the language then runs its own library
+(every list Array's `new` and `append`): landing them waits on calls costing less. Where that time goes, measured on
+the entrypoint: memory a quarter (a test's end tracing what it painted 13%, a frame's end 11%), paints made each time a
+rule applies 15% (a styled hole's, a parameter's: the same places again in a loop), member lookup by a node's fields 8%.
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

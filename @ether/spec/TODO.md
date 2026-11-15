@@ -329,6 +329,11 @@ its own reading its place, unread text recorded with reading going on.
     reads itself") and line 210 disagree for a statement read while it runs. To decide: what is set aside belongs to
     where code is read (the body's node, and what is read in it), not to the run, e.g. kept on `me.in` and looked up along
     `in`; running still sees the rule, so recursion through a call stays.
+    Tried (2026-11-15): `runs` not restoring what is set aside. Expression.lazy then reads the whole text with no
+    statement cut (163M steps, 66 s), but plain Expression.ray reads almost nothing (0 passed, 124 "Nothing reads
+    this"): the rule maker's own body, `{lhs} => {rhs}`, is read as it runs and needs the maker. Kept as it was. And
+    on the whole text plain Expression.ray does not recurse at line 385 (its stops are by steps, 40 frames deep); only a
+    text ending there does, and Expression.lazy does on the whole text (2909 frames deep).
   - **A call's frame compacted when it ends (2026-11-15):** a frame closing with something older holding what it made
     has what the notes, the run's state and its value reach moved down to where it began, the rest let go
     (`Isolation.compacted_or`, `Collector.frame_compacted`). Unlimited, 14983 compactions over the suite with no stale

@@ -1707,10 +1707,9 @@ Keys := class {
   }
   static key_moved (lv, lp, x, i) => (i < 2) ? append(lv, x) : ((Members.catches_all(topattern(member(x, Symbol.key))) == 0) ? append(lp, x) : 0)
 }
-// Caches (`level cached …`, removable: each what it caches, again): a list of keys, each its pattern and lead
-// (`keys_reading`, by the list, its length and the rules' epoch); of those, the ones read in a text of the program (by
-// where it is too); the ones led by text in a node's rules (`led_keys`). Each a table of slots and a room after them,
-// cleared once full.
+// Caches (`level cached …`, removable: each what it caches, again): of a node's rules, the keys that can read a text
+// (`keys_reading`: those led by its first byte or by a hole, whose literals all occur in it), by the node's own index of
+// its keys by what leads each (`leads`, kept on the node as its keys grow).
 Caches := class {
   static keys_reading (r, t: Text) => (r is Node) ? Caches.keys_of(r, keys(r), t) : (((r is List) && (t is Text)) ? Caches.keys_plain(r, t, Caches.reading_lead(t)) : r)
   static reading_lead (t: Text) => (t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2)

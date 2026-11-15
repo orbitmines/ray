@@ -497,6 +497,13 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   cw_* helpers, 300 of entry and IO, 260 of tests and paints. To fit in 1000 lines the core is to be restated (each
   pattern kind's reading a rule of its own, through a continuation), not transliterated; the caches (pair ends, led
   keys, rules by lead text) and memory go to Compiler.ray levels.
+- **Memory, one way of keeping (2026-11-15)**: a statement's end now compacts its frame as a call's end does (9ca298a1:
+  the same results and times; the copy out to what lasts, `statement_copied`, gone). A test's end the same way
+  (compact what it painted and said down to where it began, `kept_alone`, instead of `lasting_copy` to what lasts) gives
+  the same results but `--test` 67 → 77.5 s, twice: what a test keeps then stays young, inside the frames around it, so
+  it is moved again by each of their compactions and written past the barrier. Not landed; `lasting_copy` stays for it
+  and for the compiler's parse table (Writing's `parse_moved`). With no reclaiming at all (`noreclaim = 1`) the suites
+  run out of memory (18 passed, 207 errors): reclaiming is not removable, only unifiable.
 
 ## Node.ray
 

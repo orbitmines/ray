@@ -163,6 +163,12 @@ and Locals (High's functions given their parameters as locals) are the back end'
 got faster, since a test no longer reads them as the language's (`--test` 223 → 183 s, `--test-all` 185 → 140 s, with
 one error fewer, 7). Expression.ray: 4250 lines.
 
+**The image from the globals; tests leave out what is lowered (2026-11-15).** `image_out`/`image_in` are written by
+Lowered from Low's globals (every one, a word each), so Images no longer copies each by name. What Expression.ray has
+lowered (from `Runtime := class` to its end) is the back end's, as Runtime.ray was: the host leaves it out of what a test
+reads (as it leaves out a comment, each line kept where it is). The same results, `--test` 183 → 67 s, `--test-all`
+140 → 30 s (5 errors), the self-compile 51 s. Baselines from here: 249/200/11 in 67 s, 135/133/5 in 30 s.
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

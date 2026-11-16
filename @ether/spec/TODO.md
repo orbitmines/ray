@@ -541,10 +541,14 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
      worse at every file (`.project.ray` alone 263 → 237 passed; from Node.ray on it runs out of memory; with Ray.ray
      nothing passes): what calls now really run (classes with a header run their block per construction, `Ordered`'s
      `>`/`<`) costs more and fails more. Next: what Ray.ray's `Ordered := class (T = static) => { … }` does per call.
-- **A call written bare in a hole is not called** (2026-11-16, both readers; scratchpad `p112.ray`): in a block with
-  `h (n) => true`, `assert h(false)` and `x := h(false); assert x` fail while `assert (h(false))`, `assert h(false) ===
-  true` and `assert h(false) && true` pass. Likely the split (a value then what follows read on it, `reading`'s
-  `prefer_split`) reads `assert h` and then `(false)` on what that answered. Most tests are written `assert f(x)`.
+- **A comment after one space is read with a block's name** (2026-11-16, scratchpad `p124.ray`–`p134.ray`): in a block
+  with `v := true` (or `h (n) => true`), `mine v // c` and `assert h(false) // c` fail, where `mine v  // c` (two spaces,
+  as every test is written) and `mine (v) // c` pass. The hole takes `v // c`; read in the block, the block's own `v`
+  reads its start and `// c` is then read on its value, by nothing: `nearer` lets a farther rule read the whole only
+  when it is a name equal to the text (`fuller`), and the block's `in` finds `v` again through its parts before the
+  comment rule in `global`. Letting a farther rule that reads more win (longest first, §4.3; `E.H.ray`) passes these
+  but fails 35 tests written with two spaces (CC10, CF12, CF18, …): the comment rule's `{statement}` is then read
+  where the rule is, not where the text was written (`=> statement` does not help).
 - **A keyword is read at the start of a name that is not visible** (2026-11-16): `recur ^keyword` reads the start of
   `recurring_flip(…)` in a block (rules read inside words, Design §2): a method of a block whose name starts with `recur`
   is not called there (`p107.ray`), and with calls run (above) `goto recurring` leaves the test: RC1 and RV2 are not run.

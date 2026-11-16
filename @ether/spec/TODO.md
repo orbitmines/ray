@@ -511,17 +511,24 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   led table (same suites, the self-compile 51 → 50 s).
 - **The memo, measured again (2026-11-15)**: off (`nomemo = 1`), `--test` 65 → 116 s, `--test-all` 28 → 62 s. It stays
   until holes read differently.
-- **Calls, the lazy reader (2026-11-15, not landed)**: a method led by what it is read on, `{this}(…)`, kept in a node
-  of its own rules (`led`) and read only on a value made of it (`led_from`), about 40 reader lines. With it calls run:
-  `--test` 249 → 255 passed, `--test-all` 135 → 294 passed (far more of each file read), no budget stops. Number.ray's
-  `{ }{value}` loops it (read on the class itself: `Number{true}`); written `{this}{value}` it reads on an instance only,
-  as its one use, `1 Vertex.Boundary`, does. Not landed for its speed: `--test` 60 → 187 s, `--test-all` 18 → 107 s.
-  What it costs is the language running its own library: tests run once everything is read, so every list is then
-  made by Array's `new` and `append` (taking those out alone gives back 15 of the entrypoint's 35 extra seconds); each
-  single call is cheap. Profiled, nearly every function is twice as busy; the collector is a third of either run
-  (`gc_live_counted`, `none_in`, `end_of`, `gc_start_back`), member lookup by walking a node's fields (`own`) 8%.
-  `level shown`, every `:=`'s, scanned all that was painted (what calls paint grows it): a node now keeps the style it
-  is shown as (ed6593d0, both suites 5% faster, the same results). Regressions to look at when it lands: GN1, IX9, IS1.
+- **Calls, the lazy reader (landed 2026-11-16)**: a method led by what it is read on, `{this}(…)`, kept in a node of
+  its own rules (`led`) and read only on a value made of it (`led_from`), about 40 reader lines. Number.ray's `{ }{value}`
+  looped it (read on the class itself: `Number{true}`); written `{this}{value}` it reads on an instance only, as its one
+  use, `1 Vertex.Boundary`, does. With it a body beginning `external .` lost its node: the statements after it were read
+  in the node they began in (`Statements(me.in)`), not the one `.` made, so what they defined (a call's parameters,
+  `taking`'s) was not seen by them. `.` now makes that node a component of the one they are read in (`composed`).
+  Together: `--test` 249 → 289 passed, `--test-all` 135 → 307 (far more of each file read), no budget stops, the
+  self-compile the same (48 s, 546 MB). Landed slower (`--test` 56 → 168 s, `--test-all` 17.5 → 101 s), as the user
+  decided (2026-11-16): the cost is the language running its own library (tests run once everything is read, so every
+  list is made by Array's `new` and `append`), and a structure's speed is the compiler's to give, by type (Array is a
+  Ray: what is of that type is optimized for it), once everything works. Two tests that passed before fail with it,
+  each by what is still broken, not by calls: IX9 (`level member` answers a value even for a name not held: it passed
+  only because the call never ran) and IS1 (`.every((item) => …)`, see below).
+- **A call's parameters, given positionally, are not seen by its body** (2026-11-16, both readers): `f (x) => x` written
+  at the top of a file, `f(true)` answers what `taking` answered (`true`), not `x`, whatever it is given; in a block the
+  same function, called from a statement there, works. `taking` declares with `({written_parameters}) := …` inside
+  `if … else`, and `(x) := v` is `((x) => value)`, which the closure rule reads (it defines, and is the latest such), so
+  no rule `x` is made where the body is read. Repro: scratchpad `probe.mjs` with `AT=2619`, `p32.ray`.
 - **Starts found stale where a value is made (2026-11-16)**: every place that lets memory go clears where values started
   in it (`freed_to`, `all_freed`, `memory_back`, and `freed_back` with it), yet a value made after a `freed_back` finds
   starts noted in its own cells (769 times in one self-compile). Clearing only where memory is let go (and not where a

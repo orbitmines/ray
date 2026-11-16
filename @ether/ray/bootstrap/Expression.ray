@@ -35,6 +35,9 @@ Expression := class (
         node := this
         // (what it is made of, its components: the last added first, read after its own rules and before what it is in)
         parts := Array.new
+        // (its rules led by what they are read on, `{this}(…)`, each kept with the rest of its head, `led_rest`)
+        led := None
+        led_from := None
         rules := {
           [rule: GRAMMAR_RULE.LHS] := (caller) => {
             // (as the holes that wrote it took it, defined where they are used; each hole shown as its head says, `{x ^style}`)
@@ -49,6 +52,7 @@ Expression := class (
             rule_home := (valued ? defined_in(rule_where, rule_lhs) : None) ?? rule_where
             sink = Array.new
             head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))
+            led_written := rule_lhs as (led: BOOTSTRAPPER.CAPTURE.map{== \s}(`this`), led_after: String+)
             rule_styled := sink.map((sp) => [level place_name (sp.rest.first), sp.first])
             // (its body read once, in a node of its own, run in a node in that one each time it is applied)
             rule_body := Node(in: ((caller.bound === None) ? node : caller.in))
@@ -75,6 +79,13 @@ Expression := class (
             }
             rule_own := rule_home.rules.keys.last
             rule_own.written_head = rule_lhs
+            // (a method led by what it is read on, `{this}(…)`: read on a value, its rest reads what follows the value; a rest led by a
+            // hole too, `{this}{rest}`, would read anything)
+            (rule_own.led_rest = (led_written.led_after as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))) if !((led_written.led_after === None) || (led_written.led_after.first == hole_opening))
+            // (kept apart, in a node of its own rules: only what is read on a value made of it reads by them)
+            (led_home(rule_home).rules[[rule_own.led_rest]] := rule_own.value) if !((rule_own.led_rest === None) || (rule_home === global))
+            // (one that is only a hole, `{written}`: it reads anything, so only what it is defined in reads with it)
+            (rule_own.lone = true) if (rule_lhs.first == hole_opening) && ((level cw_enclosed (rule_lhs)) === true)
             (rule_own.named = true) if !has_hole(rule_lhs)
             // (the pairs its head writes, `({x})`, known to what is read after it; one holding `=>`, a rule that defines)
             level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE) (rule_home)
@@ -87,7 +98,9 @@ Expression := class (
             // (what it is read on gives what is read on it: a node its rules, anything else its fields; one of the level's own
             // kinds of value, what the level says it is, `level kinds`)
             o := ((level kind_of (v)) === None) ? v : named_in(Program(in: kinds_of(caller)), level kind_of (v))
+            // (its own methods led by it first: what follows it read by their rest, `this` it)
             (o.rules === None) ? members(o).for((m) => on.rules[[m.key]] := (c) => m.value) : (on.parts = [o])
+            (on.led_from = o) if !(o.rules === None)
             r := (rs: Statements(on) = rest)
             (r === None) ? None : run_by(r, Program(caller: caller, in: on, this: v, receiver: v))
           }
@@ -114,14 +127,20 @@ Expression := class (
         // (a definition, `=>` outside pairs: the latest rule that defines, else the rule that makes rules; none set aside)
         // (what reads it here, but a name, `x`, read at its start, when what it is in reads it all, `x = v`)
         whole (text) => nearer(text, made(text, defines(text)))
-        nearer (text, near) => (near === None) ? (parts_whole(parts, text) ?? in?.whole(text)) : ((near.named && !(text == near.key)) ? fuller(text, near, in?.whole(text)) : near)
+        nearer (text, near) => (near === None) ? (led_whole(led_from, text) ?? (parts_whole(parts, text) ?? in?.whole(text))) : ((near.named && !(text == near.key)) ? fuller(text, near, in?.whole(text)) : near)
         // (in its components: each one's own rules, then what it is made of in turn, not what it is in)
-        own_whole (text) => longest(text, false) ?? parts_whole(parts, text)
+        own_whole (text) => part_longest(text) ?? parts_whole(parts, text)
+        part_longest (text) => (level keys_reading (rules) (text)){!(((. === split_key) || (. === maker_key)) || (.defines || (.lone === true))) && (!among(aside, .) && (text ~= .))}#.sort(.length).last
         parts_whole (ps, text) => ps.empty ? None : (ps.first.own_whole(text) ?? parts_whole(ps.rest, text))
         fuller (text, near, far) => (text == far?.key) ? far : near
         made (text, defining_text) => (((rules.keys.first === maker_key) && defining_text) && (text ~= maker_key)) ? (defining(text) ?? maker_key) : longest(text, defining_text)
-        prefix (text) => longest(text, defines(text)) ?? (parts_prefix(parts, text) ?? in?.prefix(text))
-        own_prefix (text) => longest(text, false) ?? parts_prefix(parts, text)
+        prefix (text) => longest(text, defines(text)) ?? (led_prefix(led_from, text) ?? (parts_prefix(parts, text) ?? in?.prefix(text)))
+        // (a value's methods led by it, `{this}(…)`: by their rest, in it and what it is made of)
+        led_whole (place, text) => (place === None) ? None : (((place.led === None) ? None : place.led.own_whole(text)) ?? led_parts_whole(place.parts, text))
+        led_parts_whole (ps, text) => ps.empty ? None : (led_whole(ps.first, text) ?? led_parts_whole(ps.rest, text))
+        led_prefix (place, text) => (place === None) ? None : (((place.led === None) ? None : place.led.own_prefix(text)) ?? led_parts_prefix(place.parts, text))
+        led_parts_prefix (ps, text) => ps.empty ? None : (led_prefix(ps.first, text) ?? led_parts_prefix(ps.rest, text))
+        own_prefix (text) => part_longest(text) ?? parts_prefix(parts, text)
         parts_prefix (ps, text) => ps.empty ? None : (ps.first.own_prefix(text) ?? parts_prefix(ps.rest, text))
         defining (text) => (level keys_reading (rules) (text)){.defines && (!among(aside, .) && (text ~= .))}#.sort(.length).last ?? in?.defining(text)
         longest (text, defining_text) => (level keys_reading (rules) (text)){!(. === split_key) && ((defining_text || !((. === maker_key) || .defines)) && (!among(aside, .) && (text ~= .)))}#.sort(.length).last
@@ -142,7 +161,7 @@ Expression := class (
         rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => {
           // (`external . v`: v one of the components of what it is read in, the last added first, answered; bare, a node of its
           // own in what it is read in, made of what a method was read on, its receiver)
-          `.` (made_of) => (made_of.first === None) ? (caller.this = (caller.in = made_on(Node(in: caller.in), caller))) : composed(place_of(caller), made_of.first)
+          `.` (made_of) => (made_of.first === None) ? (caller.this = (caller.in = composed(caller.in, made_on(Node(in: caller.in), caller)))) : composed(place_of(caller), made_of.first)
           `&` => caller
           `goto` (to) => (caller.at = to.first) if (to.rest.empty || to.rest.first)
           `label` (to) => to.first
@@ -286,6 +305,9 @@ Expression := class (
         program.for_value = was
         r
       }
+      led_of (place) => ((place.led === None) ? Array.new : [place.led]).joined(parts_led(place.parts))
+      parts_led (ps) => ps.empty ? Array.new : led_of(ps.first).joined(parts_led(ps.rest))
+      led_home (place) => (place.led === None) ? (place.led = Node()) : place.led
       made_on (made, program) => {
         (made.parts = [program.receiver]) if !((program.receiver === None) || (program.receiver.rules === None))
         program.receiver = None

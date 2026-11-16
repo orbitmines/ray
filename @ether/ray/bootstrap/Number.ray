@@ -5,7 +5,7 @@ Number &+= Ordered
 Number &+= {
   succ => Number(next: this)
   assert 7.succ == 8  // N42 7.succ is not eight
-  { }{value} ^punctuation => value{#.count == this}
+  {this}{value} ^punctuation => value{#.count == this}
   pred => .next
   assert 3.pred == 2  // N109 what comes before three is not two
   assert 3.pred.succ == 3  // N110 stepping back and forward does not come back

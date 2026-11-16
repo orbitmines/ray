@@ -549,9 +549,9 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   comment rule in `global`. Letting a farther rule that reads more win (longest first, §4.3; `E.H.ray`) passes these
   but fails 35 tests written with two spaces (CC10, CF12, CF18, …): the comment rule's `{statement}` is then read
   where the rule is, not where the text was written (`=> statement` does not help).
-- **A keyword is read at the start of a name that is not visible** (2026-11-16): `recur ^keyword` reads the start of
-  `recurring_flip(…)` in a block (rules read inside words, Design §2): a method of a block whose name starts with `recur`
-  is not called there (`p107.ray`), and with calls run (above) `goto recurring` leaves the test: RC1 and RV2 are not run.
+- **RC1 and RV2 are not run with calls running** (2026-11-16, `E.R2.ray`/`E.S.ray`): their asserts are not reached. It
+  looked like `recur ^keyword` reading the start of `recurring_…` names, but those probes had comments after one space
+  (above); written with two, a block's `recurring_…` methods are called (`p107b.ray`). Open.
 - **A rule with no head after a statement is read with it** (2026-11-16, both readers): `{ a := 1 \n => 2 }` reads one
   definition whose head is `a := 1` (the rule that makes rules takes any space before `=>`, a line end too), and every
   `:=` then goes round (`ran past its budget`). CLI.ray's `=> (@me/instance = … if version) | …` is the only one; with

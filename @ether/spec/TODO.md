@@ -541,6 +541,13 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
      worse at every file (`.project.ray` alone 263 → 237 passed; from Node.ray on it runs out of memory; with Ray.ray
      nothing passes): what calls now really run (classes with a header run their block per construction, `Ordered`'s
      `>`/`<`) costs more and fails more. Next: what Ray.ray's `Ordered := class (T = static) => { … }` does per call.
+- **A call written bare in a hole is not called** (2026-11-16, both readers; scratchpad `p112.ray`): in a block with
+  `h (n) => true`, `assert h(false)` and `x := h(false); assert x` fail while `assert (h(false))`, `assert h(false) ===
+  true` and `assert h(false) && true` pass. Likely the split (a value then what follows read on it, `reading`'s
+  `prefer_split`) reads `assert h` and then `(false)` on what that answered. Most tests are written `assert f(x)`.
+- **A keyword is read at the start of a name that is not visible** (2026-11-16): `recur ^keyword` reads the start of
+  `recurring_flip(…)` in a block (rules read inside words, Design §2): a method of a block whose name starts with `recur`
+  is not called there (`p107.ray`), and with calls run (above) `goto recurring` leaves the test: RC1 and RV2 are not run.
 - **A rule with no head after a statement is read with it** (2026-11-16, both readers): `{ a := 1 \n => 2 }` reads one
   definition whose head is `a := 1` (the rule that makes rules takes any space before `=>`, a line end too), and every
   `:=` then goes round (`ran past its budget`). CLI.ray's `=> (@me/instance = … if version) | …` is the only one; with

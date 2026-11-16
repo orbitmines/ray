@@ -44,11 +44,12 @@ Expression := class (
             taken := takes(caller)
             written := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
             // (a name written in a pair, `(x) := v`: x read as a value, declared again where something visible defines it)
-            named := between(written)
+            named := pair_named(between(written), taken)
             valued := (!(written.first == hole_opening) && (level cw_enclosed (written))) && !has_hole(named)
             rule_lhs := valued ? named : written
             rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
-            rule_where := home_of(caller, level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) ?? (place_of(caller) ?? node)
+            // (a name in a pair a hole took, `{name}` given `(x)`: defined where that was written; given `({p})`, where p's was)
+            rule_where := home_of(caller, ((valued && ((rule.LHS.first == hole_opening) && (named.length > 0))) ? paired_hole(caller, level spliced_entry (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) : level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken))) ?? (place_of(caller) ?? node)
             rule_home := (valued ? defined_in(rule_where, rule_lhs) : None) ?? rule_where
             sink = Array.new
             head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))
@@ -366,6 +367,9 @@ Expression := class (
       // (the hole a hole's text names, `{x}`, further out, as far as one does)
       written_by (program, hole) => (((hole === None) || !((level cw_trimmed (hole.value)).first == hole_opening)) || (holder(program, hole) === None)) ? hole : (outer_hole(holder(program, hole), between(level cw_trimmed (hole.value))) ?? hole)
       outer_hole (program, name) => written_by(program.caller, takes(program.caller){.key == name}#.first)
+      // (what is in a pair, `({p})`: a hole's that was taken, the text it took)
+      pair_named (inner, taken) => (((inner.first == hole_opening) && ((level cw_enclosed (inner)) === true)) && (taken{.key == between(inner)}#.count > 0)) ? level spliced (inner) (BOOTSTRAPPER.CAPTURE) (taken) : inner
+      paired_hole (program, hole) => ((hole === None) || (holder(program, hole) === None) || !((level cw_enclosed (level cw_trimmed (hole.value))) === true) || !(between(level cw_trimmed (hole.value)).first == hole_opening)) ? hole : (outer_hole(holder(program, hole), between(between(level cw_trimmed (hole.value)))) ?? hole)
       holder (program, hole) => ((hole === None) || (program === None)) ? None : (among(program.bound ?? Array.new, hole) ? program : holder(program.caller, hole))
       home_of (program, hole) => (holder(program, hole) === None) ? None : place_of(holder(program, hole).caller)
       // (where a program defines: in the value it reads code for, `x.( … )`, else where it is)

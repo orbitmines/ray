@@ -524,11 +524,20 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   Ray: what is of that type is optimized for it), once everything works. Two tests that passed before fail with it,
   each by what is still broken, not by calls: IX9 (`level member` answers a value even for a name not held: it passed
   only because the call never ran) and IS1 (`.every((item) => …)`, see below).
-- **A call's parameters, given positionally, are not seen by its body** (2026-11-16, both readers): `f (x) => x` written
-  at the top of a file, `f(true)` answers what `taking` answered (`true`), not `x`, whatever it is given; in a block the
-  same function, called from a statement there, works. `taking` declares with `({written_parameters}) := …` inside
-  `if … else`, and `(x) := v` is `((x) => value)`, which the closure rule reads (it defines, and is the latest such), so
-  no rule `x` is made where the body is read. Repro: scratchpad `probe.mjs` with `AT=2619`, `p32.ray`.
+- **A call's parameters, given positionally, are not seen by its body** (2026-11-16, both readers). Three causes, each
+  found with scratchpad `probe.mjs` (`AT=2619`, `p32.ray`, `p43.ray`, `p52.ray`):
+  1. *Fixed:* `(x) := v` is `({name} => value)`, a pair the hole took: the rule maker looked for where the head's own
+     inside was written (`between({name})`, nothing), so defined x in the `:=` rule's body. Now a pair a hole took is
+     defined where the hole's text was written.
+  2. *Fixed:* `({p}) := v` in a rule (`taking`'s `({written_parameters}) := …`): splicing does not follow a hole named
+     inside a pair, so the name stayed `{p}` and nothing was defined. Now what is in such a pair is the text p took, and
+     it is defined where p's was written (the call's own node). `(zb) taking true` now gives zb.
+  3. *Open:* a styled call rule (`{this}({arguments}) ^punctuation => { … ({{parameters}}) … }`, the closure's) reaches
+     the rule maker through `{lhs} ^{style} {=>} {rhs}`, so its body is `{rhs}`'s text, spliced once: its `{{parameters}}`
+     and `{{body}}` are never spliced (TODO 2026-10-31 already: "needs its body spliced twice"). Splicing such a body
+     again when it still holds `{{` makes every top-level closure call give its parameters (probes pass), but then the
+     calls run for real and 11 statements run past their budget (`() => …` bodies, classes' `(() => { … })()`, line
+     588), `--test` 289 → 276, `--test-all` 307 → 159 with 238 not run. Scratch `E.R2.ray`. Next: what loops there.
 - **Starts found stale where a value is made (2026-11-16)**: every place that lets memory go clears where values started
   in it (`freed_to`, `all_freed`, `memory_back`, and `freed_back` with it), yet a value made after a `freed_back` finds
   starts noted in its own cells (769 times in one self-compile). Clearing only where memory is let go (and not where a

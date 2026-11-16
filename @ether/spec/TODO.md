@@ -534,10 +534,18 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
      it is defined where p's was written (the call's own node). `(zb) taking true` now gives zb.
   3. *Open:* a styled call rule (`{this}({arguments}) ^punctuation => { … ({{parameters}}) … }`, the closure's) reaches
      the rule maker through `{lhs} ^{style} {=>} {rhs}`, so its body is `{rhs}`'s text, spliced once: its `{{parameters}}`
-     and `{{body}}` are never spliced (TODO 2026-10-31 already: "needs its body spliced twice"). Splicing such a body
-     again when it still holds `{{` makes every top-level closure call give its parameters (probes pass), but then the
-     calls run for real and 11 statements run past their budget (`() => …` bodies, classes' `(() => { … })()`, line
-     588), `--test` 289 → 276, `--test-all` 307 → 159 with 238 not run. Scratch `E.R2.ray`. Next: what loops there.
+     and `{{body}}` are never spliced (TODO 2026-10-31 already: "needs its body spliced twice"). Tried (scratchpad
+     `E.R2.ray`, `E.S.ray`): such a body spliced again while it still holds `{{`, and a code hole given a block, `{{body}}`
+     taking `{ … }`, given what is inside its braces (a closure's block body is code, as a rule's is). Every closure probe
+     then passes (`(a, b) => …`, `() => { r := …; r }`, `(x) => { x }`, recursion through `.on`), but the tested text does
+     worse at every file (`.project.ray` alone 263 → 237 passed; from Node.ray on it runs out of memory; with Ray.ray
+     nothing passes): what calls now really run (classes with a header run their block per construction, `Ordered`'s
+     `>`/`<`) costs more and fails more. Next: what Ray.ray's `Ordered := class (T = static) => { … }` does per call.
+- **A rule with no head after a statement is read with it** (2026-11-16, both readers): `{ a := 1 \n => 2 }` reads one
+  definition whose head is `a := 1` (the rule that makes rules takes any space before `=>`, a line end too), and every
+  `:=` then goes round (`ran past its budget`). CLI.ray's `=> (@me/instance = … if version) | …` is the only one; with
+  calls running (above), reading CLI.ray stops every test after it. A rule with no head alone in a block is read by
+  nothing.
 - **Starts found stale where a value is made (2026-11-16)**: every place that lets memory go clears where values started
   in it (`freed_to`, `all_freed`, `memory_back`, and `freed_back` with it), yet a value made after a `freed_back` finds
   starts noted in its own cells (769 times in one self-compile). Clearing only where memory is let go (and not where a

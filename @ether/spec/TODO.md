@@ -541,18 +541,10 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
      worse at every file (`.project.ray` alone 263 → 237 passed; from Node.ray on it runs out of memory; with Ray.ray
      nothing passes): what calls now really run (classes with a header run their block per construction, `Ordered`'s
      `>`/`<`) costs more and fails more. Next: what Ray.ray's `Ordered := class (T = static) => { … }` does per call.
-- **`===` of a block's name, in brackets, is neither true nor false** (2026-11-18, scratchpad `p95`–`p99`): in a block
-  with `tt := true` (or `nn := { }`), `assert tt === tt` passes but `assert (tt === tt) === true`, `(tt === true) ===
-  true` and `(nn === nn) === true` fail; with a global name (`ff`) all pass, and so does `(tt) === true`. `tt === tt` is
-  read as `tt`, then `=== tt` read on its value (the split); in brackets what that answers is no boolean (not `true`:
-  likely the jump `===` is written with, its label a list, left going out of it). Every `is` starts with `value ===
-  type`, so `TA() is TA` and the TY tests fail with it.
-  Any text led by a block's name fails in brackets: `(tt && true)` (not `(true && tt)`): the name read, then `&& true`
-  on its value, by nothing (the split answers None); outside brackets something else reads it after. `E.H.ray` (a
-  farther rule that reads more wins) passes all of these, but then `x = true` in a block is read by `{place} = {value}`
-  rather than `x` then `= true` on it, and assigns nothing (CC10, CF12, CF18, … the 35 it loses; the comment rule is
-  not it). The split first, the farther rule only when nothing reads the rest (`E.U2.ray`: read again, the split and the
-  name aside) goes round: `applied.input` there is likely not what the split read.
+- **A block's name leading a text in brackets** (2026-11-18): `(tt && true)` read `tt`, then `&& true` on its value,
+  by nothing (the split answered None). Now the whole is read again with the split and the rules led by that value set
+  aside (`unsplit`): --test 289 → 395, --test-all 307 → 604. Still open: `(tt === tt) === true` in a block (one
+  bracketed `===` inside another), and IB22 (Number.ray) and IT46 (Ray.ray), which passed before it.
 - **A comment after one space is read with a block's name** (2026-11-16, scratchpad `p124.ray`–`p134.ray`): in a block
   with `v := true` (or `h (n) => true`), `mine v // c` and `assert h(false) // c` fail, where `mine v  // c` (two spaces,
   as every test is written) and `mine (v) // c` pass. The hole takes `v // c`; read in the block, the block's own `v`

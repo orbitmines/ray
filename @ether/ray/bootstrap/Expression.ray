@@ -103,7 +103,8 @@ Expression := class (
             (o.rules === None) ? members(o).for((m) => on.rules[[m.key]] := (c) => m.value) : (on.parts = [o])
             (on.led_from = o) if !(o.rules === None)
             r := (rs: Statements(on) = rest)
-            (r === None) ? None : run_by(r, Program(caller: caller, in: on, this: v, receiver: v))
+            // (nothing read on it: the whole read again, neither split nor led by that value, `(x && y)`)
+            (r === None) ? unsplit(caller, text(rest.from - value.length, rest.to), value) : run_by(r, Program(caller: caller, in: on, this: v, receiver: v))
           }
         }
         // (a name read inside its own reading is its place)
@@ -150,7 +151,15 @@ Expression := class (
         longer (text, found) => ((found === maker_key) || (text == found?.key) || !prefer_split(text, found)) ? found : split_key
         // (the split, when it reads more of the text than the key does, read again: what was read since may have been another
         // text)
-        prefer_split (text, found) => (text ~= split_key) && ((found === None) || (split_key.length > ((text ~= found) ? found.length : 0)))
+        prefer_split (text, found) => !among(aside, split_key) && (text ~= split_key) && ((found === None) || (split_key.length > ((text ~= found) ? found.length : 0)))
+        // (a text read with the split, and a rule led by what it read, set aside)
+        unsplit (program, whole_text, led_by) => {
+          was := aside
+          aside = [split_key, led_by].joined(aside)
+          r := named_in(program, whole_text)
+          aside = was
+          r
+        }
         keys => (in === None) ? own_keys : (own_keys | in.keys)
         own_keys => parts.empty ? rules.keys : rules.keys.joined(parts_written(parts))
       }

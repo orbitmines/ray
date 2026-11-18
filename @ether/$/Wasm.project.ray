@@ -609,8 +609,6 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //| level callable {callable_value} => external callable callable_value
 //| level readable {readable_type} => external readable readable_type
 //| level origin_of {origin_code} => external origin_of origin_code
-//| level quoted {quoted_text} => external quoted quoted_text
-//| level defines_text {defining_text} => external defines_text defining_text
 //| level function_given {given_arguments} {given_parameters} => external function_given given_arguments given_parameters
 //| level mapped {mapped_place} {mapped_text} => external mapped mapped_place mapped_text
 //| level dynamic_in {dynamic_value} => external dynamic_in dynamic_value

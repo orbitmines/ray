@@ -1929,6 +1929,12 @@ made_as (instance, wanted, written_made) => (wanted === written_made) ? instance
     written_types
   }
 }
+// (asked of the text a class's header is written as: whether it holds a quote, `"`, `` ` `` or `\` (a header written as
+// a structure), and whether it holds `:=` (one that defines what its positions are read by))
+level quoted {quoted_text} => holds_quote(quoted_text)
+holds_quote (quote_text) => !(quote_text.empty) && ((((quote_text.first) == 34) || ((quote_text.first) == 96) || ((quote_text.first) == 92)) || holds_quote(quote_text.rest))
+level defines_text {defining_text} => holds_defining(defining_text)
+holds_defining (define_text) => !(define_text.empty) && !((define_text.rest).empty) && ((((define_text.first) == 58) && (((define_text.rest).first) == 61)) || holds_defining(define_text.rest))
 class: {class_parent} ({class_fields}) {`=>`} {`{`}{class_body}{`}`} ^keyword => (() => {
   // (`static`, the class: the one whose block this is written in (`outer`, its block's), else this one: `integer: static` of
   // a class written in Decimal's block is a Decimal)

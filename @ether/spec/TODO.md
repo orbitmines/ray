@@ -545,6 +545,11 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   by nothing (the split answered None). Now the whole is read again with the split and the rules led by that value set
   aside (`unsplit`): --test 289 → 395, --test-all 307 → 604. Still open: `(tt === tt) === true` in a block (one
   bracketed `===` inside another), and IB22 (Number.ray) and IT46 (Ray.ray), which passed before it.
+- **Two arguments given by name, in a block** (2026-11-18, `p107.ray` at the NA tests): `PN(left: true, right:
+  false).left` fails, as does `PN(left: tv, …)`, `PN(left: (true), …)` and the other order; `PN(true, false).left`, one
+  given by name (`Indexed(index: 5)`, NA12) and the same call in a method (`paired_of(a, b)`, NA10) pass. `taking`
+  gives the list positionally first (`({written_parameters}) := arguments_given`), then `given_names` declares each by
+  name; `level function_given` there is answered by nothing.
 - **A comment after one space is read with a block's name** (2026-11-16, scratchpad `p124.ray`–`p134.ray`): in a block
   with `v := true` (or `h (n) => true`), `mine v // c` and `assert h(false) // c` fail, where `mine v  // c` (two spaces,
   as every test is written) and `mine (v) // c` pass. The hole takes `v // c`; read in the block, the block's own `v`

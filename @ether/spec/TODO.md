@@ -541,6 +541,12 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
      worse at every file (`.project.ray` alone 263 → 237 passed; from Node.ray on it runs out of memory; with Ray.ray
      nothing passes): what calls now really run (classes with a header run their block per construction, `Ordered`'s
      `>`/`<`) costs more and fails more. Next: what Ray.ray's `Ordered := class (T = static) => { … }` does per call.
+- **`===` of a block's name, in brackets, is neither true nor false** (2026-11-18, scratchpad `p95`–`p99`): in a block
+  with `tt := true` (or `nn := { }`), `assert tt === tt` passes but `assert (tt === tt) === true`, `(tt === true) ===
+  true` and `(nn === nn) === true` fail; with a global name (`ff`) all pass, and so does `(tt) === true`. `tt === tt` is
+  read as `tt`, then `=== tt` read on its value (the split); in brackets what that answers is no boolean (not `true`:
+  likely the jump `===` is written with, its label a list, left going out of it). Every `is` starts with `value ===
+  type`, so `TA() is TA` and the TY tests fail with it.
 - **A comment after one space is read with a block's name** (2026-11-16, scratchpad `p124.ray`–`p134.ray`): in a block
   with `v := true` (or `h (n) => true`), `mine v // c` and `assert h(false) // c` fail, where `mine v  // c` (two spaces,
   as every test is written) and `mine (v) // c` pass. The hole takes `v // c`; read in the block, the block's own `v`

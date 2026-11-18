@@ -552,11 +552,11 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
 - **RC1 and RV2 are not run with calls running** (2026-11-16, `E.R2.ray`/`E.S.ray`): their asserts are not reached. It
   looked like `recur ^keyword` reading the start of `recurring_…` names, but those probes had comments after one space
   (above); written with two, a block's `recurring_…` methods are called (`p107b.ray`). Open.
-- **A rule with no head after a statement is read with it** (2026-11-16, both readers): `{ a := 1 \n => 2 }` reads one
-  definition whose head is `a := 1` (the rule that makes rules takes any space before `=>`, a line end too), and every
-  `:=` then goes round (`ran past its budget`). CLI.ray's `=> (@me/instance = … if version) | …` is the only one; with
-  calls running (above), reading CLI.ray stops every test after it. A rule with no head alone in a block is read by
-  nothing.
+- **A definition with no head in a block goes round** (2026-11-18; a rule with no head is a parse error, user): at the
+  top level `x := true \n=> 2` leaves `=> 2` unread, as it should; in a block (`q := { \n true \n => 2 \n }`) a line
+  `=> 2` or `:= 2` runs past its budget, everywhere around it too (`== 2` is left unread). Likely the statement around the
+  block read again by the rule that makes rules, its head `q := { true` ending inside the brace it opens: a head is read
+  as `String[]` (`Code`), which, unlike a hole, does not keep a pair whole. CLI.ray's `=> …` now has a head (`() =>`).
 - **Starts found stale where a value is made (2026-11-16)**: every place that lets memory go clears where values started
   in it (`freed_to`, `all_freed`, `memory_back`, and `freed_back` with it), yet a value made after a `freed_back` finds
   starts noted in its own cells (769 times in one self-compile). Clearing only where memory is let go (and not where a

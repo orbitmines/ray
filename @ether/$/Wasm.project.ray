@@ -600,8 +600,8 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //| level rule {rule_head} => external rule rule_head
 //| level unset {unset_place} => external unset unset_place
 //| level unset_typed {unset_place} {unset_type} => external unset unset_place unset_type
-//| level names {names_list} {names_first} {names_last} => external names names_list names_first names_last
-//| level named_like {like_list} {like_from} => external named_like like_list like_from
+//| level names {names_list} {names_first} {names_last} => names_list
+//| level named_like {like_list} {like_from} => like_list
 //| level admits {admits_value} {admits_type} => external admits admits_value admits_type
 //| level typed_name {typed_value} => external typed_name typed_value
 //| level named {named_value} => external named named_value

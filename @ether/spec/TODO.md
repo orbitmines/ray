@@ -547,6 +547,12 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   read as `tt`, then `=== tt` read on its value (the split); in brackets what that answers is no boolean (not `true`:
   likely the jump `===` is written with, its label a list, left going out of it). Every `is` starts with `value ===
   type`, so `TA() is TA` and the TY tests fail with it.
+  Any text led by a block's name fails in brackets: `(tt && true)` (not `(true && tt)`): the name read, then `&& true`
+  on its value, by nothing (the split answers None); outside brackets something else reads it after. `E.H.ray` (a
+  farther rule that reads more wins) passes all of these, but then `x = true` in a block is read by `{place} = {value}`
+  rather than `x` then `= true` on it, and assigns nothing (CC10, CF12, CF18, … the 35 it loses; the comment rule is
+  not it). The split first, the farther rule only when nothing reads the rest (`E.U2.ray`: read again, the split and the
+  name aside) goes round: `applied.input` there is likely not what the split read.
 - **A comment after one space is read with a block's name** (2026-11-16, scratchpad `p124.ray`–`p134.ray`): in a block
   with `v := true` (or `h (n) => true`), `mine v // c` and `assert h(false) // c` fail, where `mine v  // c` (two spaces,
   as every test is written) and `mine (v) // c` pass. The hole takes `v // c`; read in the block, the block's own `v`

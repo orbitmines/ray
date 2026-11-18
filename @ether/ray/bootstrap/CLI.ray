@@ -27,7 +27,7 @@ CLI := class (arguments: (
 
   usage => (name, " ", %, "\nUsage: ", name, " [options] [operands]\nOptions:", .fields.map(("\n  --", .name, "  ", .description)))
   run => None                                // what the tool does (`with CLI = CLI { run => … }`)
-  => (@me/instance = (name, " ", %) if version) |
+  () => (@me/instance = (name, " ", %) if version) |
     (@me/instance = usage if help) |
     run
 }

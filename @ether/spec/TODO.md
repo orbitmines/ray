@@ -545,6 +545,12 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   by nothing (the split answered None). Now the whole is read again with the split and the rules led by that value set
   aside (`unsplit`): --test 289 → 395, --test-all 307 → 604. Still open: `(tt === tt) === true` in a block (one
   bracketed `===` inside another), and IB22 (Number.ray) and IT46 (Ray.ray), which passed before it.
+- **`level unset` written in the language** (2026-11-18, `~/.cache/ray-lazy/keep/unset.diff` + `E.P.ray`): the runtime
+  names a place's kind `place` (`kind_named`), the level's `kinds` reads a place on `({ unset_place => true })`, and the
+  entrypoint defines `unset_place => false` and `level unset {v} => ((v).unset_place) === true`. Probed it answers as
+  kernel.ts did, but in --test the blocks of OP1–OP3 and TY78–TY79 are then not run (404 against 408; probed alone the OP
+  block runs, OP2 and OP3 passing). Not landed. `level unset_typed` (every `x: T`) is answered by nothing: a name given
+  no value does not hold its type (`yy: true` then `yy === true` fails).
 - **Two arguments given by name, in a block** (2026-11-18, `p107.ray` at the NA tests): `PN(left: true, right:
   false).left` fails, as does `PN(left: tv, …)`, `PN(left: (true), …)` and the other order; `PN(true, false).left`, one
   given by name (`Indexed(index: 5)`, NA12) and the same call in a method (`paired_of(a, b)`, NA10) pass. `taking`

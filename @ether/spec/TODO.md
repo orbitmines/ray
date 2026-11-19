@@ -577,6 +577,13 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   (=== {converted_type}) {`=>`} …`, its target `(=== {converted_type}) {`=>`} {converted_body} ^keyword`), and what is
   read after it is lost. Every `{x: Name}` passed so far only because a typed hole read nothing (those rules dead). Needs
   the user: how a word is written as a type (what makes Name read one word, not anything).
+  Decided (the user, 2026-11-19): Name reads arbitrary characters; conflicts are resolved by the rules' order. Done
+  (`keep/ent.static.ray`, with E.T3/E.T4): `static {statement} ^keyword` moved above the `as` rules, so line 1233's
+  `static (…) as (=== …) {`=>`} …` is read by `static` first: reading gets past the `as` rule. Next stop: after
+  `{name: Name} | {other} := {value}` (entrypoint:1174) nothing is read until a later `x | y := z` (`O | optimizations :=
+  7`): the Name-typed hole crosses line ends there. Not with a type of the same rule unstyled (`Nm2 := { {nw} => true }`
+  reads line by line), only with Name's `{word ^variable}`: that hole's place is made where `{x} ^{style}`'s body reads
+  it, not in Name, and an untyped hole's extent jumps over what its node's rules read at each step (`hole_led`, `l > n`).
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

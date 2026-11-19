@@ -596,7 +596,13 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   very next statement (`(external &) ^`passed``): tried on it, what Superscript.String's own rules read of it does not
   end. Not the guard: keying what is being read at a place by the node read (`E.T7.ray`, `read_key`, a typed hole's
   pattern naming its type) changes nothing. Next: which of that node's rules (the numeral class's block: `next => if …`,
-  `{fraction: static.String} (): Real`, …) recurses.
+  `{fraction: static.String} (): Real`, …) recurses. Typed by `Number` it reads on (slowly); by `Superscript` or
+  `Decimal.String` (a numeral class: it reads its texts by `{value: type}`, typed `Glyphs[]{…}`, from `{on} reads
+  ({name}: {type}) as {made}`) it stops. Under it the superposition: two lone typed rules written directly (`{value:
+  "a"}`, `{value: "b"}`) read one of them and nothing else (`keep/p148.ray` W3, W4), but a rule written in a body typed by
+  that body's parameter, `mk {xa} => ({ }) &+ { {value: xa} => value }`, reads nothing (W1): the head's `xa` is not the
+  parameter's value where the head is read. `{a} | {b}` writes its rules so (`{value: a} => value`), hence V6. Next: what
+  a head written in a rule's body sees of that rule's holes.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

@@ -663,6 +663,14 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   against 70: 2107, 2126, 2942, 3424, 3426 now pass; 2108 TY71 newly fails); String.ray 79 and Number.ray (without FR2)
   274 still stop. The narrowing probes pass on it too. TY71, `assert !(checked_bit 2)`: the value is right (`!(…) ? 1 : 2`
   gives 1, `keep/p190.ray`), but the test fails as written: something is said while it runs afterwards.
+  E.T20 (`keep/E.T20.ray`): a narrowing reads by what it narrows (E.T18), no check for what rules read (E.T17); what a
+  narrowing holds for is asked when the rule applies (`{name}: {type} = {value}`: `(value) checked (type)`). All 19
+  typed probes pass (`keep/p192.ray`, 39 s); the class stops none; String.ray 63, Number.ray (without FR2) 272. Their
+  stops are where the typed rules now apply and compute: String.ray 309–321 (`"abcde"[1..<4]`, `U+0041` read by
+  `U+{codepoint: Hexadecimal.String}`), Number.ray 453–469 (`100%`, `200%`, `₂10`, `2³`); the committed reader passes
+  those tests, but with every typed rule giving a superposition, where `==` answers for each member.
+  Suites on E.T17: 0 passed (a statement past its budget leaves every test unrun); `.entrypoint.ray:121:54` (`{name}:
+  ({type})? = None`) "Nothing reads this" with typed holes answered, though `oy: (Number)? = None` reads (`p193`).
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

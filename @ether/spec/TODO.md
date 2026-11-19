@@ -617,6 +617,15 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   Reading each check anew ran every statement past its budget; read once, the entrypoint reads through (127 s against
   14 s): the language's `fits_span`, asked for each span a typed hole tries.
   Probing: compare by a choice or by numbers; `x.f === v` and `==` on a superposition do not say what they seem to.
+  Suites on `E.T10` with the reordered entrypoint: 0 passed (69 and 57 statements past their budget); the entrypoint read
+  alone does better than the committed reader (32 of its asserts failed against 70; one new, TY71 inside its block, `2`
+  read by a hole typed `"0" | "1"`, though `tb {x: Bit}` alone reads as it should). Bisected (`keep/bisect_num.sh`): the
+  stops begin with Number.ray:454 `200% == 2`, and it is `Decimal.Real(…) / 100` itself, with Number.ray:446
+  `{numerator: Decimal.String}/{denominator: Decimal.String}` alive (removed, it passes; 441 and 452 do not matter). Every
+  `/` read after it (each function body is read where it runs, `{{body}}`) offers spans to `numerator`, each asked
+  `(Decimal.String) fits_span (span)`, and one such check costs about 4 s (`p185`: 35 s, 39 s for `12`, 40 s for
+  `(this - other) `). Not a check asking itself: a hole set aside anywhere while its check runs (`keep/E.T11.ray`) does
+  not change it. Typed parameters (`(x: Number)`) and holes typed by `Number` cost nothing more (`p182`, `p183`).
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

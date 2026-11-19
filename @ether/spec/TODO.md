@@ -645,6 +645,17 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   typed by a narrowed list stops 96 statements (`prefix: 1[]{length == 0..4}` or `U0: Binary{length == 8}` alone; a
   `static CodeUnit := Binary₈` alone none). (`keep/bisect_file.sh` cuts only before top-level statements; an earlier
   cut inside a block left it open.)
+  Not how the type reads, but the check: the same with the check always holding stops none, and so does an untyped
+  field; fields typed `Binary`, `1[]` or `String` all stop about 36 (one `fits_span` through the language per span, about
+  4 s). Built from it (`keep/E.T15.ray`–`E.T18.ray`):
+  - E.T15: a type with reading rules of its own reads by them, not by what it `narrows` (`T[]` declares `narrows := Node`).
+    `Node := .`: reading by the node the language is read in as a hole (E.T16b), or by a type's own rules without its
+    parts (E.T16a), does not help.
+  - E.T17: read by its own rules, a span is one of the type (what reads as a type is its rules), so no check; asked only
+    when read otherwise (by what a narrowing narrows, or as a hole). The class stops none; V1–V6 and `Bit` pass, 37 s
+    against 140 s.
+  - E.T18: only rules led by a hole count as a type's reading rules (a method, `holds (it)`, is read on one, not as one),
+    so a narrowing reads by what it narrows and is checked.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

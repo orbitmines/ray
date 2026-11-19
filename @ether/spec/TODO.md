@@ -637,6 +637,14 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
     those (`E.T12n`, `read_by` none) it reads through; read by their types' rules it stops. A list type's rules
     (`{value: element}`, `{first: element}{rest: made}`, `{element}[]`) are led by a typed hole whose type is itself,
     so reading by them recurses at each position.
+  Decided next (the user): typed reading only in heads, a class's fields plain holes. Built (`keep/E.T14.ray`: `unset`
+  answered with a typed place only while a rule's head is read, `in_head`; elsewhere nothing, as the committed reader):
+  V1–V6 and `Bit` pass. But a field is a head too: a class written as a structure reads text by its fields (`{on} reads
+  ({name}: {type}) as {made}` writes `{value: type} => made(value)`; `{on} reads ({fields}) as {made}` writes
+  `{written: global.String{. is (made).written_as}}`). After String.ray's first 79 lines, one class with one field
+  typed by a narrowed list stops 96 statements (`prefix: 1[]{length == 0..4}` or `U0: Binary{length == 8}` alone; a
+  `static CodeUnit := Binary₈` alone none). (`keep/bisect_file.sh` cuts only before top-level statements; an earlier
+  cut inside a block left it open.)
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

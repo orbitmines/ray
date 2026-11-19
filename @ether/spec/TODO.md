@@ -591,7 +591,12 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   rules but those that define and those led by `{this}`), probed: typed by a text, by a node, reads what it does and
   nothing else; by a superposition `"a" | "b"` reads `c` too (open). Suites still 0 passed: Number.ray:458's definition,
   `{base}{power: Superscript.String} ^number`, overflows the stack (`Superscript.String` is a node with rules), led
-  rules left out or not.
+  rules left out or not. Narrowed (`keep/p143.ray`–`p146.ray`, Number.ray to line 457): `{bb}{pw: String} => true` and
+  `lone_q {pq: (Superscript.String)} => true` leave what follows read; `{bq}{pq: Superscript.String} => true` stops the
+  very next statement (`(external &) ^`passed``): tried on it, what Superscript.String's own rules read of it does not
+  end. Not the guard: keying what is being read at a place by the node read (`E.T7.ray`, `read_key`, a typed hole's
+  pattern naming its type) changes nothing. Next: which of that node's rules (the numeral class's block: `next => if …`,
+  `{fraction: static.String} (): Real`, …) recurses.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

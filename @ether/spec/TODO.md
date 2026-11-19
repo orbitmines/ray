@@ -584,6 +584,14 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   7`): the Name-typed hole crosses line ends there. Not with a type of the same rule unstyled (`Nm2 := { {nw} => true }`
   reads line by line), only with Name's `{word ^variable}`: that hole's place is made where `{x} ^{style}`'s body reads
   it, not in Name, and an untyped hole's extent jumps over what its node's rules read at each step (`hole_led`, `l > n`).
+  Corrected (same day): not the style. The `=>` alias rule, `{name: Name} | {other} {`=>`} {body}`, a rule that defines,
+  read the next alias rules' own definitions (`{name: Name} | {other} := {value} => …`) as two names written together,
+  making lone rules that read all after them. Moved after the other alias rules and the two `x: A | B` rules
+  (`keep/ent.static.ray`): the whole entrypoint reads again. With `E.T6.ray` (a type's reading: `own_reading`, its own
+  rules but those that define and those led by `{this}`), probed: typed by a text, by a node, reads what it does and
+  nothing else; by a superposition `"a" | "b"` reads `c` too (open). Suites still 0 passed: Number.ray:458's definition,
+  `{base}{power: Superscript.String} ^number`, overflows the stack (`Superscript.String` is a node with rules), led
+  rules left out or not.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

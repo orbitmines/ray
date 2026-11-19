@@ -607,6 +607,15 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   the superposition's own members are not found even there (`(true | false).superposes`, Y5). Rules with typed holes,
   dead until now, read these statements first (`{method}({code: Dotted})`, hole-led, can read `({ })`). Every typed
   rule comes alive at once; each is to be checked against what it now reads.
+  Decided (the user, 2026-11-19): a typed hole is the hole, then `is T`: its span as an untyped hole takes it, read on only
+  if the language's `{type} fits_span {text}` holds. Built (`keep/E.T10.ray`, not landed): `external unset x T` types
+  the place by `hole_checked`, a field of the hole followed by a `typed_by` pattern (`staged`) whose function asks a node
+  of the place's (`fit_type`, `fit_span`) `(fit_type) fits_span (fit_span)`, that statement read once (when `fits_span`
+  reads) and run for each span; a check asked again at a place while it is asked fails (`staged_read`, the actives).
+  Reading each check anew ran every statement past its budget; read once, the entrypoint reads through (127 s against
+  14 s). But the check passes everything: the language's `fits_span` and `is` do not answer yet (`keep/p153.ray`, on the
+  committed reader: `(Sup) fits_span (`a`)`, `` `c` is Sup `` neither true nor false), and a superposition has no
+  members (`(true | false).superposes`, Y5). Next: those, under typed holes.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

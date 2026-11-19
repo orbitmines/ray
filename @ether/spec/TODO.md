@@ -601,8 +601,12 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   ({name}: {type}) as {made}`) it stops. Under it the superposition: two lone typed rules written directly (`{value:
   "a"}`, `{value: "b"}`) read one of them and nothing else (`keep/p148.ray` W3, W4), but a rule written in a body typed by
   that body's parameter, `mk {xa} => ({ }) &+ { {value: xa} => value }`, reads nothing (W1): the head's `xa` is not the
-  parameter's value where the head is read. `{a} | {b}` writes its rules so (`{value: a} => value`), hence V6. Next: what
-  a head written in a rule's body sees of that rule's holes.
+  parameter's value where the head is read. `{a} | {b}` writes its rules so (`{value: a} => value`), hence V6.
+  Corrected (`keep/p149.ray`–`p151.ray`): not what the head sees (typed by a global it fails too). With typed holes,
+  `Mk6 := ({ }) &+ { zz6 => true }` no longer has `zz6` (Y1; `{ } &+ { … }` too, Y4), where the committed reader has it;
+  the superposition's own members are not found even there (`(true | false).superposes`, Y5). Rules with typed holes,
+  dead until now, read these statements first (`{method}({code: Dotted})`, hole-led, can read `({ })`). Every typed
+  rule comes alive at once; each is to be checked against what it now reads.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

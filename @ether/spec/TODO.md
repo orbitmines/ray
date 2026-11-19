@@ -626,6 +626,17 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   `(Decimal.String) fits_span (span)`, and one such check costs about 4 s (`p185`: 35 s, 39 s for `12`, 40 s for
   `(this - other) `). Not a check asking itself: a hole set aside anywhere while its check runs (`keep/E.T11.ray`) does
   not change it. Typed parameters (`(x: Number)`) and holes typed by `Number` cost nothing more (`p182`, `p183`).
+  Decided (the user, 2026-11-19, after the above): the hole reads what T's own rules read (a narrowing, what it narrows; a
+  type with none, a hole), then `is T` on that span. Built (`keep/E.T12.ray`; `E.T13.ray` the same, the reading made
+  when the place becomes a pattern): V1–V6 and `Bit` read as they should, the entrypoint alone reads through. But:
+  - Number.ray:451 `(1/3).fraction[5] == 3` stops: 446 now reads `1/3` as a real, and its fraction's fifth digit is
+    `1 × 10^5 / 3` (Number.ray:360) by the arithmetic the language has. Numerals' to do, not typed holes'.
+  - Each other bootstrap file alone stops statements (on E.T13: String.ray 155, Node.ray 135, Ray.ray 110, Number.ray
+    without FR2 94). String.ray's first is its line 80, `UTF-8 := class: TF (sequence: Unit[])` with fields typed by
+    narrowed lists (`prefix: 1[]{length == 0..4}`, `U0: Binary{length == 8 - prefix.length}{⊢0}`): read with a hole for
+    those (`E.T12n`, `read_by` none) it reads through; read by their types' rules it stops. A list type's rules
+    (`{value: element}`, `{first: element}{rest: made}`, `{element}[]`) are led by a typed hole whose type is itself,
+    so reading by them recurses at each position.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

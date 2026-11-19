@@ -570,10 +570,13 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   `own_whole` (which leaves lone rules out) reads nothing. Probed: typed by a text reads it and no other (V1, V2); a node
   and a superposition both take the dynamic branch. But from entrypoint:1140 on, `{source} as {target: Name} {`=>`}
   {body}` (Name's one rule is the lone `{word ^variable}`), no later statement is read at all, its text bounded to the
-  hole's statement or not (`E.T4.ray`). Suspected: the dynamic's reader code runs in the middle of another pattern's
-  reading (hole-led heads are tried at every statement), and `matched` puts back what was bound only when it fails, so
-  a `~=` that reads leaves its bindings in the outer reading. A statement's dynamic is read first, where that does not
-  matter.
+  hole's statement or not (`E.T4.ray`). Found: no runtime fault (putting back what a dynamic's question bound, `E.T5.ray`,
+  changes nothing). `Name := { {word ^variable} => … }` has one rule, a lone untyped hole, and an untyped hole in a head
+  reads anything, so a hole typed Name reads anything: `{source} as {target: Name} {`=>`} {body}` is a rule that defines
+  (its head holds `=>`), chosen before the rule that makes rules, and reads entrypoint:1233's definition (`static (…) as
+  (=== {converted_type}) {`=>`} …`, its target `(=== {converted_type}) {`=>`} {converted_body} ^keyword`), and what is
+  read after it is lost. Every `{x: Name}` passed so far only because a typed hole read nothing (those rules dead). Needs
+  the user: how a word is written as a type (what makes Name read one word, not anything).
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

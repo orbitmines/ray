@@ -671,6 +671,11 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   those tests, but with every typed rule giving a superposition, where `==` answers for each member.
   Confirmed (`keep/p194.ray`, the committed reader with Number.ray read): `200% == 3` and `2³ == 9` pass as `200% == 2`
   and `2³ == 8` do. The baseline's passes there are not the language's.
+  A count of stops is not enough: with Number.ray up to line 452 read on E.T17/E.T20 nothing runs afterwards (every assert,
+  the probe's too, stays `untested`, nothing is said, no error); the committed reader runs them (`keep/p195.ray`:
+  `"³" is Superscript.String` passes there, 50 s). A run is now judged by a trivial assert being run (`bisect_ran.sh`).
+  `T.String` is `String{. is T.written_as}`: its check asks `level readable`/`level admits`, unanswered, so the language's
+  `text_reads` reads it.
   Suites on E.T17: 0 passed (a statement past its budget leaves every test unrun); `.entrypoint.ray:121:54` (`{name}:
   ({type})? = None`) "Nothing reads this" with typed holes answered, though `oy: (Number)? = None` reads (`p193`).
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering

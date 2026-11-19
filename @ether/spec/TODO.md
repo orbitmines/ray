@@ -551,6 +551,17 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   kernel.ts did, but in --test the blocks of OP1–OP3 and TY78–TY79 are then not run (404 against 408; probed alone the OP
   block runs, OP2 and OP3 passing). Not landed. `level unset_typed` (every `x: T`) is answered by nothing: a name given
   no value does not hold its type (`yy: true` then `yy === true` fails).
+- **Typed holes: `level unset_typed` answered in the reader** (2026-11-19, `~/.cache/ray-lazy/keep/E.T.ray`, not landed):
+  the reader's `global` answers `external unset` through two statics, `unset_place` (a place of kind 0) and `typed_place`
+  (`x: T` on a place: `Place(name, kind: T, given)`, which a head turns into `field(name, astype(T))`; a name given
+  something already answered as it is). Probed with the other bootstrap files blanked, `checked_bit {x: Bit}` reads `1`
+  (TY70). In the suites nothing passes (13389 stops, every statement from the entrypoint's line 8 on): with Number.ray
+  kept, `nn := 1` overflows the stack, first at Number.ray:458 `{base}{power: Superscript.String} ^number` (and 460,
+  `{type}{length: …}`): a head led by an untyped hole, its typed hole now read by a class's header, reads itself (the
+  compiled patterns know nothing of `aside`). Lines 446–457 (`{numerator: Decimal.String}/…`) read, 5–6× slower. Giving
+  an undefined type (a place) no type (`E.T2.ray`) overflows on everything: `{x: T}` with T not defined yet must stay a
+  typed field that reads nothing, not become a hole that reads anything. Needs: a rule led by a hole not reading itself
+  in the compiled patterns, then the numerals (`{digits: Decimal.String}`) run.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

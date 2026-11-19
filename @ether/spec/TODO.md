@@ -108,6 +108,16 @@ its own reading its place, unread text recorded with reading going on.
   and a second `({names}) := {value}` with `given`, 78.1M (the `(`-led rule is tried at every statement led by `(`).
 - **A hole's text is read again at every application** (an assert's computed style, `^((ensure {condition}) ? …)`;
   `{a} | {b}`'s block on every `|`): most of the matcher's work. ray-45: read hole texts in the rule's shared body node.
+- **Comparisons, calls and methods do not answer** (found 2026-11-19, the committed reader, every bootstrap file kept;
+  `keep/p217.ray`–`p228.ray`, judged by a choice painting `debug`/`info`, its controls `false`, `None`, `true` right):
+  - `x == y` is not `==` at all: it reads as `{name ^variable} = {value}` (entrypoint line 49), `x` given `= y`, whose
+    body ends defining a rule (truthy). The reader takes a value's method (the split) only when it reads more than a rule
+    reading the whole text (`prefer_split`), and a hole-led rule whose literal is in the text reads it whole. Ray.ray's
+    `==` made `None` changes nothing; a class's own `==`, `!=`, `<`, `<=`, `<<`, `+`, `-`, `*`, `/`, `%`, `|`, `&`, `>`,
+    `->` never runs (`p220`, `p223`, `p224`). So every `assert … == …` passes, and `(x == y) is T` too (read whole by `=`).
+  - A function whose body is `None` gives something true (`zgn (x) => None`: `zgn(3)` holds); an instance's method or
+    field giving `true` gives something false (`Qv().yes`, `zqv.takes(1)`), so no class method's result reaches a test.
+  The suite's passes rest on these: N8 `!(2 < 1)` and CI3 `carrier.again === true` fail; MI1/MI2 (`… == 3`) pass.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after
   everything is read, so a prefix passes `1 == 2` (two names nothing defines yet).
 - **Something gives `named_by` what is no text** (r115 from r36, found by the text words reading it as one, fixed in

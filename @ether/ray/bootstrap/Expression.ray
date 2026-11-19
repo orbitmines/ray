@@ -178,9 +178,19 @@ Expression := class (
           `style` (how) => painted_with(how, caller)
           `include` (file) => included(caller, file.first)
           `rule` (head) => rule_written(caller.in, head.first)
+          // (`external member x name`: the rule x sees by that name, its own or what it is made of, applied on x; given a
+          // value too, x given a rule by that name answering it)
+          `member` (asked) => asked.rest.rest.empty ? member_read(caller, asked.first, asked.last) : member_put(asked.first, asked.rest.first, asked.last)
           `shown` (how) => (how.first === None) ? how.last : ((((level kind_of (how.first)) === None) ? (how.first).shown_as : None) ?? how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
+      member_read (program, holder, name) => ((holder === None) || (holder.rules === None) || (name === None)) ? None : member_found(program, holder, holder.own_whole(name))
+      member_found (program, holder, found) => (found === None) ? None : found.value(Program(caller: program, in: holder, this: holder, receiver: holder))
+      member_put (holder, name, value) => {
+        holder.rules[[name]] := (c) => value
+        holder.rules.keys.last.named = true
+        value
+      }
       // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
       // order, each given what applies them.
       Statement := class (

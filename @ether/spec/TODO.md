@@ -551,11 +551,11 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   kernel.ts did, but in --test the blocks of OP1–OP3 and TY78–TY79 are then not run (404 against 408; probed alone the OP
   block runs, OP2 and OP3 passing). Not landed. `level unset_typed` (every `x: T`) is answered by nothing: a name given
   no value does not hold its type (`yy: true` then `yy === true` fails).
-- **Two arguments given by name, in a block** (2026-11-18, `p107.ray` at the NA tests): `PN(left: true, right:
-  false).left` fails, as does `PN(left: tv, …)`, `PN(left: (true), …)` and the other order; `PN(true, false).left`, one
-  given by name (`Indexed(index: 5)`, NA12) and the same call in a method (`paired_of(a, b)`, NA10) pass. `taking`
-  gives the list positionally first (`({written_parameters}) := arguments_given`), then `given_names` declares each by
-  name; `level function_given` there is answered by nothing.
+- **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
+  `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
+  blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same
+  call through a function all pass; in --test NA11, NA13 and NA14 still fail, so what fails them is a test run before
+  them. `level function_given` in `taking` is answered by nothing.
 - **A comment after one space is read with a block's name** (2026-11-16, scratchpad `p124.ray`–`p134.ray`): in a block
   with `v := true` (or `h (n) => true`), `mine v // c` and `assert h(false) // c` fail, where `mine v  // c` (two spaces,
   as every test is written) and `mine (v) // c` pass. The hole takes `v // c`; read in the block, the block's own `v`
@@ -568,10 +568,11 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   looked like `recur ^keyword` reading the start of `recurring_…` names, but those probes had comments after one space
   (above); written with two, a block's `recurring_…` methods are called (`p107b.ray`). Open.
 - **A definition with no head in a block goes round** (2026-11-18; a rule with no head is a parse error, user): at the
-  top level `x := true \n=> 2` leaves `=> 2` unread, as it should; in a block (`q := { \n true \n => 2 \n }`) a line
-  `=> 2` or `:= 2` runs past its budget, everywhere around it too (`== 2` is left unread). Likely the statement around the
-  block read again by the rule that makes rules, its head `q := { true` ending inside the brace it opens: a head is read
-  as `String[]` (`Code`), which, unlike a hole, does not keep a pair whole. CLI.ray's `=> …` now has a head (`() =>`).
+  top level `x := true \n=> 2` leaves `=> 2` unread, as it should, and so does an `assert { … }` block now (2026-11-19:
+  `=> 2` or `:= 2` unread there, the block's lines after it not run). A block given a name, `q := { \n true \n => 2 \n }`,
+  still runs past its budget at its closing `}` (`=> 2` unread). Tried (2026-11-19, `E.HL.ray`): `defines` asking only
+  the statement's first statement (`Runtime.statement_end`): no change; a head of one or more, `Head := (…)[]+` for
+  `GRAMMAR_RULE_DEF.LHS`: nothing is read at all. CLI.ray's `=> …` now has a head (`() =>`).
 - **Starts found stale where a value is made (2026-11-16)**: every place that lets memory go clears where values started
   in it (`freed_to`, `all_freed`, `memory_back`, and `freed_back` with it), yet a value made after a `freed_back` finds
   starts noted in its own cells (769 times in one self-compile). Clearing only where memory is let go (and not where a

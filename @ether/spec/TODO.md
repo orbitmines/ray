@@ -669,6 +669,8 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   stops are where the typed rules now apply and compute: String.ray 309–321 (`"abcde"[1..<4]`, `U+0041` read by
   `U+{codepoint: Hexadecimal.String}`), Number.ray 453–469 (`100%`, `200%`, `₂10`, `2³`); the committed reader passes
   those tests, but with every typed rule giving a superposition, where `==` answers for each member.
+  Confirmed (`keep/p194.ray`, the committed reader with Number.ray read): `200% == 3` and `2³ == 9` pass as `200% == 2`
+  and `2³ == 8` do. The baseline's passes there are not the language's.
   Suites on E.T17: 0 passed (a statement past its budget leaves every test unrun); `.entrypoint.ray:121:54` (`{name}:
   ({type})? = None`) "Nothing reads this" with typed holes answered, though `oy: (Number)? = None` reads (`p193`).
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering

@@ -656,6 +656,13 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
     against 140 s.
   - E.T18: only rules led by a hole count as a type's reading rules (a method, `holds (it)`, is read on one, not as one),
     so a narrowing reads by what it narrows and is checked.
+    Correct (`keep/p189.ray`: V1–V6, `Bit`, a narrowing and a list read as they should) but slow again: the class 37 stops,
+    each bootstrap file about 100, the entrypoint's asserts 131 (the narrowing's check is `fits_span`). E.T19: a span
+    read by what a narrowing narrows asks only `(type).holds(span)`.
+  E.T17 read alone after the entrypoint: Node.ray, Ray.ray and the entrypoint's asserts stop none (66 asserts fail,
+  against 70: 2107, 2126, 2942, 3424, 3426 now pass; 2108 TY71 newly fails); String.ray 79 and Number.ray (without FR2)
+  274 still stop. The narrowing probes pass on it too. TY71, `assert !(checked_bit 2)`: the value is right (`!(…) ? 1 : 2`
+  gives 1, `keep/p190.ray`), but the test fails as written: something is said while it runs afterwards.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

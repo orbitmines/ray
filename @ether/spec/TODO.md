@@ -602,20 +602,21 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   "a"}`, `{value: "b"}`) read one of them and nothing else (`keep/p148.ray` W3, W4), but a rule written in a body typed by
   that body's parameter, `mk {xa} => ({ }) &+ { {value: xa} => value }`, reads nothing (W1): the head's `xa` is not the
   parameter's value where the head is read. `{a} | {b}` writes its rules so (`{value: a} => value`), hence V6.
-  Corrected (`keep/p149.ray`–`p151.ray`): not what the head sees (typed by a global it fails too). With typed holes,
-  `Mk6 := ({ }) &+ { zz6 => true }` no longer has `zz6` (Y1; `{ } &+ { … }` too, Y4), where the committed reader has it;
-  the superposition's own members are not found even there (`(true | false).superposes`, Y5). Rules with typed holes,
-  dead until now, read these statements first (`{method}({code: Dotted})`, hole-led, can read `({ })`). Every typed
-  rule comes alive at once; each is to be checked against what it now reads.
+  Corrected again (`keep/p166.ray`–`p176.ray`): the probes were wrong, not the language. `x.f === true` with `x.f` a
+  member is not read as a comparison (Y1, Y5, the `&+` members, `fits_span` answering, all hold when asked by a choice,
+  `(x.f ? 1 : 2) == 1`); and on the committed reader every rule with a typed hole gives a superposition, not its value
+  (`te {sp: "a"} => true`: `(te a) === true` fails, `.listing` holds; `==` on it answers for each member), since
+  `level unset_typed` (`{x}: {type}`) is answered by nothing. Typed holes do read as they should (V1–V6 by numbers pass
+  on the committed reader). With `unset` answered (`E.T`, `E.T10`) the rule gives its value (`p173`). So `unset` is to be
+  answered; `E.T10` (below) is the variant decided.
   Decided (the user, 2026-11-19): a typed hole is the hole, then `is T`: its span as an untyped hole takes it, read on only
   if the language's `{type} fits_span {text}` holds. Built (`keep/E.T10.ray`, not landed): `external unset x T` types
   the place by `hole_checked`, a field of the hole followed by a `typed_by` pattern (`staged`) whose function asks a node
   of the place's (`fit_type`, `fit_span`) `(fit_type) fits_span (fit_span)`, that statement read once (when `fits_span`
   reads) and run for each span; a check asked again at a place while it is asked fails (`staged_read`, the actives).
   Reading each check anew ran every statement past its budget; read once, the entrypoint reads through (127 s against
-  14 s). But the check passes everything: the language's `fits_span` and `is` do not answer yet (`keep/p153.ray`, on the
-  committed reader: `(Sup) fits_span (`a`)`, `` `c` is Sup `` neither true nor false), and a superposition has no
-  members (`(true | false).superposes`, Y5). Next: those, under typed holes.
+  14 s): the language's `fits_span`, asked for each span a typed hole tries.
+  Probing: compare by a choice or by numbers; `x.f === v` and `==` on a superposition do not say what they seem to.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

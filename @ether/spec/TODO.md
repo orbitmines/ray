@@ -118,6 +118,13 @@ its own reading its place, unread text recorded with reading going on.
   - A function whose body is `None` gives something true (`zgn (x) => None`: `zgn(3)` holds); an instance's method or
     field giving `true` gives something false (`Qv().yes`, `zqv.takes(1)`), so no class method's result reaches a test.
   The suite's passes rest on these: N8 `!(2 < 1)` and CI3 `carrier.again === true` fail; MI1/MI2 (`… == 3`) pass.
+  Tried (`keep/E.M1.ray`–`E.M3.ray`): a literal not read where the text goes on with another operator's byte (neither a
+  word's, white, nor a pair's), `literal_of`. Checked after the literal (E.M2) it reads as before but changes no
+  comparison; checked before it too (E.M1, E.M3) nothing is read at all (no paint, no error: something in the entrypoint's
+  first statements is led so). And `2 < 1` holds with no `=` in it: the value is what is wrong. A call does not give its
+  body's value (`keep/p230.ray`, `p231.ray`): `zj (x) => None`, `zj(3)`, `zj (3)`, `zj 3` are not `None`; `zl (x) => zw`,
+  `zl(3)` is not `zw`; `zk => None` read as `zk` is, `zk()` is not. A label is not the answer (`runs` keeps the answer
+  before a `label`/`goto`). Next: what a call answers, before `==` can be asked.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after
   everything is read, so a prefix passes `1 == 2` (two names nothing defines yet).
 - **Something gives `named_by` what is no text** (r115 from r36, found by the text words reading it as one, fixed in

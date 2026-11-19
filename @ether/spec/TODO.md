@@ -562,6 +562,18 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   an undefined type (a place) no type (`E.T2.ray`) overflows on everything: `{x: T}` with T not defined yet must stay a
   typed field that reads nothing, not become a hole that reads anything. Needs: a rule led by a hole not reading itself
   in the compiled patterns, then the numerals (`{digits: Decimal.String}`) run.
+- **Typed holes read by the type's own rules** (2026-11-19, `keep/E.T3.ray`, not landed; user: no hardcoding, it
+  follows from the rules composed): `{x: T}` "takes what T's own rules read whole" (the entrypoint's `{x}: {type}`), so a
+  node T types the place by `level dynamic ((text) => T.longest(text, false))`, the same dynamic pattern a statement is
+  read by (`{statement: concurrently context.reading(.)}`); a text (any value of a level kind) stays a literal. Its
+  own rules, lone ones too: a superposition's are `{value: a}`, `{value: b}` (lone, typed by each component), so
+  `own_whole` (which leaves lone rules out) reads nothing. Probed: typed by a text reads it and no other (V1, V2); a node
+  and a superposition both take the dynamic branch. But from entrypoint:1140 on, `{source} as {target: Name} {`=>`}
+  {body}` (Name's one rule is the lone `{word ^variable}`), no later statement is read at all, its text bounded to the
+  hole's statement or not (`E.T4.ray`). Suspected: the dynamic's reader code runs in the middle of another pattern's
+  reading (hole-led heads are tried at every statement), and `matched` puts back what was bound only when it fails, so
+  a `~=` that reads leaves its bindings in the outer reading. A statement's dynamic is read first, where that does not
+  matter.
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering
   `external member`, 467e17ec): probed in a block at the NA tests (`p107.ray`, `p124.ray`, every other top-level test
   blanked) `PN(left: true, right: false).left`, `PN(left: tv, …)`, `PN(left: (true), …)`, the other order and the same

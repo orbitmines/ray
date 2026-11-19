@@ -676,6 +676,18 @@ are removable levels of Compiler.ray. Externals: Design §21.2's only, plus the 
   `"³" is Superscript.String` passes there, 50 s). A run is now judged by a trivial assert being run (`bisect_ran.sh`).
   `T.String` is `String{. is T.written_as}`: its check asks `level readable`/`level admits`, unanswered, so the language's
   `text_reads` reads it.
+  **Corrected (2026-11-19): every result above judged by `==`, `<` or a choice is void.** `assert (1 == 2)`, `assert (1 !=
+  1)`, `` assert ((`a` == `b`) ? false : true) `` all pass on the committed reader and every variant, with or without the
+  bootstrap files kept (`keep/p213.ray`–`p215.ray`): a comparison is something true that is not `true`, `false` or `None`
+  (the suite too: N8 `!(2 < 1)` fails). And `assert (x) == n` is `(assert x) == n`. So V1–V6, TB5–TB8, NR1–NR9, "all 19
+  pass", `200% == 3` passing (a superposition) were never tested. Judged instead by `assert x`, rules giving `true` or
+  `None` (`keep/p216.ray`, Node.ray and Ray.ray kept; `assert None` fails, `assert (true | None)` passes):
+  - committed reader: no typed rule applies (text, list, narrowing, superposition);
+  - E.T: only the superposition's applies, to `c` as to `b`;
+  - E.T20: the text's applies to `a` (`tl c`'s test is not run); list and narrowing never; the superposition's to `c`
+    (`tq b`'s not run);
+  - E.T18: no test runs.
+  And `!(…)` of a comparison fails on every reader (TY71 is that, not typed holes).
   Suites on E.T17: 0 passed (a statement past its budget leaves every test unrun); `.entrypoint.ray:121:54` (`{name}:
   ({type})? = None`) "Nothing reads this" with typed holes answered, though `oy: (Number)? = None` reads (`p193`).
 - **Two arguments given by name, in a class's construction** (2026-11-18; 2026-11-19 with the reader answering

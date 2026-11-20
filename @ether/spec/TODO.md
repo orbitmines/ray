@@ -170,6 +170,9 @@ its own reading its place, unread text recorded with reading going on.
   `Number.Named.for(…)` (line 286): seventeen classes made in one statement's calls, not statements. A call's frame of a
   megabyte or more let go the same way (F1, frames compacted when held, the floor raised) changes nothing there (168
   budget lines against 164), so what stops it is not memory; the same stops, in the entrypoint too, come without regions.
+  Timed quietly against the committed build (180 s / 120 s): R9 221 s / 172 s; compacting only a statement something older
+  holds (R10, the rest freed whole as now) 213 s, still the suites. Not landed: slower, and calls do not need it yet.
+  Compacting only those of a megabyte or more fails whether the rest are freed (R7) or kept (R7c, 82 passed): why is open.
   Suites (2026-11-20, main tree, revision 144; base 408/627): E.M9 alone 407/627 (NGN3 `None != 5 && !(None != None)` read
   now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
   passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.

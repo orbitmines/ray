@@ -136,7 +136,16 @@ its own reading its place, unread text recorded with reading going on.
     the brackets, `()[]{}`) is a pair only where it is written as one, closed on the same line (`pair_class`); the class reads.
   - `=` read inside `==` (and `/` in `//`, `>` in `=>`): E.M9, a literal not read where the text goes on, before or after it,
     with another printable operator byte (`literal_of`; `\0`, which joins the files, is not one: counted, nothing reads).
-  E.C3 = E.C1 + E.M9 + as-written pairs: with every bootstrap file kept it still stops (117); bisecting.
+  E.C3 = E.C1 + E.M9 + as-written pairs: with every bootstrap file kept it still stops (117). Not a loop, and not one
+  statement's budget (4× it, or none, stops the same; with `stopped_statement` doing nothing the reading ends, in the same
+  time): the test's whole fuel (`ETHER_TEST_FUEL`, 2G) runs out, and the one stop is noted again by each turn it unwinds
+  through (~60 "ran past its budget" from one). Ray.ray to line 788 and two classes after it: the committed reader reads it
+  within 250M steps, E.M9 within 1G, E.C1 not within 2.1G. Once calls give their body's value every class definition runs
+  its functions (`inherits_structure`, `member_given`, `same_characters`, … in the class rule, line 1942), each call reading
+  its body's text again by every rule known, so a class costs more the more is defined before it. Calls answering needs a
+  call that does not read its body again (read once, where it is defined) before the suites can run with it.
+  Also found: a class without a header (`class { … }`, read as `(nothing_given = None) =>`) makes instances without its
+  methods (`Cq(declared).yes` is not `true`; `class (x = None) => { … }` has them, given anything but `None`); on every reader.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after
   everything is read, so a prefix passes `1 == 2` (two names nothing defines yet).
 - **Something gives `named_by` what is no text** (r115 from r36, found by the text words reading it as one, fixed in

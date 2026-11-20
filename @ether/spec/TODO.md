@@ -144,13 +144,15 @@ its own reading its place, unread text recorded with reading going on.
   its functions (`inherits_structure`, `member_given`, `same_characters`, … in the class rule, line 1942), each call reading
   its body's text again by every rule known, so a class costs more the more is defined before it. Calls answering needs a
   call that does not read its body again (read once, where it is defined) before the suites can run with it.
-  Measured further (2026-11-20; a statement's steps noted in the length of a span the harness prints, `keep/E.C3cost.ray`,
-  `keep/probe2.mjs`): not one class's cost (1.7–1.9M steps each, flat; 60 in the probe file read through), not memory (no
-  collection runs while Ray.ray is read, `word 3996` noted per statement; an earlier note of `free` was misread), not the
-  set-aside statements read again (fewer retries than the committed reader). What grows is the run's total: Ray.ray of
-  trivial classes alone, 4 need under 500M steps, 16 between 2G and 2.147G, while reading Ray.ray's statements costs
-  ~30M. Where the rest goes is open: the statements noted at the call body's `label recurring` (line 588) span the
-  tests' own fuel, so they say nothing (nor do the tests' calls, `Afterwards.kept_run`: no steps there).
+  Measured further (2026-11-20; a statement's steps, `free`, the fuel and the floor noted in the length of a span the
+  harness prints, `keep/E.C3m10.ray`, `keep/E.C3stop.ray`, `keep/probe2.mjs`): not a class's steps (1.7–1.9M each, flat;
+  reading leaves 2.09G of 2.147G fuel), not the set-aside statements read again. Memory: an included file's statements
+  are nested in its `include`, and memory is let go only when an outermost statement ends (no collection runs while
+  Ray.ray is read), so it climbs class by class. Ray.ray of trivial classes, `free` after each: the committed reader
+  260, 290, 300, 320 … 410 MB (~19 MB a class), E.C3 420, 460, 490, 520 … 700 MB (30–50 MB). At the stop (Ray.ray to
+  788 and two classes) `free` is 1110–1120 MB, at `near_end` (1.2G − 32M), the fuel 1.93G above its floor 1.73G. With
+  calls answering every class leaves more, so the stop comes ~15 classes into a file. Calls answering waits on an
+  included file's statements being let go as outermost ones are (Engine.md step 4, regions), or on leaving less.
   Suites (2026-11-20, main tree, revision 144; base 408/627): E.M9 alone 407/627 (NGN3 `None != 5 && !(None != None)` read
   now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
   passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.

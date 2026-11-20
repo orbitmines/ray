@@ -155,6 +155,12 @@ its own reading its place, unread text recorded with reading going on.
   now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
   passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.
   The `<{generics}>` pairs want the text's shape (Engine.md step 1: pairs read once per part), not a scan per byte.
+  E.M9 does not self-compile (`mchain.mjs`): r144 compiles it, but the engine made then compiles a module that does not
+  instantiate ("Duplicate export name ''"); with `operator_byte` a constant it compiles. Its reader refuses a literal
+  wherever another operator byte touches it, and the source glues operators that are literals apart (`#.first`, `{x}#.`):
+  read so, the compiler's own text reads wrong. What it wants instead: a literal not read where a longer one that some
+  rule's head writes reads there (`=` not where `==` does), the longest of the heads' literals, not of the bytes.
+  Timing (quiet, two runs each): base --test 216 s / --test-all 162–167 s; E.M9 268–272 s / 102–104 s.
   Also found: a class without a header (`class { … }`, read as `(nothing_given = None) =>`) makes instances without its
   methods (`Cq(declared).yes` is not `true`; `class (x = None) => { … }` has them, given anything but `None`); on every reader.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after

@@ -2520,7 +2520,7 @@ Turns := class {
   // its memory to that one's end, what it answers held where nothing notes it)
   static left => {
     Turns.copied_out(isostack + ((isodepth - 1) * 12)) if (word_of(3912) == word_of(3984)) && (isodepth <= Isolation.depth_most) && (word_of(3844) == 0) && (noreclaim == 0)
-    Isolation.statement_closed()
+    Isolation.isolated_value(0, 0)
   }
   static copied_out (s) => {
     Turns.compacted_kept(s, Collector.frame_compacted(s, 0)) if (word_of(3992) == 0) && (word_of(3936) == 0)
@@ -2870,22 +2870,10 @@ Memory := class {
   }
   // (a write into what lasts while a test is open, not while what lasts is taken: undone with the test, as older words are)
   static lasting_tested (x) => (word_of(3944) != 0) && (x >= arena_base()) && (word_of(3844) == 0)
-  static one_effect => {
-    effects = effects + 1
-    0
-  }
-  static kept_outside => {
-    kept()
-    0
-  }
   static touched_by (x, w, v) => {
     Notes.held_noted(w) if (word_of(3912) != 0) && held(v) && (v >= word_of(3984)) && (v < arena_base()) && ((x < word_of(3912)) || (x >= arena_base()))
-    Memory.effect_at(x, w, v) if (x < markf) || (x >= arena_base())
-    0
-  }
-  static effect_at (x, w, v) => {
-    Memory.one_effect()
-    Memory.isolation_seen(x, w, v, framed()) if (held(v) && (v < arena_base())) && (v >= word_of(isostack))
+    effects = ((x < markf) || (x >= arena_base())) ? (effects + 1) : effects
+    Memory.isolation_seen(x, w, v, framed()) if ((x < markf) || (x >= arena_base())) && held(v) && (v < arena_base()) && (v >= word_of(isostack))
     0
   }
   static isolation_seen (x, w, v, s0) => {
@@ -2900,25 +2888,18 @@ Memory := class {
     o := word_of(isostack + ((s - 1) * 12))
     return 0 if (x >= o) && (x < arena_base())
     return s - 1 if v < o
-    Memory.frame_escaped(s - 1, o, w)
-    0
-  }
-  static frame_escaped (i, o, w) => {
     Notes.held_noted(w)
-    Memory.raised(isostack + ((i * 12) + 8))
-  }
-  static raised (a) => {
-    word_put(a, 1) if word_of(a) == 0
+    word_put(isostack + (((s - 1) * 12) + 8), 1) if word_of(isostack + (((s - 1) * 12) + 8)) == 0
     0
   }
   static touched (x) => {
-    return Memory.kept_outside() if (x >= arena_base()) && (word_of(3844) == 0)
-    Memory.one_effect() if x >= arena_base()
+    return kept() if (x >= arena_base()) && (word_of(3844) == 0)
+    effects = (x >= arena_base()) ? (effects + 1) : effects
     Memory.frames_touched(x, framed()) if x < markf
     0
   }
   static frames_touched (x, s0) => {
-    Memory.one_effect()
+    effects = effects + 1
     s := s0
     while s > 0 {
       s = (((x < word_of(isostack + ((s - 1) * 12))) || (x >= arena_base())) ? Memory.frame_raised(s) : 0)
@@ -3112,14 +3093,6 @@ Isolation := class {
     markf = word_of(isostack + ((isodepth * 12) + 4))
     Isolation.value_closed(isostack + (isodepth * 12), v, word_of(isostack + ((isodepth * 12) + 8)) == 0)
   }
-  // (a statement's frame closed as it is, never compacted: what it answers is held where nothing notes it; the frame around
-  // it, compacted in turn, takes it with it)
-  static statement_closed => {
-    isodepth = isodepth - 1
-    return 0 if isodepth >= depth_most
-    markf = word_of(isostack + ((isodepth * 12) + 4))
-    Isolation.value_closed(isostack + (isodepth * 12), 0, word_of(isostack + ((isodepth * 12) + 8)) == 0)
-  }
   static value_closed (s, v, g) => (((g && (noreclaim == 0)) && (word_of(3844) == 0)) && ((held(v) == 0) || (v < word_of(s)))) ? Isolation.value_dropped(s, v) : Isolation.frame_collected(s, v)
   static value_dropped (s, v) => {
     Isolation.freed_to(word_of(s)) if free > word_of(s)
@@ -3142,22 +3115,8 @@ Isolation := class {
     word_put(s - 4, word_of(s + 8)) if (s > isostack) && (word_of(s + 8) > word_of(s - 4))
     v
   }
-  static isolated_close (o, v) => {
-    isodepth = isodepth - 1
-    return 0 if isodepth >= depth_most
-    markf = word_of(isostack + ((isodepth * 12) + 4))
-    Isolation.frame_closed(isostack + (isodepth * 12), word_of(isostack + ((isodepth * 12) + 8)) == 0)
-    0
-  }
-  static frame_closed (s, g) => (g && (noreclaim == 0)) ? Isolation.all_freed(s) : Isolation.frame_collected(s, 0)
-  static all_freed (s) => {
-    starts_cleared(word_of(s), free)
-    free = word_of(s)
-    epoch = epoch + 1
-    word_put(4004, 0)
-    word_put(3996, word_of(3996) + 1)
-    0
-  }
+  // (a frame given back nothing, as a statement's: closed as one giving back nothing that is of it)
+  static isolated_close (o, v) => Isolation.isolated_value(o, 0)
   static stopped => word_of(3916) != 0
 }
 // Collector: a value made since a point, with what it reaches made since, copied to what lasts: what it reaches marked

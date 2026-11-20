@@ -209,6 +209,12 @@ each step below removes code, and what it unblocks is fixed in the shape that re
    each written in the entrypoint as rules, its lowered half removed.
 5. **The levels** (Compiler's own, ~300) as rules the full language runs.
 
+**Where it stands (2026-11-20, evening).** 3804 lines (3891 this morning), suites the same and as fast: call frames no
+longer compacted (cfa89ea8), compaction reads the run's lists by their own word (8f5bb86b), the notes kept as written,
+one marking for both copies (f3573076), one way a frame closes (92c47269). Regions (step 1's next) are correct but
+18–40% slower and not landed (TODO.md); calls with them still stop in Number.ray and the entrypoint, not by memory: the
+language running its own library (`Number.Named.for`, a class's helpers by `.rest`) past a statement's budget.
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

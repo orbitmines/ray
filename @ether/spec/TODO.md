@@ -173,6 +173,11 @@ its own reading its place, unread text recorded with reading going on.
   Timed quietly against the committed build (180 s / 120 s): R9 221 s / 172 s; compacting only a statement something older
   holds (R10, the rest freed whole as now) 213 s, still the suites. Not landed: slower, and calls do not need it yet.
   Compacting only those of a megabyte or more fails whether the rest are freed (R7) or kept (R7c, 82 passed): why is open.
+  Where calls spend it (E.C1 on 92c47269, every bootstrap file kept, `--cpu-prof` of the worker, 83 s): reading, not
+  running: `kind_read` 18%, `repeat_read`, `either_from`, `onward`, `read_by_another` 3–6% each; taking memory (the
+  starts' bits, `taken_at`) ~12%. A call reads its body's text again each time it runs, so `Number.Named.for(…)` reads a
+  class's definition seventeen times. What calls want: a body read once where it is written, the reading kept with the
+  closure (the statements-answer shape, Engine.md step 4), not a faster matcher.
   Suites (2026-11-20, main tree, revision 144; base 408/627): E.M9 alone 407/627 (NGN3 `None != 5 && !(None != None)` read
   now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
   passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.

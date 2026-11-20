@@ -190,6 +190,34 @@ landed: TODO.md) pass more (`--test-all` 135 → 294) but take ~3× as long, as 
 the entrypoint: memory a quarter (a test's end tracing what it painted 13%, a frame's end 11%), paints made each time a
 rule applies 15% (a styled hole's, a parameter's: the same places again in a loop), member lookup by a node's fields 8%.
 
+## The rewrite (the user, 2026-11-20, evening)
+
+"You need to get to 1000 preferably hundreds, cut massively. reading and running should be intertwined such that it's
+one Expression.ray setup, like the old 75-line setup we had (b32e4da6's target), we want to return to that as much as
+possible. The runtime needs to be the simplest thing ever, because reading can be so simple." And: "the level primitives
+should all be gone." Decided: **rewrite, then grow** (the suites drop, then come back), and **the old engine builds the
+new** (r144's Lowering lowers the new runtime; the fixpoint returns once the compiler is rules too).
+
+What is given then: the four externals (`.`, `&`, `goto`, `label`) and what `High` writes a program as: values (nothing,
+true, false, numbers, texts, lists, nodes and their fields, closures), patterns (literal, sequence, either, repeated,
+characters, a hole), a pattern reading a text, a call. Nothing else; no `level …`.
+
+Measured (dd96655e): the compiler's parts call ~160 runtime names, and from those 2039 of the runtime's 2553 lines are
+reached, because `reads` and `in_turn` carry where a statement ends, which bytes pair, a line's indent, splicing, reading
+again and the memo. Those are the language's, not the runtime's: they move into the setup as rules.
+
+1. **Statements read by rules.** Where a statement ends (a line, unless indented on or inside a pair), which bytes pair,
+   holes spliced: written in the setup, as the target's `Statements` is (`dynamically (leading_whitespace,
+   {statement: concurrently context.reading(.)}: context.rules.keys)[]`). Turns, Pairs, Layout, Built, Splices, Readings,
+   Keys, Members' and Calls' helpers go.
+2. **The language part without `level`.** Each of its 28 written as rules, or let go: tests paint by a node the host is
+   told of, not by `level paints`.
+3. **The runtime from nothing**: values, nodes, lists, texts, the patterns and one backtracking reader, calls; memory
+   only taken (a frame given back when it wrote nothing older, if that is needed). Budget: under 500 lines.
+4. **The compiler as rules**, so the new engine writes itself: the fixpoint again.
+
+The suites are counted after each step and grown back from wherever step 3 leaves them.
+
 ## Cut first (the user, 2026-11-20)
 
 "Quickest path towards cutting down the engine so you don't fix things which you'll prune after." So no more fixes to

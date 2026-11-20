@@ -3020,46 +3020,19 @@ Starts := class {
   static bits_paired (v) => Starts.bits_fours((v & 51) + ((v / 4) & 51))
   static bits_fours (v) => (v + (v / 16)) & 15
 }
-// Notes: the words older memory gives a value of a statement or frame still open (word 3880, 3876 of them), each once
-// lately (word 3976); what lasts given such a value not by a write: noted, escaping, keeping its test
+// Notes: the words older memory gives a value of a statement or frame still open (word 3880, 3876 of them); what lasts given such a value not by a write: noted, escaping, keeping its test
 Notes := class {
   // (a word older than the statement read now given a value of a statement still read: noted, for its end)
-  // (once: a word noted again since the notes last changed is not noted twice (word 3976, by the word, each with the
-  // notes' generation); when they are full, those of words no longer holding anything still read let go first)
   static held_noted (w) => {
     word_put(3880, lasting_alloc(67108864)) if word_of(3880) == 0
-    word_put(3976, lasting_alloc(524296)) if word_of(3976) == 0
-    return 0 if Notes.noted_lately(w, word_of(3976) + (8 + (((w / 4) & 65535) * 8)))
-    Notes.notes_pruned(word_of(3880)) if word_of(3876) >= 16777216
     word_put(3992, 1) if word_of(3876) >= 16777216
     Notes.note_put(w) if word_of(3876) < 16777216
-    0
-  }
-  static noted_lately (w, e) => {
-    return 1 if (word_of(e) == w) && (word_of(e + 4) == word_of(word_of(3976)))
-    word_put(e, w)
-    word_put(e + 4, word_of(word_of(3976)))
     0
   }
   // (the notes now n of them, fewer than before: what was noted lately forgotten)
   static notes_counted (n) => {
     word_put(3876, n)
-    word_put(word_of(3976), word_of(word_of(3976)) + 1) if word_of(3976) != 0
     0
-  }
-  // (the notes kept of words holding a value of a frame or statement still open)
-  static notes_pruned (l) => {
-    o := Entry.lowest(Entry.lowest(free, word_of(3984)), (isodepth > 0) ? word_of(isostack) : 0)
-    i := 0
-    j := 0
-    x := 0
-    while i < word_of(3876) {
-      x = word_of(word_of(l + (i * 4)))
-      word_put(l + (j * 4), word_of(l + (i * 4))) if pointer(x) && (x >= o) && (x < arena_base())
-      j = (pointer(x) && (x >= o) && (x < arena_base())) ? (j + 1) : j
-      i = i + 1
-    }
-    Notes.notes_counted(j)
   }
   static note_put (w) => {
     word_put(word_of(3880) + (word_of(3876) * 4), w)
@@ -3289,13 +3262,18 @@ Collector := class {
   // nothing when there is no room to mark what it reaches)
   static lasting_copy (v, base) => {
     return v if (held(v) == 0) || (v < base) || (v >= free)
+    return 0 if Collector.marked_since(base, v, 0) == 0
+    Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(base, free), free, markf) - base, base, free) + Collector.gc_reloc(v)
+  }
+  // (what is made since `base` marked where the run's roots (when asked) and `v` reach it; none when there is no room)
+  static marked_since (base, v, rooted) => {
     return 0 if ((free + (Collector.gc_map_size(base, free) * 5)) + 25165824) > (arena_base() - 4194304)
     Collector.gc_compaction_set(base, free, Collector.gc_map_size(base, free))
     zeroed(free, Collector.gc_map_size(base, free))
+    Collector.roots_of(0, base) if rooted != 0
     Collector.gc_mark(v)
     Collector.gc_marks_traced()
-    return 0 if word_of(4052) != 0
-    Collector.copied_to(Memory.lasting_from(Collector.gc_live_counted(base, free), free, markf) - base, base, free) + Collector.gc_reloc(v)
+    (word_of(4052) == 0) ? 1 : 0
   }
   // (each marked value, from one to the next by what is live: what was let go not walked)
   static copied_to (d, base, top) => {
@@ -3410,16 +3388,7 @@ Collector := class {
   // (a frame ended, begun at the frame's word, what older words (the notes, word 3880), the run's state and its value hold of
   // it moved down to where it began, in order, the rest let go; its value as moved. The notes of words in it moved with
   // them, or let go with them)
-  static frame_compacted (s, v) => {
-    return v if ((free + (Collector.gc_map_size(word_of(s), free) * 5)) + 25165824) > (arena_base() - 4194304)
-    Collector.gc_compaction_set(word_of(s), free, Collector.gc_map_size(word_of(s), free))
-    zeroed(free, Collector.gc_map_size(word_of(s), free))
-    Collector.roots_of(0, word_of(s))
-    Collector.gc_mark(v) if pointer(v)
-    Collector.gc_marks_traced()
-    return v if word_of(4052) != 0
-    Collector.frame_fixed(word_of(s), free, Collector.gc_live_counted(word_of(s), free), v)
-  }
+  static frame_compacted (s, v) => (Collector.marked_since(word_of(s), (pointer(v) ? v : 0), 1) == 0) ? v : Collector.frame_fixed(word_of(s), free, Collector.gc_live_counted(word_of(s), free), v)
   // (where each word older than the frame is to point once it moved, read before anything moves: a word noted twice
   // moved once; none moved when there is no room to note them)
   static frame_fixed (b, top, n, v) => {

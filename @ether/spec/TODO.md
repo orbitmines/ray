@@ -125,6 +125,18 @@ its own reading its place, unread text recorded with reading going on.
   body's value (`keep/p230.ray`, `p231.ray`): `zj (x) => None`, `zj(3)`, `zj (3)`, `zj 3` are not `None`; `zl (x) => zw`,
   `zl(3)` is not `zw`; `zk => None` read as `zk` is, `zk()` is not. A label is not the answer (`runs` keeps the answer
   before a `label`/`goto`). Next: what a call answers, before `==` can be asked.
+  Found (2026-11-20): the call rules a function writes are styled (`{this}({arguments}) ^punctuation`), so `{lhs} ^{style}
+  {`=>`} {rhs}` gives them a body spliced once: `{{body}}`, `{{parameters}}` stay unspliced and the body never runs (a call
+  with no arguments, `{this}()`, unstyled, does). Splicing again while `{{` remains (E.R2's `rhs_spliced`, `keep/E.C1.ray`)
+  makes calls answer (`keep/p238.ray`, Node.ray kept: 9 of 11 right against 4; an instance's field and method still not),
+  and then more really runs and stops:
+  - a class with a header and a method named with a closing `>` (`Of := class (x) => { ~> => None }`, Ray.ray's `Ordered`
+    with `chainable >`) runs past its budget: `<{generics}>` heads (lines 614, 618, 632, 2027) teach `<` `>` as a pair, for
+    good (a global rule's pairs are never forgotten), so a lone `>` closes nothing. E.C3: a pair a head taught (not one of
+    the brackets, `()[]{}`) is a pair only where it is written as one, closed on the same line (`pair_class`); the class reads.
+  - `=` read inside `==` (and `/` in `//`, `>` in `=>`): E.M9, a literal not read where the text goes on, before or after it,
+    with another printable operator byte (`literal_of`; `\0`, which joins the files, is not one: counted, nothing reads).
+  E.C3 = E.C1 + E.M9 + as-written pairs: with every bootstrap file kept it still stops (117); bisecting.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after
   everything is read, so a prefix passes `1 == 2` (two names nothing defines yet).
 - **Something gives `named_by` what is no text** (r115 from r36, found by the text words reading it as one, fixed in

@@ -1756,23 +1756,9 @@ Keys := class {
 // (`keys_reading`: those led by its first byte or by a hole, whose literals all occur in it), by the node's own index of
 // its keys by what leads each (`leads`, kept on the node as its keys grow).
 Caches := class {
-  static keys_reading (r, t: Text) => (r is Node) ? Caches.keys_of(r, keys(r), t) : (((r is List) && (t is Text)) ? Caches.keys_plain(r, t, Caches.reading_lead(t)) : r)
+  // (the keys that can read a text: those led by a hole, and those led by its first byte, whose literals are all in it)
+  static keys_reading (r, t: Text) => (r is Node) ? Caches.keys_reading(keys(r), t) : (((r is List) && (t is Text)) ? Caches.keys_plain(r, t, Caches.reading_lead(t)) : r)
   static reading_lead (t: Text) => (t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2)
-  // (a node's keys that can read a text: those led by its first byte and those led by a hole, by the node's index, in order)
-  static keys_of (r: Node, l: List, t: Text) => (!(t is Text)) ? l : ((Caches.reading_lead(t) == (0 - 3)) ? Caches.keys_plain(l, t, 0 - 3) : Caches.keys_led(l, Caches.leads(r), t, Caches.reading_lead(t)))
-  static keys_led (l: List, x, t: Text, c) => {
-    o := list()
-    a := (c >= 0) ? word_of(x + (8 + (c * 4))) : (0 - 1)
-    b := word_of(x + 1036)
-    i := 0
-    while (a >= 0) || (b >= 0) {
-      i = ((b < 0) || ((a >= 0) && (a < b))) ? a : b
-      append(o, at(l, i)) if Keys.literals_in(Keys.key_pattern(at(l, i)), t.from, t.to)
-      a = (i == a) ? word_of(x + (2072 + (i * 4))) : a
-      b = (i == b) ? word_of(x + (2072 + (i * 4))) : b
-    }
-    o
-  }
   static keys_plain (l: List, t: Text, b) => {
     o := list()
     i := 0
@@ -1784,47 +1770,6 @@ Caches := class {
   }
   static key_leads (p, t: Text, b) => ((!Keys.led_by_text(p)) || (Keys.lead_byte(p) == b) || (b == (0 - 3))) && Keys.literals_in(p, t.from, t.to)
   static lead_class (b) => (white(b) || (b == 10)) ? (0 - 3) : b
-  // (a node's keys by the byte that leads each (256: led by text, by no byte; 257: by a hole), kept on the node (`index`) as they grow:
-  // the first of each, the last, each one's next, in order, then the list and its last key indexed; made again when
-  // its keys are others, fewer, or past its room)
-  static leads (r: Node) => Caches.leads_grown(r.keys, Caches.leads_fitting(r, r.keys, r.index))
-  static leads_fitting (r: Node, l: List, x) => ((x == 0) || (word_of(x) < l.count) || (word_of(x + 4) > l.count) || (word_of(x + (2072 + (word_of(x) * 4))) != l) || ((word_of(x + 4) > 0) && (word_of(x + (2076 + (word_of(x) * 4))) != at(l, word_of(x + 4) - 1)))) ? Caches.leads_made(r, l, (l.count < 8) ? 16 : (l.count * 2)) : x
-  static leads_made (r: Node, l: List, n) => {
-    x := (r >= arena_base()) ? lasting_alloc(2080 + (n * 4)) : alloc(2080 + (n * 4))
-    word_put(x, n)
-    word_put(x + 4, 0)
-    Caches.chains_cleared(x + 8, x + 2072)
-    word_put(x + (2072 + (n * 4)), l)
-    r.index = x
-    x
-  }
-  static leads_grown (l: List, x) => {
-    Caches.led_added(x, l, word_of(x + 4)) if word_of(x + 4) < l.count
-    word_put(x + (2076 + (word_of(x) * 4)), at(l, l.count - 1)) if l.count > 0
-    x
-  }
-  static chains_cleared (a0, e) => {
-    a := a0
-    while a < e {
-      word_put(a, 0 - 1)
-      a = a + 4
-    }
-    0
-  }
-  static led_added (x, l: List, i0) => {
-    i := i0
-    k := 0
-    while i < l.count {
-      k = Caches.lead_code(topattern(member(at(l, i), Symbol.key)))
-      k = (k < 0) ? 257 : k
-      word_put(x + (2072 + (i * 4)), 0 - 1)
-      word_put(((word_of(x + (1040 + (k * 4))) < 0) ? (x + (8 + (k * 4))) : (x + (2072 + (word_of(x + (1040 + (k * 4))) * 4)))), i)
-      word_put(x + (1040 + (k * 4)), i)
-      i = i + 1
-    }
-    word_put(x + 4, l.count)
-  }
-  static lead_code (p) => Keys.led_by_text(p) ? ((Keys.lead_byte(p) < 0) ? 256 : Keys.lead_byte(p)) : (0 - 1)
 }
 // Pairs (`level paired …`): which bytes pair, learned from a capture's uses (`open close`, the bytes just around each,
 // neither white nor of a word: the same both a quote, else an opening and a closing bracket), each noted with where
@@ -2015,122 +1960,12 @@ Layout := class {
 // sorted, searched by halves); where a pair that opens at a place ends (`pair_end`, by place, the classes' version);
 // whether a part is held outside brackets (`holds_outside`).
 Indexes := class {
-  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : ((((e - a) > 64) && in_program(a, e)) ? Indexes.occurs_based(Indexes.based_index(program_from(), program_from() + program_length(), 3960), program_length(), l, a, e) : ((((e - a) > 64) && Indexes.in_taken(a, e, takent)) ? Indexes.occurs_taken(l, a, e, takent) : Indexes.found_at(l, a, e)))
-  static in_taken (a, e, t: Text) => (t != 0) && (a >= t.from) && (e <= t.to)
-  static occurs_taken (l, a, e, t: Text) => Indexes.occurs_based(Indexes.based_index(t.from, t.to, 3952), t.to - t.from, l, a, e)
-  static pair_hash (q) => ((byte(q - 1) * 31) + byte(q)) & 4095
+  // (whether a text occurs between a and e)
+  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : Indexes.found_at(l, a, e)
   static found_at (l: Text, a, e) => {
     q := a
     while (q + (l.to - l.from)) <= e {
       return 1 if (byte(q) == byte(l.from)) && texteq(q, l.from, l.to - l.from)
-      q = q + 1
-    }
-    0
-  }
-  // (an index of a text: the count of each byte and each byte pair before it, then where each pair is, then each byte)
-  static occurs_based (x, nb, l: Text, a, e) => (Indexes.based_bytes(x, l, a, e) == 0) ? 0 : (((l.to - l.from) == 1) ? 1 : ((Indexes.based_pairs(x, x + (((257 + 4097) + nb) * 4), l, a, e) == 0) ? 0 : Indexes.based_found(x + (((257 + 4097) + nb) * 4), l, a, e, x)))
-  static based_bytes (x, l: Text, a, e) => {
-    i := 0
-    while i < (l.to - l.from) {
-      return 0 if Indexes.none_after(x + ((257 + 4097) * 4), word_of(x + (byte(l.from + i) * 4)), word_of(x + ((byte(l.from + i) + 1) * 4)), a, e)
-      i = i + 1
-    }
-    1
-  }
-  static none_after (p, lo, hi, a, e) => Indexes.none_from(p, Indexes.first_from(p, lo, hi, a), hi, e)
-  static none_from (p, j, hi, e) => (j >= hi) || (word_of(p + (j * 4)) >= e)
-  static based_pairs (x, g, l: Text, a, e) => {
-    i := 1
-    while i < (l.to - l.from) {
-      return 0 if Indexes.none_after(g, word_of(x + ((257 + Indexes.pair_hash(l.from + i)) * 4)), word_of(x + ((257 + (Indexes.pair_hash(l.from + i) + 1)) * 4)), a + 1, e)
-      i = i + 1
-    }
-    1
-  }
-  static based_found (g, l: Text, a, e, x) => Indexes.based_from(g, l, e, Indexes.first_from(g, word_of(x + ((257 + Indexes.pair_hash(l.from + 1)) * 4)), word_of(x + ((257 + (Indexes.pair_hash(l.from + 1) + 1)) * 4)), a + 1), word_of(x + ((257 + (Indexes.pair_hash(l.from + 1) + 1)) * 4)))
-  static based_from (g, l: Text, e, j, k) => {
-    i := j
-    while i < k {
-      return 0 if ((word_of(g + (i * 4)) - 1) + (l.to - l.from)) > e
-      return 1 if texteq(word_of(g + (i * 4)) - 1, l.from, l.to - l.from)
-      i = i + 1
-    }
-    0
-  }
-  static first_from (x, lo, hi, a) => {
-    l := lo
-    h := hi
-    m := 0
-    while l < h {
-      m = (l + h) / 2
-      l = (word_of(x + (m * 4)) < a) ? (m + 1) : l
-      h = (l == (m + 1)) ? h : m
-    }
-    l
-  }
-  static based_index (b0, e0, w) => ((word_of(w + 4) == b0) && (word_of(w) != 0)) ? word_of(w) : Indexes.index_built(b0, e0, w, Indexes.index_room(word_of(w), ((257 + 4097) + ((e0 - b0) * 2)) * 4))
-  static index_room (x, size) => ((x != 0) && (word_of(x - 8) >= size)) ? x : Indexes.index_made(size)
-  static index_made (size) => {
-    x := lasting_alloc(size + 8) + 8
-    word_put(x - 8, size)
-    x
-  }
-  static index_built (b0, e0, w, x) => {
-    t := alloc(4097 * 4)
-    zeroed(x, (257 + 4097) * 4)
-    Indexes.counted(x, b0, e0)
-    Indexes.summed(x, 0, 257)
-    Indexes.summed(x, 257, 4097)
-    Indexes.copied_words(t, x + (257 * 4), 4097)
-    Indexes.pairs_placed(x, t, b0, e0)
-    Indexes.copied_words(t, x, 256)
-    Indexes.bytes_placed(x, t, b0, e0)
-    word_put(w, x)
-    word_put(w + 4, b0)
-    x
-  }
-  static counted (x, b0, e0) => {
-    q := b0
-    while q < e0 {
-      Indexes.bumped(x + ((byte(q) + 1) * 4))
-      Indexes.bumped(x + ((257 + (Indexes.pair_hash(q) + 1)) * 4)) if q > b0
-      q = q + 1
-    }
-    0
-  }
-  static bumped (w) => word_put(w, word_of(w) + 1)
-  static summed (x, from, n) => {
-    i := 1
-    while i < n {
-      word_put(x + ((from + i) * 4), word_of(x + ((from + i) * 4)) + word_of(x + ((from + (i - 1)) * 4)))
-      i = i + 1
-    }
-    0
-  }
-  static copied_words (t, f, n) => {
-    i := 0
-    while i < n {
-      word_put(t + (i * 4), word_of(f + (i * 4)))
-      i = i + 1
-    }
-    0
-  }
-  static index_placed (base, slot, q) => {
-    word_put(base + (word_of(slot) * 4), q)
-    Indexes.bumped(slot)
-  }
-  static pairs_placed (x, t, b0, e0) => {
-    q := b0 + 1
-    while q < e0 {
-      Indexes.index_placed(x + (((257 + 4097) + (e0 - b0)) * 4), t + (Indexes.pair_hash(q) * 4), q)
-      q = q + 1
-    }
-    0
-  }
-  static bytes_placed (x, t, b0, e0) => {
-    q := b0
-    while q < e0 {
-      Indexes.index_placed(x + ((257 + 4097) * 4), t + (byte(q) * 4), q)
       q = q + 1
     }
     0
@@ -2359,18 +2194,17 @@ Matching := class {
     }
     0
   }
-  static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, Caches.leads(rules), n, m, c)
-  static led_tried (l: List, x, n, m, c) => {
-    a := (c >= 0) ? word_of(x + (8 + (c * 4))) : (0 - 1)
-    b := word_of(x + 1032)
+  static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, n, m, c)
+  // (the first of the rules led by text, by the byte c or by none, reading past n)
+  static led_tried (l: List, n, m, c) => {
     i := 0
     r := 0
-    while (a >= 0) || (b >= 0) {
-      i = ((b < 0) || ((a >= 0) && (a < b))) ? a : b
-      r = Matching.led_matched(topattern(member(at(l, i), Symbol.key)), n, m)
+    p := None
+    while i < l.count {
+      p = topattern(member(at(l, i), Symbol.key))
+      r = (Keys.led_by_text(p) && ((Keys.lead_byte(p) == c) || (Keys.lead_byte(p) < 0))) ? Matching.led_matched(p, n, m) : 0
       return r if r > n
-      a = (i == a) ? word_of(x + (2072 + (i * 4))) : a
-      b = (i == b) ? word_of(x + (2072 + (i * 4))) : b
+      i = i + 1
     }
     0
   }

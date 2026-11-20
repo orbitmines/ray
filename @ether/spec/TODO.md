@@ -153,6 +153,12 @@ its own reading its place, unread text recorded with reading going on.
   788 and two classes) `free` is 1110–1120 MB, at `near_end` (1.2G − 32M), the fuel 1.93G above its floor 1.73G. With
   calls answering every class leaves more, so the stop comes ~15 classes into a file. Calls answering waits on an
   included file's statements being let go as outermost ones are (Engine.md step 4, regions), or on leaving less.
+  Tried (committed reader, Ray.ray of 10 trivial classes; `keep/E.X*.ray`): a statement read in turn inside another
+  (its answer given to the turn already) compacted at its end as a call's frame is (`Turns.nested_out` beside
+  `copied_out`). Always (E.X2): 19 → 7 MB a class (so ~7 MB of each is live), but 224 s against 31 s, every compaction
+  reading all the run's roots. Only when `paced` (E.X3), or with `paced` reading word 3980 above `free` as stale (E.X4):
+  unchanged, 19 MB: of 3330 frames over a megabyte, 75 are paced; in the rest an inner compaction left 3980 inside the
+  frame, so it reads as mostly kept already. What a class leaves wants to be less, or let go by regions (step 4).
   Suites (2026-11-20, main tree, revision 144; base 408/627): E.M9 alone 407/627 (NGN3 `None != 5 && !(None != None)` read
   now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
   passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.

@@ -178,6 +178,15 @@ its own reading its place, unread text recorded with reading going on.
   starts' bits, `taken_at`) ~12%. A call reads its body's text again each time it runs, so `Number.Named.for(…)` reads a
   class's definition seventeen times. What calls want: a body read once where it is written, the reading kept with the
   closure (the statements-answer shape, Engine.md step 4), not a faster matcher.
+  Deleting the memory machinery outright (2026-11-20, variants Y2–Y6 in the cache): the self-compile still reaches its
+  fixpoint with no collector, no notes and no statement compaction (78 s), but the suites read nothing (214 errors, 65
+  stops): without the outermost statement's compaction the test reading reaches the arena's end. The packrat memo is
+  needed the same way (without it the test reading takes over 600 s). What can replace the ~600 lines (Collector, Notes,
+  the barrier, Starts, test images): one mark-and-slide of young memory at an outermost statement's end, rooted in the
+  run's words and the whole of what lasts read as words (starts and bytes marked for what lasts too), no notes, no
+  frames' escapes, no per-test copying out.
+  A rule's body can not simply be read once: reading is led by values (`{value}.rest` reads the rest by the value's own
+  rules), so a body read before its holes hold anything has no value to read `x.foo(…)` by.
   Suites (2026-11-20, main tree, revision 144; base 408/627): E.M9 alone 407/627 (NGN3 `None != 5 && !(None != None)` read
   now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
   passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.

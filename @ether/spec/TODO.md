@@ -150,7 +150,11 @@ its own reading its place, unread text recorded with reading going on.
   set-aside statements read again (fewer retries than the committed reader). What grows is the run's total: Ray.ray of
   trivial classes alone, 4 need under 500M steps, 16 between 2G and 2.147G, while reading Ray.ray's statements costs
   ~30M. Where the rest goes is open: the statements noted at the call body's `label recurring` (line 588) span the
-  tests' own fuel, so they say nothing. Next: note each test's steps (tests run after everything is read).
+  tests' own fuel, so they say nothing (nor do the tests' calls, `Afterwards.kept_run`: no steps there).
+  Suites (2026-11-20, main tree, revision 144; base 408/627): E.M9 alone 407/627 (NGN3 `None != 5 && !(None != None)` read
+  now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
+  passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.
+  The `<{generics}>` pairs want the text's shape (Engine.md step 1: pairs read once per part), not a scan per byte.
   Also found: a class without a header (`class { … }`, read as `(nothing_given = None) =>`) makes instances without its
   methods (`Cq(declared).yes` is not `true`; `class (x = None) => { … }` has them, given anything but `None`); on every reader.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after

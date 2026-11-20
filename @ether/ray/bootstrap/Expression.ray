@@ -3137,13 +3137,8 @@ Isolation := class {
     isodepth = isodepth - 1
     return v if isodepth >= depth_most
     markf = word_of(isostack + ((isodepth * 12) + 4))
-    Isolation.value_closed(isostack + (isodepth * 12), Isolation.compacted_or(isostack + (isodepth * 12), v), word_of(isostack + ((isodepth * 12) + 8)) == 0)
+    Isolation.value_closed(isostack + (isodepth * 12), v, word_of(isostack + ((isodepth * 12) + 8)) == 0)
   }
-  // (a frame ended with something older holding what it made, or giving back a value it made: that moved down to where
-  // the frame began, the rest let go. Only a frame `paced` so: compacting reads all the run's roots and what the frame
-  // holds, so one that is small, or mostly what was compacted already, is kept, as the frame around it, compacted in
-  // turn, reclaims it)
-  static compacted_or (s, v) => ((noreclaim == 0) && (word_of(3844) == 0) && (word_of(3992) == 0) && ((word_of(3944) == 0) || (word_of(s) >= word_of(3944))) && Collector.paced(word_of(s)) && ((word_of(s + 8) == 1) || ((word_of(s + 8) == 0) && pointer(v) && (v >= word_of(s)) && (v < free)))) ? Collector.frame_compacted(s, v) : v
   // (a statement's frame closed as it is, never compacted: what it answers is held where nothing notes it; the frame around
   // it, compacted in turn, takes it with it)
   static statement_closed => {
@@ -3178,7 +3173,6 @@ Isolation := class {
     isodepth = isodepth - 1
     return 0 if isodepth >= depth_most
     markf = word_of(isostack + ((isodepth * 12) + 4))
-    Isolation.compacted_or(isostack + (isodepth * 12), 0)
     Isolation.frame_closed(isostack + (isodepth * 12), word_of(isostack + ((isodepth * 12) + 8)) == 0)
     0
   }
@@ -3430,10 +3424,6 @@ Collector := class {
     return v if word_of(4052) != 0
     Collector.frame_fixed(word_of(s), free, Collector.gc_live_counted(word_of(s), free), v)
   }
-  // (a frame of a megabyte or more, made at least as much since memory was last compacted (word 3980, where it then
-  // ended) as it holds of what that kept: each byte moved paid for by one made, however deep frames nest)
-  static paced (b) => Collector.paced_at(b, (word_of(3980) < b) ? b : ((word_of(3980) > free) ? free : word_of(3980)))
-  static paced_at (b, w) => ((free - b) >= 1048576) && ((free - w) >= (w - b))
   // (where each word older than the frame is to point once it moved, read before anything moves: a word noted twice
   // moved once; none moved when there is no room to note them)
   static frame_fixed (b, top, n, v) => {
@@ -3511,7 +3501,6 @@ Collector := class {
     word_put(4004, 0)
     word_put(3920, m)
     free = f
-    word_put(3980, f)
     0
   }
   // (the notes kept past a statement: of words older than it still holding a value of a statement around it)

@@ -144,6 +144,13 @@ its own reading its place, unread text recorded with reading going on.
   its functions (`inherits_structure`, `member_given`, `same_characters`, … in the class rule, line 1942), each call reading
   its body's text again by every rule known, so a class costs more the more is defined before it. Calls answering needs a
   call that does not read its body again (read once, where it is defined) before the suites can run with it.
+  Measured further (2026-11-20, a statement's cost and `free` noted per statement, `keep/E.C3cost.ray`, `E.C3mem.ray`):
+  not the cost of a class (1.7–1.9M steps each, 60 in the probe file read through) but memory inside one `include`.
+  An included file's statements are nested in the `include` statement, so what each leaves is let go only when the
+  include ends (copy-out is at the outermost statement): Ray.ray of trivial classes alone, `free` after each, the
+  committed reader 248, 269, 290, 309 MB (~20 MB a class), E.C3 367 MB after the first. 12 classes read; 16 or 20 stop
+  (arena full, then the collector's work spends the test's fuel). So calls answering waits on an included file's
+  statements being let go as the outermost ones are (Engine.md step 4, regions).
   Also found: a class without a header (`class { … }`, read as `(nothing_given = None) =>`) makes instances without its
   methods (`Cq(declared).yes` is not `true`; `class (x = None) => { … }` has them, given anything but `None`); on every reader.
 - **A test's pass is only honest on a whole reading**: numbers are defined at line 3373 and asserts run after

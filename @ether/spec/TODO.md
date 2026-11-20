@@ -159,6 +159,17 @@ its own reading its place, unread text recorded with reading going on.
   reading all the run's roots. Only when `paced` (E.X3), or with `paced` reading word 3980 above `free` as stale (E.X4):
   unchanged, 19 MB: of 3330 frames over a megabyte, 75 are paced; in the rest an inner compaction left 3980 inside the
   frame, so it reads as mostly kept already. What a class leaves wants to be less, or let go by regions (step 4).
+  Regions (2026-11-20, Engine.md "Cut first"; `state/R*.ray`): a statement in another's reading compacted at its end and,
+  when it took a megabyte or more, what it kept made to last (word 3984 raised to `free`, every open frame begun past it,
+  the notes begun again). Raising the floor breaks reading unless every statement start still open is raised with it
+  (R4, R5: a statement begun below the floor writes a value above it into its own older words unnoted; `based` restores a
+  start at least at the floor). Compacting every such statement (R8) holds the suites, 2x slower; most of that was
+  reading the run's lists item by item at each compaction (R9: their own word only, 408/627); that alone landed as
+  8f5bb86b (the same suites, 140 s / 100 s against 143 s / 102 s). Compacting only those of a megabyte or more (R7) breaks the suites (84 passed): unexplained, open.
+  With calls (E.C1 on R9), the reading gets through Ray.ray (one stop left, line 24) and stops in Number.ray at
+  `Number.Named.for(…)` (line 286): seventeen classes made in one statement's calls, not statements. A call's frame of a
+  megabyte or more let go the same way (F1, frames compacted when held, the floor raised) changes nothing there (168
+  budget lines against 164), so what stops it is not memory; the same stops, in the entrypoint too, come without regions.
   Suites (2026-11-20, main tree, revision 144; base 408/627): E.M9 alone 407/627 (NGN3 `None != 5 && !(None != None)` read
   now as the `!=` method, which answers nothing yet: it passed by misreading `!=`); the as-written pairs alone (E.P1) 0
   passed, 215/455 errors with stops: looking to the line's end at every `pair_class` is ruinous, so E.C3's costs are its.

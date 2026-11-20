@@ -2553,9 +2553,7 @@ Turns := class {
     l
   }
   static read_turn (f, args, at, r, mark) => {
-    v := valued_from(mark)
-    boundn = mark
-    call(curried(f, append(list(), v)), args, 0)
+    Turns.handed(f, args, mark)
     Turns.left()
     Turns.over_after(at, r) if statement_over()
     r
@@ -2604,10 +2602,14 @@ Turns := class {
   }
   static again_taken (f, args, i, mark) => {
     Turns.removed_at(aside_or_none(), i)
+    Turns.handed(f, args, mark)
+    1
+  }
+  // (what a statement read is given to: the value of what it bound since the mark, those bindings let go)
+  static handed (f, args, mark) => {
     v := valued_from(mark)
     boundn = mark
     call(curried(f, append(list(), v)), args, 0)
-    1
   }
   static removed_at (l: List, i) => {
     j := i

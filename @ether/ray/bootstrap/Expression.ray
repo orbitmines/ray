@@ -3347,10 +3347,6 @@ Collector := class {
     0
   }
   // (a list the run holds: it, and what it holds)
-  static listed_root (w, fix) => {
-    Collector.roots_in(word_of(word_of(w) + 12), word_of(word_of(w) + 12) + (word_of(word_of(w) + 4) * 4), fix) if (word_of(w) != 0) && ((fix == 0) || (!gc_in(word_of(w)))) && (word_of(word_of(w)) == 3)
-    Collector.root(w, fix)
-  }
   static roots_in (a0, e, fix) => {
     a := a0
     while a < e {
@@ -3377,12 +3373,12 @@ Collector := class {
     Collector.roots_in(actives + 8, (actives + 8) + (activen * 8), fix)
     Collector.roots_in(word_of(3856) + 4, word_of(3856) + 12, fix) if word_of(3856) != 0
     Collector.copies_root(word_of(3864), word_of(3868), fix, b) if word_of(3864) != 0
-    Collector.listed_root(3860, fix)
-    Collector.listed_root(3968, fix)
-    Collector.listed_root(3972, fix)
-    Collector.listed_root(4044, fix)
+    Collector.root(3860, fix)
+    Collector.root(3968, fix)
+    Collector.root(3972, fix)
+    Collector.root(4044, fix)
     Collector.root(4048, fix)
-    Collector.listed_root(4068, fix)
+    Collector.root(4068, fix)
     Collector.root(3872, fix)
     Collector.root(3904, fix)
     Collector.pairs_root(word_of(3988), 0, fix) if word_of(3988) != 0

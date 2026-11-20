@@ -190,6 +190,25 @@ landed: TODO.md) pass more (`--test-all` 135 → 294) but take ~3× as long, as 
 the entrypoint: memory a quarter (a test's end tracing what it painted 13%, a frame's end 11%), paints made each time a
 rule applies 15% (a styled hole's, a parameter's: the same places again in a loop), member lookup by a node's fields 8%.
 
+## Cut first (the user, 2026-11-20)
+
+"Quickest path towards cutting down the engine so you don't fix things which you'll prune after." So no more fixes to
+what a later step replaces (the pairs a line scan would teach, the pacing of compaction, the reader's handling of `==`):
+each step below removes code, and what it unblocks is fixed in the shape that remains.
+
+1. **Memory as regions** (what calls wait on, and ~860 → ~150 lines). Done: call frames no longer compacted (cfa89ea8,
+   suites the same). Next: a statement inside another's reading that took a megabyte or more is let go as an outermost
+   one is (its kept part lasts: word 3984 and the open frames and statements begun past it, the notes begun again), and
+   compacting reads the lists the run holds by their own word only, as their items' writes are noted already. Then what
+   that leaves unused: the notes' once-table, the notes' pruning when full, the second copy path (`lasting_copy` beside
+   the slide), the object starts' summary.
+2. **Calls land** (E.C1, the body of a styled rule spliced again) on that memory, with the language's own library run.
+3. **The text's shape read once** (lines, pairs, each byte's pair end): Pairs, Indexes, Layout's line work and the
+   caches of `keys_reading` go to what it answers; `<{generics}>` reads as written.
+4. **Requests into the language**, a section at a time (Texts, Splices, Readings, Keys, Members, Calls, Built, Origins):
+   each written in the entrypoint as rules, its lowered half removed.
+5. **The levels** (Compiler's own, ~300) as rules the full language runs.
+
 ## Risks
 
 - **Speed.** The caches exist because each removal measured slower (keys 20×, `occurs` 3×, the memo 3.5 min). Each

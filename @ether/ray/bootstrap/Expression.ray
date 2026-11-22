@@ -1441,7 +1441,6 @@ Texts := class {
 // open and a close (or a doubled open and a doubled close) is a name, taken from a list of entries (each a key and a
 // value, `take_named`: the value, trimmed, itself a capture of a name taken further on, that), and written in its place.
 Splices := class {
-  static Taken := (entry, past)
   static opening_end_at (from, to) => {
     oe := from
     while (oe < to) && (byte(oe) != 32) {
@@ -1449,7 +1448,6 @@ Splices := class {
     }
     oe
   }
-  static capture_ok (cap: Text, oe) => ((oe - cap.from) != 0) && ((oe + 1) < cap.to)
   static found_from (from, e, a, z) => {
     q := from
     while (q < e) && (at_text(q, e, a, z) == 0) {
@@ -1457,83 +1455,8 @@ Splices := class {
     }
     q
   }
-  static trimmed_of (v: Text) => Texts.trimmed_text(v.from, v.to)
-  static spliced_entry (t: Text, cap: Text, l) => ((t is Text) && (cap is Text) && (l is List) && Splices.capture_ok(cap, Splices.opening_end_at(cap.from, cap.to))) ? Splices.entry_taken(t, cap, Splices.opening_end_at(cap.from, cap.to), l) : None
-  static entry_taken (t, cap, oe, l) => {
-    taken_reset()
-    Splices.spliced_into(t, cap, oe, l, 0)
-    taken_entry()
-  }
-  static spliced (t: Text, cap: Text, l) => ((t is Text) && (cap is Text) && (l is List) && Splices.capture_ok(cap, Splices.opening_end_at(cap.from, cap.to))) ? Splices.spliced_as(t, cap, Splices.opening_end_at(cap.from, cap.to), l, Splices.spliced_whole(t, cap, Splices.opening_end_at(cap.from, cap.to), l)) : t
-  static spliced_as (t, cap, oe, l, whole) => (whole != None) ? whole : Splices.spliced_written(t, cap, oe, l, alloc_bytes(Splices.spliced_into(t, cap, oe, l, 0) + 8))
-  static spliced_written (t, cap, oe, l, o) => text(o, o + Splices.spliced_into(t, cap, oe, l, o))
-  // (how long the text is with each name taken, written to out unless it is 0)
-  static spliced_into (t: Text, cap: Text, oe, l, out) => {
-    n := 0
-    q := t.from
-    m := None
-    while q < t.to {
-      m = (at_text(q, t.to, cap.from, oe) != 0) ? Splices.single_or(((at_text(q + (oe - cap.from), t.to, cap.from, oe) != 0) ? Splices.doubled_found(q + ((oe - cap.from) * 2), Splices.found_from(q + ((oe - cap.from) * 2), t.to, oe + 1, cap.to), t.to, cap, oe, l) : None), q, t.to, cap, oe, l) : None
-      n = (m === None) ? Splices.byte_copied(out, n, q) : Splices.taken_copied(out, n, m)
-      q = (m === None) ? (q + 1) : Splices.past_of(m)
-    }
-    n
-  }
-  static past_of (m: Taken) => m.past
-  static doubled_found (s, r, e, cap: Text, oe, l) => ((r < e) && (at_text(r + (cap.to - (oe + 1)), e, oe + 1, cap.to) != 0)) ? Splices.taken_or_none(take_named(s, r, l, cap.from, oe, cap.to), r + ((cap.to - (oe + 1)) * 2)) : None
-  static single_or (m, q, e, cap: Text, oe, l) => (m === None) ? Splices.single_found(q + (oe - cap.from), Splices.found_from(q + (oe - cap.from), e, oe + 1, cap.to), e, cap, oe, l) : m
-  static single_found (s, r, e, cap: Text, oe, l) => (r < e) ? Splices.taken_or_none(take_named(s, r, l, cap.from, oe, cap.to), r + (cap.to - (oe + 1))) : None
-  static taken_or_none (x, past) => (x == 0) ? None : Taken(entry: x, past: past)
-  static taken_copied (out, n, m: Taken) => Splices.copied_in(out, n, Splices.trimmed_of(m.entry))
-  static copied_in (out, n, u: Text) => {
-    Splices.copy_out(out + n, u.from, u.to - u.from) if out != 0
-    n + (u.to - u.from)
-  }
-  static copy_out (o, s, k) => {
-    copy(o, s, k)
-    copied_from(o, s, k)
-  }
-  static byte_copied (out, n, q) => {
-    Splices.byte_out(out + n, q) if out != 0
-    n + 1
-  }
-  static byte_out (o, q) => {
-    byte_put(o, byte(q))
-    copied_from(o, q, 1)
-  }
-  // (a text that is one capture whole: its name taken, trimmed)
-  static spliced_whole (t: Text, cap: Text, oe, l) => ((at_text(t.from, t.to, cap.from, oe) != 0) && ((t.to - (cap.to - (oe + 1))) >= (t.from + (oe - cap.from))) && (at_text(t.to - (cap.to - (oe + 1)), t.to, oe + 1, cap.to) != 0)) ? Splices.whole_taken(Splices.whole_or_single((((at_text(t.from + (oe - cap.from), t.to, cap.from, oe) != 0) && ((t.to - ((cap.to - (oe + 1)) * 2)) >= (t.from + ((oe - cap.from) * 2))) && (at_text(t.to - ((cap.to - (oe + 1)) * 2), t.to, oe + 1, cap.to) != 0)) ? take_named(t.from + ((oe - cap.from) * 2), t.to - ((cap.to - (oe + 1)) * 2), l, cap.from, oe, cap.to) : 0), t, cap, oe, l)) : None
-  static whole_or_single (x, t: Text, cap: Text, oe, l) => (x != 0) ? x : take_named(t.from + (oe - cap.from), t.to - (cap.to - (oe + 1)), l, cap.from, oe, cap.to)
-  static whole_taken (x) => (x == 0) ? None : Splices.trimmed_of(x)
-  // (a name, all of word bytes, taken from the list's entries from the i-th on: the first with that key; its value
-  // itself one capture whole, the name in it taken from those after; the first entry taken noted)
-  static take_named (na, ne, l, oa, oe, ce) => Splices.take_named_from(na, ne, l, 0, oa, ce)
-  static take_named_from (na, ne, l, from, oa, ce) => ((na >= ne) || (Splices.word_only(na, ne) == 0)) ? None : Splices.named_in(na, ne, l, from, oa, ce)
-  static word_only (a, e) => {
-    q := a
-    while q < e {
-      return 0 if word_byte(byte(q)) == 0
-      q = q + 1
-    }
-    1
-  }
-  static named_in (na, ne, l: List, from, oa, ce) => {
-    i := from
-    while i < l.count {
-      return Splices.named_value(at(l, i), l, i, oa, ce) if Splices.names(at(l, i), na, ne)
-      i = i + 1
-    }
-    None
-  }
   static names (x, na, ne) => (x is Node) && Splices.key_is(member(x, Symbol.key), member(x, Symbol.value), na, ne)
   static key_is (k: Text, v: Text, na, ne) => (k is Text) && (v is Text) && ((k.to - k.from) == (ne - na)) && texteq(k.from, na, ne - na)
-  static named_value (x, l, i, oa, ce) => Splices.aliased_or(Splices.alias_in(Splices.trimmed_of(member(x, Symbol.value)), l, i, oa, Splices.opening_end_at(oa, ce), ce), x)
-  static alias_in (u: Text, l, i, oa, oe, ce) => ((at_text(u.from, u.to, oa, oe) != 0) && (at_text(u.to - (ce - (oe + 1)), u.to, oe + 1, ce) != 0)) ? Splices.take_named_from(u.from + (oe - oa), u.to - (ce - (oe + 1)), l, i + 1, oa, ce) : None
-  static aliased_or (r, x) => (r != None) ? r : Splices.first_taken(x)
-  static first_taken (x) => {
-    word_held(3872, x) if taken_entry() == 0
-    member(x, Symbol.value)
-  }
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
   static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Indexes.found_at(part, t.from, t.to) != 0)) ? true : false
   static holds_outside_in (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from)) ? Splices.outside_in(t.from, t.to, part) : false
@@ -1551,7 +1474,6 @@ Splices := class {
   static separator_of (t: Text, cap: Text) => ((t is Text) && (cap is Text)) ? Splices.separator_in(t, cap.from, Splices.opening_end_at(cap.from, cap.to), cap.to) : None
   static separator_in (t: Text, oa, oe, ce) => Splices.separator_from(t, Splices.found_from(t.from, t.to, oe + 1, ce), oa, oe, ce)
   static separator_from (t: Text, q, oa, oe, ce) => (q >= t.to) ? None : Texts.trimmed_text(q + (ce - (oe + 1)), Splices.found_from(q + (ce - (oe + 1)), t.to, oa, oe))
-  static place_name (p: Place) => (p is Place) ? name_text(p.name) : None
   static copied (x: Node) => Splices.copy_of(node(x.in), x)
   static copy_of (n: Node, x: Node) => {
     f := x.fields
@@ -1651,11 +1573,6 @@ Readings := class {
 // what byte, whether a pattern's literals all occur in a text; the rules moved from one node to another (all but the
 // first two, and those catching all, `moved_keys`); how many rules there are around a context (`keys_version`).
 Keys := class {
-  static key_pattern (x) => Keys.noted_key(topattern(((x is Node) && (member(x, Symbol.key) != None)) ? member(x, Symbol.key) : x))
-  static noted_key (p) => {
-    cache_key(p)
-    p
-  }
   static led_by_text (p: Pattern) => (p is Pattern) && ((p.kind == literally) || ((p.kind == in_sequence) && Keys.sequence_led(p.a)))
   static sequence_led (l: List) => (l.count != 0) && Keys.led_by_text(at(l, 0))
   static lead_byte (p: Pattern) => (p.kind == literally) ? Keys.text_lead(p.a) : ((p.kind == in_sequence) ? Keys.sequence_lead(p.a) : (0 - 1))
@@ -1694,20 +1611,6 @@ Keys := class {
 // (`keys_reading`: those led by its first byte or by a hole, whose literals all occur in it), by the node's own index of
 // its keys by what leads each (`leads`, kept on the node as its keys grow).
 Caches := class {
-  // (the keys that can read a text: those led by a hole, and those led by its first byte, whose literals are all in it)
-  static keys_reading (r, t: Text) => (r is Node) ? Caches.keys_reading(keys(r), t) : (((r is List) && (t is Text)) ? Caches.keys_plain(r, t, Caches.reading_lead(t)) : r)
-  static reading_lead (t: Text) => (t.from < t.to) ? Caches.lead_class(byte(t.from)) : (0 - 2)
-  static keys_plain (l: List, t: Text, b) => {
-    o := list()
-    i := 0
-    while i < l.count {
-      append(o, at(l, i)) if Caches.key_leads(Keys.key_pattern(at(l, i)), t, b)
-      i = i + 1
-    }
-    o
-  }
-  static key_leads (p, t: Text, b) => ((!Keys.led_by_text(p)) || (Keys.lead_byte(p) == b) || (b == (0 - 3))) && Keys.literals_in(p, t.from, t.to)
-  static lead_class (b) => (white(b) || (b == 10)) ? (0 - 3) : b
 }
 // Pairs (`level paired …`): which bytes pair, learned from a capture's uses (`open close`, the bytes just around each,
 // neither white nor of a word: the same both a quote, else an opening and a closing bracket), each noted with where
@@ -1760,21 +1663,6 @@ Pairs := class {
     word_put(b + (8 + (n * 12)), char_class(c))
     word_put(b + (12 + (n * 12)), home)
     word_put(b, n + 1)
-  }
-  static unpaired (home) => (word_of(pairs_at) == 0) ? 0 : Pairs.unpaired_in(word_of(pairs_at), home)
-  static unpaired_in (b, home) => {
-    n := word_of(b)
-    while (n > 0) && (word_of(b + (12 + ((n - 1) * 12))) == home) {
-      Pairs.class_restored(b + (4 + ((n - 1) * 12)))
-      n = n - 1
-    }
-    word_put(b, n)
-    0
-  }
-  static class_restored (r) => Pairs.class_back(word_of(r), word_of(r + 4))
-  static class_back (c, k) => {
-    class_put(c, k)
-    classes_changed()
   }
   // (a capture's opening an opening bracket, unless it is of a class already, and its closing's last byte a closing)
   static closing (cap: Text) => (cap is Text) ? Pairs.closing_by(cap, Splices.opening_end_at(cap.from, cap.to)) : 0
@@ -1975,7 +1863,6 @@ Members := class {
     0
   }
   static maybe (x, sym) => (x == None) ? None : member(x, sym)
-  static orelse (a, b) => truthy(a) ? a : b
   static entry (p, v) => Runtime.defined_as(Runtime.defined_as(node(0), Symbol.key, p), Symbol.value, v)
   static keyed (n, p, v) => {
     keys_touched(n)
@@ -2432,14 +2319,6 @@ Entry := class {
     q
   }
   static part_text (a, e) => text(a, Entry.zero_from(a, e))
-  static entry_read (f) => Entry.reader_made(lasting_alloc(16), f)
-  static reader_made (b: Reader, f) => {
-    b.reader = f
-    b.from = 0
-    b.to = 0
-    word_put(entered_at, b)
-    0
-  }
   static entry_given (t: Text) => (word_of(entered_at) == 0) ? 0 : Entry.entry_called(word_of(entered_at), t, textend)
   static entry_called (b: Reader, t: Text, q) => {
     b.from = t.from
@@ -2505,25 +2384,11 @@ Origins := class {
   static Copy := (aside, to, from, length)
   static copies_at := 3864
   static copies_count_at := 3868
-  static copied_from (o, s, n) => Origins.copy_noted(Origins.copies(), word_of(copies_count_at), o, s, n)
   static copies => (word_of(copies_at) == 0) ? Origins.copies_made() : word_of(copies_at)
   static copies_made => {
     word_put(copies_at, lasting_alloc(16777200))
     word_put(copies_count_at, 0)
     word_of(copies_at)
-  }
-  static copy_noted (b, k, o, s, n) => ((k > 0) && Origins.extends_copy(b + ((k - 1) * 12), o, s)) ? Origins.copy_extended(b + ((k - 1) * 12), n) : ((k >= 1398100) ? 0 : Origins.copy_put(b + (k * 12), k, o, s, n))
-  static extends_copy (r: Copy, o, s) => ((r.to + r.length) == o) && ((r.from + r.length) == s)
-  static copy_extended (r: Copy, n) => {
-    r.length = r.length + n
-    0
-  }
-  static copy_put (r: Copy, k, o, s, n) => {
-    r.to = o
-    r.from = s
-    r.length = n
-    word_put(copies_count_at, k + 1)
-    0
   }
   static origin_at (a) => {
     q := a
@@ -3222,8 +3087,6 @@ Hooks := class {
   static program_from => 8388608
   static program_length => word_of(4088)
   static in_program (a, e) => (a >= 8388608) && (e <= (8388608 + word_of(4088)))
-  static taken_reset => word_put(3872, 0)
-  static taken_entry => word_of(3872)
   static keys_moved => {
     Hooks.keys_reset()
     word_put(3996, word_of(3996) + 1)
@@ -3263,7 +3126,6 @@ Hooks := class {
   static turn_depth => word_of(4072)
   static turn_depth_set (d) => word_put(4072, d)
   static fuel_floor => word_of(4060)
-  static turn_begun => Hooks.turn_begun_within(0)
   // (a statement's budget, within what the turn it is in has left: one inside another never outlasts it)
   static turn_begun_within (outer) => {
     word_put(4060, Hooks.higher(outer, word_of(3896) - 200000000))

@@ -1,13 +1,9 @@
-
 // Expression: a language read from its own text. Its first line says how a rule is written: `!language`, the brackets a
 // hole is written in (`{ }`), then the rule that makes rules, written with them (`{LHS} => {RHS}`). Every statement after it
 // is read in a node by the longest of that node's rules that reads it; the rule that makes rules adds one there, its head
 // read the same way, its body read when it is applied, in a node of its own whose caller is what applied it. Only four
 // things are given: `external .` (a node), `external &` (what applies), `external goto` and `external label` (where control
-// goes). Read under a level, `Program{O: …}`, what it reads is a Program (statements as vertices, gotos as edges), and a
-// back end is one more level: `Wasm` writes that Program as WebAssembly.
-// (a line's end, as a text)
-line_end := "\n"
+// goes); and what the host gives and is given: the input, the files, what is painted and said.
 Expression := class (
   BOOTSTRAPPER: (
     HEADER: `!language`,
@@ -20,191 +16,169 @@ Expression := class (
   ),
   (
     // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
-    // shape again, `[LHS: [LHS, RHS], RHS]`; the first statement)
+    // shape again; the first statement)
     Code := (BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Code) | String)[]
     GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{is \s}((space) => \s[])
     GRAMMAR_RULE_DEF.RHS = Code
     GRAMMAR_RULE_DEF.LHS = Code
     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
-    
     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
     statements: (
       // A node: its rules by their heads; what it does not read, what it is in reads.
       Node := class (in?: Node, of?: Node) => {
-        // (itself, as its rules' bodies name it: `this` there is what a statement calls them on)
         node := this
-        // (what it is made of, its components: the last added first, read after its own rules and before what it is in)
-        parts := Array.new
-        // (its rules led by what they are read on, `{this}(…)`, each kept with the rest of its head, `led_rest`)
-        led := None
-        led_from := None
         rules := {
           [rule: GRAMMAR_RULE.LHS] := (caller) => {
-            // (as the holes that wrote it took it, defined where they are used; each hole shown as its head says, `{x ^style}`)
-            taken := takes(caller)
-            written := level spliced (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)
-            // (a name written in a pair, `(x) := v`: x read as a value, declared again where something visible defines it)
-            named := pair_named(between(written), taken)
-            valued := (!(written.first == hole_opening) && (level cw_enclosed (written))) && !has_hole(named)
-            rule_lhs := valued ? named : written
-            rule_rhs := inside_of(level spliced (rule.RHS) (BOOTSTRAPPER.CAPTURE) (taken))
-            // (a name in a pair a hole took, `{name}` given `(x)`: defined where that was written; given `({p})`, where p's was)
-            rule_where := home_of(caller, ((valued && ((rule.LHS.first == hole_opening) && (named.length > 0))) ? paired_hole(caller, level spliced_entry (rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken)) : level spliced_entry (valued ? between(rule.LHS) : rule.LHS) (BOOTSTRAPPER.CAPTURE) (taken))) ?? (place_of(caller) ?? node)
-            rule_home := (valued ? defined_in(rule_where, rule_lhs) : None) ?? rule_where
-            sink = Array.new
-            head := (rule_lhs as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))
-            led_written := rule_lhs as (led: BOOTSTRAPPER.CAPTURE.map{== \s}(`this`), led_after: String+)
-            rule_styled := sink.map((sp) => [level place_name (sp.rest.first), sp.first])
-            // (its body read once, in a node of its own, run in a node in that one each time it is applied)
-            rule_body := Node(in: ((caller.bound === None) ? node : caller.in))
-            rule_home.rules[[head]] := (caller) => {
+            // (its head and body as written, a hole a rule running took standing for what it took; made where that was written)
+            // (a name written in a pair, `(x) := v`: x read as a value, made again where something visible defines it)
+            // (one naming a hole of what wrote it, `(place) := v`: the text that hole took, where that was written)
+            written_whole := written_of(rule.LHS, caller)
+            writer := writer_of(rule.LHS, caller)
+            inner := between(written_whole)
+            naming := binder(writer, inner)
+            named := (naming === None) ? written_of(inner, writer) : written_of(level cw_trimmed (taken_in(naming, inner).value), naming.caller)
+            valued := (!(written_whole.first == hole_opening) && ((level cw_enclosed (written_whole)) === true)) && ((named.length > 0) && !has_hole(named))
+            written := valued ? named : written_whole
+            head := head_of(valued ? ((naming === None) ? inner : named) : rule.LHS, (naming === None) ? caller : naming.caller)
+            rule_rhs := body_of(rule.RHS, caller)
+            namer := naming ?? splicer(inner, writer)
+            here := (valued && !(namer === None)) ? (place_of(namer.caller) ?? node) : home_of(rule.LHS, caller, place_of(caller) ?? node)
+            home := (valued ? defined_in(here, named) : None) ?? here
+            defines := level holds_text (written) (separator)
+            head.for((piece) => piece)
+            level paired (written) (BOOTSTRAPPER.CAPTURE) (home)
+            home.rules[[head]] := (caller) => {
               me := applied
               me.bound = holes
               me.caller = caller
-              me.in = Node(in: rule_body)
-              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => parameter_read(hole, applied, hole_value(hole, c, caller)))
-              me.in.written_keys.for((hk) => hk.named = true)
+              me.in = Node(in: node)
               me.this = caller.this
               me.receiver = caller.receiver
-              me.bound.for((hole) => rule_styled{.first == hole.key}#.for((sh) => painted.append([sh.last, hole.value, [[hole]]])))
-              (rule_own.styled_as ?? Array.new).for((rs) => painted.append([rs.first, [rule_lhs, me.input], [me.bound]]))
-              // (its body read and run in turn where it runs, the rule set aside while it is read: a rule never reads itself)
+              // (each hole a rule of its node, `x` and `{x}`, answering what it took read where the rule was applied, once)
+              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => held(hole, () => read_outside(me.outside, () => named_for(c, (splicer(hole.value, caller) === None) ? reader(c, caller) : caller, hole.value))))
+              me.in.rules.keys.for((hk) => hk.named = true)
+              // (read while the rule is set aside: a rule never reads itself)
+              (rule_own.styled_as ?? Array.new).for((style) => painted.append([style, [rule_own.written_head, me.input], [me.bound]]))
               me.outside = aside
               aside = [rule_own].joined(aside)
               (rs: Statements(me.in)(me) = rule_rhs)
               aside = me.outside
-              left := leaving(finished(me), me.answer)
-              // (the pairs its body's rules wrote, known only while it is read)
-              level unpaired (me.in)
-              left
+              leaving(finished(me), me.answer)
             }
-            rule_own := rule_home.rules.keys.last
-            rule_own.written_head = rule_lhs
-            // (a method led by what it is read on, `{this}(…)`: read on a value, its rest reads what follows the value; a rest led by a
-            // hole too, `{this}{rest}`, would read anything)
-            (rule_own.led_rest = (led_written.led_after as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => named_in(Program(in: node), hole.inside))) if !((led_written.led_after === None) || (led_written.led_after.first == hole_opening))
-            // (kept apart, in a node of its own rules: only what is read on a value made of it reads by them)
-            (led_home(rule_home).rules[[rule_own.led_rest]] := rule_own.value) if !((rule_own.led_rest === None) || (rule_home === global))
-            // (one that is only a hole, `{written}`: it reads anything, so only what it is defined in reads with it)
-            (rule_own.lone = true) if (rule_lhs.first == hole_opening) && ((level cw_enclosed (rule_lhs)) === true)
-            (rule_own.named = true) if !has_hole(rule_lhs)
-            // (the pairs its head writes, `({x})`, known to what is read after it; one holding `=>`, a rule that defines)
-            level paired (rule_lhs) (BOOTSTRAPPER.CAPTURE) (rule_home)
-            (rule_own.defines = true) if (level holds_text (rule_lhs) (separator))
+            rule_own := home.rules.keys.last
+            rule_own.written_head = written
+            // (one whose head holds `=>`, a rule that defines: read before the others)
+            rule_own.defines = defines
+            rule_own.named = !has_hole(written)
+            rule_own.lone = (written.first == hole_opening) && ((level cw_enclosed (written)) === true)
             rule_own
           }
+          // (a value read first, then what is read on it, `x.f`: what follows read by its members, or by its rules)
           [{value: concurrently node.prefix(.)}: node.keys, rest: (String | \n)[]] := (caller) => {
             v := value(caller)
             on := Node(in: caller.in, of: v)
-            // (what it is read on gives what is read on it: a node its rules, anything else its fields; one of the level's own
-            // kinds of value, what the level says it is, `level kinds`)
             o := ((level kind_of (v)) === None) ? v : named_in(Program(in: kinds_of(caller)), level kind_of (v))
-            // (its own methods led by it first: what follows it read by their rest, `this` it)
             (o.rules === None) ? members(o).for((m) => on.rules[[m.key]] := (c) => m.value) : (on.parts = [o])
-            (on.led_from = o) if !(o.rules === None)
-            r := (rs: Statements(on) = rest)
-            // (nothing read on it: the whole read again, neither split nor led by that value, `(x && y)`)
-            (r === None) ? unsplit(caller, text(rest.from - value.length, rest.to), value) : run_by(r, Program(caller: caller, in: on, this: v, receiver: v))
+            // (only space after it: nothing read on it)
+            r := ((level cw_trimmed (rest)).length == 0) ? None : (rs: Statements(on) = rest)
+            (r === None) ? unsplit(caller, text(rest.from - value.length, rest.to), split_key) : run_by(r, Program(caller: caller, in: on, this: v, receiver: v, outside: caller.outside))
           }
         }
-        // (a name read inside its own reading is its place)
-        named_as (text, by) => ((node.naming_here ?? Array.new){. == text}#.count > 0) ? Place(text, node) : named_now(text, by)
-        named_now (text, by) => {
-          was_naming := node.naming_here
-          node.naming_here = [text].joined(was_naming ?? Array.new)
-          r := (level holds_text (text) (line_end)) ? apart(by, () => turned(node, text, by)) : named_once(text, by)
-          node.naming_here = was_naming
-          r
-        }
-        // (a text of one line is one statement, read whole, or the place it names; one of more, its statements read in turn)
+        // (what it is made of, read after its own rules)
+        parts := Array.new
+        maker_key := rules.keys.first
+        split_key := rules.keys.last
+        // (a head: each hole a place in the node, read as what applies it reads it; one a rule running took, what it took)
+        head_of (text, by) => (text as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => hole_head(hole.inside, by))
+        // (a hole quoting a text, `{`=>`}`: that text, literally)
+        hole_head (inside, by) => (((inside.length > 1) && (inside.first == inside.last)) && !is_word(inside.first)) ? quoted(level cw_inner (inside)) : taken_head(inside, by)
+        taken_head (inside, by) => (binder(by, inside) === None) ? named_in(Program(in: node), inside) : head_of(taken_in(binder(by, inside), inside).value, binder(by, inside).caller)
+        // (a body: the code inside its brackets; one hole a rule running took, what it took)
+        body_of (text, by) => (splicer(text, by) === None) ? braced(text) : body_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
+        braced (text) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? text : (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code
+        written_of (text, by) => (splicer(text, by) === None) ? text : written_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
+        writer_of (text, by) => (splicer(text, by) === None) ? by : writer_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
+        home_of (text, by, here) => (splicer(text, by) === None) ? here : home_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller, splicer(text, by).caller.in)
+        // (the longest of its rules that reads the text, else what it is in reads it)
+        // (a definition: the latest rule that defines that reads it; else the longest of its rules that reads it, else what it is in reads it)
+        reading (text) => split_or(text, ((makes && defines(text)) && (text ~= maker_key)) ? (defining(text) ?? maker_key) : longest(text))
+        // (the split, when it reads more of the text than what was found)
+        split_or (text, found) => ((found === maker_key) || (text == found?.key) || set_aside(split_key) || !(text ~= split_key) || (!(found === None) && !(split_key.length > ((text ~= found) ? found.length : 0)))) ? found : split_key
+        // (a rule that is one hole, `{written}`, would read anything: kept under its text, not read)
+        // (a name read at its start, `x` of `x = v`, when what it is in reads it all: that)
+        prefix (text) => nearer(text, own_longest(text) ?? parts_prefix(parts, text))
+        nearer (text, near) => (near === None) ? in?.prefix(text) : (((near.named === true) && !(text == near.key)) ? fuller(text, near, in?.prefix(text)) : near)
+        fuller (text, near, far) => (text == far?.key) ? far : near
+        parts_prefix (ps, text) => ps.empty ? None : (ps.first.own_longest(text) ?? parts_prefix(ps.rest, text))
+        own_longest (text) => rules.keys{!((. === split_key) || (. === maker_key) || (makes && .defines) || .lone) && !set_aside(.) && (text ~= .)}#.sort(.length).last
+        // (a node whose rules begin with the one that makes rules: a language's, where a definition is read first)
+        makes => rules.keys.first === maker_key
+        defining (text) => rules.keys{!set_aside(.) && .defines && (text ~= .)}#.sort(.length).last ?? in?.defining(text)
+        longest (text) => prefix(text)
+        own_keys => parts.empty ? rules.keys : rules.keys.joined(parts.first.own_keys)
+        keys => (in === None) ? own_keys : own_keys.joined(in.keys)
+        // (a text read here: its statements in turn, what they answered; nothing read, the place it names)
+        // (one of more lines, its statements run in turn as they are read)
+        named_as (text, by) => (level holds_text (text) (line_end)) ? apart(by, () => turned(node, text, by)) : named_once(text, by)
         named_once (text, by) => {
           v := (vs: Statements(node) = text)
           (v === None) ? Place(text, node) : apart(by, () => v(by))
         }
-        split_key := rules.keys.last
-        maker_key := rules.keys.first
-        // (its rules but the two every node has, the one that makes rules and the split)
-        written_keys => parts_written(parts).joined(rules.keys{!((. === maker_key) || (. === split_key))}#)
-        parts_written (ps) => ps.empty ? Array.new : parts_written(ps.rest).joined(ps.first.written_keys)
-        // (a definition, `=>` outside pairs: the latest rule that defines, else the rule that makes rules; none set aside)
-        // (what reads it here, but a name, `x`, read at its start, when what it is in reads it all, `x = v`)
-        whole (text) => nearer(text, made(text, defines(text)))
-        nearer (text, near) => (near === None) ? (led_whole(led_from, text) ?? (parts_whole(parts, text) ?? in?.whole(text))) : ((near.named && !(text == near.key)) ? fuller(text, near, in?.whole(text)) : near)
-        // (in its components: each one's own rules, then what it is made of in turn, not what it is in)
-        own_whole (text) => part_longest(text) ?? parts_whole(parts, text)
-        part_longest (text) => (level keys_reading (rules) (text)){!(((. === split_key) || (. === maker_key)) || (.defines || (.lone === true))) && (!among(aside, .) && (text ~= .))}#.sort(.length).last
-        parts_whole (ps, text) => ps.empty ? None : (ps.first.own_whole(text) ?? parts_whole(ps.rest, text))
-        fuller (text, near, far) => (text == far?.key) ? far : near
-        made (text, defining_text) => (((rules.keys.first === maker_key) && defining_text) && (text ~= maker_key)) ? (defining(text) ?? maker_key) : longest(text, defining_text)
-        prefix (text) => longest(text, defines(text)) ?? (led_prefix(led_from, text) ?? (parts_prefix(parts, text) ?? in?.prefix(text)))
-        // (a value's methods led by it, `{this}(…)`: by their rest, in it and what it is made of)
-        led_whole (place, text) => (place === None) ? None : (((place.led === None) ? None : place.led.own_whole(text)) ?? led_parts_whole(place.parts, text))
-        led_parts_whole (ps, text) => ps.empty ? None : (led_whole(ps.first, text) ?? led_parts_whole(ps.rest, text))
-        led_prefix (place, text) => (place === None) ? None : (((place.led === None) ? None : place.led.own_prefix(text)) ?? led_parts_prefix(place.parts, text))
-        led_parts_prefix (ps, text) => ps.empty ? None : (led_prefix(ps.first, text) ?? led_parts_prefix(ps.rest, text))
-        own_prefix (text) => part_longest(text) ?? parts_prefix(parts, text)
-        parts_prefix (ps, text) => ps.empty ? None : (ps.first.own_prefix(text) ?? parts_prefix(ps.rest, text))
-        defining (text) => (level keys_reading (rules) (text)){.defines && (!among(aside, .) && (text ~= .))}#.sort(.length).last ?? in?.defining(text)
-        longest (text, defining_text) => (level keys_reading (rules) (text)){!(. === split_key) && ((defining_text || !((. === maker_key) || .defines)) && (!among(aside, .) && (text ~= .)))}#.sort(.length).last
-        // (and the split, `x.f`, when it reads more)
-        reading (text) => longer(text, whole(text))
-        longer (text, found) => ((found === maker_key) || (text == found?.key) || !prefer_split(text, found)) ? found : split_key
-        // (the split, when it reads more of the text than the key does, read again: what was read since may have been another
-        // text)
-        prefer_split (text, found) => !among(aside, split_key) && (text ~= split_key) && ((found === None) || (split_key.length > ((text ~= found) ? found.length : 0)))
-        // (a text read with the split, and a rule led by what it read, set aside)
-        unsplit (program, whole_text, led_by) => {
-          was := aside
-          aside = [split_key, led_by].joined(aside)
-          r := named_in(program, whole_text)
-          aside = was
-          r
-        }
-        keys => (in === None) ? own_keys : (own_keys | in.keys)
-        own_keys => parts.empty ? rules.keys : rules.keys.joined(parts_written(parts))
       }
       // A program running: what applied it, where it is.
-      // (`receiver`: what a method was read on, until a node of its own is made of it)
-      Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node, for_value?: Node, receiver?: Node) => { }
+      Program := class (caller?: Program, at?: Statement, in?: Node, this?: Node, for_value?: Node, receiver?: Node, outside?: Array) => { }
       Argument := class (\s+, word: String) => { }
       global := Node({
         rules[`external`, \s+, rule: String, args: Argument[]] := (caller) => {
-          // (`external . v`: v one of the components of what it is read in, the last added first, answered; bare, a node of its
-          // own in what it is read in, made of what a method was read on, its receiver)
-          `.` (made_of) => (made_of.first === None) ? (caller.this = (caller.in = composed(caller.in, made_on(Node(in: caller.in), caller)))) : composed(place_of(caller), made_of.first)
+          `.` (made_of) => (made_of.first === None) ? (caller.this = (caller.in = composed(caller.in, made_on(Node(in: caller.in), caller)))) : composed(value_read_in(caller.in), made_of.first)
           `&` => caller
           `goto` (to) => (caller.at = to.first) if (to.rest.empty || to.rest.first)
           `label` (to) => to.first
-          `style` (how) => painted_with(how, caller)
-          `include` (file) => included(caller, file.first)
+          `style` (how) => shown_by(how, caller)
           `rule` (head) => rule_written(caller.in, head.first)
-          // (`external member x name`: the rule x sees by that name, its own or what it is made of, applied on x; given a
-          // value too, x given a rule by that name answering it)
+          `include` (file) => named_in(caller.caller, level file_named (file.first))
           `member` (asked) => asked.rest.rest.empty ? member_read(caller, asked.first, asked.last) : member_put(asked.first, asked.rest.first, asked.last)
           `shown` (how) => (how.first === None) ? how.last : ((((level kind_of (how.first)) === None) ? (how.first).shown_as : None) ?? how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
       })
-      member_read (program, holder, name) => ((holder === None) || (holder.rules === None) || (name === None)) ? None : member_found(program, holder, holder.own_whole(name))
-      member_found (program, holder, found) => (found === None) ? None : found.value(Program(caller: program, in: holder, this: holder, receiver: holder))
+      // (a style: a rule keeps it, painted each time it is applied; anything else painted where it is read, and shown as it)
+      shown_by (how, program) => {
+        (how.last.written_head === None) ? painted.append([how.first, how.last, bound_along(program)]) : styled(how.last, how.first)
+        ((how.last).shown_as = how.first) if (level kind_of (how.last)) === None
+        how.last
+      }
+      // (a node made where a method was read on a value: made of that value, its receiver)
+      made_on (made, program) => {
+        (made.parts = [program.receiver]) if !((program.receiver === None) || (program.receiver.rules === None))
+        program.receiver = None
+        made
+      }
+      // (a node made of another too, never of what is made of it)
+      composed (into, part) => {
+        (into.parts = [part].joined(into.parts)) if !((part.rules === None) || ((into.rules === None) || made_of_deep(part, into)))
+        part
+      }
+      made_of_deep (part, whole) => (part === whole) || parts_reach(part.parts, whole)
+      parts_reach (ps, whole) => ps.empty ? false : (made_of_deep(ps.first, whole) || parts_reach(ps.rest, whole))
+      member_read (program, holder, name) => ((holder === None) || (holder.rules === None) || (name === None)) ? None : member_found(program, holder, holder.longest(name))
+      member_found (program, holder, found) => (found === None) ? None : found.value(Program(caller: program, in: holder, this: holder, receiver: holder, outside: program.outside))
       member_put (holder, name, value) => {
         holder.rules[[name]] := (c) => value
-        holder.rules.keys.last.named = true
         value
       }
-      // Statements: each, after any space, read by the longest rule that reads it (all at once, where they can be); run in
-      // order, each given what applies them.
+      // Statements: each, after any space, read by the longest rule that reads it; run in order as it is read, each given
+      // what applies them.
       Statement := class (
         leading_whitespace?: (\s | \n)[]+,
         {statement: concurrently context.reading(.)}: context.keys,
         trailing_whitespace?: (\s | \n)[]+
       ) => {}
-      // (the statements as read kept on the node they are read in, `statements`: what each read, its rule and what that took)
       Statements (context: Node) => dynamically Statement[] & (caller: Program) => (
         context.statements = .
         arrived(caller, listed(.))
       )
       listed (read) => read.map((s) => s.statement)
-      // (a text read by a program, run apart from its own statements: what it read so far, what waits, what it answered)
+      // (a text read by a program, run apart from its own statements)
       apart (program, inner) => {
         was := [program.done, program.waiting, program.answer]
         program.done = None
@@ -219,13 +193,8 @@ Expression := class (
         (rs: Statements(place)(program) = text)
         program.answer
       }
-      // (a text's statements run by a program of its own, its jumps going on in what applied it)
-      run_by (code, program) => {
-        code(program)
-        leaving(finished(program), program.answer)
-      }
-      // (each in turn, as it is read: run, but while a jump waits for a label not read yet; a jump back goes on after its label
-      // among those read, another round)
+      // (each in turn, as it is read: run, but while a jump waits for a label not read yet; a jump back goes on after its
+      // label among those read)
       arrived (program, read) => {
         read.for((s) => arrive(program, s))
         program.answer
@@ -246,8 +215,7 @@ Expression := class (
         round.for((s) => (program.at === None) ? runs(program, s) : kept(program, s))
         program
       }
-      // (a label or a jump answers nothing: the body answers what was answered before it; while it runs, the rule is no longer
-      // set aside)
+      // (a label or a jump answers nothing: the body answers what was answered before it)
       runs (program, statement) => {
         before := program.answer
         inside := aside
@@ -257,8 +225,7 @@ Expression := class (
         program.answer = ((statement.rule == `label`) || (statement.rule == `goto`)) ? before : a
         program
       }
-      // (a jump: to its label among those read, what runs next; to the host's `afterwards`, the rest kept for when everything
-      // is read; to its `report`, said, then on (in a test, to its `erred`); else waiting for its label)
+      // (a jump: to its label among those read; to `afterwards`, kept for when everything is read; to `report`, said)
       settled (program) => {
         (level kept_later (program)) if (program.at == afterwards)
         said(program) if (program.at == report)
@@ -272,21 +239,20 @@ Expression := class (
         program
       }
       labelled (program, read) => read.empty ? None : (label_is(program, read.first) ? read.rest : labelled(program, read.rest))
-      label_is (program, statement) => (statement.rule == `label`) && same_label(label_of(Program(in: program.in), statement.args.first.word), program.at)
-      // (a body read to its end: a value gone to that no label in it is, `external goto {a}`, goes on after the jump)
-      finished (program) => !((level kind_of (program.at)) == `list`) ? program : go(gone_on(program), program.waiting ?? Array.new)
+      label_is (program, statement) => (statement.rule == `label`) && (label_of(Program(in: program.in), statement.args.first.word) == program.at)
+      // (what waits goes on when the rule ends; kept for afterwards, it waits for then)
+      finished (program) => ((program.waiting === None) || (program.at == afterwards)) ? program : go(gone_on(program), program.waiting)
       leaving (program, answer) => {
         (program.caller.at = program.at) if !((program.at === None) || (program.at == afterwards))
         answer
       }
-      // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label (a jump's
-      // first, a label's), its word, or, written in the brackets holes are written in, the value that reads as)
-      given (program, name, argument, first) => (((name == `goto`) || (name == `label`)) && (argument === first)) ? label_of(program, argument.word) : ((name == `include`) ? takes(program){.key == ((argument.word.first == hole_opening) ? between(argument.word) : argument.word)}#.first : named_in(program, argument.word))
-      label_of (program, word) => (word ~= BOOTSTRAPPER.CAPTURE.map{== \s}(String+)) ? [named_in(program, word)] : Place(word, global)
-      same_label (one, other) => ((level kind_of (one)) == `list`) ? (((level kind_of (other)) == `list`) && (one.first == other.first)) : (one == other)
+      // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label, its word)
+      given (program, name, argument, first) => (((name == `goto`) || (name == `label`)) && (argument === first)) ? label_of(program, argument.word) : named_in(program, argument.word)
+      label_of (program, word) => Place(word, global)
       afterwards := Place(`afterwards`, global)
-      // (everything read, the tests kept for afterwards run, each in memory of its own (Design §21.4), what it kept for
-      // afterwards run inside it; where the host runs them a step at a time, held for it)
+      report := Place(`report`, global)
+      // (what jumped to afterwards, run once everything is read, and what that kept, in turn)
+      // (each run by the host in memory and a budget of its own, Design §21.4)
       run_later (unused) => level run_kept (ran_later) (tested_later)
       tested_later (program) => level tested_here ((program.bound.first).value)
       ran_later (program) => {
@@ -294,27 +260,35 @@ Expression := class (
         finished(go(gone_on(program), program.waiting ?? Array.new))
         testing = None
       }
-      // (what is said, `external goto report`: what the hole took and where, each in turn; the host reads them)
-      report := Place(`report`, global)
-      reported := level reports
       testing := None
+      // (what the host reads: what is painted, `external style`, and said, `external goto report`)
+      painted => level paints
+      reported => level reports
       said (program) => {
-        reported.append([takes(program).first, bound_along(program)])
+        reported.append([program.bound.first, Array.new])
         program.at = None
         (testing.at = Place(`erred`, global)) if !(testing === None)
       }
-      kinds := Array.new
-      kinds_of (program) => kinds.first ?? known(named_in(program, `level kinds`))
-      known (kind) => (kind.rules === None) ? kind : kinds.append(kind).first
-      // (what a name is read as: without the space around it, unless it is only space)
-      trimmed_or (text, otherwise) => (text.length == 0) ? otherwise : text
-      // (a hole's value, read once in what applied it; a jump back in a body forgets what its holes answered, a loop asks again)
+      // (a hole's value, read once in what applied it; a jump back forgets it)
+      // (who reads a hole: the program reading it once it entered a block, else what applied the rule; one that took a hole
+      // of what applied it, `{x}`, is read there)
+      reader (program, otherwise) => ((program.in === None) || !(program.in === program.this)) ? otherwise : program
+      // (a hole's text read with what was set aside where it was written)
+      read_outside (outside, read) => {
+        was := aside
+        aside = outside ?? aside
+        r := read()
+        aside = was
+        r
+      }
       held (hole, answer) => ((hole.answered === None) ? (hole.answered = [answer()]) : hole.answered).first
       forget (program) => (program.bound ?? Array.new).for((fh) => fh.answered = None)
-      // (who reads a hole: the program reading it once it entered a block, else what applied the rule)
-      reader (program, otherwise) => ((program.in === None) || !(program.in === program.this)) ? otherwise : program
-      // (a hole's value in its body, `{x}` read there: read once, by who reads it)
-      hole_value (hole, program, applier) => held(hole, () => named_for(program, reader(program, applier), hole.value))
+      bound_along (program) => (program === None) ? Array.new : [program.bound].joined(bound_along(program.caller))
+      rule_written (place, text) => ((place === None) || (text === None)) ? None : (place.rules.keys{.written_head == text}#.last ?? rule_written(place.in, text))
+      // (a node a value is read on in, `x.( … )`: what it defines is that value's)
+      value_read_in (place) => ((place === None) || (place.of === None) || (place.of.rules === None)) ? place : place.of
+      // (where a program defines: in the value it reads code for, `x.( … )`, else where it is)
+      place_of (program) => ((program.for_value === None) || (program.for_value.rules === None)) ? value_read_in(program.in) : program.for_value
       // (a hole read for code read in a value, `x.( … )`: read where it is written, what it defines the value's)
       named_for (program, by, text) => in_value(by, text, (((program.in === None) || (program.in.of === None)) || (by.in === program.in)) ? ((by.in === None) ? None : by.in.of) : program.in.of)
       in_value (program, text, held_value) => (held_value === None) ? named_in(program, text) : for_value(program, held_value, text)
@@ -325,94 +299,59 @@ Expression := class (
         program.for_value = was
         r
       }
-      led_of (place) => ((place.led === None) ? Array.new : [place.led]).joined(parts_led(place.parts))
-      parts_led (ps) => ps.empty ? Array.new : led_of(ps.first).joined(parts_led(ps.rest))
-      led_home (place) => (place.led === None) ? (place.led = Node()) : place.led
-      made_on (made, program) => {
-        (made.parts = [program.receiver]) if !((program.receiver === None) || (program.receiver.rules === None))
-        program.receiver = None
-        made
-      }
-      // (never made of what is made of it: what it sees would go round without end)
-      composed (into, part) => {
-        (into.parts = [part].joined(into.parts)) if !((part.rules === None) || ((into.rules === None) || made_of_deep(part, into)))
-        part
-      }
-      made_of_deep (part, whole) => (part === whole) || parts_reach(part.parts, whole)
-      parts_reach (ps, whole) => ps.empty ? false : (made_of_deep(ps.first, whole) || parts_reach(ps.rest, whole))
-      named_in (program, text) => program.in.named_as(trimmed_or(level cw_trimmed (text), text), program)
-      aside := Array.new
-      among (list_of, one) => list_of{. === one}#.count > 0
-      // (the bracket a hole opens with, and whether a text holds one)
-      hole_opening := BOOTSTRAPPER.CAPTURE.first
+      between (text) => level cw_trimmed (level cw_inner (text))
       has_hole (text) => level holds_text (text) (hole_opening)
-      // (what a definition is written with, the header's `=>`, outside every pair; the header's brackets a pair)
+      defined_in (place, text) => (place === None) ? None : ((place.rules.keys{.written_head == text}#.count > 0) ? place : defined_in(place.in, text))
+      trimmed_or (text, otherwise) => (text.length == 0) ? otherwise : text
+      // (one line trimmed; lines kept as written, each statement as deep as its line)
+      named_in (program, text) => program.in.named_as((level holds_text (text) (line_end)) ? text : trimmed_or(level cw_trimmed (text), text), program)
+      run_by (code, program) => {
+        code(program)
+        leaving(finished(program), program.answer)
+      }
+      // (a text read with the split set aside)
+      unsplit (program, whole_text, split) => {
+        was := aside
+        aside = [split].joined(aside)
+        r := named_in(program, whole_text)
+        aside = was
+        r
+      }
+      kinds := Array.new
+      kinds_of (program) => kinds.first ?? known(named_in(program, `level kinds`))
+      known (kind) => (kind.rules === None) ? kind : kinds.append(kind).first
+      // (a text that is one hole, of those a program took: that hole)
+      spliced (text, by) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? None : taken_in(by, (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code)
+      splicer (text, by) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? None : binder(by, (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code)
+      binder (program, name) => (taken_in(program, name) === None) ? None : program
+      taken_in (program, name) => ((program === None) || (program.bound === None)) ? None : program.bound{.key == name}#.first
+      aside := Array.new
+      hole_opening := BOOTSTRAPPER.CAPTURE.first
+      line_end := `
+`
       separator := level separator_of (BOOTSTRAPPER.CAPTURES.text) (BOOTSTRAPPER.CAPTURE)
       defines (text) => level holds_outside (text) (separator)
+      // (a byte of a name)
+      is_word (c) => holds(`abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_`, c)
+      holds (t, c) => t.empty ? false : ((t.first == c) || holds(t.rest, c))
+      // (a head quoting `=>`, a rule that defines: noted as its head is read)
+      quoted (t) => t
+      // (a rule shown in a style: each time it is applied, where its head reads)
+      styled (rule, style) => {
+        rule.styled_as = (rule.styled_as ?? Array.new).append(style)
+        rule
+      }
+      set_aside (key) => aside{. === key}#.count > 0
       level closing (BOOTSTRAPPER.CAPTURE)
-      // (what is painted, `external style`: each style, what it is shown on and what the holes took; the host reads them)
-      painted := level paints
-      // (the program the text is run by, and a text read after it as more of it, by the same program (the editor's file read
-      // on what the entrypoint already read)
-      top := Program(in: global, this: global)
-      read_text (text) => {
-        named_in(top, text)
-        run_later(0)
-      }
-      level entry_read (read_text)
-      sink := Array.new
-      painted_with (how, program) => {
-        sink.append(painted.append([how.first, how.last, bound_along(program)]).last)
-        // (a rule keeps the styles it is shown as, read each time it is applied)
-        ((how.last).styled_as = ((how.last).styled_as ?? Array.new).append(sink.last)) if !((how.last).written_head === None)
-        // (and a node the style it is shown as, the last given it: what `shown` answers)
-        ((how.last).shown_as = how.first) if (level kind_of (how.last)) === None
-        how.last
-      }
-      // (a hole read in its body: its name shown as a parameter, where it is read)
-      parameter_read (hole, program, answer) => {
-        painted.append([`parameter`, [hole.key, program.input], [Array.new]])
-        answer
-      }
-      // (a rule by its head as written, `level rule`: the latest written so, here or around)
-      rule_written (place, text) => ((place === None) || (text === None)) ? None : (place.rules.keys{.written_head == text}#.last ?? rule_written(place.in, text))
-      bound_along (program) => (program === None) ? Array.new : [program.bound].joined(bound_along(program.caller))
-      // (what the holes took where a program runs, the nearest first; where the rule is used whose holes took a head)
-      takes (program) => (program === None) ? Array.new : (program.bound ?? Array.new).joined(takes(program.caller))
-      // (a file, `external include <location>`: the text the host gave for the location as written where the include is, read
-      // in turn there, as the code written in its place)
-      included (program, hole) => file_read(holder(program, written_by(program, hole)), written_by(program, hole))
-      file_read (program, hole) => ((program === None) || ((level file_named (level cw_trimmed (hole.value))) === None)) ? None : named_in(program.caller, level file_named (level cw_trimmed (hole.value)))
-      // (the hole a hole's text names, `{x}`, further out, as far as one does)
-      written_by (program, hole) => (((hole === None) || !((level cw_trimmed (hole.value)).first == hole_opening)) || (holder(program, hole) === None)) ? hole : (outer_hole(holder(program, hole), between(level cw_trimmed (hole.value))) ?? hole)
-      outer_hole (program, name) => written_by(program.caller, takes(program.caller){.key == name}#.first)
-      // (what is in a pair, `({p})`: a hole's that was taken, the text it took)
-      pair_named (inner, taken) => (((inner.first == hole_opening) && ((level cw_enclosed (inner)) === true)) && (taken{.key == between(inner)}#.count > 0)) ? level spliced (inner) (BOOTSTRAPPER.CAPTURE) (taken) : inner
-      paired_hole (program, hole) => ((hole === None) || (holder(program, hole) === None) || !((level cw_enclosed (level cw_trimmed (hole.value))) === true) || !(between(level cw_trimmed (hole.value)).first == hole_opening)) ? hole : (outer_hole(holder(program, hole), between(between(level cw_trimmed (hole.value)))) ?? hole)
-      holder (program, hole) => ((hole === None) || (program === None)) ? None : (among(program.bound ?? Array.new, hole) ? program : holder(program.caller, hole))
-      home_of (program, hole) => (holder(program, hole) === None) ? None : place_of(holder(program, hole).caller)
-      // (where a program defines: in the value it reads code for, `x.( … )`, else where it is)
-      place_of (program) => ((program.for_value === None) || (program.for_value.rules === None)) ? value_read_in(program.in) : program.for_value
-      // (a node a value is read on in, `x.( … )`: what it defines is that value's)
-      value_read_in (place) => ((place === None) || ((place.of === None) || (place.of.rules === None))) ? place : place.of
-      // (the nearest node that defines a name itself)
-      defined_in (place, text) => (place === None) ? None : ((place.written_keys{text ~= .}#.count > 0) ? place : defined_in(place.in, text))
-      // (what is between a text's first character and its last)
-      between (text) => level cw_trimmed (level cw_inner (text))
-      // (a body written in the brackets holes are written in is the code inside them, its lines as written: from right after
-      // the bracket)
-      inside_of (text) => {
-        code := level cw_trimmed (text)
-        ((code.first == hole_opening) && (level cw_enclosed (code))) ? level cw_span_of (level cw_inner (code)) (between(code)) : code
-      }
+      top := Program(in: global, this: global, outside: Array.new)
       // (the compiler's parser: a grammar's rules read in a node of their own, a word what nothing else there reads)
       parse_node_of (grammar_text) => {
         g := Node(in: global)
-        (gs: Statements(g) = grammar_text)(Program(in: g))
+        (gs: Statements(g) = grammar_text)(Program(in: g, outside: Array.new))
         p := Node()
         level moved_keys (g) (p)
         leaf := Node(in: global)
-        (ls: Statements(leaf) = `{name_word} => external &`)(Program(in: leaf))
+        (ls: Statements(leaf) = `{name_word} => external &`)(Program(in: leaf, outside: Array.new))
         p.split_key = leaf.rules.keys.last
         p
       }
@@ -421,7 +360,6 @@ Expression := class (
         level curried_value (ps: Statements(grammar.parse_node) = program_text)
       }
       level set_parser (parser)
-      // (read in turn; everything read, what was kept for afterwards)
       (Statements(global)(top), (\s | \n)[], (⊣ & ((end) => run_later(0)))(0))
     )
   )
@@ -2310,7 +2248,7 @@ Turns := class {
   static turned (item, f, args, pos, d, floor) => {
     turn_depth_set(d + 1)
     u := Turns.aside_count()
-    at := Turns.in_order(item, f, args, pos)
+    at := Turns.in_order(item, f, args, pos, floor)
     read_again(item, f, args, u)
     turn_depth_set(d)
     word_put(4060, floor)
@@ -2318,17 +2256,17 @@ Turns := class {
     at
   }
   static aside_count => (aside_or_none() == None) ? 0 : Texts.count_of(aside_or_none())
-  static in_order (item, f, args, pos) => {
+  static in_order (item, f, args, pos, floor) => {
     at := pos
     while (at < textend) && (stopped() == 0) {
-      at = Turns.statement_turn(item, f, args, pos, at)
+      at = Turns.statement_turn(item, f, args, pos, at, floor)
       return (0 - at) - 1 if at < 0
     }
     at
   }
-  static statement_turn (item, f, args, pos, at) => {
+  static statement_turn (item, f, args, pos, at, floor) => {
     mark := boundn
-    turn_begun()
+    turn_begun_within(floor)
     q := textend
     se := Turns.closed_or(pos, statement_end(pos, white_after(at)), at)
     ob := word_of(3912)
@@ -3325,8 +3263,10 @@ Hooks := class {
   static turn_depth => word_of(4072)
   static turn_depth_set (d) => word_put(4072, d)
   static fuel_floor => word_of(4060)
-  static turn_begun => {
-    word_put(4060, word_of(3896) - 200000000)
+  static turn_begun => Hooks.turn_begun_within(0)
+  // (a statement's budget, within what the turn it is in has left: one inside another never outlasts it)
+  static turn_begun_within (outer) => {
+    word_put(4060, Hooks.higher(outer, word_of(3896) - 200000000))
     stopped_statement() if (word_of(3896) > 0) && Hooks.near_end()
     0
   }
@@ -3351,8 +3291,10 @@ Hooks := class {
     word_put(3916, 1)
     word_put(4064, 1)
   }
+  // (an inner turn let go, the one it is in goes on; unless that one too ran past its budget)
+  static higher (a, b) => (a > b) ? a : b
   static went_on => {
-    Hooks.stop_lowered() if word_of(4064) != 0
+    Hooks.stop_lowered() if (word_of(4064) != 0) && (word_of(3896) >= word_of(4060))
     0
   }
   static stop_lowered => {
@@ -3449,7 +3391,12 @@ Afterwards := class {
     o = word_of(4044)
     word_put(4044, list())
     word_put(4036, 0)
+    // (a test a turn of its own: past its budget it stops, and the next goes on)
+    f := word_of(4060)
+    turn_begun_within(f)
     call1(word_of(4048), x)
+    word_put(4060, f)
+    went_on()
     word_put(4036, i)
     n = word_of(4044)
     word_put(4044, o)

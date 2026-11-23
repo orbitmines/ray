@@ -3626,6 +3626,7 @@ include @./Number.ray
 include @./String.ray
 include @./CLI.ray
 include @./Expression.ray
+include @./Compiler.ray
 // (the edges `|` and `,` make: each a node of its own, the rule that decorated it a component on it)
 superposed_edge := (Node &+ { })
 superposed_edge &+= superposing_rule

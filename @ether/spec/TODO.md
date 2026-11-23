@@ -486,6 +486,17 @@ its own reading its place, unread text recorded with reading going on.
   still 124 s, from `Readings.reads_text`'s check that a rule's literals are all in the text before reading it whole
   (each a scan of the whole statement). It goes with the hole read a token at a time, which makes that check moot.
 
+## The rewritten reader (2026-11-23, revision 147)
+
+- **Ray.ray's `Iterable &+= { … }` (Ray.ray:61) runs past its budget when Ray.ray is included** (`--test-all`: Ray.ray 9
+  passed, the old reader 222). Read written in the entrypoint itself it does not. It is the statement's own reading,
+  not its statements: about 150 statements run in it before the stop, and a budget of 1e9 or no near-the-heap's-end
+  stop changes nothing. The block read to its line 193 is fine, to 208 not (`map`, `reverse`, `sort` defined); taking
+  out either `sort` alone does not help. Not the reader's own `.sort` (finding the longest key in one pass changed
+  nothing), not a kept test's budget. The profile is backtracking patterns (`kind_read`, `repeat_read`,
+  `either_from`). Next: what reads `{code}` across 350 lines there (a hole's ways each tried?), included against inline.
+- Also open: Number.ray 53 passed (182), String.ray 67 (123), Expression.ray 0 (56); entrypoint 359 (408).
+
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 
 - **Done (2026-11-13), revision 140 on.** `$/Wasm/` is gone. runtime.ray's functions are Compiler.ray levels (`Hooks`,

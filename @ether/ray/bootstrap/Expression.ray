@@ -55,7 +55,7 @@ Expression := class (
               me.this = caller.this
               me.receiver = caller.receiver
               // (each hole a rule of its node, `x` and `{x}`, answering what it took read where the rule was applied, once)
-              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => held(hole, () => read_outside(me.outside, () => named_for(c, (splicer(hole.value, caller) === None) ? reader(c, caller) : caller, hole.value))))
+              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => held(hole, () => read_outside(me.outside, () => ((splicer(hole.value, caller) === None) ? named_for(c, reader(c, caller), hole.value) : named_for(c, writer_of(hole.value, caller), written_of(hole.value, caller))))))
               me.in.rules.keys.for((hk) => hk.named = true)
               // (read while the rule is set aside: a rule never reads itself)
               (rule_own.styled_as ?? Array.new).for((style) => painted.append([style, [rule_own.written_head, me.input], [me.bound]]))
@@ -110,7 +110,8 @@ Expression := class (
         nearer (text, near) => (near === None) ? in?.prefix(text) : (((near.named === true) && !(text == near.key)) ? fuller(text, near, in?.prefix(text)) : near)
         fuller (text, near, far) => (text == far?.key) ? far : near
         parts_prefix (ps, text) => ps.empty ? None : (ps.first.own_longest(text) ?? parts_prefix(ps.rest, text))
-        own_longest (text) => rules.keys{!((. === split_key) || (. === maker_key) || (makes && .defines) || .lone) && !set_aside(.) && (text ~= .)}#.sort(.length).last
+        own_longest (text) => longest_kept(text, makes, split_key, maker_key)
+        longest_kept (text, m, sk, mk) => rules.keys{!((. === sk) || (. === mk) || (m && .defines) || .lone) && (text ~= .) && !set_aside(.)}#.sort(.length).last
         // (a node whose rules begin with the one that makes rules: a language's, where a definition is read first)
         makes => rules.keys.first === maker_key
         defining (text) => rules.keys{!set_aside(.) && .defines && (text ~= .)}#.sort(.length).last ?? in?.defining(text)
@@ -136,7 +137,7 @@ Expression := class (
           `label` (to) => to.first
           `style` (how) => shown_by(how, caller)
           `rule` (head) => rule_written(caller.in, head.first)
-          `include` (file) => named_in(caller.caller, level file_named (file.first))
+          `include` (file) => ((level file_named (file.first.first)) === None) ? None : named_in(file.first.last, level file_named (file.first.first))
           `member` (asked) => asked.rest.rest.empty ? member_read(caller, asked.first, asked.last) : member_put(asked.first, asked.rest.first, asked.last)
           `shown` (how) => (how.first === None) ? how.last : ((((level kind_of (how.first)) === None) ? (how.first).shown_as : None) ?? how.last)
         }[rule](args.map((argument) => given(caller, rule, argument, args.first)))
@@ -247,7 +248,9 @@ Expression := class (
         answer
       }
       // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label, its word)
-      given (program, name, argument, first) => (((name == `goto`) || (name == `label`)) && (argument === first)) ? label_of(program, argument.word) : named_in(program, argument.word)
+      given (program, name, argument, first) => (((name == `goto`) || (name == `label`)) && (argument === first)) ? label_of(program, argument.word) : ((name == `include`) ? written_where(argument.word, program) : named_in(program, argument.word))
+      // (a text as it was first written, followed out through the holes that took it: it, and the program it is written in)
+      written_where (text, by) => (splicer(level cw_trimmed (text), by) === None) ? [level cw_trimmed (text), by] : written_where(spliced(level cw_trimmed (text), splicer(level cw_trimmed (text), by)).value, splicer(level cw_trimmed (text), by).caller)
       label_of (program, word) => Place(word, global)
       afterwards := Place(`afterwards`, global)
       report := Place(`report`, global)
@@ -323,7 +326,8 @@ Expression := class (
       // (a text that is one hole, of those a program took: that hole)
       spliced (text, by) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? None : taken_in(by, (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code)
       splicer (text, by) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? None : binder(by, (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code)
-      binder (program, name) => (taken_in(program, name) === None) ? None : program
+      // (the rule running that took the hole: this program, or what applies it while it is no rule's own, a statement's)
+      binder (program, name) => (taken_in(program, name) === None) ? (((program === None) || !(program.bound === None)) ? None : binder(program.caller, name)) : program
       taken_in (program, name) => ((program === None) || (program.bound === None)) ? None : program.bound{.key == name}#.first
       aside := Array.new
       hole_opening := BOOTSTRAPPER.CAPTURE.first
@@ -341,7 +345,8 @@ Expression := class (
         rule.styled_as = (rule.styled_as ?? Array.new).append(style)
         rule
       }
-      set_aside (key) => aside{. === key}#.count > 0
+      set_aside (key) => aside_in(aside, key)
+      aside_in (list, key) => list.empty ? false : ((list.first === key) || aside_in(list.rest, key))
       level closing (BOOTSTRAPPER.CAPTURE)
       top := Program(in: global, this: global, outside: Array.new)
       // (the compiler's parser: a grammar's rules read in a node of their own, a word what nothing else there reads)
@@ -2013,12 +2018,14 @@ Matching := class {
     x := ctx
     r := 0
     while x is Node {
-      r = Matching.led_in_rules(member(x, Symbol.rules), n, m, c)
+      r = Matching.level_read(x, n, m, c, memo + (((((n * 31) + (x + 1)) + (textend * 7)) & 65535) * 16))
       return r if r > n
       x = member(x, Symbol.in)
     }
     0
   }
+  // (what one node's own rules read there, noted under it (`x + 1`, apart from what a node and all it is in read))
+  static level_read (x, n, m, c, h) => ((word_of(h) == n) && (word_of(h + 4) == (x + 1)) && (word_of(h + 8) == textend) && (word_of(h + 12) == epoch)) ? word_of((memo + 1048576) + ((h - memo) / 4)) : memo_noted(x + 1, n, h, Matching.led_in_rules(member(x, Symbol.rules), n, m, c))
   static led_in_rules (rules: Node, n, m, c) => (rules.keys == None) ? 0 : Matching.led_tried(rules.keys, n, m, c)
   // (the first of the rules led by text, by the byte c or by none, reading past n)
   static led_tried (l: List, n, m, c) => {
@@ -2027,12 +2034,13 @@ Matching := class {
     p := None
     while i < l.count {
       p = topattern(member(at(l, i), Symbol.key))
-      r = (Keys.led_by_text(p) && ((Keys.lead_byte(p) == c) || (Keys.lead_byte(p) < 0))) ? Matching.led_matched(p, n, m) : 0
+      r = Matching.led_tried_one(p, Keys.lead_byte(p), n, m, c)
       return r if r > n
       i = i + 1
     }
     0
   }
+  static led_tried_one (p, b, n, m, c) => (((b == c) || (b < 0)) && Keys.led_by_text(p)) ? Matching.led_matched(p, n, m) : 0
   static led_matched (p, n, m) => {
     r := matched(p, n, 0)
     boundn = m
@@ -2133,12 +2141,14 @@ Built := class {
 Turns := class {
   static in_turn (item, f, args, pos) => Turns.turned(item, f, args, pos, turn_depth(), fuel_floor())
   static turned (item, f, args, pos, d, floor) => {
+    f0 := word_of(3896)
     turn_depth_set(d + 1)
     u := Turns.aside_count()
     at := Turns.in_order(item, f, args, pos, floor)
     read_again(item, f, args, u)
     turn_depth_set(d)
-    word_put(4060, floor)
+    // (what its statements spent is theirs: the statement it is in keeps what it had left of its own)
+    word_put(4060, floor - (f0 - word_of(3896)))
     went_on()
     at
   }

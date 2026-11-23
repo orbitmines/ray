@@ -1077,7 +1077,7 @@ Runtime := class {
   // (failed: what it bound left out, and, when nothing was written meanwhile, the memory it took)
   static unbound (bn, fr, ef) => {
     boundn = bn
-    Runtime.left_alone(fr) if (effects == ef) && (noreclaim == 0)
+    Runtime.left_alone(fr) if (effects == ef)
   }
   static left_alone (fr) => {
     starts_cleared(fr, free)
@@ -1087,7 +1087,7 @@ Runtime := class {
   static ways_retried (bn, an, fr, ef) => {
     boundn = bn
     activen = an
-    freed_back(fr) if (free > fr) && (effects == ef) && (noreclaim == 0)
+    freed_back(fr) if (free > fr) && (effects == ef)
     markf = fr
     0
   }
@@ -2194,7 +2194,7 @@ Turns := class {
   static over_turn (at, se, mark) => {
     Turns.left()
     boundn = mark
-    over_budget(at, se)
+    Hooks.over_listed(at, se)
     went_on()
     se
   }
@@ -2219,7 +2219,7 @@ Turns := class {
     r
   }
   static over_after (a0, r) => {
-    over_budget(a0, r)
+    Hooks.over_listed(a0, r)
     went_on()
   }
   static read_again (item, f, args, u) => {
@@ -2380,32 +2380,9 @@ Basics := class {
 // how long, one run on extending the last); the byte a byte was first written as (in the program, or in the entry's
 // text); the indent of the line it was written on; whether that line goes on.
 Origins := class {
-  static Copy := (aside, to, from, length)
-  static copies_at := 3864
-  static copies_count_at := 3868
-  static origin_at (a) => {
-    q := a
-    n := 0
-    while n < 64 {
-      return q if (in_program(q, q + 1) || Origins.in_entry(q))
-      q = ((word_of(copies_at) == 0) ? (0 - 1) : Origins.copy_found(q, word_of(copies_at), word_of(copies_count_at)))
-      return q if q < 0
-      n = n + 1
-    }
-    0 - 1
-  }
+  static origin_at (a) => (in_program(a, a + 1) || Origins.in_entry(a)) ? a : (0 - 1)
   static in_entry (a) => (word_of(entered_at) != 0) && Origins.entry_holds(word_of(entered_at), a)
   static entry_holds (b: Reader, a) => (a >= b.from) && (a < b.to)
-  static copy_found (a, b, count) => {
-    k := count
-    while k > 0 {
-      k = k - 1
-      return Origins.copy_through(b + (k * 12), a) if Origins.copy_holds(b + (k * 12), a)
-    }
-    0 - 1
-  }
-  static copy_holds (r: Copy, a) => (a >= r.to) && (a < (r.to + r.length))
-  static copy_through (r: Copy, a) => r.from + (a - r.to)
   static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, (Origins.in_entry(o) ? Origins.entry_from(word_of(entered_at)) : program_from()), (Origins.in_entry(o) ? Origins.entry_to(word_of(entered_at)) : (program_from() + program_length())))
   static entry_from (b: Reader) => b.from
   static entry_to (b: Reader) => b.to
@@ -2434,6 +2411,7 @@ Heap := class {
     unreachable_now()
   }
   static alloc_bytes (n) => alloc(n)
+  static lasting_made (x, n) => 0
   // (what lasts past any test: taken past the arena, frames' words first (word 3840 where the next is))
   static lasting_alloc (n) => {
     word_put(3840, arena_base() + 65536) if word_of(3840) == 0
@@ -2503,9 +2481,6 @@ Heap := class {
     word_put(word_of(3932) + 44, 1) if word_of(3936) > 0
     0
   }
-  static lasting_entered => 0
-  static lasting_left (f, m) => 0
-  static lasting_made (x, n) => 0
   // (a value made since the outermost frame began: kept by what holds it)
   static escaping (v) => (isodepth > 0) && (v >= word_of(arena_base())) && (v < free)
   static isolated_open => {
@@ -2562,10 +2537,6 @@ Hooks := class {
   static classes_changed => word_held(3884, word_of(3884) + 1)
   static white (c) => (c == 32) || (c == 10) || (c == 9) || (c == 13)
   static logging => word_of(3944) != 0
-  static word_logged (w, v) => {
-    logged(w) if w < word_of(3944)
-    word_held(w, v)
-  }
   // (a word given a value raw: noted as `written` notes one, when the value is of a statement still read)
   static word_held (w, v) => {
     effects = Heap.escaping(v) ? (effects + 1) : effects
@@ -2619,17 +2590,9 @@ Hooks := class {
     word_held(4064, 0)
   }
   // (a statement past its budget, noted where what is noted lasts)
-  static over_budget (a, e) => (free < arena_base()) ? Hooks.lasting_over(a, e, free, markf) : Hooks.over_listed(a, e)
-  static lasting_over (a, e, f, m) => {
-    lasting_entered()
-    Hooks.over_listed(a, e)
-    lasting_left(f, m)
-  }
   static over_listed (a, e) => {
-    word_held(3844, word_of(3844) + 1)
     word_held(4068, list()) if word_of(4068) == 0
     append(word_of(4068), text(a, e))
-    word_held(3844, word_of(3844) - 1)
   }
   // (whether the reading runs abstractly, as the editor runs a file (the host's word 3900); whether a test written at t
   // runs: every one, but when the editor runs a file only those written in it, from where the host says it begins)
@@ -2680,7 +2643,7 @@ Afterwards := class {
   // (first only those `tested` keeps; where the host runs them a step at a time (word 4080), held for it)
   static run_kept (run, tested) => {
     word_held(4048, run)
-    word_logged(word_of(4044) + 4, Afterwards.tested_kept(word_of(4044), tested, word_of(4036)))
+    word_held(word_of(4044) + 4, Afterwards.tested_kept(word_of(4044), tested, word_of(4036)))
     return 0 if word_of(4080) != 0
     while word_of(4036) < word_of(word_of(4044) + 4) {
       word_held(4036, word_of(4036) + 1)
@@ -2787,14 +2750,9 @@ Afterwards := class {
 // lasts and its memory let go; the arguments a call shares (word 3928), made once, to last
 Images := class {
   static shared_args (w, n) => {
-    ((free >= arena_base()) ? word_held(w, Images.two_none()) : Images.args_lasting(w, free, markf)) if word_of(w) == 0
+    word_held(w, Images.two_none()) if word_of(w) == 0
     word_held(word_of(w) + 4, n)
     word_of(w)
-  }
-  static args_lasting (w, f, m) => {
-    lasting_entered()
-    word_held(w, Images.two_none())
-    lasting_left(f, m)
   }
   static two_none => append(append(list(), 0), 0)
   // (a test begun: its state noted, once, however deep tests are begun in it (word 3936))

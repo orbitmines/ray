@@ -1116,9 +1116,7 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|     Lowered.w(")\n")
 //|     Lowered.tag_written(ck)
 //|     ck.last.for((f) => Lowered.field_given(ck, f.first))
-//|     Lowered.w("  lasting_made(x, ")
-//|     High.number(Lowered.words(ck) * 4)
-//|     Lowered.w(")\n  x\n}\n")
+//|     Lowered.w("  x\n}\n")
 //|   }
 //|   static tag_written (tk) => (tk.rest.first === None) ? None : Lowered.tag_put(tk.rest.first)
 //|   static tag_put (tv) => {
@@ -2250,11 +2248,8 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|   // before, when used otherwise; else `env`), `  pK = argn(…)` each (and, when used otherwise, defined in it too), its
 //|   // body with each `get(scope, K)` as `pK`)
 //|   static rewritten (f, h, qs, qn, m, mixed) => {
-//|     g := free
-//|     s := markf
 //|     o := 0
 //|     b := 0
-//|     lasting_entered()
 //|     o = alloc(((word_of(f + 8) - word_of(f + 4)) * 2) + 1088)
 //|     b = o
 //|     o = put_span(o, word_of(f + 4), h + 13)
@@ -2262,7 +2257,6 @@ assert Wasm.spans_of(texts: ["ab", "c"], at: 0) == [16, 0, 0, 0, 2, 0, 0, 0, 18,
 //|     o = mixed ? put_span(o, h + 13, h + 33) : put_span(put_span(put_span(o, h + 13, h + 23), h + 28, h + 31), h + 32, h + 33)
 //|     o = Locals.lines_written(o, h, qs, qn, m, mixed)
 //|     o = Locals.body_written(o, m, word_of(f + 8), qs, qn)
-//|     lasting_left(g, s)
 //|     text(b, o)
 //|   }
 //|   static locals_written (o0, h, qs, qn) => {

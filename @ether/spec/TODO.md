@@ -495,7 +495,13 @@ its own reading its place, unread text recorded with reading going on.
   out either `sort` alone does not help. Not the reader's own `.sort` (finding the longest key in one pass changed
   nothing), not a kept test's budget. The profile is backtracking patterns (`kind_read`, `repeat_read`,
   `either_from`). Next: what reads `{code}` across 350 lines there (a hole's ways each tried?), included against inline.
-- Also open: Number.ray 53 passed (182), String.ray 67 (123), Expression.ray 0 (56); entrypoint 359 (408).
+  Found since: it needs Node.ray's `Node &+= { .{literal property ^property}? … }` (Node.ray:425) read first; without
+  that rule nothing runs past (`--test Ray.ray`, ~100 s, is the quick loop), but then none of Ray.ray's tests run
+  (NOT RUN, 51), a second failure behind it. The rule alone with `.empty ? a : b` lines (as Ray.ray writes them) reads
+  fine; `{property ^property}` in place of `{literal property ^property}` runs past the same. Not Node.ray's `#`
+  (Node.ray:107) or its `{\n}$…` rules; not the reader's own `{…}#` (gone from its lookups, no change).
+- Also open: Number.ray 53 passed (182), String.ray 67 (123), Expression.ray 0 (56). The entrypoint's own tests: 359,
+  the old reader 358 on the same files (none it passed lost; the 408 once noted was not this entrypoint's).
 
 ## Runtime.ray and Compiler.ray in place of $/Wasm/ (user, 2026-11-12)
 

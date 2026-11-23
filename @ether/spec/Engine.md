@@ -253,3 +253,29 @@ language running its own library (`Number.Named.for`, a class's helpers by `.res
   rebuilt by itself.
 - **Expression.ray's writes.** Step 4 changes how the reader defines rules (as answers, not writes). This is the
   largest semantic change and needs the suites to stay at baseline throughout.
+
+## The runtime rewritten (plan, 2026-11-23)
+
+Where it stands: Expression.ray 2587 lines (reader and its tests ~440, the runtime ~2150, ~1950 of code). Memory is
+already simple (a frame given back when nothing escaped it, a test's at its end, f08f2d70); the optimization levels
+are Compiler.ray's; the editor's image and stepping are gone. Measured: every runtime function left runs in the
+self-compile or the suites but for ~74 lines, so what is left is cut by replacing it, not by pruning.
+
+What a new runtime must answer, and nothing else (594 statics now, 133 asked from outside):
+- emitted by the compiler (High, Lowered; 79): alloc anything append applied_of arg argn arrays assign astype bound
+  call call_member call_member0..2 chars classh closure conj define dynamic either ending equal extended field
+  first_where get getter greater greater_equal greedy headpattern holes_of index input invoke invoke0..2
+  isolated_close isolated_open keyed last last_where less less_equal list maybe member2 minus names negated node plus
+  quotient readsv readtext remainder repeated same seeded select selmethod sequence setmember shifted_left
+  shifted_right staged tag text times truthy typed under unequal with with_code written;
+- asked as `level …` (26): closing curried_value cw_enclosed cw_inner cw_span_of cw_trimmed file_named
+  function_given holds_outside holds_text input_part kept_later kind_of mapped member moved_keys names paints paired
+  reads reports run_kept separator_of set_parser span tested_here;
+- the host's (main, name_text, out_base, out_length, …) and what `$/Wasm.project.ray`'s Writing part calls (96).
+
+Order (each a revision with both suites the same, per test): the matcher's choice points as one record (either,
+anything, repeat, hole: the four save/retry prologues); Built/Readings/Splices/Texts/Indexes as one text module;
+Turns' reading again folded into in_order; Afterwards/Images' test running as one; then the matcher itself (Pattern
+kinds 1–28 → the reading rules the decision keeps: hole modes, pairs, statement ends) rewritten whole. Floor: the 133
+above plus the matcher's core; ~550 lines is the estimate for the runtime, so ~1000 for Expression.ray; 500 needs the
+Writing part's 96 calls and the compiler's 79 emitted names cut too (the compiler asking less of the runtime).

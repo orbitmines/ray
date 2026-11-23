@@ -1982,8 +1982,6 @@ Turns := class {
 // Entry (`level entry …`): the input is parts, each ended by a zero byte (the program, the runtime, then files, each
 // its name, a line end, and what it holds); a file by its name; the i-th part; the entry's reader, given a text to read.
 Entry := class {
-  static Reader := (aside, reader, from, to)
-  static entered_at := 3856
   static zero_from (a, e) => {
     q := a
     while (q < e) && (byte(q) != 0) {
@@ -2019,15 +2017,6 @@ Entry := class {
     q
   }
   static part_text (a, e) => text(a, Entry.zero_from(a, e))
-  static entry_given (t: Text) => (word_of(entered_at) == 0) ? 0 : Entry.entry_called(word_of(entered_at), t, textend)
-  static entry_called (b: Reader, t: Text, q) => {
-    b.from = t.from
-    b.to = t.to
-    textend = t.to
-    r := call1(b.reader, t)
-    textend = q
-    r
-  }
 }
 // Actives: the rules, or a class's header, being read at a place (read again there, it fails).
 Actives := class {
@@ -2079,12 +2068,8 @@ Basics := class {
 // how long, one run on extending the last); the byte a byte was first written as (in the program, or in the entry's
 // text); the indent of the line it was written on; whether that line goes on.
 Origins := class {
-  static origin_at (a) => (in_program(a, a + 1) || Origins.in_entry(a)) ? a : (0 - 1)
-  static in_entry (a) => (word_of(entered_at) != 0) && Origins.entry_holds(word_of(entered_at), a)
-  static entry_holds (b: Reader, a) => (a >= b.from) && (a < b.to)
-  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, (Origins.in_entry(o) ? Origins.entry_from(word_of(entered_at)) : program_from()), (Origins.in_entry(o) ? Origins.entry_to(word_of(entered_at)) : (program_from() + program_length())))
-  static entry_from (b: Reader) => b.from
-  static entry_to (b: Reader) => b.to
+  static origin_at (a) => in_program(a, a + 1) ? a : (0 - 1)
+  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, program_from(), program_from() + program_length())
   static indent_within (o, lo, te) => {
     q := o
     while (q > lo) && (byte(q - 1) != 10) {
@@ -2110,7 +2095,6 @@ Heap := class {
     unreachable_now()
   }
   static alloc_bytes (n) => alloc(n)
-  static lasting_made (x, n) => 0
   // (what lasts past any test: taken past the arena, frames' words first (word 3840 where the next is))
   static lasting_alloc (n) => {
     word_put(3840, arena_base() + 65536) if word_of(3840) == 0
@@ -2332,18 +2316,10 @@ Afterwards := class {
     append(word_of(4044), p)
     p
   }
-  static entry_step => ((word_of(4044) == 0) || (word_of(4036) >= word_of(word_of(4044) + 4))) ? int(0) : Afterwards.entry_ran(word_of(4044))
-  static entry_ran (l) => {
-    x := at(l, word_of(4036))
-    word_held(4036, word_of(4036) + 1)
-    Afterwards.kept_run(x)
-    int(word_of(l + 4) - word_of(4036))
-  }
   // (first only those `tested` keeps; where the host runs them a step at a time (word 4080), held for it)
   static run_kept (run, tested) => {
     word_held(4048, run)
     word_held(word_of(4044) + 4, Afterwards.tested_kept(word_of(4044), tested, word_of(4036)))
-    return 0 if word_of(4080) != 0
     while word_of(4036) < word_of(word_of(4044) + 4) {
       word_held(4036, word_of(4036) + 1)
       Afterwards.kept_run(at(word_of(4044), word_of(4036) - 1))

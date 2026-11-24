@@ -24,6 +24,24 @@ Expression := class (
     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
     statements: (
+      // (pairs, learned from a rule's head: the bytes just around each hole, unless white, of a word or a hole's own
+      // bracket, the same both a quote, else an opening and a closing bracket (one a hole quoting, {`)`}, the byte it
+      // quotes); a hole's own brackets an opening and a closing one)
+      paired (t) => pairs_in(t, None)
+      pairs_in (t, before) => t.empty ? None : ((t.first == BOOTSTRAPPER.CAPTURE.first) ? pair_past(past_hole(t.rest), before) : pairs_in(t.rest, t.first))
+      past_hole (t) => t.empty ? None : ((t.first == BOOTSTRAPPER.CAPTURE.last) ? t.rest : past_hole(t.rest))
+      pair_past (t, before) => {
+        (pair_bytes(before, byte_after(t))) if !((t === None) || (before === None) || t.empty)
+        (t === None) ? None : pairs_in(t, BOOTSTRAPPER.CAPTURE.last)
+      }
+      byte_after (t) => (((t.first == BOOTSTRAPPER.CAPTURE.first) && (t.length >= 4)) && ((t.rest.first == t.rest.rest.rest.first) && ((level class_of_byte (t.rest.first)) == 2))) ? t.rest.rest.first : t.first
+      pair_bytes (b, c) => (((level pairable (b)) && (level pairable (c))) && apart_from_holes(b, c)) ? pair_kind(b, c) : None
+      apart_from_holes (b, c) => !(b == BOOTSTRAPPER.CAPTURE.last) && !(c == BOOTSTRAPPER.CAPTURE.first)
+      pair_kind (b, c) => (b == c) ? (level class_given (b) (2)) : ((((level class_of_byte (b)) == 0) && ((level class_of_byte (c)) == 0)) ? brackets(b, c) : None)
+      brackets (b, c) => {
+        level class_given (b) (1)
+        level class_given (c) (3)
+      }
       // A node: its rules by their heads; what it does not read, what it is in reads.
       Node := class (in?: Node, of?: Node) => {
         node := this
@@ -46,7 +64,7 @@ Expression := class (
             home := (valued ? defined_in(here, named) : None) ?? here
             defines := level holds_text (written) (separator)
             head.for((piece) => piece)
-            level paired (written) (BOOTSTRAPPER.CAPTURE) (home)
+            paired(written)
             home.rules[[head]] := (caller) => {
               me := applied
               me.bound = holes
@@ -347,7 +365,8 @@ Expression := class (
       }
       set_aside (key) => aside_in(aside, key)
       aside_in (list, key) => list.empty ? false : ((list.first === key) || aside_in(list.rest, key))
-      level closing (BOOTSTRAPPER.CAPTURE)
+      (level class_given (hole_opening) (1)) if ((level class_of_byte (hole_opening)) == 0)
+      level class_given (BOOTSTRAPPER.CAPTURE.last) (3)
       top := Program(in: global, this: global, outside: Array.new)
       // (the compiler's parser: a grammar's rules read in a node of their own, a word what nothing else there reads)
       parse_node_of (grammar_text) => {
@@ -1299,48 +1318,9 @@ Keys := class {
   }
   static key_moved (lv, lp, x, i) => (i < 2) ? append(lv, x) : ((Members.catches_all(topattern(member(x, Symbol.key))) == 0) ? append(lp, x) : 0)
 }
-// Pairs (`level paired …`): which bytes pair, learned from a capture's uses (`open close`, the bytes just around each,
-// neither white nor of a word: the same both a quote, else an opening and a closing bracket);
-// whether a pair is open before a place; where a block,
-// opened at the end of a line, is closed by a line beginning with a closing.
+// Pairs: a byte's class (learned by the reader from rules' heads); whether a pair is open before a place; where a
+// block, opened at the end of a line, is closed by a line beginning with a closing.
 Pairs := class {
-  static paired (t: Text, cap: Text, home) => ((t is Text) && (cap is Text)) ? Pairs.paired_by(t, cap, Splices.opening_end_at(cap.from, cap.to)) : None
-  static paired_by (t: Text, cap: Text, oe) => ((oe == cap.from) || ((oe + 1) >= cap.to)) ? None : Pairs.paired_in(t, cap, oe)
-  static paired_in (t: Text, cap: Text, oe) => {
-    q := t.from
-    while q < t.to {
-      q = (at_text(q, t.to, cap.from, oe) != 0) ? Pairs.pair_at(t, cap, oe, q, Splices.found_from(q + (oe - cap.from), t.to, oe + 1, cap.to)) : (q + 1)
-    }
-    None
-  }
-  static pair_at (t: Text, cap: Text, oe, q, r) => (r >= t.to) ? t.to : Pairs.pair_after(t, cap, q, r + (cap.to - (oe + 1)))
-  static pair_after (t: Text, cap: Text, q, r) => {
-    Pairs.pair_between(cap, (((byte(q - 1) == byte(cap.to - 1)) && ((q - 4) >= t.from)) ? Pairs.quoted_in(q - 4, byte(q - 1)) : byte(q - 1)), (((byte(r) == byte(cap.from)) && ((r + 4) <= t.to)) ? Pairs.quoted_in(r, byte(r)) : byte(r))) if (q > t.from) && (r < t.to)
-    r
-  }
-  // (a quoted byte, `'x'`, around a capture: the byte quoted)
-  static quoted_in (h, c) => ((byte(h + 1) == byte(h + 3)) && (char_class(byte(h + 1)) == 2)) ? byte(h + 2) : c
-  static pair_between (cap: Text, b, c) => {
-    ((b == c) ? Pairs.pair_set(b, 2) : (((char_class(b) == 0) && (char_class(c) == 0)) ? Pairs.both_set(b, c) : 0)) if (white(b) == 0) && (white(c) == 0) && (word_byte(b) == 0) && (word_byte(c) == 0) && (b != byte(cap.to - 1)) && (c != byte(cap.from))
-    0
-  }
-  static both_set (b, c) => {
-    Pairs.pair_set(b, 1)
-    Pairs.pair_set(c, 3)
-  }
-  static pair_set (c, k) => {
-    class_put(c, k)
-  }
-  // (a capture's opening an opening bracket, unless it is of a class already, and its closing's last byte a closing)
-  static closing (cap: Text) => (cap is Text) ? Pairs.closing_by(cap, Splices.opening_end_at(cap.from, cap.to)) : 0
-  static closing_by (cap: Text, oe) => {
-    Pairs.closing_set(cap) if (oe > cap.from) && ((oe + 1) < cap.to)
-    0
-  }
-  static closing_set (cap: Text) => {
-    class_put(byte(cap.from), 1) if char_class(byte(cap.from)) == 0
-    class_put(byte(cap.to - 1), 3)
-  }
   // (a byte's class, as the reading rules read it (1 an opening bracket, 2 a quote, 3 a closing one), and given one;
   // whether it can pair: neither white nor of a word)
   static class_of_byte (t: Text) => int(char_class(byte(t.from)))

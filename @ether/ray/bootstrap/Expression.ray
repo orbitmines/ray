@@ -664,8 +664,8 @@ Runtime := class {
   static ends_there (at, q, depth, indent) => Runtime.ends_before(at, q, Runtime.byte_or_line(q + 1 + indent), (indent <= depth))
   static ends_before (at, q, c, shallow) => (c != 10) && shallow && (char_class(c) != 3) && (comma_ended(at, q) == 0) && (Runtime.quote_open(at, q) == 0)
   static byte_or_line (q) => (q < textend) ? byte(q) : 10
-  // (how far bytes of a class (`chared`: 1 a space, 2 a line end, 3 white), or not of it, run from q up to e; or back
-  // from q down to a)
+  // (how far bytes of a class (`chared`: 1 a space, 2 a line end, 3 white, 5 a zero, 6 a line end or a zero), or not
+  // of it, run from q up to e; or back from q down to a)
   static run_from (q, e, k, want) => {
     r := q
     while (r < e) && ((chared(byte(r), k) != 0) == want) {
@@ -1746,7 +1746,7 @@ Built := class {
   }
   static staged (f) => pattern(typed_by, f, 0)
   static recell (k: Rest, next) => (k.list is List) ? Rest(list: k.list, next: next, index: k.index) : cell(k.list, next)
-  static chared (c, k) => (k == 1) ? ((c == 32) || (c == 9)) : (((k == 2) || (k == 4)) ? (c == 10) : ((k == 3) ? white(c) : 1))
+  static chared (c, k) => (k == 1) ? ((c == 32) || (c == 9)) : (((k == 2) || (k == 4)) ? (c == 10) : ((k == 3) ? white(c) : ((k == 5) ? (c == 0) : ((k == 6) ? ((c == 10) || (c == 0)) : 1))))
   static texteq (a, b, n) => {
     i := 0
     while i < n {
@@ -1848,15 +1848,9 @@ Turns := class {
   }
 }
 // Entry (`level entry …`): the input is parts, each ended by a zero byte (the program, the runtime, then files, each
-// its name, a line end, and what it holds); a file by its name; the i-th part; the entry's reader, given a text to read.
+// its name, a line end, and what it holds); a file by its name; the i-th part.
 Entry := class {
-  static zero_from (a, e) => {
-    q := a
-    while (q < e) && (byte(q) != 0) {
-      q = q + 1
-    }
-    q
-  }
+  static zero_from (a, e) => Runtime.run_from(a, e, 5, 0)
   static file_named (t: Text) => (t is Text) ? Entry.file_in(Texts.trimmed_text(t.from, t.to), Entry.zero_from(program_from(), program_from() + program_length()) + 1, program_from() + program_length()) : None
   static file_in (n: Text, a, e) => {
     q := a
@@ -1866,13 +1860,7 @@ Entry := class {
     }
     None
   }
-  static name_end (q, e) => {
-    k := q
-    while (k < e) && (byte(k) != 10) && (byte(k) != 0) {
-      k = k + 1
-    }
-    k
-  }
+  static name_end (q, e) => Runtime.run_from(q, e, 6, 0)
   static names_file (n: Text, a, k, e) => (k < e) && (byte(k) == 10) && ((k - a) == (n.to - n.from)) && texteq(a, n.from, n.to - n.from)
   static input_part (i) => Entry.part_text(Entry.part_from(program_from(), program_from() + program_length(), untag(i)), program_from() + program_length())
   static part_from (a, e, k) => {
@@ -2210,26 +2198,7 @@ Afterwards := class {
     word_held(3944, f)
     1
   }
-  static kind_of (v) => Afterwards.kind_named(alloc_bytes(8), v)
-  static kind_named (t, v) => {
-    return text(t, put4(put4(t, 110, 111, 116, 104), 105, 110, 103, 0)) if v == 0
-    return text(t, put4(put4(t, 102, 97, 108, 115), 101, 0, 0, 0)) if v == 8
-    return text(t, put4(t, 116, 114, 117, 101)) if v == 12
-    return text(t, put4(put4(t, 110, 117, 109, 98), 101, 114, 0, 0)) if (v & 1) == 1
-    return text(t, put4(t, 116, 101, 120, 116)) if tag(v) == 4
-    return text(t, put4(t, 108, 105, 115, 116)) if tag(v) == 3
-    0
-  }
-  static put4 (o, c0, c1, c2, c3) => {
-    byte_put(o, c0)
-    return o + 1 if c1 == 0
-    byte_put(o + 1, c1)
-    return o + 2 if c2 == 0
-    byte_put(o + 2, c2)
-    return o + 3 if c3 == 0
-    byte_put(o + 3, c3)
-    o + 4
-  }
+  static kind_of (v) => (v == 0) ? name_text(Symbol.nothing) : ((v == 8) ? name_text(Symbol.false) : ((v == 12) ? name_text(Symbol.true) : (((v & 1) == 1) ? name_text(Symbol.number) : ((tag(v) == 4) ? name_text(Symbol.text) : ((tag(v) == 3) ? name_text(Symbol.list) : 0)))))
 }
 // Images: a test's state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside
 // copied to what lasts and its memory let go

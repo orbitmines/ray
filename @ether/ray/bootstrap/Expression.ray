@@ -9,15 +9,15 @@ Expression := class (
     HEADER: `!language`,
     \s[]+,
     // (a hole's brackets, a space where its name goes)
-    CAPTURE: (String+, \s, String+),
+    CAPTURE: (String, \s, String),
     \s[]+,
-    CAPTURES: (LHS: CAPTURE.map{== \s}(`LHS`) | RHS: CAPTURE.map{== \s}(`RHS`) | String)[],
+    CAPTURES: (LHS: [CAPTURE.first, `LHS`, CAPTURE.last] | RHS: [CAPTURE.first, `RHS`, CAPTURE.last] | String)[],
     \n\n
   ),
   (
     // (the rule that makes rules: any space in it any amount of space, each hole anything, its left side a head of the same
     // shape again; the first statement)
-    Code := (BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Code) | String)[]
+    Code := ([BOOTSTRAPPER.CAPTURE.first, level lazily ((space) => Code), BOOTSTRAPPER.CAPTURE.last] | String)[]
     GRAMMAR_RULE_DEF := BOOTSTRAPPER.CAPTURES.map{is \s}((space) => \s[])
     GRAMMAR_RULE_DEF.RHS = Code
     GRAMMAR_RULE_DEF.LHS = Code
@@ -73,7 +73,7 @@ Expression := class (
               me.this = caller.this
               me.receiver = caller.receiver
               // (each hole a rule of its node, `x` and `{x}`, answering what it took read where the rule was applied, once)
-              me.bound.for((hole) => me.in.rules[[hole.key | BOOTSTRAPPER.CAPTURE.map{== \s}(hole.key)]] := (c) => held(hole, () => read_outside(me.outside, () => ((splicer(hole.value, caller) === None) ? named_for(c, reader(c, caller), hole.value) : named_for(c, writer_of(hole.value, caller), written_of(hole.value, caller))))))
+              me.bound.for((hole) => me.in.rules[[hole.key | [BOOTSTRAPPER.CAPTURE.first, hole.key, BOOTSTRAPPER.CAPTURE.last]]] := (c) => held(hole, () => read_outside(me.outside, () => ((splicer(hole.value, caller) === None) ? named_for(c, reader(c, caller), hole.value) : named_for(c, writer_of(hole.value, caller), written_of(hole.value, caller))))))
               me.in.rules.keys.for((hk) => hk.named = true)
               // (read while the rule is set aside: a rule never reads itself)
               (rule_own.styled_as ?? Array.new).for((style) => painted.append([style, [rule_own.written_head, me.input], [me.bound]]))
@@ -107,13 +107,13 @@ Expression := class (
         maker_key := rules.keys.first
         split_key := rules.keys.last
         // (a head: each hole a place in the node, read as what applies it reads it; one a rule running took, what it took)
-        head_of (text, by) => (text as (hole: BOOTSTRAPPER.CAPTURE.map{== \s}((space) => Place(`inside`, node)) | String)[]).map{.inside}((hole) => hole_head(hole.inside, by))
+        head_of (text, by) => (text as (hole: [BOOTSTRAPPER.CAPTURE.first, Place(`inside`, node), BOOTSTRAPPER.CAPTURE.last] | String)[]).map{.inside}((hole) => hole_head(hole.inside, by))
         // (a hole quoting a text, `{`=>`}`: that text, literally)
         hole_head (inside, by) => (((inside.length > 1) && (inside.first == inside.last)) && !is_word(inside.first)) ? quoted(level cw_inner (inside)) : taken_head(inside, by)
         taken_head (inside, by) => (binder(by, inside) === None) ? named_in(Program(in: node), inside) : head_of(taken_in(binder(by, inside), inside).value, binder(by, inside).caller)
         // (a body: the code inside its brackets; one hole a rule running took, what it took)
         body_of (text, by) => (splicer(text, by) === None) ? braced(text) : body_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
-        braced (text) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? text : (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code
+        braced (text) => ((text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]) === None) ? text : (text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]).code
         written_of (text, by) => (splicer(text, by) === None) ? text : written_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
         writer_of (text, by) => (splicer(text, by) === None) ? by : writer_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
         home_of (text, by, here) => (splicer(text, by) === None) ? here : home_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller, splicer(text, by).caller.in)
@@ -342,8 +342,8 @@ Expression := class (
       kinds_of (program) => kinds.first ?? known(named_in(program, `level kinds`))
       known (kind) => (kind.rules === None) ? kind : kinds.append(kind).first
       // (a text that is one hole, of those a program took: that hole)
-      spliced (text, by) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? None : taken_in(by, (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code)
-      splicer (text, by) => ((text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))) === None) ? None : binder(by, (text as BOOTSTRAPPER.CAPTURE.map{== \s}((space) => (code: Code))).code)
+      spliced (text, by) => ((text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]) === None) ? None : taken_in(by, (text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]).code)
+      splicer (text, by) => ((text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]) === None) ? None : binder(by, (text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]).code)
       // (the rule running that took the hole: this program, or what applies it while it is no rule's own, a statement's)
       binder (program, name) => (taken_in(program, name) === None) ? (((program === None) || !(program.bound === None)) ? None : binder(program.caller, name)) : program
       taken_in (program, name) => ((program === None) || (program.bound === None)) ? None : program.bound{.key == name}#.first
@@ -1207,8 +1207,8 @@ Splices := class {
   }
 }
 // Readings (`level read …`): whether two values are the same (a text read wholly by a pattern is); a text read by a
-// pattern, to what its holes bound (`readtext`); a text, or a node's structure, with what a function picks mapped by
-// another (or to a value; into a pattern, a byte picked held by it).
+// pattern, to what its holes bound (`readtext`); a node's structure with what a function picks mapped by another (or
+// to a value).
 Readings := class {
   static Spanned := (11, name, from, to, value)
   static Marked := (13, name, from, to, value)
@@ -1237,40 +1237,6 @@ Readings := class {
     v
   }
   static curried_if (p: Pattern, v) => ((p is Pattern) && (p.kind == with_function)) ? curried(p.b, v) : v
-  static mapped_text (t: Text, f, g) => ((g is Closure) || (g is Pattern)) ? Readings.mapped_pattern(t, f, g) : Readings.mapped_bytes(t, f, g, alloc_bytes(((t.to - t.from) * 16) + 16))
-  static mapped_pattern (t: Text, f, g) => {
-    l := list()
-    q := t.from
-    s := q
-    while q < t.to {
-      s = (truthy(call1(f, text(q, q + 1))) ? Readings.part_put(l, g, s, q) : s)
-      q = q + 1
-    }
-    append(l, literal(text(s, q))) if q > s
-    sequence(l)
-  }
-  static part_put (l, g, s, q) => {
-    append(l, literal(text(s, q))) if q > s
-    append(l, (g is Closure) ? Pattern(kind: typed_with, a: g, b: text(q, q + 1)) : g)
-    q + 1
-  }
-  static mapped_bytes (t: Text, f, g, o) => {
-    n := o
-    q := t.from
-    while q < t.to {
-      n = (truthy(call1(f, text(q, q + 1))) ? Readings.text_put(n, (g is Closure) ? call1(g, text(q, q + 1)) : g) : Readings.byte_kept(n, q))
-      q = q + 1
-    }
-    text(o, n)
-  }
-  static text_put (n, r: Text) => {
-    copy(n, r.from, r.to - r.from)
-    n + (r.to - r.from)
-  }
-  static byte_kept (n, q) => {
-    byte_put(n, byte(q))
-    n + 1
-  }
   static structure_into (o: Node, s: List, l, f, g) => {
     i := 0
     while i < s.count {
@@ -1496,7 +1462,7 @@ Calls := class {
     o
   }
   static selmethod (x, sym, f, args) => (sym == Symbol.map) ? Calls.mapped_by(x, f, arg(args, 0)) : 0
-  static mapped_by (x, f, g) => (x is Text) ? mapped_text(x, f, g) : (((x is Node) && (member(x, Symbol.text) != None)) ? Readings.structure_into(copied(x), x.keys, list(), f, g) : x)
+  static mapped_by (x, f, g) => ((x is Node) && (member(x, Symbol.text) != None)) ? Readings.structure_into(copied(x), x.keys, list(), f, g) : x
   static place (t, ctx) => Place(name: intern(((t is Node) ? member(t, Symbol.text) : t)), kind: 0, given: ctx)
   static readsv (p, t) => (p is Node) ? Calls.read_keyed(p, t, member(p, Symbol.key)) : reads(topattern(p), t)
   static read_keyed (p, t, k) => (k == None) ? reads(topattern(p), t) : Calls.read_measured(p, t, k, reads(topattern(k), t))

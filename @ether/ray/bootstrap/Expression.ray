@@ -1819,115 +1819,73 @@ Built := class {
 // opened in it closes), each read in a region of its own and given to a function as it is read; one not read is set
 // aside, and those are read again after (each one read now taken out, until none more is), one over its budget noted.
 Turns := class {
-  static in_turn (item, f, args, pos) => Turns.turned(item, f, args, pos, fuel_floor())
-  static turned (item, f, args, pos, floor) => {
+  static in_turn (item, f, args, pos) => {
+    floor := word_of(4060)
     f0 := word_of(3896)
     u := Turns.aside_count()
-    at := Turns.in_order(item, f, args, pos, floor)
-    read_again(item, f, args, u)
+    at := pos
+    while (at >= 0) && (at < textend) && (stopped() == 0) {
+      at = Turns.statement_turn(item, f, args, pos, at, floor)
+    }
+    at = (at < 0) ? ((0 - at) - 1) : at
+    Turns.read_again(item, f, args, u)
     // (what its statements spent is theirs: the statement it is in keeps what it had left of its own)
     word_held(4060, floor - (f0 - word_of(3896)))
     went_on()
     at
   }
   static aside_count => (aside_or_none() == None) ? 0 : Texts.count_of(aside_or_none())
-  static in_order (item, f, args, pos, floor) => {
-    at := pos
-    while (at < textend) && (stopped() == 0) {
-      at = Turns.statement_turn(item, f, args, pos, at, floor)
-      return (0 - at) - 1 if at < 0
-    }
-    at
-  }
+  // (a statement: read in a frame of its own (closed after, as a call's is) to where it ends, or where a block opened in
+  // it closes; read, given to the function; not read, set aside, unless only space is left; over its budget, noted)
   static statement_turn (item, f, args, pos, at, floor) => {
     mark := boundn
     turn_begun_within(floor)
     q := textend
-    se := Turns.closed_or(pos, statement_end(pos, white_after(at)), at)
+    se := statement_end(pos, white_after(at))
+    b := block_closed(at, se)
+    se = (b > 0) ? statement_end(pos, b) : se
     textend = se
     isolated_open()
     r := matched(item, at, cell(pattern(statement_ending, at, 1), 0))
     textend = q
-    statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark))
-  }
-  // (back in the statement around it, if any; none and no frame open, the notes cleared (a frame open around the statement
-  // still needs those of its own))
-  // (a statement's frame closed: what something older holds of it, or the run's state, moved down to where it began, as
-  // a call's frame is, the rest let go, and the frame kept when anything is left; a statement in another's reading keeps
-  // its memory to that one's end, what it answers held where nothing notes it)
-  static left => {
+    ov := statement_over()
+    Turns.handed(f, args, mark) if (ov == 0) && (r > at)
     isolated_value(0, 0)
-  }
-  static closed_or (pos, se, at) => Turns.closed_at_or(pos, se, block_closed(at, se))
-  static closed_at_or (pos, se, v) => (v > 0) ? statement_end(pos, v) : se
-  static over_turn (at, se, mark) => {
-    Turns.left()
-    boundn = mark
-    Hooks.over_listed(at, se)
-    went_on()
-    se
-  }
-  static unread_turn (at, se, mark) => {
-    Turns.left()
-    boundn = mark
-    (white_after(at) >= textend) ? ((0 - at) - 1) : Turns.put_aside(at, se)
-  }
-  static put_aside (at, se) => {
-    append(Turns.aside_list(), text(at, se))
-    se
-  }
-  static aside_list => (aside_or_none() == None) ? Turns.aside_made() : aside_or_none()
-  static aside_made => {
-    l := statements_aside()
-    l
-  }
-  static read_turn (f, args, at, r, mark) => {
-    Turns.handed(f, args, mark)
-    Turns.left()
-    Turns.over_after(at, r) if statement_over()
-    r
+    boundn = (ov || (r <= at)) ? mark : boundn
+    return (0 - at) - 1 if (ov == 0) && (r <= at) && (white_after(at) >= textend)
+    append(statements_aside(), text(at, se)) if (ov == 0) && (r <= at)
+    return se if (ov == 0) && (r <= at)
+    Turns.over_after(at, ov ? se : r) if statement_over()
+    ov ? se : r
   }
   static over_after (a0, r) => {
     Hooks.over_listed(a0, r)
     went_on()
   }
+  // (those set aside read again, each read now taken out, until none more is; the list read again each time: a
+  // statement taken may move it)
   static read_again (item, f, args, u) => {
     changed := 1
+    i := 0
+    k := 0
     while changed != 0 {
-      changed = (aside_or_none() == None) ? 0 : Turns.again_over(item, f, args, u)
+      changed = 0
+      i = u
+      while i < Turns.aside_count() {
+        k = Turns.again_read(f, args, i, boundn, item, at(aside_or_none(), i))
+        changed = changed | k
+        i = (k != 0) ? i : (i + 1)
+      }
     }
     0
   }
-  // (the list read again each time: a statement taken may move it, its end copying out what it reaches)
-  static again_over (item, f, args, u) => {
-    i := u
-    changed := 0
-    k := 0
-    while i < Turns.aside_count() {
-      k = Turns.again_framed(item, f, args, i)
-      changed = changed | k
-      i = (k != 0) ? i : (i + 1)
-    }
-    changed
-  }
-  // (a statement read again is a statement: those in it are inside it, its memory kept to the turn's end)
-  static again_framed (item, f, args, i) => {
-    Turns.again_matched(f, args, i, boundn, Turns.again_match(item, at(aside_or_none(), i)))
-  }
-  static again_match (item, t: Text) => {
+  static again_read (f, args, i, mark, item, t: Text) => {
     q := textend
     textend = t.to
     r := matched(item, t.from, cell(pattern(statement_ending, t.from, 1), 0))
     textend = q
-    r
-  }
-  static again_matched (f, args, i, mark, r) => ((r > Built.text_from(at(aside_or_none(), i))) && (white_after(r) >= Turns.text_to(at(aside_or_none(), i)))) ? Turns.again_taken(f, args, i, mark) : Turns.again_left(mark)
-  static text_to (t: Text) => t.to
-  static again_left (mark) => {
-    boundn = mark
-    0
-  }
-  static again_taken (f, args, i, mark) => {
+    boundn = ((r <= t.from) || (white_after(r) < t.to)) ? mark : boundn
+    return 0 if (r <= t.from) || (white_after(r) < t.to)
     Turns.removed_at(aside_or_none(), i)
     Turns.handed(f, args, mark)
     1
@@ -2194,7 +2152,6 @@ Hooks := class {
     word_of(3860)
   }
   static aside_or_none => word_of(3860)
-  static fuel_floor => word_of(4060)
   // (a statement's budget, within what the turn it is in has left: one inside another never outlasts it)
   static turn_begun_within (outer) => {
     word_held(4060, Hooks.higher(outer, word_of(3896) - 200000000))

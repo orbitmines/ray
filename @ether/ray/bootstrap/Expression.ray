@@ -479,6 +479,16 @@ Runtime := class {
   // of it, `own`)
   static found (node: Node, name) => (node === None) ? None : Runtime.found_in(own(node, name), node, name)
   static found_in (field: Field, node: Node, name) => (field === None) ? Runtime.found(node.in, name) : field
+  // (a node's own field by its name, its fields in turn, the latest first)
+  static own (n: Node, sym) => {
+    f := n.fields
+    while (f != None) && (Runtime.field_name_of(f) != sym) {
+      f = Runtime.field_next(f)
+    }
+    f
+  }
+  static field_name_of (f: Field) => f.name
+  static field_next (f: Field) => f.next
   static lookup (node: Node, name) => Runtime.value_of(Runtime.found(node, name))
   static value_of (field: Field) => (field === None) ? None : field.value
   // (a name given a value in the node itself: a field of it added, the latest, unless it has one; or where it is found,
@@ -1114,6 +1124,25 @@ Texts := class {
   }
   static same_text (x: Text, t: Text) => (x is Text) && ((x.to - x.from) == (t.to - t.from)) && texteq(x.from, t.from, t.to - t.from)
   static count_of (l: List) => l.count
+  // (whether a text occurs in another; where a pair that opens at a place ends; whether a part is held outside brackets)
+  // (whether a text occurs between a and e)
+  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : Texts.found_at(l, a, e)
+  static found_at (l: Text, a, e) => {
+    q := a
+    while (q + (l.to - l.from)) <= e {
+      return 1 if (byte(q) == byte(l.from)) && texteq(q, l.from, l.to - l.from)
+      q = q + 1
+    }
+    0
+  }
+  static pair_end (q) => ((pair_class(q) == 2) ? Runtime.quote_ending(q, byte(q)) : Runtime.bracket_ending(q))
+  static holds_outside (t: Text, part) => (t is Text) ? Texts.outside_read(t, part, textend) : false
+  static outside_read (t: Text, part, te) => {
+    textend = t.to
+    r := holds_outside_in(t, part)
+    textend = te
+    r
+  }
 }
 // Splices (`level spliced …`): a capture, `open close` (what opens, a space, what closes), in a text: what is between an
 // open and a close (or a doubled open and a doubled close) is a name, taken from a list of entries (each a key and a
@@ -1136,7 +1165,7 @@ Splices := class {
   static names (x, na, ne) => (x is Node) && Splices.key_is(member(x, Symbol.key), member(x, Symbol.value), na, ne)
   static key_is (k: Text, v: Text, na, ne) => (k is Text) && (v is Text) && ((k.to - k.from) == (ne - na)) && texteq(k.from, na, ne - na)
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
-  static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Indexes.found_at(part, t.from, t.to) != 0)) ? true : false
+  static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Texts.found_at(part, t.from, t.to) != 0)) ? true : false
   static holds_outside_in (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from)) ? Splices.outside_in(t.from, t.to, part) : false
   static outside_in (a, e, part: Text) => {
     q := a
@@ -1354,7 +1383,7 @@ Pairs := class {
 // Layout (`level layout …`): whether a line goes on into the next (more indented, or a closing); a text's gaps (white)
 // and words as a pattern; a word's inside, a line end in a text; the first or last where.
 Layout := class {
-  static continued_from (a, n) => (comma_ended(a, n) != 0) ? 1 : Layout.continued_by(n, Origins.indent_at_origin(origin_at(a)))
+  static continued_from (a, n) => (comma_ended(a, n) != 0) ? 1 : Layout.continued_by(n, Layout.indent_at_origin(origin_at(a)))
   static continued_by (n, d) => (d < 0) ? 0 : Layout.indented_past(n, d, indent_at(n + 1))
   static indented_past (n, d, j) => (((n + 1 + j) >= textend) || (byte(n + 1 + j) == 10)) ? 0 : ((j > d) || (pair_class(n + 1 + j) == 3))
   static spaced (l: List, j) => ((j < 0) || (j >= l.count)) ? 0 : Layout.not_literal(at(l, j))
@@ -1398,35 +1427,16 @@ Layout := class {
     }
     None
   }
-}
-// Indexes (`level indexed …`, removable: each a cache of what it answers): whether a text occurs in another (by the
-// bytes and byte pairs in it, and over the program's text or the text taken, an index of where each byte and pair is,
-// sorted, searched by halves); where a pair that opens at a place ends (`pair_end`, by place, the classes' version);
-// whether a part is held outside brackets (`holds_outside`).
-Indexes := class {
-  // (whether a text occurs between a and e)
-  static occurs (l: Text, a, e) => ((l.to - l.from) == 0) ? 1 : Indexes.found_at(l, a, e)
-  static found_at (l: Text, a, e) => {
-    q := a
-    while (q + (l.to - l.from)) <= e {
-      return 1 if (byte(q) == byte(l.from)) && texteq(q, l.from, l.to - l.from)
-      q = q + 1
-    }
-    0
-  }
-  static pair_end (q) => ((pair_class(q) == 2) ? Runtime.quote_ending(q, byte(q)) : Runtime.bracket_ending(q))
-  static holds_outside (t: Text, part) => (t is Text) ? Indexes.outside_read(t, part, textend) : false
-  static outside_read (t: Text, part, te) => {
-    textend = t.to
-    r := holds_outside_in(t, part)
-    textend = te
-    r
-  }
+  // (where a byte was written, in the program; the indent of the line it was written on)
+  static origin_at (a) => in_program(a, a + 1) ? a : (0 - 1)
+  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Layout.indent_within(o, program_from(), program_from() + program_length())
+  static indent_within (o, lo, te) => Layout.indent_from(Runtime.run_back(o, lo, 2, 0), te)
+  static indent_from (q, te) => Runtime.run_from(q, te, 1, 1) - q
 }
 // Members (`level members …`): what applies a rule, around a node (`applied_of`); a node's members, or what a rule's
 // holes hold, as entries of a name and a value (but its key and input); whether a pattern catches all (a field, or a
 // sequence of one); a member set, in a node (itself, copied) and in a pattern's fields of that name; an entry; a key
-// added to a node's rules (the rules' epoch moved on where it is read from).
+// added to a node's rules (what was read from it noted again).
 Members := class {
   static applied_of (x) => {
     a := x
@@ -1665,6 +1675,13 @@ Matching := class {
     r
   }
   static reading_of (p: Pattern, pos) => call(p.a, append(list(), text(pos, textend)), 0)
+  // (the rules, or a class's header, being read at a place: read again there, it fails)
+  static active_noted (p, pos) => {
+    activen = activen + 1
+    word_held(actives + (activen * 8), p)
+    word_held(actives + ((activen * 8) + 4), pos)
+    0
+  }
 }
 // Built (`level built …`): a node's text read again as a pattern (its gaps and words, each key a field of what it
 // holds: a pattern, a text read with, else anything), the holes in it told how they end (inside a pair of literals,
@@ -1869,27 +1886,6 @@ Entry := class {
   }
   static part_text (a, e) => text(a, Entry.zero_from(a, e))
 }
-// Actives: the rules, or a class's header, being read at a place (read again there, it fails).
-Actives := class {
-  static active_noted (p, pos) => {
-    activen = activen + 1
-    word_held(actives + (activen * 8), p)
-    word_held(actives + ((activen * 8) + 4), pos)
-    0
-  }
-}
-// FieldIndex: a node's own field by its name, its fields in turn (the latest first)
-FieldIndex := class {
-  static own (n: Node, sym) => {
-    f := n.fields
-    while (f != None) && (FieldIndex.field_name_of(f) != sym) {
-      f = FieldIndex.field_next(f)
-    }
-    f
-  }
-  static field_name_of (f: Field) => f.name
-  static field_next (f: Field) => f.next
-}
 // Basics (`level basics …`): a node, a cell; bytes put; holes bound saved and restored; shifts; not equal; what is sized or set aside after a
 // mark; arrays (`Array.new`).
 Basics := class {
@@ -1910,21 +1906,6 @@ Basics := class {
   static unequal (a, b) => negated(equal(a, b))
   static array_new (env, args, named) => list()
   static arrays => Runtime.defined_as(node(0), Symbol.new, getter(array_new, 0))
-}
-// Origins (`level origins …`): where a text copied was copied from (a log of copies, each where to, from where and
-// how long, one run on extending the last); the byte a byte was first written as (in the program, or in the entry's
-// text); the indent of the line it was written on; whether that line goes on.
-Origins := class {
-  static origin_at (a) => in_program(a, a + 1) ? a : (0 - 1)
-  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, program_from(), program_from() + program_length())
-  static indent_within (o, lo, te) => {
-    q := Runtime.run_back(o, lo, 2, 0)
-    r := textend
-    textend = te
-    d := indent_at(q)
-    textend = r
-    d
-  }
 }
 // Memory: taken in order; given back as a frame or a test ends (below)
 Heap := class {
@@ -2031,7 +2012,7 @@ Heap := class {
   static isolated_close (o, v) => Heap.isolated_value(o, 0)
   static stopped => word_of(3916) != 0
 }
-// Hooks: the reader's own words, each by its name: what is taken, the program's text, the pairs' classes, the caches'
+// Hooks: the reader's own words, each by its name: what is taken, the program's text, the pairs' classes, the memo's
 // reach, the statements set aside, a turn's budget (a statement let go when it runs past it, or near the
 // heap's end), the log, what is painted and said
 Hooks := class {

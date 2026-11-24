@@ -246,7 +246,7 @@ Expression := class (
       }
       // (a jump: to its label among those read; to `afterwards`, kept for when everything is read; to `report`, said)
       settled (program) => {
-        (level kept_later (program)) if (program.at == afterwards)
+        (later.append(program)) if (program.at == afterwards)
         said(program) if (program.at == report)
         to := (program.at === None) ? program.waiting : labelled(program, program.done)
         gone_on(program) if !((program.at === None) || (to === None))
@@ -272,9 +272,19 @@ Expression := class (
       label_of (program, word) => Place(word, global)
       afterwards := Place(`afterwards`, global)
       report := Place(`report`, global)
-      // (what jumped to afterwards, run once everything is read, and what that kept, in turn)
-      // (each run by the host in memory and a budget of its own, Design §21.4)
-      run_later (unused) => level run_kept (ran_later) (tested_later)
+      // (what jumped to afterwards, run once everything is read (those tested here), each a test of its own in memory
+      // and a budget of its own (Design §21.4), and what that kept, in turn, inside it)
+      later := Array.new
+      run_later (unused) => later.for((program) => (test_later(program)) if tested_later(program))
+      test_later (program) => {
+        was := later
+        later = Array.new
+        level test_run (ran_later) (program)
+        kept_now := later
+        later = was
+        kept_now.for((p) => test_later(p))
+        level test_end
+      }
       tested_later (program) => level tested_here ((program.bound.first).value)
       ran_later (program) => {
         testing = program
@@ -2026,57 +2036,9 @@ Hooks := class {
   }
   static unreachable_now => word_of(0 - 8)
 }
-// Afterwards: the programs kept for afterwards (`external goto afterwards`, words 4044, 4036 how far run), run once
-// everything is read, each by `run` (word 4048) with a test of its own; the code compiled once kept by what it writes
-// (word 3788: a table, by its words' hash); the names that last; the name of a value's kind
+// Afterwards: a test run (what the reader kept for afterwards, each in a test of its own); the symbols seeded; the
+// names that last; the name of a value's kind
 Afterwards := class {
-  static kept_later (p) => {
-    append(word_of(4044), p)
-    p
-  }
-  // (first only those `tested` keeps; where the host runs them a step at a time (word 4080), held for it)
-  static run_kept (run, tested) => {
-    word_held(4048, run)
-    word_held(word_of(4044) + 4, Afterwards.tested_kept(word_of(4044), tested, word_of(4036)))
-    while word_of(4036) < word_of(word_of(4044) + 4) {
-      word_held(4036, word_of(4036) + 1)
-      Afterwards.kept_run(at(word_of(4044), word_of(4036) - 1))
-    }
-    0
-  }
-  static tested_kept (l, tested, from) => {
-    i := from
-    j := from
-    k := 0
-    while i < word_of(l + 4) {
-      k = truthy(call1(tested, at(l, i)))
-      word_held(word_of(l + 12) + (j * 4), at(l, i)) if k
-      j = k ? (j + 1) : j
-      i = i + 1
-    }
-    j
-  }
-  static kept_run (x) => {
-    o := 0
-    i := word_of(4036)
-    n := 0
-    test_begin(word_of(3968), word_of(3972))
-    o = word_of(4044)
-    word_held(4044, list())
-    word_held(4036, 0)
-    // (a test a turn of its own: past its budget it stops, and the next goes on)
-    f := word_of(4060)
-    turn_begun_within(f)
-    call1(word_of(4048), x)
-    word_held(4060, f)
-    went_on()
-    word_held(4036, i)
-    n = word_of(4044)
-    word_held(4044, o)
-    Afterwards.each_run(n)
-    ((word_of(3936) == 0) ? 0 : Images.test_left(word_of(3968), word_of(3972), word_of(3936) - 1))
-    0
-  }
   // (a test run: a turn of its own, past its budget it stops and the next goes on; ended once what it kept ran)
   static test_run (run, x) => {
     test_begin(word_of(3968), word_of(3972))
@@ -2088,14 +2050,6 @@ Afterwards := class {
     0
   }
   static test_end => (word_of(3936) == 0) ? 0 : Images.test_left(word_of(3968), word_of(3972), word_of(3936) - 1)
-  static each_run (n) => {
-    i := 0
-    while i < word_of(n + 4) {
-      Afterwards.kept_run(at(n, i))
-      i = i + 1
-    }
-    0
-  }
   static seeded (t) => {
     Afterwards.seeds() if csyms == 0
     append(csyms, t)
@@ -2109,7 +2063,6 @@ Afterwards := class {
     epoch = 1
     actives = lasting_alloc(1048576)
     bounds = lasting_alloc(16777216)
-    word_held(4044, list())
     word_held(3968, list())
     word_held(3972, list())
     word_held(4084, 2)

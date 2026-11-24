@@ -654,34 +654,26 @@ Runtime := class {
   static ends_there (at, q, depth, indent) => Runtime.ends_before(at, q, Runtime.byte_or_line(q + 1 + indent), (indent <= depth))
   static ends_before (at, q, c, shallow) => (c != 10) && shallow && (char_class(c) != 3) && (comma_ended(at, q) == 0) && (Runtime.quote_open(at, q) == 0)
   static byte_or_line (q) => (q < textend) ? byte(q) : 10
-  static line_start (pos, from) => {
-    q := from
-    while (q > pos) && (byte(q - 1) != 10) {
-      q = q - 1
+  // (how far bytes of a class (`chared`: 1 a space, 2 a line end, 3 white), or not of it, run from q up to e; or back
+  // from q down to a)
+  static run_from (q, e, k, want) => {
+    r := q
+    while (r < e) && ((chared(byte(r), k) != 0) == want) {
+      r = r + 1
     }
-    q
+    r
   }
-  static line_end (from) => {
-    q := from
-    while (q < textend) && (byte(q) != 10) {
-      q = q + 1
+  static run_back (q, a, k, want) => {
+    r := q
+    while (r > a) && ((chared(byte(r - 1), k) != 0) == want) {
+      r = r - 1
     }
-    q
+    r
   }
-  static indent_at (from) => {
-    d := 0
-    while ((from + d) < textend) && ((byte(from + d) == 32) || (byte(from + d) == 9)) {
-      d = d + 1
-    }
-    d
-  }
-  static white_after (from) => {
-    q := from
-    while (q < textend) && white(byte(q)) {
-      q = q + 1
-    }
-    q
-  }
+  static line_start (pos, from) => Runtime.run_back(from, pos, 2, 0)
+  static line_end (from) => Runtime.run_from(from, textend, 2, 0)
+  static indent_at (from) => Runtime.run_from(from, textend, 1, 1) - from
+  static white_after (from) => Runtime.run_from(from, textend, 3, 1)
   // (whether a quote opened from a is not closed before n)
   static quote_open (a, n) => {
     q := a
@@ -1369,20 +1361,8 @@ Pairs := class {
   static closed_at (f, d) => ((f < textend) && (char_class(byte(f)) == 3)) ? (d - 1) : d
   static closed_here (f, d, n) => (f >= n) && (f < textend) && (char_class(byte(f)) == 3) && ((d - 1) == 0)
   static opened_after (q, l, d) => ((Pairs.spaces_back(q, l) > q) && (pair_class(Pairs.spaces_back(q, l) - 1) == 1)) ? (d + 1) : d
-  static spaces_past (q) => {
-    f := q
-    while (f < textend) && ((byte(f) == 32) || (byte(f) == 9)) {
-      f = f + 1
-    }
-    f
-  }
-  static spaces_back (q, l) => {
-    f := l
-    while (f > q) && ((byte(f - 1) == 32) || (byte(f - 1) == 9)) {
-      f = f - 1
-    }
-    f
-  }
+  static spaces_past (q) => Runtime.run_from(q, textend, 1, 1)
+  static spaces_back (q, l) => Runtime.run_back(l, q, 1, 1)
 }
 // Layout (`level layout …`): whether a line goes on into the next (more indented, or a closing); a text's gaps (white)
 // and words as a pattern; a word's inside, a line end in a text; the first or last where.
@@ -1399,20 +1379,8 @@ Layout := class {
     }
     l
   }
-  static spaces_run (q, e) => {
-    r := q
-    while (r < e) && (chared(byte(r), 3) != 0) {
-      r = r + 1
-    }
-    r
-  }
-  static word_run (q, e) => {
-    r := q
-    while (r < e) && (chared(byte(r), 3) == 0) {
-      r = r + 1
-    }
-    r
-  }
+  static spaces_run (q, e) => Runtime.run_from(q, e, 3, 1)
+  static word_run (q, e) => Runtime.run_from(q, e, 3, 0)
   static gap_added (l, s, q) => {
     append(l, Layout.gap_pattern(Layout.gap_kind(l, s, q)))
     q

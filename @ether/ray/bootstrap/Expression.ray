@@ -695,13 +695,8 @@ Runtime := class {
     }
     q
   }
-  static comma_ended (a, from) => {
-    n := from
-    while (n > a) && white(byte(n - 1)) {
-      n = n - 1
-    }
-    (n > a) && (byte(n - 1) == 44)
-  }
+  static comma_ended (a, from) => Runtime.comma_before(a, Runtime.run_back(from, a, 3, 1))
+  static comma_before (a, n) => (n > a) && (byte(n - 1) == 44)
 
   // Pairs: what a bracket or a quote opens, and where it is closed. A byte's class (1 an opening bracket, 2 a quote, 3 a
   // closing one) holds unless an odd number of backslashes before it escapes it. Where a pair ends is kept by the back
@@ -1087,17 +1082,8 @@ Runtime := class {
 // what reading one asks too (its words, where a quote or a bracket closes); what the back end's compiler asks besides is
 // its own (`$/Wasm.project.ray`'s `Writing`).
 Texts := class {
-  static trimmed_text (from, to) => {
-    a := from
-    e := to
-    while (a < e) && white(byte(a)) {
-      a = a + 1
-    }
-    while (e > a) && white(byte(e - 1)) {
-      e = e - 1
-    }
-    text(a, e)
-  }
+  static trimmed_text (from, to) => Texts.trimmed_to(Runtime.run_from(from, to, 3, 1), to)
+  static trimmed_to (a, e) => text(a, Runtime.run_back(e, a, 3, 1))
   static at_text (q, e, a, z) => ((q + (z - a)) > e) ? 0 : texteq(q, a, z - a)
   static word_byte (c) => ((c >= 97) && (c <= 122)) || ((c >= 65) && (c <= 90)) || ((c >= 48) && (c <= 57)) || (c == 95)
   static cw_trimmed (t: Text) => (t is Text) ? Texts.trimmed_text(t.from, t.to) : t
@@ -1261,8 +1247,9 @@ Readings := class {
     Marked(name: c.name, from: c.from, to: c.to, value: v)
   }
 }
-// Keys (`level keys …`): a key's pattern (its `key`, else it), whether it is led by text (begins with a literal), whether a pattern's literals all occur in a text; the rules moved from one node to another (all but the
-// first two, and those catching all, `moved_keys`); how many rules there are around a context (`keys_version`).
+// Keys (`level keys …`): a key's pattern (its `key`, else it), whether it is led by text (begins with a literal),
+// whether a pattern's literals all occur in a text; the rules moved from one node to another (all but the first two,
+// and those catching all, `moved_keys`).
 Keys := class {
   static led_by_text (p: Pattern) => (p is Pattern) && ((p.kind == literally) || ((p.kind == in_sequence) && Keys.sequence_led(p.a)))
   static sequence_led (l: List) => (l.count != 0) && Keys.led_by_text(at(l, 0))
@@ -1392,14 +1379,7 @@ Layout := class {
     append(l, literal(text(s, q)))
     q
   }
-  static line_in (a, e) => {
-    q := a
-    while q < e {
-      return 1 if byte(q) == 10
-      q = q + 1
-    }
-    0
-  }
+  static line_in (a, e) => (Runtime.run_from(a, e, 2, 0) < e) ? 1 : 0
   static first_where (l: List, f) => (l is List) ? Layout.first_in(l, f) : member2(select(l, f), Symbol.first)
   static first_in (l: List, f) => {
     i := 0
@@ -1511,8 +1491,8 @@ Members := class {
     e
   }
 }
-// Calls (`level calls …`): a function called with none, one or two arguments, a member called so (its own closure, else what it is);
-// those of a list a function picks; a member mapped (`map`, of a text or a structure); a place of a name; what a key
+// Calls (`level calls …`): a function called with none, one or two arguments, a member called so (its own closure,
+// else what it is); those of a list a function picks; a member mapped (`map`, of a text or a structure); a place of a name; what a key
 // reads of a text (its length and whether it is wholly noted on it); a name's number and its text; an argument.
 Calls := class {
   static items_of (l: List) => l.items
@@ -1938,10 +1918,7 @@ Origins := class {
   static origin_at (a) => in_program(a, a + 1) ? a : (0 - 1)
   static indent_at_origin (o) => (o < 0) ? (0 - 1) : Origins.indent_within(o, program_from(), program_from() + program_length())
   static indent_within (o, lo, te) => {
-    q := o
-    while (q > lo) && (byte(q - 1) != 10) {
-      q = q - 1
-    }
+    q := Runtime.run_back(o, lo, 2, 0)
     r := textend
     textend = te
     d := indent_at(q)

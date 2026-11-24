@@ -2049,6 +2049,16 @@ Afterwards := class {
     went_on()
     0
   }
+  // (what is kept for afterwards, for the host to run, each in a test of its own, then undone: the host reads what it
+  // painted between)
+  static later_kept (l, f) => {
+    word_held(4044, l)
+    word_held(4048, f)
+    0
+  }
+  static later_count => (word_of(4044) == 0) ? 0 : word_of(word_of(4044) + 4)
+  static later_run (i) => Afterwards.test_run(word_of(4048), at(word_of(4044), i))
+  static later_end => Images.test_undone(word_of(3968), word_of(3972))
   static test_end => (word_of(3936) == 0) ? 0 : Images.test_left(word_of(3968), word_of(3972), word_of(3936) - 1)
   static seeded (t) => {
     Afterwards.seeds() if csyms == 0
@@ -2129,6 +2139,27 @@ Images := class {
     word_held(t + 1048, 0)
     word_held(t + 1056, 0)
     0
+  }
+  // (a test undone: what it wrote over put back, what it took let go; one that wrote too much to put back, kept)
+  static test_undone (painted, reported) => {
+    t := word_of(3932)
+    word_held(3936, 0)
+    word_held(3944, 0)
+    word_held(3916, 0)
+    Images.undone(t, painted, reported) if word_of(t + 1056) == 0
+    word_held(t + 1048, 0)
+    word_held(t + 1056, 0)
+    0
+  }
+  static undone (t, painted, reported) => {
+    Images.logged_undone(t)
+    boundn = word_of(t + 28)
+    activen = word_of(t + 36)
+    word_put(3860, word_of(t + 12))
+    word_put(4068, word_of(t + 56))
+    word_put(painted + 4, word_of(t + 20)) if tag(painted) == 3
+    word_put(reported + 4, word_of(t + 24)) if tag(reported) == 3
+    Heap.given_back(word_of(t))
   }
   static test_reclaimed (t, painted, reported, f0) => {
     np := Images.past(painted, word_of(t + 20))

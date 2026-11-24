@@ -2077,6 +2077,17 @@ Afterwards := class {
     ((word_of(3936) == 0) ? 0 : Images.test_left(word_of(3968), word_of(3972), word_of(3936) - 1))
     0
   }
+  // (a test run: a turn of its own, past its budget it stops and the next goes on; ended once what it kept ran)
+  static test_run (run, x) => {
+    test_begin(word_of(3968), word_of(3972))
+    f := word_of(4060)
+    turn_begun_within(f)
+    call1(run, x)
+    word_held(4060, f)
+    went_on()
+    0
+  }
+  static test_end => (word_of(3936) == 0) ? 0 : Images.test_left(word_of(3968), word_of(3972), word_of(3936) - 1)
   static each_run (n) => {
     i := 0
     while i < word_of(n + 4) {

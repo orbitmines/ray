@@ -489,7 +489,6 @@ Runtime := class {
   }
   static field_name_of (f: Field) => f.name
   static field_next (f: Field) => f.next
-  static lookup (node: Node, name) => Runtime.value_of(Runtime.found(node, name))
   static value_of (field: Field) => (field === None) ? None : field.value
   // (a name given a value in the node itself: a field of it added, the latest, unless it has one; or where it is found,
   // else in the node)
@@ -652,7 +651,7 @@ Runtime := class {
   // pos ends, read on from at, at the end of the first line after which the next one, not blank, is indented no deeper
   // than the statement's first line, starts with no closing bracket, does not follow a line ending with a comma, and
   // leaves no quote open; else at the end of the text.
-  static statement_end (pos, at) => Runtime.ended_from(at, Runtime.line_end(at), Runtime.indent_at(Runtime.line_start(pos, at)))
+  static statement_end (pos, at) => Runtime.ended_from(at, Runtime.line_end(at), Runtime.indent_at(Runtime.run_back(at, pos, 2, 0)))
   static ended_from (at, from, depth) => {
     q := from
     while q < textend {
@@ -680,7 +679,6 @@ Runtime := class {
     }
     r
   }
-  static line_start (pos, from) => Runtime.run_back(from, pos, 2, 0)
   static line_end (from) => Runtime.run_from(from, textend, 2, 0)
   static indent_at (from) => Runtime.run_from(from, textend, 1, 1) - from
   static white_after (from) => Runtime.run_from(from, textend, 3, 1)
@@ -851,13 +849,12 @@ Runtime := class {
     e := 0
     while (r < 0) && (n >= 0) {
       Runtime.ways_retried(bn, an, fr, ef)
-      e = Runtime.hole_next(p, at, n)
+      e = ((n < textend) ? Runtime.hole_led(p, at, n, ((p.b != 2) ? ((((n > at) && (word_byte(byte(n - 1)) != 0) && (word_byte(byte(n)) != 0)) == 0) ? ((nomemo != 0) ? text_led_read(p.a, n) : Matching.memo_read(p.a, n, memo + (((((n * 31) + p.a) + (textend * 7)) & 65535) * 16))) : 0) : (((byte(n) == 92) && ((n + 1) < textend)) ? (n + 2) : 0))) : (0 - 1))
       r = (e == (0 - 1)) ? r : Runtime.onward(k, (e < 0) ? ((0 - e) - 2) : e)
       n = (e < 0) ? (0 - 1) : e
     }
     r
   }
-  static hole_next (p: Pattern, at, n) => (n < textend) ? Runtime.hole_led(p, at, n, ((p.b != 2) ? ((((n > at) && (word_byte(byte(n - 1)) != 0) && (word_byte(byte(n)) != 0)) == 0) ? ((nomemo != 0) ? text_led_read(p.a, n) : Matching.memo_read(p.a, n, memo + (((((n * 31) + p.a) + (textend * 7)) & 65535) * 16))) : 0) : (((byte(n) == 92) && ((n + 1) < textend)) ? (n + 2) : 0))) : (0 - 1)
   static hole_led (p: Pattern, at, n, l) => (l > n) ? l : ((((byte(n) == 10) && (p.b != 1) && (((continued_from(at, n) == 0) && (((pair_class(at - 1) == 2) && (pair_end(at - 1) > n)) == 0)) || (block_closed(at, n) > 0))) || ((p.b == 3) && ((byte(n) == 32) || (byte(n) == 9)))) ? (0 - 1) : Runtime.hole_byte(p, n, Runtime.class_at(n)))
   static hole_byte (p: Pattern, n, pc) => (((p.b == 0) || (p.b == 3)) && (pc != 0)) ? ((pc == 3) ? (0 - 1) : (((pair_end(n) - 1) < 0) ? (0 - 1) : pair_end(n))) : (((p.b == 1) && (pc == 2)) ? (0 - 1) : ((((p.b == 1) || (p.b == 2)) && (byte(n) == p.c)) ? ((0 - n) - 2) : (n + 1)))
   // (a binding: what it wrote over put back when what follows does not read)
@@ -902,8 +899,7 @@ Runtime := class {
     active_noted(p, at)
     Runtime.rules_found(reading_of(p, at), at, k)
   }
-  static rules_found (l, at, k) => (l is Node) ? Runtime.rules_applied(l, at, Cell(what: Pattern(kind: applied, a: l, b: boundn, c: at), next: k)) : Runtime.rules_none()
-  static rules_applied (l: Node, at, c) => Runtime.pattern_read(topattern(member(l, 17)), at, c)
+  static rules_found (l, at, k) => (l is Node) ? (Runtime.pattern_read(topattern(member(l, 17)), at, (Cell(what: Pattern(kind: applied, a: l, b: boundn, c: at), next: k)))) : Runtime.rules_none()
   static rules_none => {
     activen = activen - 1
     0 - 1
@@ -917,11 +913,10 @@ Runtime := class {
   // (a pattern a function reads by: a repeat read in turn by it; else read, then the function given what was read)
   static functioned_read (p: Pattern, f: Pattern, at, k) => ((f.a is Pattern) && (Runtime.kind_of_pattern(f.a) == repeating)) ? Runtime.onward(k, in_turn(Runtime.inner_of(f.a), f.b, p.b, at)) : Runtime.pattern_read(f.a, at, Cell(what: Pattern(kind: function_given, a: f, b: p.b, c: boundn), next: k))
   static kind_of_pattern (p: Pattern) => p.kind
-  static function_of (f: Pattern) => f.b
   static inner_of (p: Pattern) => p.a
   static function_read (p: Pattern, kept, bound, values, at, k) => {
     boundn = p.c
-    bindv(0, call(curried(Runtime.function_of(p.a), values), p.b, 0))
+    bindv(0, call(curried(((p.a).b), values), p.b, 0))
     Runtime.kept_or_restored(Runtime.onward(k, at), kept, p.c, bound)
   }
   // (the end of a statement: where a line ends, unless the statement goes on past it; noted to be read after what
@@ -1014,17 +1009,15 @@ Runtime := class {
   static bound (id, x) => Builtin(id: id, self: x)
   static curried (f, v) => Curried(function: f, value: v)
   static curried_value (c: Curried) => (c is Curried) ? c.value : list()
-  static isgetter (v: Closure) => (v is Closure) && (v.called == 1)
-  static got (v) => Runtime.isgetter(v) ? call(v, list(), 0) : v
-  static get (scope, name) => Runtime.got(lookup(scope, name))
+  static got (v) => ((v is Closure) && (v.called == 1)) ? call(v, list(), 0) : v
+  static get (scope, name) => Runtime.got(Runtime.value_of(Runtime.found(scope, name)))
   static keys (n: Node) => (n.keys === None) ? Runtime.keys_made(n) : n.keys
   static keys_made (n: Node) => {
     n.keys = list()
     n.keys
   }
-  static member (x, name) => ((x is Node) || (x is Applied)) ? Runtime.node_member(x, name, own(x, name)) : ((x is List) ? Runtime.list_member(x, name) : (((x is Text) && ((name == Symbol.count) || (name == Symbol.length))) ? Runtime.text_length(x) : None))
+  static member (x, name) => ((x is Node) || (x is Applied)) ? Runtime.node_member(x, name, own(x, name)) : ((x is List) ? ((name == Symbol.count) ? int(x.count) : ((name == Symbol.first) ? Runtime.at_or_none(x, 0) : ((name == Symbol.last) ? Runtime.at_or_none(x, x.count - 1) : ((name == Symbol.empty) ? same(x.count, 0) : (((name == Symbol.sort) || (name == Symbol.for) || (name == Symbol.map)) ? bound(name, x) : mapped(x, name)))))) : (((x is Text) && ((name == Symbol.count) || (name == Symbol.length))) ? Runtime.text_length(x) : None))
   static node_member (x, name, f: Field) => (f === None) ? ((name == Symbol.keys) ? keys(x) : None) : Runtime.got(f.value)
-  static list_member (l: List, name) => (name == Symbol.count) ? int(l.count) : ((name == Symbol.first) ? Runtime.at_or_none(l, 0) : ((name == Symbol.last) ? Runtime.at_or_none(l, l.count - 1) : ((name == Symbol.empty) ? same(l.count, 0) : (((name == Symbol.sort) || (name == Symbol.for) || (name == Symbol.map)) ? bound(name, l) : mapped(l, name)))))
   static at_or_none (l: List, i) => (l.count == 0) ? None : l.items[i]
   static text_length (t: Text) => int(t.to - t.from)
   static member2 (x, name) => ((x is Text) && ((name == Symbol.first) || (name == Symbol.last) || (name == Symbol.rest) || (name == Symbol.empty))) ? Runtime.text_member(x, name) : (((x is List) && ((name == Symbol.rest) || (name == Symbol.joined) || (name == Symbol.append))) ? ((name == Symbol.rest) ? Runtime.appended_from(list(), x, 1) : bound(name, x)) : member(x, name))
@@ -1034,20 +1027,17 @@ Runtime := class {
   static plain_closure (c: Closure) => (c is Closure) && (c.called == 0)
   static call_member (x, name, args, named) => Runtime.member_called(Runtime.own_closure(x, name), x, name, args, named)
   static member_called (c: Closure, x, name, args, named) => (c === None) ? invoke(member2(x, name), args, named) : indirect(c.env, args, named, c.function)
-  static invoke (c, args, named) => ((c is Builtin) && Runtime.list_changed(c)) ? Runtime.builtin_list(c, arg(args, 0)) : call(c, args, named)
-  static list_changed (b: Builtin) => (b.id == Symbol.joined) || (b.id == Symbol.append)
+  static invoke (c, args, named) => ((c is Builtin) && ((c.id == Symbol.joined) || (c.id == Symbol.append))) ? Runtime.builtin_list(c, arg(args, 0)) : call(c, args, named)
   static builtin_list (b: Builtin, v) => (b.id == Symbol.joined) ? joined(b.self, v) : append(b.self, v)
   static call (c, args, named) => {
     fueled()
     stopped() ? None : Runtime.called(c, args, named)
   }
-  static called (c, args, named) => (c is Pattern) ? Runtime.pattern_called(c, args) : ((c is Curried) ? Runtime.curried_called(c, Runtime.curried_function(c), args, named) : ((c is Applied) ? Runtime.applied_called(c, Runtime.applied_rule(c), args, named) : ((c is Builtin) ? Runtime.builtin_called(c, args) : ((c is Class) ? construct(c, args, named) : ((c is Closure) ? Runtime.closure_called(c, args, named) : None)))))
+  static called (c, args, named) => (c is Pattern) ? Runtime.pattern_called(c, args) : ((c is Curried) ? Runtime.curried_called(c, Runtime.curried_function(c), args, named) : ((c is Applied) ? Runtime.applied_called(c, c.rule, args, named) : ((c is Builtin) ? (((c.id == Symbol.sort) ? sorted(c.self, arg(args, 0)) : ((c.id == Symbol.for) ? each(c.self, arg(args, 0)) : ((c.id == Symbol.map) ? each_value(c.self, arg(args, 0)) : ((c.id == placed) ? place(arg(args, 0), arg(args, 1)) : ((c.id == members_listed) ? members_of(arg(args, 0)) : None)))))) : ((c is Class) ? construct(c, args, named) : ((c is Closure) ? Runtime.closure_called(c, args, named) : None)))))
   static pattern_called (p: Pattern, args) => (p.kind == with_function) ? Pattern(kind: functioned, a: p, b: args) : None
   static curried_function (c: Curried) => c.function
   static curried_called (c: Curried, f: Closure, args, named) => indirect(Runtime.defined_as(node(f.env), Symbol.this, c.value), args, named, f.function)
-  static applied_rule (c: Applied) => c.rule
   static applied_called (c, f: Closure, args, named) => indirect(applied_again(c), args, named, f.function)
-  static builtin_called (b: Builtin, args) => ((b.id == Symbol.sort) ? sorted(b.self, arg(args, 0)) : ((b.id == Symbol.for) ? each(b.self, arg(args, 0)) : ((b.id == Symbol.map) ? each_value(b.self, arg(args, 0)) : ((b.id == placed) ? place(arg(args, 0), arg(args, 1)) : ((b.id == members_listed) ? members_of(arg(args, 0)) : None)))))
   static closure_called (c: Closure, args, named) => (isodepth > 4000) ? indirect(c.env, args, named, c.function) : isolated_value(isolated_open(), indirect(c.env, args, named, c.function))
   // (a class constructing: a node in its scope, itself its `this`, given what is named, its body run in it; its header,
   // the pattern it is read by, else anything; a rule's reading applied again, its fields copied)
@@ -1260,7 +1250,6 @@ Readings := class {
     byte_put(n, byte(q))
     n + 1
   }
-  static mapped_structure (n: Node, f, g) => Readings.structure_into(copied(n), n.keys, list(), f, g)
   static structure_into (o: Node, s: List, l, f, g) => {
     i := 0
     while i < s.count {
@@ -1391,24 +1380,20 @@ Layout := class {
   static gaps (l, a, e) => {
     q := a
     while q < e {
-      q = (chared(byte(q), 3) != 0) ? Layout.gap_added(l, q, Layout.spaces_run(q, e)) : Layout.word_added(l, q, Layout.word_run(q, e))
+      q = (chared(byte(q), 3) != 0) ? Layout.gap_added(l, q, Runtime.run_from(q, e, 3, 1)) : Layout.word_added(l, q, Runtime.run_from(q, e, 3, 0))
     }
     l
   }
-  static spaces_run (q, e) => Runtime.run_from(q, e, 3, 1)
-  static word_run (q, e) => Runtime.run_from(q, e, 3, 0)
   static gap_added (l, s, q) => {
-    append(l, Layout.gap_pattern(Layout.gap_kind(l, s, q)))
+    append(l, Layout.gap_pattern((((l.count > 0) && Layout.is_literal(at(l, l.count - 1))) ? ((((Runtime.run_from(s, q, 2, 0) < q) ? 1 : 0) != 0) ? 2 : 4) : 0)))
     q
   }
-  static gap_kind (l: List, s, q) => ((l.count > 0) && Layout.is_literal(at(l, l.count - 1))) ? ((Layout.line_in(s, q) != 0) ? 2 : 4) : 0
   static is_literal (p: Pattern) => p.kind == literally
   static gap_pattern (t) => (t > 0) ? greedy(either(append(append(list(), chars(1)), chars(t))), 1) : greedy(chars(1), 1)
   static word_added (l, s, q) => {
     append(l, literal(text(s, q)))
     q
   }
-  static line_in (a, e) => (Runtime.run_from(a, e, 2, 0) < e) ? 1 : 0
   static first_where (l: List, f) => (l is List) ? Layout.first_in(l, f) : member2(select(l, f), Symbol.first)
   static first_in (l: List, f) => {
     i := 0
@@ -1429,8 +1414,7 @@ Layout := class {
   }
   // (where a byte was written, in the program; the indent of the line it was written on)
   static origin_at (a) => in_program(a, a + 1) ? a : (0 - 1)
-  static indent_at_origin (o) => (o < 0) ? (0 - 1) : Layout.indent_within(o, program_from(), program_from() + program_length())
-  static indent_within (o, lo, te) => Layout.indent_from(Runtime.run_back(o, lo, 2, 0), te)
+  static indent_at_origin (o) => (o < 0) ? (0 - 1) : (Layout.indent_from(Runtime.run_back(o, (program_from()), 2, 0), (program_from() + program_length())))
   static indent_from (q, te) => Runtime.run_from(q, te, 1, 1) - q
 }
 // Members (`level members …`): what applies a rule, around a node (`applied_of`); a node's members, or what a rule's
@@ -1505,7 +1489,6 @@ Members := class {
 // else what it is); those of a list a function picks; a member mapped (`map`, of a text or a structure); a place of a name; what a key
 // reads of a text (its length and whether it is wholly noted on it); a name's number and its text; an argument.
 Calls := class {
-  static items_of (l: List) => l.items
   static invoke0 (c) => invoke(c, list(), 0)
   static invoke1 (c, a) => invoke(c, append(list(), a), 0)
   static invoke2 (c, a, b) => invoke(c, append(append(list(), a), b), 0)
@@ -1526,7 +1509,7 @@ Calls := class {
     o
   }
   static selmethod (x, sym, f, args) => (sym == Symbol.map) ? Calls.mapped_by(x, f, arg(args, 0)) : 0
-  static mapped_by (x, f, g) => (x is Text) ? mapped_text(x, f, g) : (((x is Node) && (member(x, Symbol.text) != None)) ? mapped_structure(x, f, g) : x)
+  static mapped_by (x, f, g) => (x is Text) ? mapped_text(x, f, g) : (((x is Node) && (member(x, Symbol.text) != None)) ? Readings.structure_into(copied(x), x.keys, list(), f, g) : x)
   static place (t, ctx) => Place(name: intern(((t is Node) ? member(t, Symbol.text) : t)), kind: 0, given: ctx)
   static readsv (p, t) => (p is Node) ? Calls.read_keyed(p, t, member(p, Symbol.key)) : reads(topattern(p), t)
   static read_keyed (p, t, k) => (k == None) ? reads(topattern(p), t) : Calls.read_measured(p, t, k, reads(topattern(k), t))
@@ -1649,13 +1632,12 @@ Matching := class {
     p := None
     while i < l.count {
       p = topattern(member(at(l, i), Symbol.key))
-      r = Matching.led_tried_one(p, n, m)
+      r = (Keys.led_by_text(p) ? Matching.led_matched(p, n, m) : 0)
       return r if r > n
       i = i + 1
     }
     0
   }
-  static led_tried_one (p, n, m) => Keys.led_by_text(p) ? Matching.led_matched(p, n, m) : 0
   static led_matched (p, n, m) => {
     r := matched(p, n, 0)
     boundn = m
@@ -1841,7 +1823,7 @@ Turns := class {
   static removed_at (l: List, i) => {
     j := i
     while (j + 1) < l.count {
-      word_held(Calls.items_of(l) + (j * 4), at(l, j + 1))
+      word_held(l.items + (j * 4), at(l, j + 1))
       j = j + 1
     }
     l.count = l.count - 1
@@ -2049,11 +2031,10 @@ Hooks := class {
   static near_end => (free > (arena_base() - 33554432)) && (free < arena_base())
   static statement_over => word_of(4064) != 0
   static fueled => {
-    word_held(3916, 1) if logging() && Hooks.log_over()
+    word_held(3916, 1) if logging() && (((free - word_of(3944)) > 134217728) || (free > (arena_base() - 67108864)) || ((word_of(word_of(3932) + 48) - word_of(3896)) > 20000000))
     Hooks.fuel_spent() if word_of(3896) > 0
     0
   }
-  static log_over => ((free - word_of(3944)) > 134217728) || (free > (arena_base() - 67108864)) || ((word_of(word_of(3932) + 48) - word_of(3896)) > 20000000)
   static fuel_spent => {
     unreachable_now() if word_of(3896) == 1
     stopped_statement() if (word_of(3896) < word_of(4060)) || Hooks.near_end()

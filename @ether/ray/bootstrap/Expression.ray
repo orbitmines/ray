@@ -2172,22 +2172,16 @@ Hooks := class {
     word_held(3896, word_of(3896) - 1)
   }
   static stopped_statement => {
-    Hooks.stop_raised() if word_of(3916) == 0
-    0
-  }
-  static stop_raised => {
+    word_held(4064, 1) if word_of(3916) == 0
     word_held(3916, 1)
-    word_held(4064, 1)
   }
   // (an inner turn let go, the one it is in goes on; unless that one too ran past its budget)
   static higher (a, b) => (a > b) ? a : b
   static went_on => {
-    Hooks.stop_lowered() if (word_of(4064) != 0) && (word_of(3896) >= word_of(4060))
+    c := (word_of(4064) != 0) && (word_of(3896) >= word_of(4060))
+    word_held(3916, 0) if c
+    word_held(4064, 0) if c
     0
-  }
-  static stop_lowered => {
-    word_held(3916, 0)
-    word_held(4064, 0)
   }
   // (a statement past its budget, noted where what is noted lasts)
   static over_listed (a, e) => {
@@ -2352,7 +2346,22 @@ Images := class {
     Images.tests_made() if word_of(3932) == 0
     word_held(3936, word_of(3936) + 1)
     return 0 if word_of(3936) > 1
-    Images.test_noted(word_of(3932), painted, reported)
+    t := word_of(3932)
+    roomy(names, 256)
+    word_held(t, free)
+    word_held(t + 12, word_of(3860))
+    word_held(t + 16, Images.past(word_of(3860), 0))
+    word_held(t + 20, Images.past(painted, 0))
+    word_held(t + 24, Images.past(reported, 0))
+    word_held(t + 28, boundn)
+    word_held(t + 36, activen)
+    word_held(t + 44, 0)
+    word_held(t + 48, word_of(3896))
+    word_put(t + 52, Images.past(word_of(4068), 0))
+    word_put(t + 56, word_of(4068))
+    word_held(t + 1048, 0)
+    word_held(3944, free)
+    0
   }
   static tests_made => {
     t := lasting_alloc(1088)
@@ -2362,39 +2371,19 @@ Images := class {
     word_held(t + 1080, 0)
     word_held(3932, t)
   }
-  static test_noted (t, painted, reported) => {
-    roomy(names, 256)
-    word_held(t, free)
-    word_held(t + 4, word_of(t + 1048))
-    word_held(t + 8, word_of(3868))
-    word_held(t + 12, word_of(3860))
-    word_held(t + 16, Images.past(word_of(3860), 0))
-    word_held(t + 20, Images.past(painted, 0))
-    word_held(t + 24, Images.past(reported, 0))
-    word_held(t + 28, boundn)
-    word_held(t + 36, activen)
-    word_held(t + 40, effects)
-    word_held(t + 44, 0)
-    word_held(t + 48, word_of(3896))
-    word_put(t + 52, Images.past(word_of(4068), 0))
-    word_put(t + 56, word_of(4068))
-    word_held(t + 1048, 0)
-    word_held(3944, free)
-    0
-  }
   static past (l, from) => ((tag(l) == 3) && (word_of(l + 4) > from)) ? (word_of(l + 4) - from) : 0
   // (a test ended: what it took let go, but for what it painted, said and set aside, written out first)
   static test_left (painted, reported, d) => {
     word_held(3936, d)
     return 0 if d > 0
-    Images.test_closed(word_of(3932), painted, reported, word_of(word_of(3932)))
-  }
-  static test_closed (t, painted, reported, f0) => {
+    t := word_of(3932)
     word_held(3944, 0)
-    Images.aside_back(t) if (word_of(3916) != 0) && (word_of(3860) != 0) && (word_of(3860) == word_of(t + 12))
+    word_held(word_of(3860) + 4, word_of(t + 16)) if (word_of(3916) != 0) && (word_of(3860) != 0) && (word_of(3860) == word_of(t + 12))
     word_held(3916, 0)
-    return Images.test_unkept(t) if (word_of(t + 44) != 0) || (word_of(t + 1056) != 0)
-    Images.test_reclaimed(t, painted, reported, f0)
+    Images.test_reclaimed(t, painted, reported, word_of(t)) if (word_of(t + 44) == 0) && (word_of(t + 1056) == 0)
+    word_held(t + 1048, 0)
+    word_held(t + 1056, 0)
+    0
   }
   static test_reclaimed (t, painted, reported, f0) => {
     np := Images.past(painted, word_of(t + 20))
@@ -2413,7 +2402,6 @@ Images := class {
     Images.taken_onto(word_of(3860), k, np + nr, nu)
     word_put(4068, list()) if (no > 0) && (word_of(4068) == 0)
     Images.taken_onto(word_of(4068), k, (np + nr) + nu, no)
-    Images.test_unkept(t)
   }
   static taken_onto (l, k, from, n) => {
     i := 0
@@ -2433,8 +2421,7 @@ Images := class {
   }
   // (what the host reads of a value made in the test, made again where what lasts is: a list, a text, a node's fields,
   // a place; anything else, nothing. Each once: the first word of one made again says where it is now)
-  static lasting_of (v, f0) => ((pointer(v) == 0) || (v < f0) || (v >= free)) ? v : ((word_of(v) == 99) ? word_of(v + 4) : Images.lasting_kind(v, word_of(v), f0))
-  static lasting_kind (v, k, f0) => (k == 3) ? Images.lasting_list(v, f0) : ((k == 4) ? Images.lasting_text(v) : (((k == 1) || (k == 10)) ? Images.lasting_node(v, k, f0) : ((k == 12) ? Images.lasting_place(v, f0) : 0)))
+  static lasting_of (v, f0) => ((pointer(v) == 0) || (v < f0) || (v >= free)) ? v : ((word_of(v) == 99) ? word_of(v + 4) : ((word_of(v) == 3) ? Images.lasting_list(v, f0) : ((word_of(v) == 4) ? Images.lasting_text(v) : (((word_of(v) == 1) || (word_of(v) == 10)) ? Images.lasting_node(v, word_of(v), f0) : ((word_of(v) == 12) ? Images.lasting_place(v, f0) : 0)))))
   static moved_to (v, c) => {
     word_put(v, 99)
     word_put(v + 4, c)
@@ -2494,11 +2481,5 @@ Images := class {
     word_put(c + 8, Images.lasting_of(kd, f0))
     word_put(c + 12, Images.lasting_of(g, f0))
     c
-  }
-  static aside_back (t) => word_held(word_of(3860) + 4, word_of(t + 16))
-  static test_unkept (t) => {
-    word_held(t + 1048, 0)
-    word_held(t + 1056, 0)
-    0
   }
 }

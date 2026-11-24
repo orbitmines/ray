@@ -776,17 +776,13 @@ Runtime := class {
   // (failed: what it bound left out, and, when nothing was written meanwhile, the memory it took)
   static unbound (bn, fr, ef) => {
     boundn = bn
-    Runtime.left_alone(fr) if (effects == ef)
-  }
-  static left_alone (fr) => {
-    starts_cleared(fr, free)
-    freed_back(fr)
+    Heap.given_back(fr) if (effects == ef)
   }
   // (a way tried again: as it was when the choice began)
   static ways_retried (bn, an, fr, ef) => {
     boundn = bn
     activen = an
-    freed_back(fr) if (free > fr) && (effects == ef)
+    Heap.given_back(fr) if (free > fr) && (effects == ef)
     markf = fr
     0
   }
@@ -1294,7 +1290,6 @@ Keys := class {
   static literal_missing (c: Pattern, a, e) => (c is Pattern) && (c.kind == literally) && (occurs(c.a, a, e) == 0)
   static moved_keys (g, p) => Keys.keys_moved_into(keys(member(g, Symbol.rules)), Keys.emptied(keys(member(p, Symbol.rules))), member(g, Symbol.rules))
   static emptied (l: List) => {
-    touched(l)
     l.count = 0
     l
   }
@@ -1557,30 +1552,21 @@ Members := class {
     e
   }
 }
-// Calls (`level calls …`): a function called with none, one or two arguments (in the arguments shared for that, when
-// it is the language's own: a closure, curried or applied), a member called so (its own closure, else what it is);
+// Calls (`level calls …`): a function called with none, one or two arguments, a member called so (its own closure, else what it is);
 // those of a list a function picks; a member mapped (`map`, of a text or a structure); a place of a name; what a key
 // reads of a text (its length and whether it is wholly noted on it); a name's number and its text; an argument.
 Calls := class {
-  static direct (c) => (c is Closure) || (c is Curried) || (c is Applied)
   static items_of (l: List) => l.items
-  static args1 (a) => Calls.args_put(shared_args(3928, 1), a, 0, 1)
-  static args2 (a, b) => Calls.args_put(shared_args(3928, 2), a, b, 2)
-  static args_put (l, a, b, n) => {
-    word_held(Calls.items_of(l), a)
-    word_held(Calls.items_of(l) + 4, b) if n == 2
-    l
-  }
-  static invoke0 (c) => Calls.direct(c) ? call(c, shared_args(3928, 0), 0) : invoke(c, list(), 0)
-  static invoke1 (c, a) => Calls.direct(c) ? call(c, Calls.args1(a), 0) : invoke(c, append(list(), a), 0)
-  static invoke2 (c, a, b) => Calls.direct(c) ? call(c, Calls.args2(a, b), 0) : invoke(c, append(append(list(), a), b), 0)
-  static call1 (f, x) => Calls.direct(f) ? call(f, Calls.args1(x), 0) : call(f, append(list(), x), 0)
+  static invoke0 (c) => invoke(c, list(), 0)
+  static invoke1 (c, a) => invoke(c, append(list(), a), 0)
+  static invoke2 (c, a, b) => invoke(c, append(append(list(), a), b), 0)
+  static call1 (f, x) => call(f, append(list(), x), 0)
   static call_member0 (x, sym) => Calls.closure_call0(x, sym, own_closure(x, sym))
-  static closure_call0 (x, sym, c: Closure) => (c != None) ? indirect(c.env, shared_args(3928, 0), 0, c.function) : invoke0(member2(x, sym))
+  static closure_call0 (x, sym, c: Closure) => (c != None) ? indirect(c.env, list(), 0, c.function) : invoke0(member2(x, sym))
   static call_member1 (x, sym, a) => Calls.closure_call1(x, sym, a, own_closure(x, sym))
-  static closure_call1 (x, sym, a, c: Closure) => (c != None) ? indirect(c.env, Calls.args1(a), 0, c.function) : invoke1(member2(x, sym), a)
+  static closure_call1 (x, sym, a, c: Closure) => (c != None) ? indirect(c.env, append(list(), a), 0, c.function) : invoke1(member2(x, sym), a)
   static call_member2 (x, sym, a, b) => Calls.closure_call2(x, sym, a, b, own_closure(x, sym))
-  static closure_call2 (x, sym, a, b, c: Closure) => (c != None) ? indirect(c.env, Calls.args2(a, b), 0, c.function) : invoke2(member2(x, sym), a, b)
+  static closure_call2 (x, sym, a, b, c: Closure) => (c != None) ? indirect(c.env, append(append(list(), a), b), 0, c.function) : invoke2(member2(x, sym), a, b)
   static select (l: List, f) => {
     o := list()
     i := 0
@@ -2004,7 +1990,7 @@ Origins := class {
     d
   }
 }
-// Memory: taken in order, never given back: what is made lasts
+// Memory: taken in order; given back as a frame or a test ends (below)
 Heap := class {
   static alloc (n) => {
     p := free
@@ -2059,8 +2045,6 @@ Heap := class {
     keys_reset()
     word_put(3920, 0)
   }
-  static starts_cleared (a, e) => 0
-  static touched (x) => 0
   static written (x, w, v) => {
     effects = (x < markf) ? (effects + 1) : effects
     Heap.logged(w)
@@ -2078,7 +2062,6 @@ Heap := class {
     word_put(word_of(t + 1044) + ((n * 8) + 4), word_of(w))
     word_put(t + 1048, n + 1)
   }
-  static freed_back (f) => Heap.given_back(f)
   // (a call, a statement: what it took given back when it ends, unless it wrote into what is older, something kept it, or
   // it answers what it made; a frame a word of three at `arena_base`: where it began, the mark before it, the writes)
   static kept => {
@@ -2113,7 +2096,7 @@ Heap := class {
   static stopped => word_of(3916) != 0
 }
 // Hooks: the reader's own words, each by its name: what is taken, the program's text, the pairs' classes, the caches'
-// reach, the statements set aside, a turn's depth and budget (a statement let go when it runs past it, or near the
+// reach, the statements set aside, a turn's budget (a statement let go when it runs past it, or near the
 // heap's end), the log, what is painted and said
 Hooks := class {
   static input => text(8388608, 8388608 + word_of(4088))
@@ -2331,16 +2314,9 @@ Afterwards := class {
     o + 4
   }
 }
-// Images (what the reading is at, kept so the host can go on from it, is the back end's: `image_out`, `image_in`); a test's
-// state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside copied to what
-// lasts and its memory let go; the arguments a call shares (word 3928), made once, to last
+// Images: a test's state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside
+// copied to what lasts and its memory let go
 Images := class {
-  static shared_args (w, n) => {
-    word_held(w, Images.two_none()) if word_of(w) == 0
-    word_held(word_of(w) + 4, n)
-    word_of(w)
-  }
-  static two_none => append(append(list(), 0), 0)
   // (a test begun: its state noted, once, however deep tests are begun in it (word 3936))
   static test_begin (painted, reported) => {
     Images.tests_made() if word_of(3932) == 0

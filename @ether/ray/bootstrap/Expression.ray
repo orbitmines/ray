@@ -351,7 +351,10 @@ Expression := class (
       hole_opening := BOOTSTRAPPER.CAPTURE.first
       line_end := `
 `
-      separator := level separator_of (BOOTSTRAPPER.CAPTURES.text) (BOOTSTRAPPER.CAPTURE)
+      // (what separates the holes of the rule that makes rules, `=>`: from the first hole's end up to the next, trimmed)
+      separated (t) => ((t === None) || t.empty) ? None : level cw_trimmed (level cw_span_of (t.first) (before_hole(t)))
+      before_hole (t) => (t.rest.empty || (t.rest.first == hole_opening)) ? t.first : before_hole(t.rest)
+      separator := separated(past_hole(BOOTSTRAPPER.CAPTURES.text))
       defines (text) => level holds_outside (text) (separator)
       // (a byte of a name)
       is_word (c) => holds(`abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_`, c)
@@ -1159,20 +1162,6 @@ Texts := class {
 // open and a close (or a doubled open and a doubled close) is a name, taken from a list of entries (each a key and a
 // value, `take_named`: the value, trimmed, itself a capture of a name taken further on, that), and written in its place.
 Splices := class {
-  static opening_end_at (from, to) => {
-    oe := from
-    while (oe < to) && (byte(oe) != 32) {
-      oe = oe + 1
-    }
-    oe
-  }
-  static found_from (from, e, a, z) => {
-    q := from
-    while (q < e) && (at_text(q, e, a, z) == 0) {
-      q = q + 1
-    }
-    q
-  }
   static names (x, na, ne) => (x is Node) && Splices.key_is(member(x, Symbol.key), member(x, Symbol.value), na, ne)
   static key_is (k: Text, v: Text, na, ne) => (k is Text) && (v is Text) && ((k.to - k.from) == (ne - na)) && texteq(k.from, na, ne - na)
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
@@ -1188,10 +1177,6 @@ Splices := class {
     }
     false
   }
-  // (what separates the captures in a text: from the end of the first close to the next open, trimmed)
-  static separator_of (t: Text, cap: Text) => ((t is Text) && (cap is Text)) ? Splices.separator_in(t, cap.from, Splices.opening_end_at(cap.from, cap.to), cap.to) : None
-  static separator_in (t: Text, oa, oe, ce) => Splices.separator_from(t, Splices.found_from(t.from, t.to, oe + 1, ce), oa, oe, ce)
-  static separator_from (t: Text, q, oa, oe, ce) => (q >= t.to) ? None : Texts.trimmed_text(q + (ce - (oe + 1)), Splices.found_from(q + (ce - (oe + 1)), t.to, oa, oe))
   static copied (x: Node) => Splices.copy_of(node(x.in), x)
   static copy_of (n: Node, x: Node) => {
     f := x.fields

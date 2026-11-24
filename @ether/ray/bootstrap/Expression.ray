@@ -272,18 +272,18 @@ Expression := class (
       label_of (program, word) => Place(word, global)
       afterwards := Place(`afterwards`, global)
       report := Place(`report`, global)
-      // (what jumped to afterwards, run once everything is read (those tested here), each a test of its own in memory
-      // and a budget of its own (Design §21.4), and what that kept, in turn, inside it)
+      // (what jumped to afterwards, given to the host once everything is read: it runs each (those tested here), a test of
+      // its own in memory and a budget of its own (Design §21.4), and what that kept, in turn, inside it)
       later := Array.new
-      run_later (unused) => later.for((program) => (test_later(program)) if tested_later(program))
-      test_later (program) => {
+      run_later (unused) => level later_kept (later) (test_later)
+      test_later (program) => (kept_test(program)) if tested_later(program)
+      kept_test (program) => {
         was := later
         later = Array.new
-        level test_run (ran_later) (program)
+        ran_later(program)
         kept_now := later
         later = was
-        kept_now.for((p) => test_later(p))
-        level test_end
+        kept_now.for((p) => kept_test(p))
       }
       tested_later (program) => level tested_here ((program.bound.first).value)
       ran_later (program) => {
@@ -2036,8 +2036,8 @@ Hooks := class {
   }
   static unreachable_now => word_of(0 - 8)
 }
-// Afterwards: a test run (what the reader kept for afterwards, each in a test of its own); the symbols seeded; the
-// names that last; the name of a value's kind
+// Afterwards: what the reader kept for afterwards, given to the host, which runs each as a test of its own and undoes
+// it after reading what it painted; the symbols seeded; the names that last; the name of a value's kind
 Afterwards := class {
   // (a test run: a turn of its own, past its budget it stops and the next goes on; ended once what it kept ran)
   static test_run (run, x) => {
@@ -2059,7 +2059,6 @@ Afterwards := class {
   static later_count => (word_of(4044) == 0) ? 0 : word_of(word_of(4044) + 4)
   static later_run (i) => Afterwards.test_run(word_of(4048), at(word_of(4044), i))
   static later_end => Images.test_undone(word_of(3968), word_of(3972))
-  static test_end => (word_of(3936) == 0) ? 0 : Images.test_left(word_of(3968), word_of(3972), word_of(3936) - 1)
   static seeded (t) => {
     Afterwards.seeds() if csyms == 0
     append(csyms, t)
@@ -2093,8 +2092,8 @@ Afterwards := class {
   }
   static kind_of (v) => (v == 0) ? name_text(Symbol.nothing) : ((v == 8) ? name_text(Symbol.false) : ((v == 12) ? name_text(Symbol.true) : (((v & 1) == 1) ? name_text(Symbol.number) : ((tag(v) == 4) ? name_text(Symbol.text) : ((tag(v) == 3) ? name_text(Symbol.list) : 0)))))
 }
-// Images: a test's state (word 3932) noted when it begins and put back when it ends, what it painted, said and set aside
-// copied to what lasts and its memory let go
+// Images: a test's state (word 3932) noted when it begins and put back when it is undone: what it wrote over put back
+// (the log), what it took let go
 Images := class {
   // (a test begun: its state noted, once, however deep tests are begun in it (word 3936))
   static test_begin (painted, reported) => {
@@ -2127,19 +2126,6 @@ Images := class {
     word_held(3932, t)
   }
   static past (l, from) => ((tag(l) == 3) && (word_of(l + 4) > from)) ? (word_of(l + 4) - from) : 0
-  // (a test ended: what it took let go, but for what it painted, said and set aside, written out first)
-  static test_left (painted, reported, d) => {
-    word_held(3936, d)
-    return 0 if d > 0
-    t := word_of(3932)
-    word_held(3944, 0)
-    word_held(word_of(3860) + 4, word_of(t + 16)) if (word_of(3916) != 0) && (word_of(3860) != 0) && (word_of(3860) == word_of(t + 12))
-    word_held(3916, 0)
-    Images.test_reclaimed(t, painted, reported, word_of(t)) if (word_of(t + 44) == 0) && (word_of(t + 1056) == 0)
-    word_held(t + 1048, 0)
-    word_held(t + 1056, 0)
-    0
-  }
   // (a test undone: what it wrote over put back, what it took let go; one that wrote too much to put back, kept)
   static test_undone (painted, reported) => {
     t := word_of(3932)
@@ -2161,32 +2147,6 @@ Images := class {
     word_put(reported + 4, word_of(t + 24)) if tag(reported) == 3
     Heap.given_back(word_of(t))
   }
-  static test_reclaimed (t, painted, reported, f0) => {
-    np := Images.past(painted, word_of(t + 20))
-    nr := Images.past(reported, word_of(t + 24))
-    nu := ((word_of(3860) != 0) && (word_of(3860) == word_of(t + 12))) ? Images.past(word_of(3860), word_of(t + 16)) : 0
-    no := Images.past(word_of(4068), word_of(t + 52))
-    k := Images.lasting_list(appended_from(appended_from(appended_from(appended_from(list(), painted, word_of(t + 20)), reported, word_of(t + 24)), (nu > 0) ? word_of(3860) : list(), word_of(t + 16)), (no > 0) ? word_of(4068) : list(), word_of(t + 52)), f0)
-    Images.logged_undone(t)
-    boundn = word_of(t + 28)
-    activen = word_of(t + 36)
-    word_put(3860, word_of(t + 12))
-    word_put(4068, word_of(t + 56))
-    Heap.given_back(f0)
-    Images.taken_onto(painted, k, 0, np)
-    Images.taken_onto(reported, k, np, nr)
-    Images.taken_onto(word_of(3860), k, np + nr, nu)
-    word_put(4068, list()) if (no > 0) && (word_of(4068) == 0)
-    Images.taken_onto(word_of(4068), k, (np + nr) + nu, no)
-  }
-  static taken_onto (l, k, from, n) => {
-    i := 0
-    while i < n {
-      append(l, at(k, from + i))
-      i = i + 1
-    }
-    0
-  }
   static logged_undone (t) => {
     n := word_of(t + 1048)
     while n > 0 {
@@ -2194,68 +2154,5 @@ Images := class {
       word_put(word_of(word_of(t + 1044) + (n * 8)), word_of(word_of(t + 1044) + ((n * 8) + 4)))
     }
     0
-  }
-  // (what the host reads of a value made in the test, made again where what lasts is: a list, a text, a node's fields,
-  // a place; anything else, nothing. Each once: the first word of one made again says where it is now)
-  static lasting_of (v, f0) => ((pointer(v) == 0) || (v < f0) || (v >= free)) ? v : ((word_of(v) == 99) ? word_of(v + 4) : ((word_of(v) == 3) ? Images.lasting_list(v, f0) : ((word_of(v) == 4) ? Images.lasting_text(v) : (((word_of(v) == 1) || (word_of(v) == 10)) ? Images.lasting_node(v, word_of(v), f0) : ((word_of(v) == 12) ? Images.lasting_place(v, f0) : 0)))))
-  static moved_to (v, c) => {
-    word_put(v, 99)
-    word_put(v + 4, c)
-    c
-  }
-  static lasting_list (l, f0) => {
-    n := word_of(l + 4)
-    items := word_of(l + 12)
-    c := Images.moved_to(l, lasting_alloc(16))
-    d := lasting_alloc((n * 4) + 4)
-    word_put(c, 3)
-    word_put(c + 4, n)
-    word_put(c + 8, n)
-    word_put(c + 12, d)
-    i := 0
-    while i < n {
-      word_put(d + (i * 4), Images.lasting_of(word_of(items + (i * 4)), f0))
-      i = i + 1
-    }
-    c
-  }
-  static lasting_text (t) => {
-    a := word_of(t + 4)
-    e := word_of(t + 8)
-    c := Images.moved_to(t, lasting_alloc(12))
-    b := ((a >= word_of(word_of(3932))) && (a < free)) ? copy(lasting_alloc((e - a) + 1), a, e - a) : a
-    word_put(c, 4)
-    word_put(c + 4, b)
-    word_put(c + 8, b + (e - a))
-    c
-  }
-  static lasting_node (v, k, f0) => {
-    fs := word_of(v + 8)
-    c := Images.moved_to(v, lasting_alloc(20))
-    word_put(c, k)
-    word_put(c + 4, 0)
-    word_put(c + 12, 0)
-    word_put(c + 16, 0)
-    word_put(c + 8, Images.lasting_fields(fs, f0))
-    c
-  }
-  static lasting_fields (f, f0) => (f == 0) ? 0 : Images.lasting_field(f, word_of(f), word_of(f + 4), word_of(f + 8), f0)
-  static lasting_field (f, next, name, value, f0) => {
-    c := lasting_alloc(12)
-    word_put(c + 4, name)
-    word_put(c + 8, Images.lasting_of(value, f0))
-    word_put(c, Images.lasting_fields(next, f0))
-    c
-  }
-  static lasting_place (v, f0) => {
-    n := word_of(v + 4)
-    kd := word_of(v + 8)
-    g := word_of(v + 12)
-    c := Images.moved_to(v, lasting_alloc(16))
-    word_put(c, 12)
-    word_put(c + 4, n)
-    word_put(c + 8, Images.lasting_of(kd, f0))
-    word_put(c + 12, Images.lasting_of(g, f0))
-    c
   }
 }

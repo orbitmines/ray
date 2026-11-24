@@ -222,7 +222,20 @@ const stepping = (it, fuel, step, out, error) => {
 export const painting = async (module, text, fuel = FUEL, run = 'full', from = -1, step) => {
   const it = await instance(module), input = Buffer.from(text + '\0'), out = (e) => read_out(it, input, [[B, 0, input.length]], text, e);
   it.u8.set(input, B); it.i32[4088 >> 2] = input.length; begun(it, fuel, run, from < 0 ? 0 : B + from, step);
-  return out(stepping(it, fuel, step, out, ended(it, fuel, () => it.exports.main())));
+  return afterwards(it, fuel, out, stepping(it, fuel, step, out, ended(it, fuel, () => it.exports.main())));
+};
+// (what the reading kept for afterwards, run once it is read: each a test of its own, what it painted and said read out
+// before it is undone)
+const afterwards = (it, fuel, out, error) => {
+  const X = it.exports, merged = (key, a, b) => [...new Map([...a, ...b].map((x) => [key(x), x])).values()];
+  let all = out(error);
+  for (let i = 0, n = error || !X.later_count ? 0 : X.later_count(); i < n && !all.error; i++) {
+    // (what a test stopped past its budget left unread is not said: it was not read to its end)
+    const r = out(ended(it, fuel, () => X.later_run(i))), stopped = it.i32[3916 >> 2] !== 0;
+    X.later_end();
+    all = { ...r, painted: merged((p) => `${p.style}:${p.at}`, all.painted, r.painted), unread: stopped ? all.unread : merged((u) => u.join(':'), all.unread, r.unread), said: merged((m) => `${m.at}:${m.message}`, all.said, r.said) };
+  }
+  return all;
 };
 // (what a run painted, read out of its memory: each place in the input, or in a text the host gave after it (`regions`:
 // each its address, where it is in `input`, its length))

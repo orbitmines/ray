@@ -663,6 +663,8 @@ Runtime := class {
   static anything => Pattern(kind: anything_at_all)
   static greedy (inner: Pattern, least) => ((least == 0) && (inner is Pattern) && (inner.kind == repeating)) ? Pattern(kind: repeating, a: inner.a, c: 1) : Pattern(kind: repeating, a: inner, b: least, c: 1)
   static dynamic (f) => Pattern(kind: rules_of, a: f)
+  // (read as what a function answers, asked when it is read: a pattern that is itself, `Code`, inside itself)
+  static lazily (f) => Pattern(kind: typed_with, a: f, b: 0)
   static conj (p, f) => Pattern(kind: with_function, a: p, b: f)
 
   // Where a statement ends. The text read is the run's (up to its `textend`), a byte of it at a time (the back end's

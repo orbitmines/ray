@@ -1317,56 +1317,36 @@ Keys := class {
 Caches := class {
 }
 // Pairs (`level paired …`): which bytes pair, learned from a capture's uses (`open close`, the bytes just around each,
-// neither white nor of a word: the same both a quote, else an opening and a closing bracket), each noted with where
-// it was learned so it can be forgotten again (`unpaired`); whether a pair is open before a place; where a block,
+// neither white nor of a word: the same both a quote, else an opening and a closing bracket);
+// whether a pair is open before a place; where a block,
 // opened at the end of a line, is closed by a line beginning with a closing.
 Pairs := class {
-  static pairs_at := 3988
-  static paired (t: Text, cap: Text, home) => ((t is Text) && (cap is Text)) ? Pairs.paired_by(t, cap, Splices.opening_end_at(cap.from, cap.to), home) : None
-  static paired_by (t: Text, cap: Text, oe, home) => ((oe == cap.from) || ((oe + 1) >= cap.to)) ? None : Pairs.paired_in(t, cap, oe, home)
-  static paired_in (t: Text, cap: Text, oe, home) => {
+  static paired (t: Text, cap: Text, home) => ((t is Text) && (cap is Text)) ? Pairs.paired_by(t, cap, Splices.opening_end_at(cap.from, cap.to)) : None
+  static paired_by (t: Text, cap: Text, oe) => ((oe == cap.from) || ((oe + 1) >= cap.to)) ? None : Pairs.paired_in(t, cap, oe)
+  static paired_in (t: Text, cap: Text, oe) => {
     q := t.from
     while q < t.to {
-      q = (at_text(q, t.to, cap.from, oe) != 0) ? Pairs.pair_at(t, cap, oe, home, q, Splices.found_from(q + (oe - cap.from), t.to, oe + 1, cap.to)) : (q + 1)
+      q = (at_text(q, t.to, cap.from, oe) != 0) ? Pairs.pair_at(t, cap, oe, q, Splices.found_from(q + (oe - cap.from), t.to, oe + 1, cap.to)) : (q + 1)
     }
     None
   }
-  static pair_at (t: Text, cap: Text, oe, home, q, r) => (r >= t.to) ? t.to : Pairs.pair_after(t, cap, home, q, r + (cap.to - (oe + 1)))
-  static pair_after (t: Text, cap: Text, home, q, r) => {
-    Pairs.pair_between(cap, home, (((byte(q - 1) == byte(cap.to - 1)) && ((q - 4) >= t.from)) ? Pairs.quoted_in(q - 4, byte(q - 1)) : byte(q - 1)), (((byte(r) == byte(cap.from)) && ((r + 4) <= t.to)) ? Pairs.quoted_in(r, byte(r)) : byte(r))) if (q > t.from) && (r < t.to)
+  static pair_at (t: Text, cap: Text, oe, q, r) => (r >= t.to) ? t.to : Pairs.pair_after(t, cap, q, r + (cap.to - (oe + 1)))
+  static pair_after (t: Text, cap: Text, q, r) => {
+    Pairs.pair_between(cap, (((byte(q - 1) == byte(cap.to - 1)) && ((q - 4) >= t.from)) ? Pairs.quoted_in(q - 4, byte(q - 1)) : byte(q - 1)), (((byte(r) == byte(cap.from)) && ((r + 4) <= t.to)) ? Pairs.quoted_in(r, byte(r)) : byte(r))) if (q > t.from) && (r < t.to)
     r
   }
   // (a quoted byte, `'x'`, around a capture: the byte quoted)
   static quoted_in (h, c) => ((byte(h + 1) == byte(h + 3)) && (char_class(byte(h + 1)) == 2)) ? byte(h + 2) : c
-  static pair_between (cap: Text, home, b, c) => {
-    ((b == c) ? Pairs.pair_set(b, 2, home) : (((char_class(b) == 0) && (char_class(c) == 0)) ? Pairs.both_set(b, c, home) : 0)) if (white(b) == 0) && (white(c) == 0) && (word_byte(b) == 0) && (word_byte(c) == 0) && (b != byte(cap.to - 1)) && (c != byte(cap.from))
+  static pair_between (cap: Text, b, c) => {
+    ((b == c) ? Pairs.pair_set(b, 2) : (((char_class(b) == 0) && (char_class(c) == 0)) ? Pairs.both_set(b, c) : 0)) if (white(b) == 0) && (white(c) == 0) && (word_byte(b) == 0) && (word_byte(c) == 0) && (b != byte(cap.to - 1)) && (c != byte(cap.from))
     0
   }
-  static both_set (b, c, home) => {
-    Pairs.pair_set(b, 1, home)
-    Pairs.pair_set(c, 3, home)
+  static both_set (b, c) => {
+    Pairs.pair_set(b, 1)
+    Pairs.pair_set(c, 3)
   }
-  static pair_set (c, k, home) => {
-    Pairs.class_noted(Pairs.pairs_log(), c, home)
+  static pair_set (c, k) => {
     class_put(c, k)
-    classes_changed()
-  }
-  static pairs_log => (word_of(pairs_at) == 0) ? Pairs.log_made() : word_of(pairs_at)
-  static log_made => {
-    b := lasting_alloc(65536)
-    word_held(b, 0)
-    word_held(pairs_at, b)
-    b
-  }
-  static class_noted (b, c, home) => {
-    Pairs.class_logged(b, word_of(b), c, home) if word_of(b) < 5460
-    0
-  }
-  static class_logged (b, n, c, home) => {
-    word_held(b + (4 + (n * 12)), c)
-    word_held(b + (8 + (n * 12)), char_class(c))
-    word_held(b + (12 + (n * 12)), home)
-    word_held(b, n + 1)
   }
   // (a capture's opening an opening bracket, unless it is of a class already, and its closing's last byte a closing)
   static closing (cap: Text) => (cap is Text) ? Pairs.closing_by(cap, Splices.opening_end_at(cap.from, cap.to)) : 0
@@ -1839,14 +1819,12 @@ Built := class {
 // opened in it closes), each read in a region of its own and given to a function as it is read; one not read is set
 // aside, and those are read again after (each one read now taken out, until none more is), one over its budget noted.
 Turns := class {
-  static in_turn (item, f, args, pos) => Turns.turned(item, f, args, pos, turn_depth(), fuel_floor())
-  static turned (item, f, args, pos, d, floor) => {
+  static in_turn (item, f, args, pos) => Turns.turned(item, f, args, pos, fuel_floor())
+  static turned (item, f, args, pos, floor) => {
     f0 := word_of(3896)
-    turn_depth_set(d + 1)
     u := Turns.aside_count()
     at := Turns.in_order(item, f, args, pos, floor)
     read_again(item, f, args, u)
-    turn_depth_set(d)
     // (what its statements spent is theirs: the statement it is in keeps what it had left of its own)
     word_held(4060, floor - (f0 - word_of(3896)))
     went_on()
@@ -1866,22 +1844,14 @@ Turns := class {
     turn_begun_within(floor)
     q := textend
     se := Turns.closed_or(pos, statement_end(pos, white_after(at)), at)
-    ob := word_of(3912)
     textend = se
-    word_held(3984, free) if ob == 0
-    word_held(3912, free)
     isolated_open()
     r := matched(item, at, cell(pattern(statement_ending, at, 1), 0))
     textend = q
-    Turns.based(ob, (statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark))))
+    statement_over() ? Turns.over_turn(at, se, mark) : ((r <= at) ? Turns.unread_turn(at, se, mark) : Turns.read_turn(f, args, at, r, mark))
   }
   // (back in the statement around it, if any; none and no frame open, the notes cleared (a frame open around the statement
   // still needs those of its own))
-  static based (ob, r) => {
-    word_held(3912, ob)
-    word_held(3984, 0) if ob == 0
-    r
-  }
   // (a statement's frame closed: what something older holds of it, or the run's state, moved down to where it began, as
   // a call's frame is, the rest let go, and the frame kept when anything is left; a statement in another's reading keeps
   // its memory to that one's end, what it answers held where nothing notes it)
@@ -1934,17 +1904,15 @@ Turns := class {
     changed := 0
     k := 0
     while i < Turns.aside_count() {
-      k = Turns.again_framed(item, f, args, i, word_of(3912))
+      k = Turns.again_framed(item, f, args, i)
       changed = changed | k
       i = (k != 0) ? i : (i + 1)
     }
     changed
   }
   // (a statement read again is a statement: those in it are inside it, its memory kept to the turn's end)
-  static again_framed (item, f, args, i, ob) => {
-    word_held(3984, free) if ob == 0
-    word_held(3912, free)
-    Turns.based(ob, Turns.again_matched(f, args, i, boundn, Turns.again_match(item, at(aside_or_none(), i))))
+  static again_framed (item, f, args, i) => {
+    Turns.again_matched(f, args, i, boundn, Turns.again_match(item, at(aside_or_none(), i)))
   }
   static again_match (item, t: Text) => {
     q := textend
@@ -2039,14 +2007,10 @@ FieldIndex := class {
   static field_name_of (f: Field) => f.name
   static field_next (f: Field) => f.next
 }
-// Basics (`level basics …`): a node (the first made without a parent noted as the root), a cell; bytes put; holes bound saved and restored; shifts; not equal; what is sized or set aside after a
+// Basics (`level basics …`): a node, a cell; bytes put; holes bound saved and restored; shifts; not equal; what is sized or set aside after a
 // mark; arrays (`Array.new`).
 Basics := class {
-  static node (parent) => Basics.root_noted(Node(in: parent, fields: 0, keys: 0, index: 0), parent)
-  static root_noted (n, parent) => {
-    word_held(3904, n) if (parent == 0) && (word_of(3904) == 0)
-    n
-  }
+  static node (parent) => Node(in: parent, fields: 0, keys: 0, index: 0)
   static cell (p, next) => Cell(what: p, next: next)
   static saved (mark) => ((boundn - mark) <= 0) ? 0 : Basics.bounds_copied(alloc(((boundn - mark) * 16) + 8), mark)
   static bounds_copied (c, mark) => {
@@ -2201,7 +2165,6 @@ Hooks := class {
   static in_program (a, e) => (a >= 8388608) && (e <= (8388608 + word_of(4088)))
   static keys_moved => {
     Hooks.keys_reset()
-    word_held(3996, word_of(3996) + 1)
   }
   static keys_reset => {
     epoch = epoch + 1
@@ -2217,7 +2180,6 @@ Hooks := class {
   }
   static class_put (c, k) => byte_put(3584 + c, k)
   static char_class (c) => byte(3584 + c)
-  static classes_changed => word_held(3884, word_of(3884) + 1)
   static white (c) => (c == 32) || (c == 10) || (c == 9) || (c == 13)
   static logging => word_of(3944) != 0
   // (a word given a value raw: noted as `written` notes one, when the value is of a statement still read)
@@ -2232,8 +2194,6 @@ Hooks := class {
     word_of(3860)
   }
   static aside_or_none => word_of(3860)
-  static turn_depth => word_of(4072)
-  static turn_depth_set (d) => word_held(4072, d)
   static fuel_floor => word_of(4060)
   // (a statement's budget, within what the turn it is in has left: one inside another never outlasts it)
   static turn_begun_within (outer) => {

@@ -45,17 +45,18 @@ Expression := class (
             // (its head and body as written, a hole a rule running took standing for what it took; made where that was written)
             // (a name written in a pair, `(x) := v`: x read as a value, made again where something visible defines it)
             // (one naming a hole of what wrote it, `(place) := v`: the text that hole took, where that was written)
-            written_whole := written_of(rule.LHS, caller)
-            writer := writer_of(rule.LHS, caller)
+            origin_lhs := origin(rule.LHS, caller)
+            written_whole := origin_lhs.first
+            writer := origin_lhs.last
             inner := between(written_whole)
             naming := binder(writer, inner)
-            named := (naming === None) ? written_of(inner, writer) : written_of(level cw_trimmed (taken_in(naming, inner).value), naming.caller)
+            named := origin((naming === None) ? inner : level cw_trimmed (taken_in(naming, inner).value), (naming === None) ? writer : naming.caller).first
             valued := (!(written_whole.first == hole_opening) && ((level cw_enclosed (written_whole)) === true)) && ((named.length > 0) && !has_hole(named))
             written := valued ? named : written_whole
             head := head_of(valued ? ((naming === None) ? inner : named) : rule.LHS, (naming === None) ? caller : naming.caller)
-            rule_rhs := body_of(rule.RHS, caller)
+            rule_rhs := braced(origin(rule.RHS, caller).first)
             namer := naming ?? splicer(inner, writer)
-            here := (valued && !(namer === None)) ? (place_of(namer.caller) ?? node) : home_of(rule.LHS, caller, place_of(caller) ?? node)
+            here := (valued && !(namer === None)) ? (place_of(namer.caller) ?? node) : ((writer === caller) ? (place_of(caller) ?? node) : writer.in)
             home := (valued ? defined_in(here, named) : None) ?? here
             defines := level holds_text (written) (separator)
             head.for((piece) => piece)
@@ -68,7 +69,7 @@ Expression := class (
               me.this = caller.this
               me.receiver = caller.receiver
               // (each hole a rule of its node, `x` and `{x}`, answering what it took read where the rule was applied, once)
-              me.bound.for((hole) => me.in.rules[[hole.key | [BOOTSTRAPPER.CAPTURE.first, hole.key, BOOTSTRAPPER.CAPTURE.last]]] := (c) => held(hole, () => read_outside(me.outside, () => ((splicer(hole.value, caller) === None) ? named_for(c, reader(c, caller), hole.value) : named_for(c, writer_of(hole.value, caller), written_of(hole.value, caller))))))
+              me.bound.for((hole) => me.in.rules[[hole.key | [BOOTSTRAPPER.CAPTURE.first, hole.key, BOOTSTRAPPER.CAPTURE.last]]] := (c) => held(hole, () => read_outside(me.outside, () => ((splicer(hole.value, caller) === None) ? named_for(c, reader(c, caller), hole.value) : named_for(c, origin(hole.value, caller).last, origin(hole.value, caller).first)))))
               me.in.rules.keys.for((hk) => hk.named = true)
               // (read while the rule is set aside: a rule never reads itself)
               (rule_own.styled_as ?? Array.new).for((style) => painted.append([style, [rule_own.written_head, me.input], [me.bound]]))
@@ -107,11 +108,7 @@ Expression := class (
         hole_head (inside, by) => (((inside.length > 1) && (inside.first == inside.last)) && (level pairable (inside.first))) ? (level cw_inner (inside)) : taken_head(inside, by)
         taken_head (inside, by) => (binder(by, inside) === None) ? named_in(Program(in: node), inside) : head_of(taken_in(binder(by, inside), inside).value, binder(by, inside).caller)
         // (a body: the code inside its brackets; one hole a rule running took, what it took)
-        body_of (text, by) => (splicer(text, by) === None) ? braced(text) : body_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
         braced (text) => ((text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]) === None) ? text : (text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]).code
-        written_of (text, by) => (splicer(text, by) === None) ? text : written_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
-        writer_of (text, by) => (splicer(text, by) === None) ? by : writer_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
-        home_of (text, by, here) => (splicer(text, by) === None) ? here : home_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller, splicer(text, by).caller.in)
         // (the longest of its rules that reads the text, else what it is in reads it)
         // (a definition: the latest rule that defines that reads it; else the longest of its rules that reads it, else what it is in reads it)
         reading (text) => split_or(text, ((makes && defines(text)) && (text ~= maker_key)) ? (defining(text) ?? maker_key) : longest(text))
@@ -263,6 +260,7 @@ Expression := class (
       // (what the host is given, `external <rule> <arguments…>`: each argument read where it is written, but a label, its word)
       given (program, name, argument, first) => (((name == `goto`) || (name == `label`)) && (argument === first)) ? label_of(program, argument.word) : ((name == `include`) ? written_where(argument.word, program) : named_in(program, argument.word))
       // (a text as it was first written, followed out through the holes that took it: it, and the program it is written in)
+      origin (text, by) => (splicer(text, by) === None) ? [text, by] : origin(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
       written_where (text, by) => (splicer(level cw_trimmed (text), by) === None) ? [level cw_trimmed (text), by] : written_where(spliced(level cw_trimmed (text), splicer(level cw_trimmed (text), by)).value, splicer(level cw_trimmed (text), by).caller)
       label_of (program, word) => Place(word, global)
       afterwards := Place(`afterwards`, global)

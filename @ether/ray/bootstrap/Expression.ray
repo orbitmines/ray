@@ -107,11 +107,10 @@ Expression := class (
         // (a hole quoting a text, `{`=>`}`: that text, literally)
         hole_head (inside, by) => (((inside.length > 1) && (inside.first == inside.last)) && (level pairable (inside.first))) ? (level cw_inner (inside)) : taken_head(inside, by)
         taken_head (inside, by) => (binder(by, inside) === None) ? named_in(Program(in: node), inside) : head_of(taken_in(binder(by, inside), inside).value, binder(by, inside).caller)
-        // (a body: the code inside its brackets; one hole a rule running took, what it took)
+        // (a body: the code inside its brackets)
         braced (text) => ((text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]) === None) ? text : (text as [BOOTSTRAPPER.CAPTURE.first, (code: Code), BOOTSTRAPPER.CAPTURE.last]).code
-        // (the longest of its rules that reads the text, else what it is in reads it)
         // (a definition: the latest rule that defines that reads it; else the longest of its rules that reads it, else what it is in reads it)
-        reading (text) => split_or(text, ((makes && defines(text)) && (text ~= maker_key)) ? (defining(text) ?? maker_key) : longest(text))
+        reading (text) => split_or(text, ((makes && defines(text)) && (text ~= maker_key)) ? (defining(text) ?? maker_key) : prefix(text))
         // (the split, when it reads more of the text than what was found)
         split_or (text, found) => ((found === maker_key) || (text == found?.key) || set_aside(split_key) || !(text ~= split_key) || (!(found === None) && !(split_key.length > ((text ~= found) ? found.length : 0)))) ? found : split_key
         // (a rule that is one hole, `{written}`, would read anything: kept under its text, not read)
@@ -125,7 +124,6 @@ Expression := class (
         // (a node whose rules begin with the one that makes rules: a language's, where a definition is read first)
         makes => rules.keys.first === maker_key
         defining (text) => rules.keys{!set_aside(.) && .defines && (text ~= .)}#.sort(.length).last ?? in?.defining(text)
-        longest (text) => prefix(text)
         own_keys => parts.empty ? rules.keys : rules.keys.joined(parts.first.own_keys)
         keys => (in === None) ? own_keys : own_keys.joined(in.keys)
         // (a text read here: its statements in turn, what they answered; nothing read, the place it names)
@@ -171,7 +169,7 @@ Expression := class (
       }
       made_of_deep (part, whole) => (part === whole) || parts_reach(part.parts, whole)
       parts_reach (ps, whole) => ps.empty ? false : (made_of_deep(ps.first, whole) || parts_reach(ps.rest, whole))
-      member_read (program, holder, name) => ((holder === None) || (holder.rules === None) || (name === None)) ? None : member_found(program, holder, holder.longest(name))
+      member_read (program, holder, name) => ((holder === None) || (holder.rules === None) || (name === None)) ? None : member_found(program, holder, holder.prefix(name))
       member_found (program, holder, found) => (found === None) ? None : found.value(Program(caller: program, in: holder, this: holder, receiver: holder, outside: program.outside))
       member_put (holder, name, value) => {
         holder.rules[[name]] := (c) => value
@@ -1156,12 +1154,8 @@ Texts := class {
     r
   }
 }
-// Splices (`level spliced …`): a capture, `open close` (what opens, a space, what closes), in a text: what is between an
-// open and a close (or a doubled open and a doubled close) is a name, taken from a list of entries (each a key and a
-// value, `take_named`: the value, trimmed, itself a capture of a name taken further on, that), and written in its place.
+// Splices: whether a text holds a part (anywhere, or outside any bracket or quote in it); a node copied.
 Splices := class {
-  static names (x, na, ne) => (x is Node) && Splices.key_is(member(x, Symbol.key), member(x, Symbol.value), na, ne)
-  static key_is (k: Text, v: Text, na, ne) => (k is Text) && (v is Text) && ((k.to - k.from) == (ne - na)) && texteq(k.from, na, ne - na)
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
   static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Texts.found_at(part, t.from, t.to) != 0)) ? true : false
   static holds_outside_in (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from)) ? Splices.outside_in(t.from, t.to, part) : false

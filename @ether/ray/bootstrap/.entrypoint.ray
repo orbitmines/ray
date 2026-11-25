@@ -609,6 +609,8 @@ assert {
 // `x.name (…) =>` is a member.
 {name ^function} := ({parameters}) {`=>`} {body} ^keyword => ({name} := (({parameters}) => {body})) ^function
 {name ^function}{` `}({parameters}) {`=>`} {body} ^keyword => ({name} := (({parameters}) => {body})) ^function
+// Type parameters, between angle brackets (a pair): what is in them.
+<{generics}> ^punctuation => generics
 // (a method with type parameters, `== <up_to = None>(other: T) => …`: those its first locals, their defaults given; read as
 // a head, `chainable == <…>(…)`, the method of what it takes)
 {name ^function} <{generics}>({parameters}) {`=>`} {body} ^keyword => {name} ({parameters}) => {

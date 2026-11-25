@@ -24,17 +24,12 @@ Expression := class (
     GRAMMAR_RULE_DEF.LHS = GRAMMAR_RULE_DEF
     GRAMMAR_RULE: GRAMMAR_RULE_DEF, \n | ⊣,
     statements: (
-      // (pairs, learned from a rule's head: the bytes just around each hole, unless white, of a word or a hole's own
-      // bracket, the same both a quote, else an opening and a closing bracket (one a hole quoting, {`)`}, the byte it
-      // quotes); a hole's own brackets an opening and a closing one)
-      paired (t) => pairs_in(t, None)
-      pairs_in (t, before) => t.empty ? None : ((t.first == BOOTSTRAPPER.CAPTURE.first) ? pair_past(past_hole(t.rest), before) : pairs_in(t.rest, t.first))
+      // (pairs, learned from a head that is one hole between two bytes, `({grouped})`: unless white or of a word, the same
+      // both a quote, else an opening and a closing bracket; a hole's own brackets an opening and a closing one)
+      paired (t) => (pair_bytes(t.first, t.last)) if one_hole(t)
+      one_hole (t) => ((t.length >= 4) && !(t.first == BOOTSTRAPPER.CAPTURE.first)) && one_hole_in(level cw_inner (t))
+      one_hole_in (inner) => (inner.first == BOOTSTRAPPER.CAPTURE.first) && ((level cw_enclosed (inner)) === true)
       past_hole (t) => t.empty ? None : ((t.first == BOOTSTRAPPER.CAPTURE.last) ? t.rest : past_hole(t.rest))
-      pair_past (t, before) => {
-        (pair_bytes(before, byte_after(t))) if !((t === None) || (before === None) || t.empty)
-        (t === None) ? None : pairs_in(t, BOOTSTRAPPER.CAPTURE.last)
-      }
-      byte_after (t) => (((t.first == BOOTSTRAPPER.CAPTURE.first) && (t.length >= 4)) && ((t.rest.first == t.rest.rest.rest.first) && ((level class_of_byte (t.rest.first)) == 2))) ? t.rest.rest.first : t.first
       pair_bytes (b, c) => (((level pairable (b)) && (level pairable (c))) && apart_from_holes(b, c)) ? pair_kind(b, c) : None
       apart_from_holes (b, c) => !(b == BOOTSTRAPPER.CAPTURE.last) && !(c == BOOTSTRAPPER.CAPTURE.first)
       pair_kind (b, c) => (b == c) ? (level class_given (b) (2)) : ((((level class_of_byte (b)) == 0) && ((level class_of_byte (c)) == 0)) ? brackets(b, c) : None)
@@ -109,7 +104,7 @@ Expression := class (
         // (a head: each hole a place in the node, read as what applies it reads it; one a rule running took, what it took)
         head_of (text, by) => (text as (hole: [BOOTSTRAPPER.CAPTURE.first, Place(`inside`, node), BOOTSTRAPPER.CAPTURE.last] | String)[]).map{.inside}((hole) => hole_head(hole.inside, by))
         // (a hole quoting a text, `{`=>`}`: that text, literally)
-        hole_head (inside, by) => (((inside.length > 1) && (inside.first == inside.last)) && !is_word(inside.first)) ? quoted(level cw_inner (inside)) : taken_head(inside, by)
+        hole_head (inside, by) => (((inside.length > 1) && (inside.first == inside.last)) && (level pairable (inside.first))) ? (level cw_inner (inside)) : taken_head(inside, by)
         taken_head (inside, by) => (binder(by, inside) === None) ? named_in(Program(in: node), inside) : head_of(taken_in(binder(by, inside), inside).value, binder(by, inside).caller)
         // (a body: the code inside its brackets; one hole a rule running took, what it took)
         body_of (text, by) => (splicer(text, by) === None) ? braced(text) : body_of(spliced(text, splicer(text, by)).value, splicer(text, by).caller)
@@ -366,11 +361,6 @@ Expression := class (
       before_hole (t) => (t.rest.empty || (t.rest.first == hole_opening)) ? t.first : before_hole(t.rest)
       separator := separated(past_hole(BOOTSTRAPPER.CAPTURES.text))
       defines (text) => level holds_outside (text) (separator)
-      // (a byte of a name)
-      is_word (c) => holds(`abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_`, c)
-      holds (t, c) => t.empty ? false : ((t.first == c) || holds(t.rest, c))
-      // (a head quoting `=>`, a rule that defines: noted as its head is read)
-      quoted (t) => t
       // (a rule shown in a style: each time it is applied, where its head reads)
       styled (rule, style) => {
         rule.styled_as = (rule.styled_as ?? Array.new).append(style)

@@ -134,6 +134,12 @@ its own reading its place, unread text recorded with reading going on.
     with `chainable >`) runs past its budget: `<{generics}>` heads (lines 614, 618, 632, 2027) teach `<` `>` as a pair, for
     good (a global rule's pairs are never forgotten), so a lone `>` closes nothing. E.C3: a pair a head taught (not one of
     the brackets, `()[]{}`) is a pair only where it is written as one, closed on the same line (`pair_class`); the class reads.
+    Found again (2026-11-25, pairs learned from one-hole heads only, `<{generics}>` a rule of its own): where a pair ends
+    is still counted as depth over every opening and closing byte, of any pair (`bracket_ending`), and `Texts.enclosed_in`
+    knows the brackets by their bytes (`opener`/`closer`, `( [ {`). Each closing byte matched to the opening it was learned
+    with (a table beside the byte classes), one that does not close plain, needs `<` not to pair with the `>` of a later
+    `=>` (or `.` with `?`, which GR8's head teaches for good): with "a closing byte of none open around it is plain" a stray
+    `<` before a block still closes at an `=>` inside it (test 340 against 358; the NA block, 2052, unread). Kept as it was.
   - `=` read inside `==` (and `/` in `//`, `>` in `=>`): E.M9, a literal not read where the text goes on, before or after it,
     with another printable operator byte (`literal_of`; `\0`, which joins the files, is not one: counted, nothing reads).
   E.C3 = E.C1 + E.M9 + as-written pairs: with every bootstrap file kept it still stops (117). Not a loop, and not one

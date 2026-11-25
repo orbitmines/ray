@@ -1883,7 +1883,6 @@ Heap := class {
   // it answers what it made; a frame a word of three at `arena_base`: where it began, the mark before it, the writes)
   static kept => {
     effects = effects + 1
-    word_put(word_of(3932) + 44, 1) if word_of(3936) > 0
     0
   }
   // (a value made since the outermost frame began: kept by what holds it)
@@ -2077,11 +2076,9 @@ Afterwards := class {
 // Images: a test's state (word 3932) noted when it begins and put back when it is undone: what it wrote over put back
 // (the log), what it took let go
 Images := class {
-  // (a test begun: its state noted, once, however deep tests are begun in it (word 3936))
+  // (a test begun: its state noted)
   static test_begin (painted, reported) => {
     Images.tests_made() if word_of(3932) == 0
-    word_held(3936, word_of(3936) + 1)
-    return 0 if word_of(3936) > 1
     t := word_of(3932)
     roomy(names, 256)
     word_held(t, free)
@@ -2091,7 +2088,6 @@ Images := class {
     word_held(t + 24, Images.past(reported, 0))
     word_held(t + 28, boundn)
     word_held(t + 36, activen)
-    word_held(t + 44, 0)
     word_held(t + 48, word_of(3896))
     word_put(t + 52, Images.past(word_of(4068), 0))
     word_put(t + 56, word_of(4068))
@@ -2111,7 +2107,6 @@ Images := class {
   // (a test undone: what it wrote over put back, what it took let go; one that wrote too much to put back, kept)
   static test_undone (painted, reported) => {
     t := word_of(3932)
-    word_held(3936, 0)
     word_held(3944, 0)
     word_held(3916, 0)
     Images.undone(t, painted, reported) if word_of(t + 1056) == 0

@@ -1157,6 +1157,8 @@ Texts := class {
 // Splices: whether a text holds a part (anywhere, or outside any bracket or quote in it); a node copied.
 Splices := class {
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
+  // (whether a text is written within another: a part of it where it is written)
+  static written_within (t: Text, outer: Text) => ((t is Text) && (outer is Text) && (t.from >= outer.from) && (t.to <= outer.to)) ? true : false
   static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Texts.found_at(part, t.from, t.to) != 0)) ? true : false
   static holds_outside_in (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from)) ? Splices.outside_in(t.from, t.to, part) : false
   static outside_in (a, e, part: Text) => {
@@ -1979,6 +1981,20 @@ Hooks := class {
     c := (word_of(4064) != 0) && (word_of(3896) >= word_of(4060))
     word_held(3916, 0) if c
     word_held(4064, 0) if c
+    0
+  }
+  // (a statement the reader reads: begun on what the one it is in has left; past its budget, noted, and what follows goes on)
+  static statement_begins => {
+    floor := word_of(4060)
+    turn_begun_within(floor)
+    floor
+  }
+  static statement_ends (t, floor) => {
+    over := statement_over()
+    word_held(4068, list()) if over && (word_of(4068) == 0)
+    append(word_of(4068), t) if over
+    went_on()
+    word_held(4060, floor)
     0
   }
   // (a statement past its budget, noted where what is noted lasts)

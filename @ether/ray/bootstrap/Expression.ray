@@ -1157,6 +1157,9 @@ Texts := class {
 // Splices: whether a text holds a part (anywhere, or outside any bracket or quote in it); a node copied.
 Splices := class {
   // (whether a text holds a part, anywhere; or outside any bracket or quote in it, on its statement's lines)
+  // (what a reader is asking while it asks it, held in a word of the host: keeping it writes into nothing older)
+  static asking => word_of(4072)
+  static asked (v) => word_put(4072, v)
   // (whether a text is written within another: a part of it where it is written)
   static written_within (t: Text, outer: Text) => ((t is Text) && (outer is Text) && (t.from >= outer.from) && (t.to <= outer.to)) ? true : false
   static holds_text (t: Text, part: Text) => ((t is Text) && (part is Text) && (part.to != part.from) && (Texts.found_at(part, t.from, t.to) != 0)) ? true : false
@@ -1864,8 +1867,9 @@ Heap := class {
     keys_reset()
     word_put(3920, 0)
   }
+  // (a write into what is older keeps a frame only when what it writes is newer: nothing else would be left pointing into it)
   static written (x, w, v) => {
-    effects = (x < markf) ? (effects + 1) : effects
+    effects = ((x < markf) && Heap.escaping(v)) ? (effects + 1) : effects
     Heap.logged(w)
     v
   }

@@ -1058,7 +1058,7 @@ Runtime := class {
   static curried_function (c: Curried) => c.function
   static curried_called (c: Curried, f: Closure, args, named) => indirect(Runtime.defined_as(node(f.env), Symbol.this, c.value), args, named, f.function)
   static applied_called (c, f: Closure, args, named) => indirect(applied_again(c), args, named, f.function)
-  static closure_called (c: Closure, args, named) => (isodepth > 4000) ? indirect(c.env, args, named, c.function) : isolated_value(isolated_open(), indirect(c.env, args, named, c.function))
+  static closure_called (c: Closure, args, named) => (isodepth > 64000) ? indirect(c.env, args, named, c.function) : isolated_value(isolated_open(), indirect(c.env, args, named, c.function))
   // (a class constructing: a node in its scope, itself its `this`, given what is named, its body run in it; its header,
   // the pattern it is read by, else anything; a rule's reading applied again, its fields copied)
   static construct (c: Class, args, named) => Runtime.instance_run(c, Runtime.instance_named(Runtime.itself(node(c.env)), named), args, named)
@@ -1828,7 +1828,7 @@ Heap := class {
   static alloc_bytes (n) => alloc(n)
   // (what lasts past any test: taken past the arena, frames' words first (word 3840 where the next is))
   static lasting_alloc (n) => {
-    word_put(3840, arena_base() + 65536) if word_of(3840) == 0
+    word_put(3840, arena_base() + 1048576) if word_of(3840) == 0
     word_put(3840, word_of(3840) + (((n + 7) / 8) * 8))
     Heap.overflowed() if word_of(3840) > (1048000000 * 2)
     word_of(3840) - (((n + 7) / 8) * 8)
@@ -1902,7 +1902,7 @@ Heap := class {
     0
   }
   static lower_before (x, v) => {
-    i := ((isodepth < 4000) ? isodepth : 4000) - 1
+    i := ((isodepth < 64000) ? isodepth : 64000) - 1
     while (i > 0) && (word_of(arena_base() + (i * 12)) > v) {
       i = i - 1
     }
@@ -1913,7 +1913,7 @@ Heap := class {
   // (a value made since the outermost frame began: kept by what holds it)
   static escaping (v) => (isodepth > 0) && (v >= word_of(arena_base())) && (v < free)
   static isolated_open => {
-    Heap.frame_opened(arena_base() + (isodepth * 12)) if isodepth < 4000
+    Heap.frame_opened(arena_base() + (isodepth * 12)) if isodepth < 64000
     isodepth = isodepth + 1
     0
   }
@@ -1926,7 +1926,7 @@ Heap := class {
   }
   static isolated_value (o, v) => {
     isodepth = isodepth - 1
-    return v if isodepth >= 4000
+    return v if isodepth >= 64000
     Heap.frame_closed(arena_base() + (isodepth * 12), v)
   }
   static frame_closed (s, v) => {

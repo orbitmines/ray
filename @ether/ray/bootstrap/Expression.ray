@@ -1515,6 +1515,7 @@ Matching := class {
   }
   static held_put (b: Bound, v) => {
     effects = Heap.escaping(v) ? (effects + 1) : effects
+    Heap.lower(b + 12) if Heap.escaping(v)
     Heap.logged(b + 12)
     b.held = v
     0
@@ -1870,6 +1871,7 @@ Heap := class {
   // (a write into what is older keeps a frame only when what it writes is newer: nothing else would be left pointing into it)
   static written (x, w, v) => {
     effects = ((x < markf) && Heap.escaping(v)) ? (effects + 1) : effects
+    Heap.lower(x) if (x < markf) && Heap.escaping(v)
     Heap.logged(w)
     v
   }
@@ -1889,6 +1891,11 @@ Heap := class {
   // it answers what it made; a frame a word of three at `arena_base`: where it began, the mark before it, the writes)
   static kept => {
     effects = effects + 1
+    word_put(4076, 0)
+  }
+  // (the lowest word written something newer since the frame began: a frame is kept only when that is older than it)
+  static lower (x) => {
+    word_put(4076, x) if x < word_of(4076)
     0
   }
   // (a value made since the outermost frame began: kept by what holds it)
@@ -1901,7 +1908,8 @@ Heap := class {
   static frame_opened (s) => {
     word_put(s, free)
     word_put(s + 4, markf)
-    word_put(s + 8, effects)
+    word_put(s + 8, word_of(4076))
+    word_put(4076, arena_base())
     markf = free
   }
   static isolated_value (o, v) => {
@@ -1911,7 +1919,8 @@ Heap := class {
   }
   static frame_closed (s, v) => {
     markf = word_of(s + 4)
-    Heap.given_back(word_of(s)) if (effects == word_of(s + 8)) && ((held(v) == 0) || (v < word_of(s))) && (free > word_of(s))
+    Heap.given_back(word_of(s)) if (word_of(4076) >= word_of(s)) && ((held(v) == 0) || (v < word_of(s))) && (free > word_of(s))
+    word_put(4076, word_of(s + 8)) if word_of(s + 8) < word_of(4076)
     v
   }
   static isolated_close (o, v) => Heap.isolated_value(o, 0)
@@ -1948,6 +1957,7 @@ Hooks := class {
   // (a word given a value raw: noted as `written` notes one, when the value is of a statement still read)
   static word_held (w, v) => {
     effects = Heap.escaping(v) ? (effects + 1) : effects
+    Heap.lower(w) if Heap.escaping(v)
     Heap.logged(w)
     word_put(w, v)
     0
@@ -1978,6 +1988,28 @@ Hooks := class {
   static stopped_statement => {
     word_held(4064, 1) if word_of(3916) == 0
     word_held(3916, 1)
+  }
+  // (a turn, the statements of a text read in turn: what they spend is theirs, the statement it is in keeps what it had
+  // left of its own; the floor and the fuel as it began kept where memory lasts (word 4080 where, 4092 how many))
+  static turn_opened => {
+    word_put(4080, Heap.lasting_alloc(65536)) if word_of(4080) == 0
+    n := word_of(4092)
+    word_put(word_of(4080) + (n * 8), word_of(4060)) if n < 8192
+    word_put(word_of(4080) + ((n * 8) + 4), word_of(3896)) if n < 8192
+    word_put(4092, n + 1)
+    0
+  }
+  // (a file's statements, included: each of them on a budget of its own, as the program's own are)
+  static turn_unbounded => {
+    Hooks.turn_opened()
+    word_held(4060, 0)
+  }
+  static turn_closed => {
+    n := word_of(4092) - 1
+    word_put(4092, n)
+    word_held(4060, word_of(word_of(4080) + (n * 8)) - (word_of(word_of(4080) + ((n * 8) + 4)) - word_of(3896))) if n < 8192
+    went_on()
+    0
   }
   // (an inner turn let go, the one it is in goes on; unless that one too ran past its budget)
   static higher (a, b) => (a > b) ? a : b
@@ -2010,6 +2042,29 @@ Hooks := class {
   // runs: every one, but when the editor runs a file only those written in it, from where the host says it begins)
   static tested_here (t) => ((word_of(3948) == 0) || (tag(t) != 4)) ? 12 : ((origin_at(word_of(t + 4)) < word_of(3948)) ? 8 : 12)
   static paints => word_of(3968)
+  // (a painting's lists and texts copied where memory lasts: nothing a frame gives back is left pointing into it)
+  static lasting_copy (v) => (tag(v) == 3) ? Hooks.list_lasting(v) : ((tag(v) == 4) ? Hooks.text_lasting(v) : v)
+  static text_lasting (t: Text) => {
+    p := Heap.lasting_alloc(12)
+    word_put(p, 4)
+    word_put(p + 4, t.from)
+    word_put(p + 8, t.to)
+    p
+  }
+  static list_lasting (l: List) => {
+    p := Heap.lasting_alloc(16)
+    d := Heap.lasting_alloc((l.count * 4) + 4)
+    word_put(p, 3)
+    word_put(p + 4, l.count)
+    word_put(p + 8, l.count)
+    word_put(p + 12, d)
+    i := 0
+    while i < l.count {
+      word_put(d + (i * 4), Hooks.lasting_copy(l.items[i]))
+      i = i + 1
+    }
+    p
+  }
   static reports => word_of(3972)
   static out_base => outb
   static out_length => outn

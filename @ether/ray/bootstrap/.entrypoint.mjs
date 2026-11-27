@@ -234,6 +234,10 @@ const read_out = (it, input, regions, text, error) => {
   const list = (l) => { const o = []; if (tag(l) !== 3) return o; const d = i32[(l >> 2) + 3]; for (let i = 0; i < i32[(l >> 2) + 1]; i++) o.push(i32[(d >> 2) + i]); return o; };
   const words = (t) => Buffer.from(u8.subarray(i32[(t >> 2) + 1], i32[(t >> 2) + 2])).toString();
   const member = (v, name) => { for (let e = i32[(v >> 2) + 2]; e; e = i32[e >> 2]) { const k = X.name_text(i32[(e >> 2) + 1]); if (k && words(k) === name) return i32[(e >> 2) + 2]; } return 0; };
+  // (a hole painted: a list of its name and what it took, or a node of them)
+  const hole = (h, name) => (tag(h) === 3 ? list(h)[name === 'key' ? 0 : 1] : member(h, name));
+  // (a text by where it is, as a painted copy of it is the same)
+  const key = (t) => (tag(t) === 4 ? `${i32[(t >> 2) + 1]}:${i32[(t >> 2) + 2]}` : t);
   // (a text spliced is a copy: followed back, piece by piece, to where it is in the input)
   const copies = [], cb = i32[3864 >> 2];
   for (let k = 0; cb && k < i32[3868 >> 2]; k++) copies.push(i32.subarray((cb >> 2) + k * 3, (cb >> 2) + k * 3 + 3));
@@ -256,7 +260,7 @@ const read_out = (it, input, regions, text, error) => {
   // (where: of the programs it ran in, the outermost whose holes took text from the input, then the nearest whose texts
   // are all in that one's; its first)
   const where = (bounds) => {
-    const levels = list(bounds).map((b) => list(b).map((h) => span(member(h, 'value'))).filter(Boolean)).filter((l) => l.length);
+    const levels = list(bounds).map((b) => list(b).map((h) => span(hole(h, 'value'))).filter(Boolean)).filter((l) => l.length);
     if (!levels.length) return;
     const outer = levels[levels.length - 1], a = Math.min(...outer.map((s) => s[0])), e = Math.max(...outer.map((s) => s[1]));
     const near = levels.find((l) => l.every((s) => s[0] >= a && s[1] <= e));
@@ -268,7 +272,7 @@ const read_out = (it, input, regions, text, error) => {
   const [open, close] = Buffer.from(text.slice(0, text.indexOf('\n')).trim().split(/\s+/).slice(1, 3).join(''));
   const literal = (head, read, bounds) => {
     const whole = span(read); if (!whole || tag(head) !== 4) return [];
-    const holes = new Map(list(list(bounds)[0]).map((h) => [words(member(h, 'key')), span(member(h, 'value'))]));
+    const holes = new Map(list(list(bounds)[0]).map((h) => [words(hole(h, 'key')), span(hole(h, 'value'))]));
     const h = Buffer.from(u8.subarray(i32[(head >> 2) + 1], i32[(head >> 2) + 2])), out = [], end = whole[1];
     let at = whole[0], i = 0;
     while (i < h.length) {
@@ -300,8 +304,8 @@ const read_out = (it, input, regions, text, error) => {
   const heads = new Map();
   const entries = list(paints).flatMap((p) => {
     const [s, v, b] = list(p), style = styled(s);
-    if (tag(v) === 3 && list(v).length === 2) { const at = literal(...list(v), b); heads.set(list(v)[1], at); return at.map((at) => ({ style, at })); }
-    const head = heads.get(input_of(v));
+    if (tag(v) === 3 && list(v).length === 2) { const at = literal(...list(v), b); heads.set(key(list(v)[1]), at); return at.map((at) => ({ style, at })); }
+    const head = heads.get(key(tag(v) === 4 ? v : input_of(v)));
     if (head) return head.map((at) => ({ style, at, over: true }));
     return [{ style, at: where(b) }];
   });
@@ -309,7 +313,7 @@ const read_out = (it, input, regions, text, error) => {
   const markers = list(paints).flatMap((p) => {
     const [s, , b] = list(p), style = styled(s);
     if (!style || tag(b) !== 3) return [];
-    return list(b).flatMap((l) => list(l)).flatMap((h) => { const at = span(member(h, 'value')); if (!at) return []; let a = at[0], e = at[1]; while (a < e && input[a] <= 32) a++; while (e > a && input[e - 1] <= 32) e--; return a > 0 && input[a - 1] === 94 && input.subarray(a, e).toString() === style ? [{ style, at: [a - 1, e] }] : []; });
+    return list(b).flatMap((l) => list(l)).flatMap((h) => { const at = span(hole(h, 'value')); if (!at) return []; let a = at[0], e = at[1]; while (a < e && input[a] <= 32) a++; while (e > a && input[e - 1] <= 32) e--; return a > 0 && input[a - 1] === 94 && input.subarray(a, e).toString() === style ? [{ style, at: [a - 1, e] }] : []; });
   });
   entries.push(...markers);
   const over = new Map(entries.filter((p) => p.over).map((p) => [`${p.at}`, p.style]));

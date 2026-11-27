@@ -1937,14 +1937,14 @@ Heap := class {
   static frame_closed (s, v) => {
     markf = word_of(s + 4)
     Heap.given_back(word_of(s)) if (word_of(4076) >= word_of(s)) && ((held(v) == 0) || (v < word_of(s))) && (free > word_of(s))
-    r := ((word_of(4076) >= word_of(s)) && (v >= word_of(s)) && (v < free) && ((free - word_of(s)) >= 16384)) ? Heap.moved_out(word_of(s), v) : v
+    r := ((word_of(4076) >= word_of(s)) && (v >= word_of(s)) && (v < free) && ((free - word_of(s)) >= 2048)) ? Heap.moved_out(word_of(s), v) : v
     word_put(4076, word_of(s + 8)) if word_of(s + 8) < word_of(4076)
     r
   }
   // (a frame that answers what it made, nothing older written: what of the answer the frame made, moved to where the frame
   // began, the rest given back. Copied aside first, laid out as it will be there, then put there; each value moved once
-  // (what holds it twice holds the one moved). One holding what is not a node, a list, a function, a class or a text of
-  // the input: kept as it was)
+  // (what holds it twice holds the one moved). One holding what is not a node, a list, a function, a class, a place or a text
+  // of the input: kept as it was)
   static mover => {
     word_put(4052, Heap.lasting_alloc(32)) if word_of(4052) == 0
     c := word_of(4052)
@@ -2009,6 +2009,7 @@ Heap := class {
     return Heap.node_moved(c, start, v) if t == 1
     return Heap.list_moved(c, start, v) if t == 3
     return Heap.function_moved(c, start, v, t) if (t == 2) || (t == 5)
+    return Heap.place_moved(c, start, v) if t == 12
     return Heap.text_moved(c, start, v) if (t == 4) && ((word_of(v + 4) < start) || (word_of(v + 4) >= free))
     word_put(c + 16, 1)
     v
@@ -2057,6 +2058,15 @@ Heap := class {
     Heap.forward(c, v, a)
     Heap.put_aside(c, start, a, t)
     Heap.put_aside(c, start, a + 4, word_of(v + 4))
+    Heap.put_aside(c, start, a + 8, Heap.moved_value(c, start, word_of(v + 8)))
+    Heap.put_aside(c, start, a + 12, Heap.moved_value(c, start, word_of(v + 12)))
+    a
+  }
+  static place_moved (c, start, v) => {
+    a := Heap.room_aside(c, start, 16)
+    Heap.forward(c, v, a)
+    Heap.put_aside(c, start, a, 12)
+    Heap.put_aside(c, start, a + 4, Heap.moved_value(c, start, word_of(v + 4)))
     Heap.put_aside(c, start, a + 8, Heap.moved_value(c, start, word_of(v + 8)))
     Heap.put_aside(c, start, a + 12, Heap.moved_value(c, start, word_of(v + 12)))
     a

@@ -2114,7 +2114,34 @@ Hooks := class {
     stopped_statement() if (word_of(3896) > 0) && Hooks.near_end()
     0
   }
-  static near_end => (free > (arena_base() - 33554432)) && (free < arena_base())
+  static near_end => ((free > (arena_base() - 33554432)) && (free < arena_base())) || Hooks.past_ceiling()
+  // (and what a statement may make: as far past where it began as 256 MB, nor past what the one it is in may (the ceilings
+  // where memory lasts, word 4056: how many, then each statement's, as it began))
+  static past_ceiling => (word_of(4056) != 0) && (word_of(word_of(4056) + 4) != 0) && (free > word_of(word_of(4056) + 4)) && (free < arena_base())
+  static ceilings => {
+    word_put(4056, Heap.lasting_alloc(65536)) if word_of(4056) == 0
+    word_of(4056)
+  }
+  static ceiling_pushed (c) => {
+    b := Hooks.ceilings()
+    n := word_of(b)
+    word_put(b + (8 + (n * 4)), word_of(b + 4)) if n < 16000
+    word_put(b, n + 1)
+    word_put(b + 4, c)
+    0
+  }
+  static ceiling_popped => {
+    b := Hooks.ceilings()
+    n := word_of(b) - 1
+    word_put(b, n)
+    word_put(b + 4, word_of(b + (8 + (n * 4)))) if (n >= 0) && (n < 16000)
+    0
+  }
+  static ceiling_within => {
+    o := word_of(Hooks.ceilings() + 4)
+    c := ((free + 268435456) > arena_base()) ? arena_base() : (free + 268435456)
+    ((o != 0) && (o < c)) ? o : c
+  }
   static statement_over => word_of(4064) != 0
   static fueled => {
     word_held(3916, 1) if logging() && (((free - word_of(3944)) > 134217728) || (free > (arena_base() - 67108864)) || ((word_of(word_of(3932) + 48) - word_of(3896)) > 20000000))
@@ -2131,24 +2158,30 @@ Hooks := class {
     word_held(3916, 1)
   }
   // (a turn, the statements of a text read in turn: what they spend is theirs, the statement it is in keeps what it had
-  // left of its own; the floor and the fuel as it began kept where memory lasts (word 4080 where, 4092 how many))
+  // left of its own; the floor and the fuel as it began kept where memory lasts (word 4080 where, 4092 how many), and
+  // whether it is a file's, its statements each with a ceiling of their own)
   static turn_opened => {
-    word_put(4080, Heap.lasting_alloc(65536)) if word_of(4080) == 0
+    word_put(4080, Heap.lasting_alloc(131072)) if word_of(4080) == 0
     n := word_of(4092)
-    word_put(word_of(4080) + (n * 8), word_of(4060)) if n < 8192
-    word_put(word_of(4080) + ((n * 8) + 4), word_of(3896)) if n < 8192
+    word_put(word_of(4080) + (n * 12), word_of(4060)) if n < 8192
+    word_put(word_of(4080) + ((n * 12) + 4), word_of(3896)) if n < 8192
+    word_put(word_of(4080) + ((n * 12) + 8), 0) if n < 8192
     word_put(4092, n + 1)
     0
   }
   // (a file's statements, included: each of them on a budget of its own, as the program's own are)
   static turn_unbounded => {
     Hooks.turn_opened()
+    n := word_of(4092) - 1
+    word_put(word_of(4080) + ((n * 12) + 8), 1) if n < 8192
+    Hooks.ceiling_pushed(0)
     word_held(4060, 0)
   }
   static turn_closed => {
     n := word_of(4092) - 1
     word_put(4092, n)
-    word_held(4060, word_of(word_of(4080) + (n * 8)) - (word_of(word_of(4080) + ((n * 8) + 4)) - word_of(3896))) if n < 8192
+    Hooks.ceiling_popped() if (n < 8192) && (word_of(word_of(4080) + ((n * 12) + 8)) != 0)
+    word_held(4060, word_of(word_of(4080) + (n * 12)) - (word_of(word_of(4080) + ((n * 12) + 4)) - word_of(3896))) if n < 8192
     went_on()
     0
   }
@@ -2163,6 +2196,7 @@ Hooks := class {
   // (a statement the reader reads: begun on what the one it is in has left; past its budget, noted, and what follows goes on)
   static statement_begins => {
     floor := word_of(4060)
+    Hooks.ceiling_pushed(Hooks.ceiling_within())
     turn_begun_within(floor)
     floor
   }
@@ -2170,6 +2204,7 @@ Hooks := class {
     over := statement_over()
     word_held(4068, list()) if over && (word_of(4068) == 0)
     append(word_of(4068), t) if over
+    Hooks.ceiling_popped()
     went_on()
     word_held(4060, floor)
     0

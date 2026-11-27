@@ -1515,7 +1515,7 @@ Matching := class {
   }
   static held_put (b: Bound, v) => {
     effects = Heap.escaping(v) ? (effects + 1) : effects
-    Heap.lower(b + 12) if Heap.escaping(v)
+    Heap.lower(b + 12, v) if Heap.escaping(v)
     Heap.logged(b + 12)
     b.held = v
     0
@@ -1871,7 +1871,7 @@ Heap := class {
   // (a write into what is older keeps a frame only when what it writes is newer: nothing else would be left pointing into it)
   static written (x, w, v) => {
     effects = ((x < markf) && Heap.escaping(v)) ? (effects + 1) : effects
-    Heap.lower(x) if (x < markf) && Heap.escaping(v)
+    Heap.lower(x, v) if (x < markf) && Heap.escaping(v)
     Heap.logged(w)
     v
   }
@@ -1893,9 +1893,21 @@ Heap := class {
     effects = effects + 1
     word_put(4076, 0)
   }
-  // (the lowest word written something newer since the frame began: a frame is kept only when that is older than it)
-  static lower (x) => {
-    word_put(4076, x) if x < word_of(4076)
+  // (the lowest word written something newer since the frame began: a frame is kept only when that is older than it; a
+  // value older than the frame, what the frames before it hold (each frame's mark at its start, the one before's lowest
+  // after it): of the last that began before the value)
+  static lower (x, v) => {
+    word_put(4076, x) if (v >= markf) && (x < word_of(4076))
+    Heap.lower_before(x, v) if v < markf
+    0
+  }
+  static lower_before (x, v) => {
+    i := ((isodepth < 4000) ? isodepth : 4000) - 1
+    while (i > 0) && (word_of(arena_base() + (i * 12)) > v) {
+      i = i - 1
+    }
+    w := arena_base() + (((i + 1) * 12) + 8)
+    word_put(w, x) if x < word_of(w)
     0
   }
   // (a value made since the outermost frame began: kept by what holds it)
@@ -1920,8 +1932,137 @@ Heap := class {
   static frame_closed (s, v) => {
     markf = word_of(s + 4)
     Heap.given_back(word_of(s)) if (word_of(4076) >= word_of(s)) && ((held(v) == 0) || (v < word_of(s))) && (free > word_of(s))
+    r := ((word_of(4076) >= word_of(s)) && (v >= word_of(s)) && (v < free) && ((free - word_of(s)) >= 16384)) ? Heap.moved_out(word_of(s), v) : v
     word_put(4076, word_of(s + 8)) if word_of(s + 8) < word_of(4076)
+    r
+  }
+  // (a frame that answers what it made, nothing older written: what of the answer the frame made, moved to where the frame
+  // began, the rest given back. Copied aside first, laid out as it will be there, then put there; each value moved once
+  // (what holds it twice holds the one moved). One holding what is not a node, a list, a function, a class or a text of
+  // the input: kept as it was)
+  static mover => {
+    word_put(4052, Heap.lasting_alloc(32)) if word_of(4052) == 0
+    c := word_of(4052)
+    word_put(c, Heap.lasting_alloc(8388608)) if word_of(c) == 0
+    word_put(c + 8, Heap.lasting_alloc(65536 * 12)) if word_of(c + 8) == 0
+    c
+  }
+  static moved_out (start, v) => {
+    c := Heap.mover()
+    word_put(c + 4, 0)
+    word_put(c + 12, word_of(c + 12) + 1)
+    word_put(c + 16, 0)
+    word_put(c + 20, 0)
+    a := Heap.moved_value(c, start, v)
+    return v if (word_of(c + 16) != 0) || (word_of(c + 4) >= (free - start))
+    n := word_of(c + 4)
+    Heap.given_back(start)
+    i := 0
+    while i < n {
+      word_put(start + i, word_of(word_of(c) + i))
+      i = i + 4
+    }
+    free = start + n
+    a
+  }
+  static moving (c, v) => (word_of(c + 16) == 0) && pointer(v)
+  static room_aside (c, start, n) => {
+    o := word_of(c + 4)
+    word_put(c + 4, o + (((n + 7) / 8) * 8))
+    word_put(c + 16, 1) if word_of(c + 4) > 8388608
+    start + o
+  }
+  static put_aside (c, start, a, v) => {
+    word_put(word_of(c) + (a - start), v) if (word_of(c + 16) == 0) && ((a - start) < 8388600)
+    0
+  }
+  static slot_of (c, v) => {
+    i := (v / 8) & 65535
+    while (word_of(word_of(c + 8) + ((i * 12) + 8)) == word_of(c + 12)) && (word_of(word_of(c + 8) + (i * 12)) != v) {
+      i = (i + 1) & 65535
+    }
+    word_of(c + 8) + (i * 12)
+  }
+  static forwarded (c, v) => {
+    e := Heap.slot_of(c, v)
+    (word_of(e + 8) == word_of(c + 12)) ? word_of(e + 4) : 0
+  }
+  static forward (c, v, a) => {
+    e := Heap.slot_of(c, v)
+    word_put(e, v)
+    word_put(e + 4, a)
+    word_put(e + 8, word_of(c + 12))
+    word_put(c + 20, word_of(c + 20) + 1)
+    word_put(c + 16, 1) if word_of(c + 20) > 32768
+    0
+  }
+  static moved_value (c, start, v) => {
+    return v if !Heap.moving(c, v) || (v < start) || (v >= free)
+    f := Heap.forwarded(c, v)
+    return f if f != 0
+    t := word_of(v)
+    return Heap.node_moved(c, start, v) if t == 1
+    return Heap.list_moved(c, start, v) if t == 3
+    return Heap.function_moved(c, start, v, t) if (t == 2) || (t == 5)
+    return Heap.text_moved(c, start, v) if (t == 4) && ((word_of(v + 4) < start) || (word_of(v + 4) >= free))
+    word_put(c + 16, 1)
     v
+  }
+  static node_moved (c, start, v) => {
+    a := Heap.room_aside(c, start, 20)
+    Heap.forward(c, v, a)
+    Heap.put_aside(c, start, a, 1)
+    Heap.put_aside(c, start, a + 4, Heap.moved_value(c, start, word_of(v + 4)))
+    Heap.put_aside(c, start, a + 8, Heap.fields_moved(c, start, word_of(v + 8)))
+    Heap.put_aside(c, start, a + 12, Heap.moved_value(c, start, word_of(v + 12)))
+    Heap.put_aside(c, start, a + 16, Heap.moved_value(c, start, word_of(v + 16)))
+    a
+  }
+  static fields_moved (c, start, f) => {
+    return f if !Heap.moving(c, f) || (f < start) || (f >= free)
+    g := Heap.forwarded(c, f)
+    return g if g != 0
+    a := Heap.room_aside(c, start, 12)
+    Heap.forward(c, f, a)
+    Heap.put_aside(c, start, a + 4, word_of(f + 4))
+    Heap.put_aside(c, start, a + 8, Heap.moved_value(c, start, word_of(f + 8)))
+    Heap.put_aside(c, start, a, Heap.fields_moved(c, start, word_of(f)))
+    a
+  }
+  static list_moved (c, start, v) => {
+    n := word_of(v + 4)
+    word_put(c + 16, 1) if (n < 0) || (n > word_of(v + 8)) || (n > 1000000)
+    return v if word_of(c + 16) != 0
+    a := Heap.room_aside(c, start, 16)
+    Heap.forward(c, v, a)
+    d := (n == 0) ? 0 : Heap.room_aside(c, start, n * 4)
+    Heap.put_aside(c, start, a, 3)
+    Heap.put_aside(c, start, a + 4, n)
+    Heap.put_aside(c, start, a + 8, n)
+    Heap.put_aside(c, start, a + 12, d)
+    i := 0
+    while i < n {
+      Heap.put_aside(c, start, d + (i * 4), Heap.moved_value(c, start, word_of(word_of(v + 12) + (i * 4))))
+      i = i + 1
+    }
+    a
+  }
+  static function_moved (c, start, v, t) => {
+    a := Heap.room_aside(c, start, 16)
+    Heap.forward(c, v, a)
+    Heap.put_aside(c, start, a, t)
+    Heap.put_aside(c, start, a + 4, word_of(v + 4))
+    Heap.put_aside(c, start, a + 8, Heap.moved_value(c, start, word_of(v + 8)))
+    Heap.put_aside(c, start, a + 12, Heap.moved_value(c, start, word_of(v + 12)))
+    a
+  }
+  static text_moved (c, start, v) => {
+    a := Heap.room_aside(c, start, 12)
+    Heap.forward(c, v, a)
+    Heap.put_aside(c, start, a, 4)
+    Heap.put_aside(c, start, a + 4, word_of(v + 4))
+    Heap.put_aside(c, start, a + 8, word_of(v + 8))
+    a
   }
   static isolated_close (o, v) => Heap.isolated_value(o, 0)
   static stopped => word_of(3916) != 0
@@ -1957,7 +2098,7 @@ Hooks := class {
   // (a word given a value raw: noted as `written` notes one, when the value is of a statement still read)
   static word_held (w, v) => {
     effects = Heap.escaping(v) ? (effects + 1) : effects
-    Heap.lower(w) if Heap.escaping(v)
+    Heap.lower(w, v) if Heap.escaping(v)
     Heap.logged(w)
     word_put(w, v)
     0
